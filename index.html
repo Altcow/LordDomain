@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>城主領地</title>
+<meta name="theme-color" content="#1c2430">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="城主領地">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="topbar">
+  <span id="title">城主領地</span>
+  <span id="info"></span>
+  <span class="spacer"></span>
+  <button id="btnRot" title="旋轉 (R)">↘</button>
+  <select id="selSeason" title="季節主題">
+    <option value="spring">春</option>
+    <option value="summer">夏</option>
+    <option value="autumn">秋</option>
+    <option value="winter">冬</option>
+  </select>
+  <button id="btnShop">商店</button>
+  <button id="btnDemo">範本</button>
+  <button id="btnPano" title="全景預覽">全景</button>
+  <button id="btnClear">清空</button>
+</div>
+<div id="resbar"></div>
+<canvas id="game"></canvas>
+<div id="shop" hidden></div>
+<div id="tplMenu" hidden></div>
+<div id="pano" hidden>
+  <div class="pbar"><span id="panoMsg"></span><span class="spacer"></span><button id="panoSave" disabled>儲存圖片</button><button id="panoClose">✕ 關閉</button></div>
+  <img id="panoImg" alt="領地全景">
+</div>
+<div id="toolbar"></div>
+<script src="js/data.js"></script>
+<script src="js/map.js"></script>
+<script src="js/templates.js"></script>
+<script src="js/render.js"></script>
+<script src="js/panorama.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+<script src="js/pwa.js"></script>
+</body>
+</html>
