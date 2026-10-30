@@ -1,3 +1,16 @@
+// 經營模式建築分類(工具列上方的分類標籤)。item 為 OBJECTS 的 key;未列入者自動歸「其他」(buildCatIds)
+const BUILD_FAVS = ['house', 'market', 'wall', 'gate', 'tree', 'stone', 'well', 'lumber', 'quarry', 'field_sprout', 'shop_wine', 'stairs'];
+const BUILD_GROUPS = [
+  { id: 'live', name: '居住與生活', items: ['house', 'palace', 'well', 'well_sweep', 'privy', 'woodpile', 'barrel_water', 'barrel_empty', 'basket', 'food_table', 'couch', 'mat', 'screen', 'chest', 'bookshelf', 'lamp_stand', 'broom', 'winejar', 'winejar_big', 'winejar_stack', 'winejar_mix', 'deco_brazier', 'dog', 'cat'] },
+  { id: 'shop', name: '商鋪與市集', items: ['market', 'inn', 'post_station', 'shop_wine', 'shop_book', 'shop_cloth', 'shop_rice', 'shop_rouge', 'shop_gamble', 'shop_brothel', 'shop_herb', 'shop_tea', 'shop_pawn', 'stall_veg', 'stall_fruit', 'stall_cloth', 'stall_pottery', 'stall_rice', 'stall_book', 'stall_rouge', 'stall_meat', 'stall_wine', 'stall_tea', 'stall_toy', 'handcart', 'cart_hay', 'cart_goods', 'cart_empty', 'oxcart', 'deco_oxcart', 'wheelbarrow', 'carriage'] },
+  { id: 'farm', name: '農牧', items: ['field_millet', 'field_sprout', 'field_wheat', 'mulberry_grove', 'orchard', 'vegetable_plot', 'herb_garden', 'tea_garden', 'beehive', 'plow', 'hoe', 'millstone', 'waterwheel', 'winnower', 'ox', 'horse', 'donkey', 'chicken', 'duck', 'goose', 'sheep', 'pig', 'stable', 'sheepfold', 'ranch_fence', 'trough', 'fodder', 'haystack', 'grain_sacks', 'granary_round', 'salt_pile', 'saltfield', 'fish_rack', 'fishery'] },
+  { id: 'ind', name: '產業', items: ['lumber', 'deco_lumberyard', 'sawbench', 'lograft', 'quarry', 'mine_entrance', 'minecart', 'ore_iron', 'ore_copper', 'ore_stone', 'smithy', 'shop_smith', 'dock', 'bank'] },
+  { id: 'mil', name: '軍事與營地', items: ['army_camp', 'parade_ground', 'drill_ground', 'archer', 'shield', 'cavalry', 'siege', 'hospital', 'tent_group', 'tent_general', 'flag_army', 'flag_great', 'drum_tower', 'beacon', 'deco_watchtower', 'deco_stable', 'deco_weaponrack', 'deco_target', 'training_dummy', 'deco_jumaa', 'deco_campfire', 'deco_lujiao', 'war_chariot', 'cloud_ladder', 'ram', 'trebuchet', 'jinglan', 'warship'] },
+  { id: 'garden', name: '庭園與景觀', items: ['tree', 'stone', 'tree_pine', 'tree_willow', 'tree_sakura', 'tree_maple', 'tree_mulberry', 'tree_peach', 'tree_cypress', 'deco_bamboo', 'deco_bush', 'flower_bed', 'deco_rocks', 'rockery', 'stone_lamp', 'lantern_line', 'deco_pond', 'lotus', 'reeds', 'potted_plant', 'small_bridge'] },
+  { id: 'rite', name: '祭祀與禮制', items: ['paifang', 'she_altar', 'incense_burner', 'censer', 'stele'] },
+  { id: 'road', name: '城牆與道路', items: ['wall', 'gate', 'stairs', 'ramp', 'bridge', 'wall_courtyard', 'gate_courtyard', 'fence_wood', 'fence_bamboo', 'road_stone', 'toll_gate', 'ferry', 'boat_small'] }
+];
+
 const TERRAIN_TOOLS = {
   road:  { name: '道路', icon: '🛤️', drag: true },
   grass: { name: '草地', icon: '🌱', drag: true },
@@ -8,7 +21,7 @@ const TERRAIN_TOOLS = {
   erase: { name: '拆除', icon: '🧹', drag: true }
 };
 
-const ui = { tool: null, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco' };
+const ui = { tool: null, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco', buildCat: '常用' };
 
 const TERRAIN_OF = { road: T_ROAD, grass: T_GRASS, lake: T_LAKE, river: T_RIVER };
 const TERRAIN_NAME = ['草地', '湖', '河', '道路'];
@@ -71,11 +84,10 @@ function bindEvents(canvas) {
       mapeditClear();
       return;
     }
-    if (!confirm('清空整個領地？資源、兵力與科技進度會重設。' + pendWarnText())) return;
+    if (!confirm('清空領地上的所有建築與地形？資源與科技進度不會改變。' + pendWarnText())) return;
     pendClear();
     hideReset();
     clearWorld();
-    techReset();
     saveWorld();
     updateResBar();
   });
@@ -112,31 +124,87 @@ function bindEvents(canvas) {
 function buildToolbar() {
   const bar = document.getElementById('toolbar');
   bar.innerHTML = '';
-  addToolButton(bar, null, '✋', '瀏覽', null);
-  for (const id in TERRAIN_TOOLS) addToolButton(bar, id, TERRAIN_TOOLS[id].icon, TERRAIN_TOOLS[id].name, null);
-  const sep = document.createElement('span');
-  sep.className = 'sep';
-  sep.textContent = '｜';
-  bar.appendChild(sep);
-  let milSep = false;
-  for (const id in OBJECTS) {
-    if (!sideOk(id)) continue;
-    if (OBJECTS[id].mil && !milSep) {
-      const s2 = document.createElement('span');
-      s2.className = 'sep';
-      s2.textContent = '｜';
-      bar.appendChild(s2);
-      milSep = true;
-    }
-    addToolButton(bar, id, OBJECTS[id].icon, OBJECTS[id].name, OBJECTS[id]);
+  if (game.mode === 'battleDesign' && typeof buildCampToolbar === 'function') {
+    buildCampToolbar(bar);
+  } else {
+    addToolButton(bar, null, '✋', '瀏覽', null);
+    for (const id in TERRAIN_TOOLS) addToolButton(bar, id, TERRAIN_TOOLS[id].icon, TERRAIN_TOOLS[id].name, null);
+    const sep = document.createElement('span');
+    sep.className = 'sep';
+    sep.textContent = '｜';
+    bar.appendChild(sep);
+    if (ui.buildCat !== '常用' && !buildCatIds(ui.buildCat).length) ui.buildCat = '常用';
+    buildCatIds(ui.buildCat).forEach(id => addToolButton(bar, id, OBJECTS[id].icon, OBJECTS[id].name, OBJECTS[id]));
   }
-  if (game.mode === 'battleDesign' && typeof CAMP_TOOLS !== 'undefined') {
-    const s3 = document.createElement('span');
-    s3.className = 'sep';
-    s3.textContent = '｜';
-    bar.appendChild(s3);
-    for (const id in CAMP_TOOLS) addToolButton(bar, id, CAMP_TOOLS[id].icon, CAMP_TOOLS[id].name, null);
+  syncToolActive();
+  buildCatBar();
+}
+
+// 分類內容:常用 / 各分類(依 BUILD_GROUPS)/ misc(其他 = 不在任何分類的可見建築)。只回傳 sideOk 為真者
+function buildCatIds(catId) {
+  if (catId === '常用') return BUILD_FAVS.filter(k => OBJECTS[k] && sideOk(k));
+  if (catId === 'misc') {
+    const listed = {};
+    BUILD_GROUPS.forEach(g => g.items.forEach(k => { listed[k] = true; }));
+    return Object.keys(OBJECTS).filter(k => !listed[k] && sideOk(k));
   }
+  const g = BUILD_GROUPS.find(x => x.id === catId);
+  return g ? g.items.filter(k => OBJECTS[k] && sideOk(k)) : [];
+}
+
+function buildCatList() {
+  const out = [{ id: '常用', name: '常用', n: buildCatIds('常用').length }];
+  BUILD_GROUPS.forEach(g => out.push({ id: g.id, name: g.name, n: buildCatIds(g.id).length }));
+  const misc = buildCatIds('misc').length;
+  if (misc) out.push({ id: 'misc', name: '其他', n: misc });
+  return out;
+}
+
+// 工具列上方的分類標籤列(橫向可捲動);戰鬥布置不顯示
+function buildCatBar() {
+  let box = document.getElementById('catbar');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'catbar';
+    document.body.appendChild(box);
+    box.addEventListener('click', onCatClick);
+  }
+  const on = game.mode !== 'battleDesign';
+  box.hidden = !on;
+  document.body.classList.toggle('has-catbar', on);
+  if (!on) return;
+  const tb = document.getElementById('toolbar');
+  box.style.bottom = (tb ? tb.offsetHeight : 0) + 'px';
+  box.textContent = '';
+  buildCatList().forEach(c => {
+    const b = document.createElement('button');
+    b.setAttribute('data-cat', c.id);
+    if (c.id === ui.buildCat) b.classList.add('on');
+    b.innerHTML = c.name + ' <small>' + c.n + '</small>';
+    box.appendChild(b);
+  });
+}
+
+function onCatClick(e) {
+  const b = e.target.closest('button');
+  if (!b || !b.getAttribute('data-cat')) return;
+  ui.buildCat = b.getAttribute('data-cat');
+  buildToolbar();
+  updateResBar();
+}
+
+function syncToolActive() {
+  const key = ui.tool === null ? '' : ui.tool;
+  document.querySelectorAll('#toolbar button').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-tool') === key);
+  });
+}
+
+// 底部疊放高度:工具列 + 分類列(顯示時),待購條與提示以此定位
+function bottomStackPx() {
+  const tb = document.getElementById('toolbar');
+  const cb = document.getElementById('catbar');
+  return (tb ? tb.offsetHeight : 0) + (cb && !cb.hidden ? cb.offsetHeight : 0);
 }
 
 function addToolButton(bar, id, icon, name, def) {
@@ -159,8 +227,11 @@ function addToolButton(bar, id, icon, name, def) {
       return;
     }
     setTool(ui.tool === id ? null : id);
+    const hl = ui.tool === id ? toolHelpLine(id) : '';
+    if (hl) showToast(hl);
   });
   bar.appendChild(btn);
+  return btn;
 }
 
 function isCampTool(t) {
@@ -185,6 +256,8 @@ function setTool(id) {
 function toolInfo() {
   const t = ui.tool;
   if (t === null) return '瀏覽模式：拖曳移動、滾輪／雙指縮放';
+  const hl = toolHelpLine(t);
+  if (hl) return hl;
   if (isCampTool(t)) return CAMP_TOOLS[t].name;
   if (OBJECTS[t]) {
     const d = OBJECTS[t];
@@ -517,6 +590,7 @@ function applyOne(x, y) {
     const o = world.objects[world.occ[i] - 1];
     const refund = refundOf(o.type);
     removeObjectAt(x, y, true);
+    if (typeof auPlay === 'function') auPlay('remove');
     if (o.type === LAB_TYPE && world.tech.cur) showToast('已拆除 科研院，退還 ' + costText(refund) + '；研發暫停，重建後繼續');
     else showToast('已拆除 ' + OBJECTS[o.type].name + '，退還 ' + costText(refund));
     return true;
@@ -580,6 +654,7 @@ function onPointerDown(e) {
   e.currentTarget.setPointerCapture(e.pointerId);
   gs.ptrs.set(e.pointerId, { x: x, y: y, x0: x, y0: y, t0: performance.now() });
   gs.last = { x: x, y: y };
+  tdDropDown(x, y, gs.ptrs.size);
   if (gs.ptrs.size >= 2) {
     startPinch();
     return;
@@ -621,6 +696,7 @@ function onPointerMove(e) {
   const dx = e.clientX - p.x, dy = e.clientY - p.y;
   p.x = e.clientX;
   p.y = e.clientY;
+  if (gs.ptrs.size === 1) tdDropMove(p.x, p.y);
   if (gs.mode === 'pinch') {
     if (gs.ptrs.size >= 2) pinchMove();
     else panBy(dx, dy);
@@ -648,6 +724,7 @@ function onPointerEnd(e) {
   if (e.type === 'pointerup' && gs.mode === 'pan' && gs.ptrs.size === 1 && ui.tool === null && !hide.on &&
       Math.hypot(p.x - p.x0, p.y - p.y0) < 8 && performance.now() - p.t0 < 400) tapObjectAt(p.x, p.y);
   gs.ptrs.delete(e.pointerId);
+  if (gs.ptrs.size === 0) tdDropUp();
   if (e.type === 'pointerup' && gs.mode === 'pending' && e.pointerId === gs.primary) {
     clearTimeout(gs.timer);
     gs.mode = null;
@@ -667,6 +744,7 @@ function onPointerEnd(e) {
 
 // 瀏覽模式點一下建築（目前只有科研院有反應）
 function tapObjectAt(sx, sy) {
+  if (typeof lifeTap === 'function' && lifeTap(sx, sy)) return;
   const c = screenToCell(sx, sy);
   if (!c) return;
   const n = world.occ[idx(c.x, c.y)];
@@ -828,7 +906,7 @@ function onTplClick(e) {
   const isDef = b.hasAttribute('data-default');
   const t = isDef ? defaultTemplate(world.board) : TEMPLATES.find(tp => tp.id === b.getAttribute('data-tpl'));
   if (!t) return;
-  if (!confirm('套用範本「' + t.name + '」？目前的領地會被覆蓋' + (TEMPLATE_KEEP_RES ? '。' : '，資源重設為初始值。') + pendWarnText())) return;
+  if (!confirm('套用範本「' + t.name + '」？目前的布置會被覆蓋,資源與科技不會改變。' + pendWarnText())) return;
   pendClear();
   hideReset();
   const r = isDef ? applyDefaultTemplate(world.board) : applyTemplate(t.id);
@@ -996,6 +1074,10 @@ let audioCtx = null;
 
 // 需在使用者手勢內呼叫（pointerdown/pointerup/click），iOS 才允許建立／恢復 AudioContext
 function audioUnlock() {
+  if (typeof AU !== 'undefined' && AU && AU.unlock) {
+    AU.unlock();
+    return null;
+  }
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
@@ -1021,6 +1103,10 @@ function isMuted() {
 }
 
 function beep() {
+  if (typeof auPlay === 'function') {
+    auPlay('error');
+    return;
+  }
   if (isMuted()) return;
   const ac = audioUnlock();
   if (!ac) return;
@@ -1073,7 +1159,7 @@ function updatePendBar() {
     bar.innerHTML = html;
   }
   bar.hidden = false;
-  bar.style.bottom = (document.getElementById('toolbar').offsetHeight + 6) + 'px';
+  bar.style.bottom = (bottomStackPx() + 6) + 'px';
 }
 
 function onPendClick(e) {
@@ -1112,6 +1198,7 @@ function commitPending() {
   const r = pendCommit();
   if (r.ok) {
     saveWorld();
+    if (typeof auPlay === 'function') auPlay('place');
     showToast('已建造 ' + r.n + ' 件，花費 ' + costText(r.cost));
     if (!hadLab && labBuilt()) showToast('科研院落成！切到 ✋ 瀏覽，點一下科研院即可研發');
   } else if (r.why === 'res') {

@@ -427,7 +427,7 @@ var ART = window.ART = (function () {
   A.OBJ = {};
   A.def = function (type, spec) { A.OBJ[type] = spec; };
   A.foot = function (type, f) { var s = A.OBJ[type]; return (f % 2 === 1) ? [s.d, s.w] : [s.w, s.d]; };
-  A.vkey = function (v) { v = v || {}; return [v.season || 'spring', v.tod || 'noon', v.level || 0, v.skin || '', v.kind || '', v.seed || 0].join('/'); };
+  A.vkey = function (v) { v = v || {}; return [v.season || 'spring', v.tod || 'noon', v.level || 0, v.skin || '', v.kind || '', v.seed || 0, v.dmg || 0].join('/'); };
   A.footShadow = function (ctx, fw, fd, kind, k) {
     if (kind === 'none') return;
     var col = 'rgba(30,60,20,' + (0.25 * (k === undefined ? 1 : k)).toFixed(3) + ')';
@@ -1059,7 +1059,10 @@ var ART_TYPE_MAP = {
   house: 'house', palace: 'palace', tree: 'tree', bridge: 'bridge',
   lumber: 'lumberyard', quarry: 'quarry', market: 'stall', gate: 'gatehouse', wall: 'wallseg',
   research: 'academy', archer: 'archeryrange', shield: 'barracks', cavalry: 'stable', siege: 'siegeyard',
-  hospital: 'shop', stone: 'rocks', ramp: 'ramp'
+  hospital: 'shop', stone: 'rocks', ramp: 'ramp',
+  hq: 'camp_hq', tower: 'camp_tower', nutai: 'camp_nutai', shitai: 'camp_shitai', tent: 'camp_tent',
+  wagon: 'camp_wagon', granary: 'camp_granary', muster: 'camp_muster', banner: 'camp_banner', fakecamp: 'camp_fake',
+  lujiao: 'camp_lujiao'
 };
 var ART_TREE_KINDS = ['round', 'pine', 'sakura', 'maple', 'willow'];
 var artSt = null;
@@ -1111,7 +1114,9 @@ function artSetTod(v) {
 })();
 
 function artType(type) {
-  return Object.prototype.hasOwnProperty.call(ART_TYPE_MAP, type) ? ART_TYPE_MAP[type] : null;
+  if (Object.prototype.hasOwnProperty.call(ART_TYPE_MAP, type)) return ART_TYPE_MAP[type];
+  // 未列於對照表的新物件(art_deco*.js 等):ART 若有同名定義就直接使用
+  return (typeof ART !== 'undefined' && ART.OBJ && Object.prototype.hasOwnProperty.call(ART.OBJ, type)) ? type : null;
 }
 function artFacing(o) { return (o.facing != null ? o.facing : o.rot) || 0; }
 // 城牆相鄰判定:x 軸向 / y 軸向是否有城牆或城門,回傳 'x'、'y'、'xy' 或 ''(含門的佔格)
@@ -1136,6 +1141,7 @@ function artVariant(o) {
   if (o.type === 'hospital') v.skin = 'herb';
   if (o.type === 'wall') v.skin = artWallConn(o);
   if (o.type === 'tree') v.kind = ART_TREE_KINDS[seed % ART_TREE_KINDS.length];
+  v.dmg = o.dmg || 0;
   return v;
 }
 

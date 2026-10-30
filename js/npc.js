@@ -3,18 +3,34 @@
 //   clearBoard canPlace place paintTerrain fillRect idx tplCells boardToJSON
 
 // NPC 戰鬥陣。tpl 為 templates.js 的範本 id;add 為增補物件(範本座標,格式同範本 objects);
-// marks 缺省沿用範本的 marks。diff:1 易、2 中、3 難
+// remove 為移除物件 [{ type, n }](依範本展開後的順序移除該型別前 n 座,先於 add 之前套用);
+// marks 缺省沿用範本的 marks;gar 為守軍覆寫 { 建築 type: { 兵種: 人數 } }(空物件 = 無守軍,見 PLAN_DEFENSE §C.2)。
+// diff:1 易、2 中、3 難、4 極難、5 極難
 const NPC_BASES = [
-  { id: 'huangjin', name: '黃巾營寨', tpl: 'camp_square', diff: 1, intro: '黃巾賊眾據方城而守,帥帳居中,四角箭樓相望。', add: [] },
-  { id: 'shankou', name: '山口隘道', tpl: 'camp_pass', diff: 2, intro: '山賊扼守谷口,兩側高台居高臨下,谷北帥帳穩坐。', add: [] },
+  { id: 'huangjin', name: '黃巾營寨', tpl: 'camp_huangjin', diff: 1, intro: '黃巾賊眾據草寨而守,寨主帳居中,四面寨門大開,營帳環繞。', add: [], remove: [], gar: { hq: { hjlishi: 1, hjzong: 3, hunter: 2, qingqi: 1, chuangnu: 1 } } },
+  { id: 'shankou', name: '山口隘道', tpl: 'camp_shankou', diff: 2, intro: '山賊扼守谷口,兩側高台居高臨下,谷北帥帳穩坐。', add: [], remove: [] },
   {
-    id: 'jun', name: '東漢郡城', tpl: 'jun', diff: 3, intro: '郡城四門內側皆設箭樓與屯兵營,城主府居中,護城壕環繞。',
+    id: 'jun', name: '東漢郡城', tpl: 'jun', diff: 3, intro: '郡城四門內側皆設敵樓與槍陣,郡府居中,護城壕環繞,民房不設守軍。',
     add: [
-      { type: 'tower', at: [21, 10] }, { type: 'muster', at: [30, 10] },
-      { type: 'tower', at: [26, 43] }, { type: 'muster', at: [26, 39] },
-      { type: 'tower', at: [12, 27] }, { type: 'muster', at: [16, 27] },
-      { type: 'tower', at: [42, 27] }, { type: 'muster', at: [38, 27] }
+      { type: 'dilou', pts: [[22, 10], [31, 10], [13, 25], [40, 25]] },
+      { type: 'qiangzhen', pts: [[27, 10], [26, 42], [10, 27], [43, 27]] },
+      { type: 'granary', pts: [[34, 10], [19, 10]] },
+      { type: 'ztower', pts: [[26, 38], [16, 27], [37, 27]] },
+      { type: 'xunyan', pts: [[26, 33]] },
+      { type: 'huojian', pts: [[22, 26], [23, 17]] },
+      { type: 'muster', pts: [[19, 25], [34, 25]] },
+      { type: 'banner', pts: [[18, 31], [36, 31]] },
+      { type: 'nutai', pts: [[23, 15]] },
+      { type: 'gutai', pts: [[29, 15]] },
+      { type: 'lianu', pts: [[29, 17]] },
+      { type: 'fengsui', pts: [[24, 19]] },
+      { type: 'pili', pts: [[30, 21]] },
+      { type: 'shitai', pts: [[16, 19], [36, 18]] },
+      { type: 'wanglou', pts: [[10, 19], [44, 19], [10, 36], [44, 36]] },
+      { type: 'qtower', pts: [[14, 36], [22, 36], [32, 36], [40, 36]] }
     ],
+    remove: [],
+    gar: { house: {}, lumber: {} },
     marks: {
       deploy: [
         { r: [12, 1, 28, 4], kind: 'front' }, { r: [12, 51, 28, 4], kind: 'front' },
@@ -22,12 +38,14 @@ const NPC_BASES = [
       ],
       rally: []
     }
-  }
+  },
+  { id: 'hulao', name: '虎牢關', tpl: 'camp_hulao', diff: 4, intro: '兩山夾一線,關城居中,關前谷道狹長,關後營壘盆地,側路可爬。', add: [], remove: [] },
+  { id: 'luoyang', name: '洛陽城', tpl: 'camp_luoyang', diff: 5, intro: '外郭、內城、宮城三重,四門甕城,河道吊橋,宮城居中。', add: [], remove: [] }
 ];
 
 // 在 game.backup 狀態下直接建攻擊棋盤。applyTemplate 於備份中不套用,故此處依同樣規則放置地形與物件。
 // 回傳放置失敗的物件描述陣列
-function npcBuildBoard(t, add, marks) {
+function npcBuildBoard(t, add, marks, remove) {
   clearBoard();
   const ox = (MAP_W - t.w) >> 1, oy = (MAP_H - t.h) >> 1;
   const R = (x0, y0, w, h, fn) => fillRect(ox + x0, oy + y0, ox + x0 + w - 1, oy + y0 + h - 1, fn);
@@ -50,19 +68,27 @@ function npcBuildBoard(t, add, marks) {
   (mk.rally || []).forEach(p => world.marks.rally.push(Object.assign({}, p, { x: ox + p.x, y: oy + p.y })));
   (mk.aiEntry || []).forEach(a => world.marks.aiEntry.push(Object.assign({}, a, { r: shift(a.r) })));
 
-  const fails = [];
+  const list = [];
   (t.objects || []).concat(add || []).forEach(e => {
     const rot = e.rot || 0;
-    tplCells(e).forEach(p => {
-      const x = ox + p[0], y = oy + p[1];
-      if (!OBJECTS[e.type] || !canPlace(e.type, x, y, rot)) { fails.push(e.type + '@' + p[0] + ',' + p[1]); return; }
-      place(e.type, x, y, rot);
-    });
+    tplCells(e).forEach(p => list.push({ type: e.type, p: p, rot: rot }));
+  });
+  (remove || []).forEach(r => {
+    for (let k = 0, left = r.n | 0; k < list.length && left > 0; k++) {
+      if (list[k].type !== r.type) continue;
+      list.splice(k, 1); k--; left--;
+    }
+  });
+  const fails = [];
+  list.forEach(o => {
+    const x = ox + o.p[0], y = oy + o.p[1];
+    if (!OBJECTS[o.type] || !canPlace(o.type, x, y, o.rot)) { fails.push(o.type + '@' + o.p[0] + ',' + o.p[1]); return; }
+    place(o.type, x, y, o.rot);
   });
   return fails;
 }
 
-// 前提:game.backup 已存在且 game.mode === 'attack';回傳 boardToJSON(world),失敗回 null
+// 前提:game.backup 已存在且 game.mode === 'attack';回傳 boardToJSON(world)(帶 gar 欄位),失敗回 null
 function npcLoadIntoWorld(id) {
   const b = NPC_BASES.find(v => v.id === id);
   const t = b && TEMPLATES.find(v => v.id === b.tpl);
@@ -70,9 +96,11 @@ function npcLoadIntoWorld(id) {
     console.warn('[npc] ' + id + ': 需在 boardBackup() 後且 mode 為 attack 時載入');
     return null;
   }
-  const fails = npcBuildBoard(t, b.add, b.marks);
+  const fails = npcBuildBoard(t, b.add, b.marks, b.remove);
   if (fails.length) console.warn('[npc] ' + id + ': ' + fails.length + ' failed', fails.slice(0, 20).join(' '));
-  return boardToJSON(world);
+  const j = boardToJSON(world);
+  j.gar = b.gar || null;
+  return j;
 }
 
 // 戰報事件文字(A §4.6);{unit} 兵種名、{bld} 建築名、{n} 數量,由呼叫端代入

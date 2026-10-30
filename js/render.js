@@ -7,9 +7,13 @@ function setSeason(name) {
 }
 
 const view = { x: 0, y: 0, zoom: 1 };
-const ZOOM_FLOOR = 0.5, ZOOM_MIN_CAP = 1.5, ZOOM_MAX = 2.5;
-const MAX_VIEW_CELLS = 1200;
-let zoomMin = ZOOM_FLOOR;
+const ZOOM_ABS_MIN = 0.05, ZOOM_MIN_CAP = 1.5, ZOOM_MAX = 2.5;
+// 整張地圖的螢幕外框(世界像素、未乘縮放):寬 = 對角投影寬;高 = 頂部留建築高度 + 底邊
+const MAP_FIT_W = (MAP_W + MAP_H) * TW / 2;
+const MAP_FIT_H = (MAP_W + MAP_H) * TH / 2 + MAX_H * HL + 64;
+// 縮放低於此值:不畫地格邊線(細線會閃爍)、建築改畫色塊
+const TILE_EDGE_MIN_ZOOM = 0.35, OBJ_BLOB_ZOOM = 0.35;
+let zoomMin = ZOOM_ABS_MIN;
 const viewport = { w: 0, h: 0, dpr: 1 };
 const preview = { visible: false, x: 0, y: 0, tool: null, rot: 0, ok: true };
 
@@ -22,10 +26,10 @@ function resizeCanvas(canvas) {
   updateZoomMin();
 }
 
-// 依視窗面積限制最多可見約 MAX_VIEW_CELLS 格（每格世界面積 TW*TH/2）
+// 縮放下限 = 整張地圖剛好塞進視窗(寬高取較嚴者),上限 ZOOM_MIN_CAP;所有地圖共用
 function updateZoomMin() {
-  const z = Math.sqrt(viewport.w * viewport.h / (MAX_VIEW_CELLS * TW * TH / 2));
-  zoomMin = Math.min(ZOOM_MIN_CAP, Math.max(ZOOM_FLOOR, z));
+  const fit = Math.min(viewport.w / MAP_FIT_W, viewport.h / MAP_FIT_H);
+  zoomMin = Math.max(ZOOM_ABS_MIN, Math.min(ZOOM_MIN_CAP, fit));
   if (view.zoom < zoomMin) view.zoom = zoomMin;
 }
 
@@ -72,9 +76,12 @@ function centerOnCell(x, y) {
   view.y = isoY(x + 0.5, y + 0.5, world.height[idx(x, y)]);
 }
 
+// 地圖比視窗小的方向置中;否則限制在地圖範圍內
 function clampView() {
-  view.x = Math.min(isoX(MAP_W, 0), Math.max(isoX(0, MAP_H), view.x));
-  view.y = Math.min(isoY(MAP_W, MAP_H, 0), Math.max(isoY(0, 0, MAX_H), view.y));
+  const xl = isoX(0, MAP_H), xh = isoX(MAP_W, 0);
+  const yl = isoY(0, 0, MAX_H), yh = isoY(MAP_W, MAP_H, 0);
+  view.x = (xh - xl) * view.zoom <= viewport.w ? (xl + xh) / 2 : Math.min(xh, Math.max(xl, view.x));
+  view.y = (yh - yl) * view.zoom <= viewport.h ? (yl + yh) / 2 : Math.min(yh, Math.max(yl, view.y));
 }
 
 // 繪製輔助
@@ -226,6 +233,7 @@ function drawCliffFace(ctx, ax, ay, bx, by, h, hn, color) {
     [isoX(bx, by), isoY(bx, by, hn)],
     [isoX(ax, ay), isoY(ax, ay, hn)]
   ], color);
+  if (view.zoom < TILE_EDGE_MIN_ZOOM) return;
   for (let L = hn + 1; L <= h - 1; L++) {
     ctx.beginPath();
     ctx.moveTo(isoX(ax, ay), isoY(ax, ay, L));
@@ -315,10 +323,12 @@ function drawTile(ctx, x, y, time) {
     else if (wet && nt !== T_LAKE && nt !== T_RIVER) edgeLine(ctx, p[e[0]], p[e[1]], PAL.foam, 2, 0.6);
   });
 
-  polyPath(ctx, p);
-  ctx.strokeStyle = 'rgba(0,0,0,0.06)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  if (view.zoom >= TILE_EDGE_MIN_ZOOM) {
+    polyPath(ctx, p);
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
 
   if (t === T_RIVER) drawRiver(ctx, x, y, h, time);
   else if (t === T_LAKE) drawLake(ctx, x, y, h, time);
@@ -584,6 +594,14 @@ function drawObject(ctx, o, alpha) {
   ctx.restore();
 }
 
+// 小縮放的建築色塊：佔格頂面一塊純色（軍事紅、樹綠、其餘石灰），縮到最小仍可辨識
+function drawObjBlob(ctx, o) {
+  const fp = OBJECTS[o.type] ? footprint(o.type, o.rot) : [1, 1];
+  const top = world.height[idx(o.x, o.y)] * HL + 14;
+  const col = o.type === 'tree' ? PAL.canopyDark : (OBJECTS[o.type] && OBJECTS[o.type].mil ? MIL_COL.red : '#c9b48a');
+  poly(ctx, [gpt(o.x, o.y, top), gpt(o.x + fp[0], o.y, top), gpt(o.x + fp[0], o.y + fp[1], top), gpt(o.x, o.y + fp[1], top)], col);
+}
+
 // 待購物件：金色底＋半透明本體＋金色虛線外框；選取中改白色實線
 function drawPendingObj(ctx, o) {
   const fp = footprint(o.type, o.rot);
@@ -725,6 +743,8 @@ function draw(ctx, time) {
   ctx.setTransform(r * z, 0, 0, r * z, r * (viewport.w / 2 - view.x * z), r * (viewport.h / 2 - view.y * z));
 
   const hid = hide.on && !pano.open; // 隱藏建築（PLAN 12.17）；全景一律畫實際建築
+  if (typeof tdZonePrep === 'function') tdZonePrep(time);
+  if (typeof lifeFrame === 'function') lifeFrame(time);
 
   for (let d = 0; d <= MAP_W + MAP_H - 2; d++) {
     for (let x = Math.max(0, d - MAP_H + 1); x <= Math.min(d, MAP_W - 1); x++) {
@@ -732,13 +752,16 @@ function draw(ctx, time) {
       if (cellVisible(x, y)) {
         drawTile(ctx, x, y, time);
         if (hid) drawGhostCell(ctx, x, y);
+        if (typeof tdZoneCell === 'function') tdZoneCell(ctx, x, y);
       }
     }
     if (typeof drawOverlayDiag === 'function') drawOverlayDiag(ctx, d, time);
     const list = hid ? null : world.objDiag[d];
     if (list) {
       list.slice().sort((a, b) => a.x - b.x).forEach(o => {
-        if (objVisible(o) && !(typeof tdObjSkip === 'function' && tdObjSkip(o))) drawObject(ctx, o, 1);
+        if (!objVisible(o) || (typeof tdObjSkip === 'function' && tdObjSkip(o))) return;
+        if (view.zoom < OBJ_BLOB_ZOOM) drawObjBlob(ctx, o);
+        else drawObject(ctx, o, 1);
       });
     }
     const pl = pano.open || hid ? null : pend.diag[d];
@@ -748,10 +771,13 @@ function draw(ctx, time) {
       });
     }
     if (typeof drawBattleDiag === 'function') drawBattleDiag(ctx, d, time);
+    if (typeof lifeDrawDiag === 'function') lifeDrawDiag(ctx, d, time);
   }
 
   if (typeof drawWorldOverlay === 'function') drawWorldOverlay(ctx, time);
+  if (typeof tdDrawDrop === 'function') tdDrawDrop(ctx, time);
   if (typeof artLights === 'function') artLights(ctx, time);
+  if (typeof lifeDrawTop === 'function') lifeDrawTop(ctx, time);
   if (preview.visible) drawPreview(ctx);
   ctx.setTransform(r, 0, 0, r, 0, 0);
   if (typeof drawScreenHud === 'function') drawScreenHud(ctx, time);

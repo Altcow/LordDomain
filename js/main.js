@@ -36,7 +36,9 @@ function boot() {
 function frame(nowMs) {
   const dt = Math.min(0.25, Math.max(0, (nowMs - lastFrameMs) / 1000));
   lastFrameMs = nowMs;
-  tickResources(dt);
+  // 攻擊/沙盤/錄影期間不累積經濟(資源列改顯示掠奪);同步 lastTs 避免離線結算把戰鬥時間算進去
+  if (typeof lootMode === 'function' && lootMode()) world.lastTs = Date.now();
+  else tickResources(dt);
   const td = tickResearch(dt);
   if (td) onTechDone(td, false);
   if (battle && ((game.mode === 'attack' && game.phase === 'march') || game.mode === 'replay')) {

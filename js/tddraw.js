@@ -179,6 +179,21 @@ function drawOverlayDiag(ctx, d, time) {
 const TD_TEAM_COL = { 0: '#b8322c', 1: '#3e6fb0' };
 const TD_LOD_ZOOM = 0.8;           // view.zoom 低於此值改畫色點
 const TD_SKIN = '#f0d0a0';
+
+// 小縮放色點半徑(world 單位):直徑 2r × view.zoom = CSS px,至少 3px(dpr 由 transform 一併換算)
+function tdLodR() { return Math.max(2.4, 1.5 / view.zoom); }
+
+// 色點:攻方(team 0)圓點、守方方點;白色細邊(CSS 寬 ≥ 0.5px)
+function tdLodDot(ctx, x, y, team, r) {
+  ctx.beginPath();
+  if (team === 0) ctx.arc(x, y, r, 0, Math.PI * 2);
+  else ctx.rect(x - r, y - r, 2 * r, 2 * r);
+  ctx.fillStyle = TD_TEAM_COL[team] || TD_TEAM_COL[1];
+  ctx.fill();
+  ctx.lineWidth = Math.max(0.9, 0.5 / view.zoom);
+  ctx.strokeStyle = '#ffffff';
+  ctx.stroke();
+}
 let tdBkt = null;                  // 對角線分桶:tdBkt[x+y] = [{u, x, y}]
 const tdSpecCache = {};            // 隊伍色變體 spec(id 含隊伍 → 離屏快取不互撞)
 let tdFpsT0 = -1, tdFpsN = 0, tdFpsVal = 0;
@@ -234,9 +249,9 @@ function tdGroundHz(b, x, y) {
   return (top + (bot - top) * fy) * HL;
 }
 
-// 單位本 tick 是否爬升(地面高度增加)
+// 單位是否攀爬中(td.js u.climbing:跨入攀爬邊後、走出一格高度前)
 function tdClimbing(b, u) {
-  return tdGroundHz(b, u.x, u.y) - tdGroundHz(b, u.px, u.py) > 0;
+  return !!u.climbing;
 }
 
 // 影子畫在地面(單位所在位置的地面高度處),只在高度 > 0 時畫
@@ -304,11 +319,11 @@ function tdDrawBody(ctx, u, e, p, time, col) {
 }
 
 function drawBattleDiag(ctx, d, time) {
-  if (typeof battle === 'undefined' || battle === null) return;
+  if (typeof battle === 'undefined' || battle === null) { tdFxReset(); return; }
   const b = battle;
   if (d === 0) {
+    tdDmgSync(b);
     tdRebuildBuckets(b, tdAlpha());
-    tdDepArr = tdDeployOn() ? deployCells(b.map, 'front') : null;
     tdFxFrame(b, time);
   }
   if (tdBkt === null) return;
@@ -318,33 +333,30 @@ function drawBattleDiag(ctx, d, time) {
     const i = y * MAP_W + x;
     const bl = tdBldAt(b, i);
     if (bl !== null && !bl.alive) tdRubble(ctx, x, y, b.map.height[i] * HL);
-    if (tdDepArr !== null && tdDepArr[i] === 1) poly(ctx, topPts(x, y, b.map.height[i], 0), TD_DEPLOY_FILL);
   }
   const list = tdBkt[d];
-  if (list.length === 0) { tdFxDrawDiag(ctx, b, d, time); return; }
+  if (list.length === 0) { tdBarsDiag(ctx, b, d); tdFxDrawDiag(ctx, b, d, time); return; }
   list.sort(function (p, q) { return p.x - q.x; });
   const lod = view.zoom < TD_LOD_ZOOM;
+  const lr = lod ? tdLodR() : 0;
   for (let k = 0; k < list.length; k++) {
     const e = list[k];
     const u = e.u;
     e.hz = tdGroundHz(b, e.x, e.y);
     e.climb = tdClimbing(b, u);
     const p = gpt(e.x, e.y, e.hz);
-    const col = TD_TEAM_COL[u.team] || TD_TEAM_COL[1];
     tdShadow(ctx, e);
     if (lod) {
-      ctx.beginPath();
-      ctx.arc(p[0], p[1] - 8, 2.4, 0, Math.PI * 2);
-      ctx.fillStyle = col;
-      ctx.fill();
+      tdLodDot(ctx, p[0], p[1] - 8, u.team, lr);
     } else {
-      tdDrawBody(ctx, u, e, p, time, col);
+      tdDrawBody(ctx, u, e, p, time, TD_TEAM_COL[u.team] || TD_TEAM_COL[1]);
     }
     const us = tdUnitSeen.get(u);
     if (us !== undefined && time - us.flash < TD_FLASH_MS) tdFlashBody(ctx, p, lod);
     if (u.fx && u.fx.ambush && u.fx.ambush.until > b.tick) tdAmbushEdge(ctx, p);
-    if (u.hp < u.maxHp) tdHpBar(ctx, p, u);
+    if (u.hp < u.maxHp && !lod) tdHpBar(ctx, p, u);
   }
+  tdBarsDiag(ctx, b, d);
   tdFxDrawDiag(ctx, b, d, time);
 }
 
@@ -426,166 +438,505 @@ function drawWorldOverlay(ctx, time) {
 }
 
 // ---- 戰鬥演出(M2-07;PLAN_TD_MASTER M2-07、PLAN_TD_CORE §4.7)----
-// 純視覺:只讀 battle,不寫入模擬狀態。td.js 沒有投射物事件,射擊以 bl.cd 由低跳高(重置)推算;
-// 目標優先取 bl.btgt(建築實際鎖定者),失效時退回射程內最近的攻方。每幀只在 d === 0 掃描一次。
-const TD_FX_LIFE = 300;             // 投射物 / 落點圈存活毫秒(0.3 秒)
+// 純視覺:只讀 battle,不寫入模擬狀態。射擊來自 td.js tdShot 寫入的 battle.shots(環形緩衝,seq 遞增):
+// 每幀消費 seq > tdLastSeq 的新筆;壽命以模擬時間計(倍速下仍可見),且真實時間至少 TD_FX_MIN_REAL 毫秒。
 const TD_FX_DUST_LIFE = 600;        // 塵煙存活毫秒
 const TD_FX_SHARD_LIFE = 500;       // 碎片存活毫秒
-const TD_FX_PROJ_MAX = 60;          // 同時投射物(含落點圈)上限
-const TD_FX_PART_MAX = 120;         // 同時塵煙 / 碎片上限
+const TD_FX_HPFADE_LIFE = 600;      // 建築摧毀後血條淡出毫秒(之後才留瓦礫)
+const TD_FX_PROJ_MAX = 60;          // 同時射擊視覺(含落點圈)上限
+const TD_FX_PART_MAX = 120;         // 同時塵煙 / 碎片 / 血條淡出上限
+const TD_FX_MIN_REAL = 250;         // 每筆射擊至少顯示的真實毫秒
+const TD_FX_FADE_REAL = 120;        // 抵達後淡出的真實毫秒
+const TD_FX_ZOOM_MIN = 0.35;        // 縮放低於此值只畫 stone 與 fire
+const TD_SHOT_DUR = { arrow: 0.2, bolt: 0.2, stone: 0.5, melee: 0.1, fire: 0.4, smoke: 0.6 };   // 各樣式飛行 / 作用的模擬秒數
+const TD_SHOT_COL = { 0: '#b8322c', 1: '#3e6fb0' };   // 攻方紅系、守方與建築藍系(外框 / 尾跡帶隊色)
+const TD_SHOT_WOOD = '#c9a46a';     // 箭桿木色
 const TD_FLASH_MS = 120;            // 受擊閃白時間(約 1~2 幀)
-const TD_DEPLOY_FILL = 'rgba(255,230,120,.24)';
 const TD_AMBUSH_EDGE = 'rgba(255,215,120,.9)';
 const TD_RANGE_COL = 'rgba(255,255,255,.7)';
 const TD_FLAG_COL = 'rgba(255,214,90,.9)';
 const TD_DUST_OFF = [[0, 0], [0.4, 0.2], [-0.3, 0.4], [0.2, -0.4], [-0.4, -0.2]];
 const TD_SHARD_OFF = [[0.2, 0.1, 8], [-0.3, 0.2, 12], [0.1, -0.3, 6], [-0.2, -0.2, 10]];
-let tdFx = [];                      // 視覺項目;pr = true 為投射物 / 落點圈,其餘為塵煙 / 碎片
-let tdFxBkt = null;                 // 依對角線分桶(同 tdBkt),每幀由 tdFxFrame 重建
+let tdFx = [];                      // 視覺項目;sh = true 為射擊(依模擬時間),其餘為塵煙 / 碎片 / 血條淡出(依真實時間)
+let tdFxBkt = null;                 // 依對角線分桶,每幀由 tdFxFrame 重建
 let tdFxCount = 0;                  // ?perf 顯示用:目前視覺項目數
-let tdDepArr = null;                // 本幀可部署格(deployCells 結果,或 null)
-const tdBldSeen = new WeakMap();    // bl -> { cd, alive }
+let tdFxBattle = null;              // 上一幀的 battle;換新時重設
+let tdLastSeq = -1;                 // 已消費的最後 battle.shots seq
+let tdNowS = 0;                     // 本幀模擬時間(秒)
+let tdBarBkt = null;                // 存活且受傷建築的血條,依前緣對角線分桶
+const tdBldSeen = new WeakMap();    // bl -> { alive, frac }
 const tdUnitSeen = new WeakMap();   // u -> { hp, flash }
 
-// 觀察期或沙盤已選卡時高亮可部署格
-function tdDeployOn() {
-  if (game.phase === 'scout') return true;
-  return typeof sand !== 'undefined' && sand !== null && !!sand.card;
+// 模擬時間(秒):tick × SIM_DT 加上插值餘量
+function tdSimNow(b) {
+  const a = typeof b.acc === 'number' ? b.acc : 0;
+  return b.tick * SIM_DT + (a < 0 ? 0 : (a > SIM_DT ? SIM_DT : a));
 }
 
-// 上限內才加入;投射物 / 落點圈共用 TD_FX_PROJ_MAX,塵煙 / 碎片用 TD_FX_PART_MAX
-function tdFxPush(it) {
-  let np = 0, nq = 0;
-  for (let k = 0; k < tdFx.length; k++) {
-    if (tdFx[k].pr) np++; else nq++;
+// 清空演出與消費進度(battle 為 null、換新戰鬥時)
+function tdFxReset() {
+  tdFx.length = 0;
+  tdFxCount = 0;
+  tdLastSeq = -1;
+  tdFxBattle = null;
+}
+
+// ---- 可部署區與落點預覽(不依賴 battle:觀察期 battle 為 null,地圖即 world 的敵陣偵察版)----
+const TD_ZONE_FRONT = { fill: 'rgba(70,220,110,.30)', line: '#7dff9e' };
+const TD_ZONE_FLANK = { fill: 'rgba(170,110,255,.30)', line: '#c9a2ff' };
+const TD_DROP_OK = { fill: 'rgba(92,255,138,.28)', line: '#5cff8a' };
+const TD_DROP_BAD = { fill: 'rgba(255,90,74,.30)', line: '#ff5a4a' };
+let tdDepArr = null;                // 本幀正面可部署格(Uint8Array)或 null
+let tdDepFlank = null;              // 本幀側翼可部署格(deployCells 的 flank 含正面格;繪製時正面優先)
+let tdZT = 0;                       // 本幀時間(外框脈動用)
+let tdDrop = null;                  // 按住地圖的落點 {x, y, x0, y0}(螢幕座標)或 null
+
+// 本幀要畫的可部署區:
+//  觀察期(atk.on 且 phase==='scout'):有先鋒卡即畫正面,地圖為 world
+//  進軍期(atk.on 且 phase==='march'):仍有隊數且該部已開放的卡;先鋒/中軍/後軍畫正面,伏兵畫側翼
+//  沙盤:已選卡且仍有隊數時畫正面
+function tdZoneWant() {
+  const out = { board: null, front: false, flank: false };
+  if (typeof battle === 'undefined' || battle === null) {
+    if (typeof atk !== 'undefined' && atk.on && game.phase === 'scout') {
+      out.board = world;
+      out.front = atk.cards.some(function (k) { return k.part === 'van'; });
+    }
+    return out;
   }
-  if (it.pr ? np >= TD_FX_PROJ_MAX : nq >= TD_FX_PART_MAX) return false;
+  if (battle.over) return out;
+  out.board = battle.map;
+  if (typeof sand !== 'undefined' && sand !== null && sand.card) {
+    out.front = battle.army.some(function (k) { return k.u === sand.card && k.part === 'main' && k.left > 0; });
+    return out;
+  }
+  if (typeof atk !== 'undefined' && atk.on && game.phase === 'march') {
+    battle.army.forEach(function (k) {
+      if (k.left <= 0 || !battle.seqOpen(k.part).open) return;
+      if (SEQ_ZONE[k.part] === 'flank') out.flank = true; else out.front = true;
+    });
+  }
+  return out;
+}
+
+// render.js draw() 每幀開頭呼叫
+function tdZonePrep(time) {
+  tdZT = time;
+  tdDepArr = null;
+  tdDepFlank = null;
+  const z = tdZoneWant();
+  if (z.board === null) return;
+  if (z.front) tdDepArr = deployCells(z.board, 'front');
+  if (z.flank) tdDepFlank = deployCells(z.board, 'flank');
+}
+
+// 單格的可部署區外框與填色(render.js 畫完地形後呼叫,建築在其上)
+function tdZoneCell(ctx, x, y) {
+  if (tdDepArr === null && tdDepFlank === null) return;
+  const i = y * MAP_W + x;
+  const f = tdDepArr !== null && tdDepArr[i] === 1;
+  const l = !f && tdDepFlank !== null && tdDepFlank[i] === 1;
+  if (!f && !l) return;
+  const sty = f ? TD_ZONE_FRONT : TD_ZONE_FLANK;
+  const p = topPts(x, y, world.height[i], 0);
+  poly(ctx, p, sty.fill);
+  ctx.save();
+  ctx.globalAlpha = 0.55 + 0.45 * Math.sin(tdZT / 220);
+  outline(ctx, p, sty.line, Math.max(2, 1 / view.zoom));
+  ctx.restore();
+}
+
+// 按住落點:ui.js 指標按下 / 移動 / 放開時呼叫;移動超過 8px 即為平移,取消預覽
+function tdDropDown(sx, sy, n) { tdDrop = n === 1 ? { x: sx, y: sy, x0: sx, y0: sy } : null; }
+function tdDropMove(sx, sy) {
+  if (tdDrop === null) return;
+  if (Math.hypot(sx - tdDrop.x0, sy - tdDrop.y0) > 8) { tdDrop = null; return; }
+  tdDrop.x = sx;
+  tdDrop.y = sy;
+}
+function tdDropUp() { tdDrop = null; }
+
+// 落點資訊:格、是否合法、用哪個兵種;沒有可部署的卡時回 null
+function tdDropInfo() {
+  if (tdDrop === null || pano.open) return null;
+  const c = screenToCell(tdDrop.x, tdDrop.y);
+  if (c === null) return null;
+  const i = c.y * MAP_W + c.x;
+  const occ = world.occ[i] !== 0;
+  if (typeof battle === 'undefined' || battle === null) {
+    if (typeof atk === 'undefined' || !atk.on || game.phase !== 'scout') return null;
+    const sel = atk.cards[atk.sel];
+    const k = sel && sel.part === 'van' ? sel : atk.cards.find(function (q) { return q.part === 'van'; });
+    if (!k) return null;
+    return { x: c.x, y: c.y, ok: tdDepArr !== null && tdDepArr[i] === 1 && !occ, u: k.u };
+  }
+  if (battle.over) return null;
+  if (typeof sand !== 'undefined' && sand !== null && sand.card) {
+    const s = battle.army.find(function (q) { return q.u === sand.card && q.part === 'main'; });
+    if (!s) return null;
+    return { x: c.x, y: c.y, ok: s.left > 0 && canDeploy(battle, 'main', c.x, c.y) && !occ, u: s.u };
+  }
+  if (typeof atk === 'undefined' || !atk.on || game.phase !== 'march') return null;
+  const k = battle.army[atk.sel];
+  if (!k) return null;
+  return { x: c.x, y: c.y, ok: k.left > 0 && canDeploy(battle, k.part, c.x, c.y) && !occ, u: k.u };
+}
+
+// 落點預覽:合法綠、不合法紅的格外框 + 兵種影子與色點(攻方,team 0)
+function tdDrawDrop(ctx, time) {
+  const d = tdDropInfo();
+  if (d === null) return;
+  const i = d.y * MAP_W + d.x;
+  const sty = d.ok ? TD_DROP_OK : TD_DROP_BAD;
+  const p = topPts(d.x, d.y, world.height[i], 0);
+  poly(ctx, p, sty.fill);
+  outline(ctx, p, sty.line, Math.max(2, 1.5 / view.zoom));
+  const g = gpt(d.x + 0.5, d.y + 0.5, world.height[i] * HL);
+  ctx.save();
+  ctx.globalAlpha = 0.5;
+  ctx.beginPath();
+  ctx.ellipse(g[0], g[1], 5, 2.5, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  ctx.fill();
+  ctx.globalAlpha = 0.85;
+  tdLodDot(ctx, g[0], g[1] - 8, 0, tdLodR());
+  ctx.restore();
+}
+
+// 上限內才加入(塵煙 / 碎片 / 血條淡出共用 TD_FX_PART_MAX)
+function tdFxPush(it) {
+  let n = 0;
+  for (let k = 0; k < tdFx.length; k++) if (!tdFx[k].sh) n++;
+  if (n >= TD_FX_PART_MAX) return false;
   tdFx.push(it);
   return true;
 }
 
-// 建築射程內最近的存活攻方(btgt 失效時的退路)
-function tdFxNearest(b, bl, range) {
-  let best = null, bd = Infinity;
-  for (let k = 0; k < b.atkList.length; k++) {
-    const u = b.atkList[k];
-    if (!(u.hp > 0)) continue;
-    const d = tdDist(bl, u.x, u.y);
-    if (d > range + 0.5) continue;
-    if (d < bd || (d === bd && best !== null && u.id < best.id)) { best = u; bd = d; }
+// 射擊視覺上限 TD_FX_PROJ_MAX:滿了丟最舊的一條射擊,保留新的
+function tdFxPushShot(it) {
+  let n = 0, old = -1;
+  for (let k = 0; k < tdFx.length; k++) {
+    if (tdFx[k].sh) { if (old < 0) old = k; n++; }
   }
-  return best;
+  if (n >= TD_FX_PROJ_MAX) tdFx.splice(old, 1);
+  tdFx.push(it);
 }
 
-// 射擊:single 為箭線、aoe(投石台)為石彈弧線並加落點圈、pierce(弩台)為弩矢
-function tdFxShot(b, bl, time) {
-  const cb = bl.cb;
-  let t = bl.btgt;
-  if (!(t && t.hp > 0)) t = tdFxNearest(b, bl, cb.range);
-  if (!t) return;
-  const kind = cb.mode === 'aoe' ? 'stone' : (cb.mode === 'pierce' ? 'bolt' : 'arrow');
-  const cx = bl.x + bl.w / 2, cy = bl.y + bl.h / 2;
-  const hz = b.map.height[bl.y * MAP_W + bl.x] * HL;
-  const it = {
-    pr: true, k: kind, t0: time, life: TD_FX_LIFE, sx: cx, sy: cy, sz: hz + 36,
-    eu: t, ex: t.x, ey: t.y, ez: 0, arc: kind === 'stone' ? 36 : (kind === 'arrow' ? 10 : 0), p: 0
-  };
-  if (!tdFxPush(it)) return;
-  if (kind === 'stone' && cb.aoe > 0) {
-    tdFxPush({ pr: true, k: 'ring', t0: time, life: TD_FX_LIFE, x: t.x, y: t.y, z: tdGroundHz(b, t.x, t.y) + 1, r: cb.aoe, p: 0 });
+// 由 battle.shots 的一筆建立射擊視覺(只讀)
+function tdShotStart(b, r, time) {
+  const k = TD_SHOT_DUR[r.k] !== undefined ? r.k : 'arrow';
+  const dist = Math.hypot(r.tx - r.ax, r.ty - r.ay);
+  const hA = tdGroundHz(b, r.ax, r.ay), hT = tdGroundHz(b, r.tx, r.ty);
+  tdFxPushShot({
+    sh: true, seq: r.seq, k: k, team: r.team === 0 ? 0 : 1,
+    ax: r.ax, ay: r.ay, tx: r.tx, ty: r.ty, aoe: r.aoe > 0 ? r.aoe : 0,
+    sz: hA + (k === 'stone' ? 30 : (k === 'melee' ? 8 : 14)), ez: hT + 6, hT: hT,
+    arc: k === 'stone' ? Math.min(60, 14 + 5 * dist) : (k === 'fire' ? 10 : (k === 'arrow' ? 8 : 0)),
+    dur: TD_SHOT_DUR[k], bornS: r.tick * SIM_DT, t0: time, tDone: -1, p: 0, a: 1, gx: r.tx, gy: r.ty, gz: hT
+  });
+}
+
+// 射擊進度 p(模擬時間 / 樣式時長)、抵達後的淡出係數 a(真實時間)
+function tdShotAt(it, time) {
+  const age = tdNowS - it.bornS;
+  const p = age <= 0 ? 0 : (age >= it.dur ? 1 : age / it.dur);
+  it.p = p;
+  if (it.tDone < 0 && age >= it.dur) it.tDone = time;
+  it.a = it.tDone < 0 ? 1 : Math.min(1, Math.max(0, 1 - (time - it.tDone) / TD_FX_FADE_REAL));
+  it.gx = it.ax + (it.tx - it.ax) * p;
+  it.gy = it.ay + (it.ty - it.ay) * p;
+}
+
+// 射擊:抵達且淡出完、真實時間滿 TD_FX_MIN_REAL 才移除;其餘項目依真實壽命
+function tdFxAlive(it, time) {
+  if (it.sh) return !(it.tDone >= 0 && time - it.tDone >= TD_FX_FADE_REAL && time - it.t0 >= TD_FX_MIN_REAL);
+  return time - it.t0 < it.life;
+}
+
+// 射擊在螢幕上的位置:沿 a→t 直線,高度為拋物線(stone 較高)
+function tdShotPos(it, p) {
+  return gpt(it.ax + (it.tx - it.ax) * p, it.ay + (it.ty - it.ay) * p, it.sz + (it.ez - it.sz) * p + Math.sin(Math.PI * p) * it.arc);
+}
+
+function tdShotDraw(ctx, it, time) {
+  if (!(it.a > 0)) return;
+  ctx.save();
+  const col = TD_SHOT_COL[it.team];
+  if (it.k === 'arrow') tdDrawArrow(ctx, it, col, it.a);
+  else if (it.k === 'bolt') tdDrawBolt(ctx, it, col, it.a);
+  else if (it.k === 'stone') tdDrawStone(ctx, it, col, it.a, time);
+  else if (it.k === 'melee') tdDrawMelee(ctx, it, col, it.a);
+  else if (it.k === 'fire') tdDrawFire(ctx, it, col, it.a);
+  else tdDrawSmoke(ctx, it, col, it.a);
+  ctx.restore();
+}
+
+// 箭矢:細長箭桿 + 箭頭 + 尾羽,尾跡帶隊色
+function tdDrawArrow(ctx, it, col, al) {
+  const p = it.p, t = tdShotPos(it, Math.max(0, p - 0.2)), h = tdShotPos(it, p);
+  edgeLine(ctx, t, h, col, 3, 0.35 * al);
+  edgeLine(ctx, t, h, TD_SHOT_WOOD, 1.2, al);
+  const dx = h[0] - t[0], dy = h[1] - t[1], L = Math.hypot(dx, dy);
+  if (L < 0.5) return;
+  const ux = dx / L, uy = dy / L, px = -uy, py = ux;
+  ctx.globalAlpha = al;
+  ctx.beginPath();
+  ctx.moveTo(h[0] + ux * 3, h[1] + uy * 3);
+  ctx.lineTo(h[0] - ux + px * 2, h[1] - uy + py * 2);
+  ctx.lineTo(h[0] - ux - px * 2, h[1] - uy - py * 2);
+  ctx.closePath();
+  ctx.fillStyle = '#d8dce0';
+  ctx.fill();
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+  const bx = t[0] - ux * 2.5, by = t[1] - uy * 2.5;
+  ctx.beginPath();
+  ctx.moveTo(bx + px * 1.6, by + py * 1.6);
+  ctx.lineTo(t[0], t[1]);
+  ctx.lineTo(bx - px * 1.6, by - py * 1.6);
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+// 弩矢:粗直線加殘影
+function tdDrawBolt(ctx, it, col, al) {
+  const p = it.p;
+  const a = tdShotPos(it, Math.max(0, p - 0.25)), m = tdShotPos(it, Math.max(0, p - 0.1)), h = tdShotPos(it, p);
+  edgeLine(ctx, a, m, col, 1.2, 0.25 * al);
+  edgeLine(ctx, m, h, col, 3.4, 0.6 * al);
+  edgeLine(ctx, m, h, '#d8c39a', 1.8, al);
+}
+
+// 石彈:拋物線 + 落點圈(aoe 半徑)+ 落地塵
+function tdDrawStone(ctx, it, col, al, time) {
+  const p = it.p;
+  if (it.aoe > 0) {
+    const r = it.aoe * (0.85 + 0.15 * p);
+    ctx.beginPath();
+    for (let q = 0; q <= 24; q++) {
+      const c = gpt(it.tx + r * Math.cos(q * Math.PI / 12), it.ty + r * Math.sin(q * Math.PI / 12), it.hT + 1);
+      if (q === 0) ctx.moveTo(c[0], c[1]); else ctx.lineTo(c[0], c[1]);
+    }
+    ctx.globalAlpha = al * 0.08;
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.globalAlpha = al * (0.3 + 0.5 * p);
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
+  if (p < 1) {
+    const c = tdShotPos(it, p);
+    ctx.globalAlpha = al;
+    ctx.beginPath();
+    ctx.arc(c[0], c[1], 2.6, 0, Math.PI * 2);
+    ctx.fillStyle = '#6f675e';
+    ctx.fill();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+  } else if (it.tDone >= 0) {
+    const q = Math.min(1, (time - it.tDone) / 200);
+    ctx.fillStyle = 'rgb(130,122,112)';
+    for (let k = 0; k < TD_DUST_OFF.length; k++) {
+      const o = TD_DUST_OFF[k];
+      const c = gpt(it.tx + o[0] * (0.5 + q), it.ty + o[1] * (0.5 + q), it.hT + 4 + 8 * q);
+      ctx.globalAlpha = al * 0.5 * (1 - q);
+      ctx.beginPath();
+      ctx.arc(c[0], c[1], 2 + 4 * q, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 }
 
-// 建築摧毀:塵煙與碎片(隱藏建築不畫)
-function tdFxDestroy(b, bl, time) {
+// 打擊:不飛行,短弧線加目標處閃光
+function tdDrawMelee(ctx, it, col, al) {
+  const p = it.p;
+  const A = tdShotPos(it, 0), T = tdShotPos(it, 1);
+  const mx = (A[0] + T[0]) / 2, my = (A[1] + T[1]) / 2 - 6;
+  ctx.globalAlpha = al * (1 - 0.5 * p);
+  ctx.beginPath();
+  ctx.moveTo(A[0], A[1]);
+  ctx.quadraticCurveTo(mx, my, T[0], T[1]);
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+  ctx.globalAlpha = al * (1 - p);
+  ctx.beginPath();
+  for (let k = 0; k < 4; k++) {
+    const a = k * Math.PI / 2 + Math.PI / 4, L = 3 + 5 * p;
+    ctx.moveTo(T[0] + Math.cos(a) * 2, T[1] + Math.sin(a) * 2);
+    ctx.lineTo(T[0] + Math.cos(a) * L, T[1] + Math.sin(a) * L);
+  }
+  ctx.strokeStyle = '#fff3c4';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(T[0], T[1], 2 + 2 * p, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff3c4';
+  ctx.fill();
+}
+
+// 火球:火球本體加焰尾
+function tdDrawFire(ctx, it, col, al) {
+  const p = it.p;
+  for (let q = 3; q >= 1; q--) {
+    const c = tdShotPos(it, Math.max(0, p - 0.05 * q));
+    ctx.globalAlpha = al * (0.5 - 0.12 * q);
+    ctx.beginPath();
+    ctx.arc(c[0], c[1], 2.6 - 0.5 * q, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff7a1a';
+    ctx.fill();
+  }
+  const h = tdShotPos(it, p);
+  ctx.globalAlpha = al;
+  ctx.beginPath();
+  ctx.arc(h[0], h[1], 2.6, 0, Math.PI * 2);
+  ctx.fillStyle = '#ff9a2a';
+  ctx.fill();
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 0.9;
+  ctx.stroke();
+}
+
+// 煙:目標處灰煙團擴散(外框帶隊色)
+function tdDrawSmoke(ctx, it, col, al) {
+  const p = it.p;
+  const c0 = gpt(it.tx, it.ty, it.hT + 4 + 6 * p);
+  for (let q = 0; q < 3; q++) {
+    const c = [c0[0] + (q - 1) * (3 + 3 * p), c0[1] - q * 2 * p];
+    ctx.beginPath();
+    ctx.arc(c[0], c[1], 2 + 5 * p + q * 0.8, 0, Math.PI * 2);
+    ctx.globalAlpha = al * 0.45 * (1 - 0.6 * p);
+    ctx.fillStyle = 'rgb(150,150,150)';
+    ctx.fill();
+    ctx.globalAlpha = al * 0.4;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+  }
+}
+
+// 建築血條:寬依占格(牆較窄且較低),綠 > 50%、黃 > 25%、其餘紅
+function tdBarLift(bl) { return bl.cb && bl.cb.block === 'wall' ? 24 : 56; }
+function tdBarDraw(ctx, x, y, w, h, frac, z, lift, wall, al) {
+  const c = gpt(x + w / 2, y + h / 2, z + lift);
+  const W = (wall ? 6 : 10) * w, H = wall ? 2 : 3;
+  const f = frac < 0 ? 0 : (frac > 1 ? 1 : frac);
+  ctx.save();
+  ctx.globalAlpha = al;
+  ctx.fillStyle = 'rgba(0,0,0,.55)';
+  ctx.fillRect(c[0] - W / 2 - 0.5, c[1] - 0.5, W + 1, H + 1);
+  ctx.fillStyle = f > 0.5 ? '#6ccf5a' : (f > 0.25 ? '#e8c03a' : '#e0402a');
+  ctx.fillRect(c[0] - W / 2, c[1], W * f, H);
+  ctx.restore();
+}
+
+// 每幀依 battle.bld 收集存活、受傷、未隱藏的建築(依前緣格對角線分桶)
+function tdBarBuild(b) {
+  if (tdBarBkt === null) {
+    tdBarBkt = [];
+    for (let k = 0; k < MAP_W + MAP_H - 1; k++) tdBarBkt.push([]);
+  }
+  for (let k = 0; k < tdBarBkt.length; k++) tdBarBkt[k].length = 0;
+  for (let n = 0; n < b.bld.length; n++) {
+    const bl = b.bld[n];
+    if (!bl.alive || bl.hidden || !(bl.hp > 0) || !(bl.maxHp > 0) || !(bl.hp < bl.maxHp)) continue;
+    tdBarBkt[tdClampI(bl.x + bl.w - 1 + bl.y + bl.h - 1, 0, tdBarBkt.length - 1)].push(bl);
+  }
+}
+
+function tdBarsDiag(ctx, b, d) {
+  if (tdBarBkt === null || view.zoom < TD_FX_ZOOM_MIN) return;
+  const list = tdBarBkt[d];
+  for (let k = 0; k < list.length; k++) {
+    const bl = list[k];
+    tdBarDraw(ctx, bl.x, bl.y, bl.w, bl.h, bl.hp / bl.maxHp, b.map.height[bl.y * MAP_W + bl.x] * HL, tdBarLift(bl), bl.cb.block === 'wall', 1);
+  }
+}
+
+// 建築摧毀:塵煙、碎片與血條淡出(隱藏建築不畫)
+function tdFxDestroy(b, bl, time, frac) {
   if (bl.hidden) return;
   const cx = bl.x + bl.w / 2, cy = bl.y + bl.h / 2;
   const hz = b.map.height[bl.y * MAP_W + bl.x] * HL;
   for (let k = 0; k < TD_DUST_OFF.length; k++) {
     const o = TD_DUST_OFF[k];
-    tdFxPush({ pr: false, k: 'dust', t0: time, life: TD_FX_DUST_LIFE, x: cx + o[0] * bl.w, y: cy + o[1] * bl.h, z: hz + 6, p: 0 });
+    tdFxPush({ k: 'dust', t0: time, life: TD_FX_DUST_LIFE, x: cx + o[0] * bl.w, y: cy + o[1] * bl.h, z: hz + 6, p: 0 });
   }
   for (let k = 0; k < TD_SHARD_OFF.length; k++) {
     const o = TD_SHARD_OFF[k];
-    tdFxPush({ pr: false, k: 'shard', t0: time, life: TD_FX_SHARD_LIFE, x: cx + o[0] * bl.w, y: cy + o[1] * bl.h, z: hz + o[2], p: 0 });
+    tdFxPush({ k: 'shard', t0: time, life: TD_FX_SHARD_LIFE, x: cx + o[0] * bl.w, y: cy + o[1] * bl.h, z: hz + o[2], p: 0 });
+  }
+  if (bl.maxHp > 0) {
+    tdFxPush({ k: 'bar', t0: time, life: TD_FX_HPFADE_LIFE, x: bl.x, y: bl.y, w: bl.w, h: bl.h, z: hz, frac: frac, lift: tdBarLift(bl), wall: bl.cb.block === 'wall', p: 0 });
   }
 }
 
-// 每幀掃描:建築 cd 重置 → 射擊;存活轉死亡 → 摧毀;單位 hp 下降 → 閃白
+// 消費 battle.shots 中 seq > tdLastSeq 的新筆(環形緩衝;一幀最多取最新 TD_FX_PROJ_MAX 筆)
+function tdShotConsume(b, time) {
+  const hi = b.shotSeq - 1;
+  if (hi <= tdLastSeq) return;
+  const shots = b.shots || [];
+  let lo = Math.max(tdLastSeq + 1, b.shotSeq - TD_SHOT_MAX);
+  if (hi - lo + 1 > TD_FX_PROJ_MAX) lo = hi - TD_FX_PROJ_MAX + 1;
+  for (let s = lo; s <= hi; s++) {
+    const r = shots[s % TD_SHOT_MAX];
+    if (!r || r.seq !== s) continue;
+    if (view.zoom < TD_FX_ZOOM_MIN && r.k !== 'stone' && r.k !== 'fire') continue;
+    tdShotStart(b, r, time);
+  }
+  tdLastSeq = hi;
+}
+
+// 每幀掃描:存活轉死亡 → 摧毀演出;單位 hp 下降 → 閃白
 function tdFxScan(b, time) {
   for (let n = 0; n < b.bld.length; n++) {
     const bl = b.bld[n];
+    const frac = bl.maxHp > 0 ? bl.hp / bl.maxHp : 0;
     const s = tdBldSeen.get(bl);
-    if (s === undefined) { tdBldSeen.set(bl, { cd: bl.cd, alive: bl.alive }); continue; }
-    if (!bl.hidden) {
-      if (s.alive && !bl.alive) tdFxDestroy(b, bl, time);
-      else if (bl.alive && bl.cb.atk > 0 && bl.cd > s.cd) tdFxShot(b, bl, time);
-    }
-    s.cd = bl.cd;
+    if (s === undefined) { tdBldSeen.set(bl, { alive: bl.alive, frac: frac }); continue; }
+    if (s.alive && !bl.alive) tdFxDestroy(b, bl, time, s.frac);
     s.alive = bl.alive;
+    s.frac = frac;
   }
   for (let k = 0; k < b.units.length; k++) {
     const u = b.units[k];
     const s = tdUnitSeen.get(u);
-    if (s === undefined) { tdUnitSeen.set(u, { hp: u.hp, flash: -1e9, cd: u.cdT }); continue; }
+    if (s === undefined) { tdUnitSeen.set(u, { hp: u.hp, flash: -1e9 }); continue; }
     if (u.hp < s.hp) s.flash = time;
-    if (u.cdT > s.cd && u.hp > 0) tdFxUnitShot(b, u, time);
     s.hp = u.hp;
-    s.cd = u.cdT;
   }
 }
 
-// 遠程單位(射程 ≥ 2,如弓兵)出手:cdT 重置即為一次射擊,畫箭線朝目標飛去
-// 目標取 utgt(單位)或 tgt(建築),皆為攻擊當 tick 的鎖定目標(近似)
-function tdFxUnitShot(b, u, time) {
-  const def = UNITS[u.u];
-  if (!def || !(def.range >= 2)) return;
-  const t = u.utgt && u.utgt.hp > 0 ? u.utgt : (u.tgt && u.tgt.hp > 0 ? u.tgt : null);
-  if (t === null) return;
-  const isUnit = 'team' in t;
-  const tx = isUnit ? t.x : t.x + t.w / 2, ty = isUnit ? t.y : t.y + t.h / 2;
-  tdFxPush({
-    pr: true, k: 'arrow', t0: time, life: TD_FX_LIFE, sx: u.x, sy: u.y, sz: tdGroundHz(b, u.x, u.y) + 14,
-    eu: isUnit ? t : null, ex: tx, ey: ty, ez: 0, arc: 6, p: 0
-  });
-}
-
-// 更新一個視覺項目的地面位置 it.gx / gy / gz 與進度 it.p(投射物的目標若仍存活則跟隨其位置)
-function tdFxAt(it, b, time) {
+// 更新一個視覺項目的地面位置 it.gx / gy / gz 與進度 it.p
+function tdFxAt(it, time) {
+  if (it.sh) { tdShotAt(it, time); return; }
   const p = Math.min(1, Math.max(0, (time - it.t0) / it.life));
   it.p = p;
-  if (!it.pr) {
-    it.gx = it.x; it.gy = it.y;
-    it.gz = it.z + (it.k === 'dust' ? 20 * p : 30 * Math.sin(Math.PI * p));
+  if (it.k === 'bar') {
+    it.gx = it.x + it.w - 1; it.gy = it.y + it.h - 1; it.gz = it.z;
     return;
   }
-  if (it.k === 'ring') {
-    it.gx = it.x; it.gy = it.y; it.gz = it.z;
-    return;
-  }
-  const u = it.eu;
-  if (u && u.hp > 0) { it.ex = u.x; it.ey = u.y; }
-  it.ez = tdGroundHz(b, it.ex, it.ey) + 10;
-  it.gx = it.sx + (it.ex - it.sx) * p;
-  it.gy = it.sy + (it.ey - it.sy) * p;
-  it.gz = it.sz + (it.ez - it.sz) * p + Math.sin(Math.PI * p) * it.arc;
+  it.gx = it.x; it.gy = it.y;
+  it.gz = it.z + (it.k === 'dust' ? 20 * p : 30 * Math.sin(Math.PI * p));
 }
 
-// 投射物在螢幕上的位置(依進度 p)
-function tdFxScreen(it, p) {
-  const gx = it.sx + (it.ex - it.sx) * p, gy = it.sy + (it.ey - it.sy) * p;
-  return gpt(gx, gy, it.sz + (it.ez - it.sz) * p + Math.sin(Math.PI * p) * it.arc);
-}
-
-// 每幀開頭:清除過期項目、掃描事件、依對角線分桶
+// 每幀開頭:換新戰鬥則重設、清過期項目、消費新射擊、掃描事件、依對角線分桶
 function tdFxFrame(b, time) {
+  if (b !== tdFxBattle) { tdFxReset(); tdFxBattle = b; }
+  tdNowS = tdSimNow(b);
   let w = 0;
   for (let k = 0; k < tdFx.length; k++) {
-    const it = tdFx[k];
-    if (time - it.t0 < it.life) tdFx[w++] = it;
+    if (tdFxAlive(tdFx[k], time)) tdFx[w++] = tdFx[k];
   }
   tdFx.length = w;
+  if (!b.over) tdShotConsume(b, time);
   tdFxScan(b, time);
+  if (b.over) tdFx.length = 0;
+  tdBarBuild(b);
   if (tdFxBkt === null) {
     tdFxBkt = [];
     for (let k = 0; k < MAP_W + MAP_H - 1; k++) tdFxBkt.push([]);
@@ -593,28 +944,50 @@ function tdFxFrame(b, time) {
   for (let k = 0; k < tdFxBkt.length; k++) tdFxBkt[k].length = 0;
   for (let k = 0; k < tdFx.length; k++) {
     const it = tdFx[k];
-    tdFxAt(it, b, time);
+    tdFxAt(it, time);
     tdFxBkt[tdClampI(Math.floor(it.gx) + Math.floor(it.gy), 0, tdFxBkt.length - 1)].push(it);
   }
   tdFxCount = tdFx.length;
 }
 
-function tdFxDrawOne(ctx, it) {
+// 戰陣建築受損外觀:依血量比例寫入 world.objects[].dmg(art.js artVariant 讀取)。
+// 只在攻擊 / 錄影 / 沙盤(body.sandbox,同 battleui lootMode)寫入;索引不符時以 type,x,y 比對。
+function tdDmgWanted() {
+  if (game.mode === 'attack' || game.mode === 'replay') return true;
+  return typeof document !== 'undefined' && !!document.body && document.body.classList.contains('sandbox');
+}
+
+function tdDmgOf(bl) {
+  if (!(bl.maxHp > 0)) return 0;
+  const r = bl.hp / bl.maxHp;
+  return r < 0.2 ? 2 : (r < 0.5 ? 1 : 0);
+}
+
+function tdDmgSync(b) {
+  if (!tdDmgWanted() || typeof world === 'undefined' || !world.objects) return;
+  const objs = world.objects;
+  let byKey = null;
+  for (let n = 0; n < b.bld.length; n++) {
+    const bl = b.bld[n];
+    let o = objs[bl.n];
+    if (!o || o.type !== bl.type || o.x !== bl.x || o.y !== bl.y) {
+      if (byKey === null) {
+        byKey = new Map();
+        for (let k = 0; k < objs.length; k++) byKey.set(objs[k].type + '|' + objs[k].x + '|' + objs[k].y, objs[k]);
+      }
+      o = byKey.get(bl.type + '|' + bl.x + '|' + bl.y);
+    }
+    if (!o) continue;
+    const v = tdDmgOf(bl);
+    if ((o.dmg || 0) !== v) o.dmg = v;
+  }
+}
+
+function tdFxDrawOne(ctx, it, time) {
+  if (it.sh) { tdShotDraw(ctx, it, time); return; }
+  if (it.k === 'bar') { tdBarDraw(ctx, it.x, it.y, it.w, it.h, it.frac, it.z, it.lift, it.wall, 1 - it.p); return; }
   const p = it.p;
   ctx.globalAlpha = 1;
-  if (it.k === 'ring') {
-    const r = it.r * (0.5 + 0.5 * p);
-    ctx.globalAlpha = 1 - p;
-    ctx.beginPath();
-    for (let a = 0; a <= 24; a++) {
-      const q = gpt(it.gx + r * Math.cos(a * Math.PI / 12), it.gy + r * Math.sin(a * Math.PI / 12), it.gz + 1);
-      if (a === 0) ctx.moveTo(q[0], q[1]); else ctx.lineTo(q[0], q[1]);
-    }
-    ctx.strokeStyle = 'rgba(255,140,60,1)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    return;
-  }
   if (it.k === 'dust') {
     const c = gpt(it.gx, it.gy, it.gz);
     ctx.globalAlpha = 0.55 * (1 - p);
@@ -629,27 +1002,21 @@ function tdFxDrawOne(ctx, it) {
     ctx.globalAlpha = 1 - p;
     ctx.fillStyle = '#8a8076';
     ctx.fillRect(c[0] - 1.5, c[1] - 1.5, 3, 3);
-    return;
   }
-  const h = tdFxScreen(it, p);
-  if (it.k === 'stone') {
-    ctx.beginPath();
-    ctx.arc(h[0], h[1], 2.6, 0, Math.PI * 2);
-    ctx.fillStyle = '#6f675e';
-    ctx.fill();
-    return;
-  }
-  const t = tdFxScreen(it, Math.max(0, p - 0.15));
-  edgeLine(ctx, t, h, it.k === 'bolt' ? '#d8c39a' : '#f3d36b', it.k === 'bolt' ? 2 : 1.2, 1);
 }
 
-// 本對角線的視覺項目 + 令旗插旗圖示
+// 本對角線的視覺項目 + 令旗插旗圖示;縮放 < TD_FX_ZOOM_MIN 只畫 stone 與 fire
 function tdFxDrawDiag(ctx, b, d, time) {
   if (tdFxBkt === null) return;
   const list = tdFxBkt[d];
+  const low = view.zoom < TD_FX_ZOOM_MIN;
   if (list.length > 0) {
     ctx.save();
-    for (let k = 0; k < list.length; k++) tdFxDrawOne(ctx, list[k]);
+    for (let k = 0; k < list.length; k++) {
+      const it = list[k];
+      if (low && !(it.sh && (it.k === 'stone' || it.k === 'fire'))) continue;
+      tdFxDrawOne(ctx, it, time);
+    }
     ctx.restore();
   }
   const f = b.flag;
@@ -661,7 +1028,7 @@ function tdFxDrawDiag(ctx, b, d, time) {
 // 受擊閃白(一兩幀):白色小橢圓蓋在人物身上
 function tdFlashBody(ctx, p, lod) {
   ctx.beginPath();
-  if (lod) ctx.arc(p[0], p[1] - 8, 3, 0, Math.PI * 2);
+  if (lod) ctx.arc(p[0], p[1] - 8, tdLodR() + 0.5, 0, Math.PI * 2);
   else ctx.ellipse(p[0], p[1] - 14, 7, 10, 0, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(255,255,255,.8)';
   ctx.fill();

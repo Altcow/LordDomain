@@ -508,7 +508,6 @@ function clearWorld() {
   world.zone.fill(0);
   world.marks = newMarks();
   world.objects = [];
-  world.res = Object.assign({}, START_RES);
   rebuildOcc();
 }
 
@@ -542,6 +541,8 @@ function loadDemo(ox, oy) {
   put('bridge', 26, 18, 0);
   put('house', 20, 8); put('house', 20, 13); put('house', 10, 14); put('house', 14, 14);
   put('lumber', 9, 6); put('quarry', 20, 10); put('market', 16, 14);
+  // 三種營放在樹與城牆之前;不佔第 18 欄道路與城門中線通道(17,5 / 18,5 仍空)
+  put('cavalry', 11, 5, 0); put('shield', 15, 8, 0); put('archer', 19, 5, 0);
   // 高台後牆、左牆、右牆與前牆(南門在 17,16 與階梯同線)
   fillRect(8, 4, 16, 4, (x, y) => put('wall', x, y));
   fillRect(20, 4, 22, 4, (x, y) => put('wall', x, y));
@@ -556,7 +557,6 @@ function loadDemo(ox, oy) {
   const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
   for (let n = 0; n < 70; n++) put('tree', Math.floor(rnd() * 40), Math.floor(rnd() * 40));
   for (let x = 12; x <= 36; x++) if (x !== 18 && x !== 19 && x !== 26 && rnd() < 0.7) put('stone', x, 19);
-  world.res = Object.assign({}, START_RES);
 }
 
 function tplCells(e) {
@@ -632,7 +632,7 @@ function applyTemplate(id) {
     if (fails.length) console.warn('[template] ' + id + ': ' + fails.length + ' failed', fails.slice(0, 20).join(' '));
     failed = fails.length;
   }
-  if (estate && TEMPLATE_KEEP_RES) world.res = keep;
+  if (estate) world.res = keep;
   if (estate) world.lastTs = Date.now();
   return { placed: world.objects.length, failed: failed, ox: ox, oy: oy };
 }

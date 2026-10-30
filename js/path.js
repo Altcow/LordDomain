@@ -1,13 +1,14 @@
 // path.js — 尋路與流場(PLAN_TD_MASTER §6.1;規格 PLAN_TD_CORE §3.1~§3.6、§3.10)
 // 只宣告函式與常數,載入時不執行模擬邏輯。
 // 外部全域:MAP_W MAP_H OBJECTS DIRS T_GRASS T_LAKE T_RIVER T_ROAD(data.js、units.js)
-// 選用掛點:stratCost(b, i, profile)(C 的危害;未定義時略過)
+// 選用掛點:stratCost(b, i, profile)(C 的危害;未定義時略過)、TD_COMBAT.climbCost(攀爬代價;未定義時 40)
 
 const WALL_BASE = 60;
 const PATH_UNREACH = 0xFFFF;
 const PATH_COST_MAX = 0xFFFE;
 const PATH_INF = 0xFFFFFFFF;
 const PATH_KEY_SHIFT = 4096;
+const PATH_CLIMB_COST = (typeof TD_COMBAT !== 'undefined' && TD_COMBAT.climbCost) || 40;
 
 // MOVE_COST[基礎 profile][地形值];地形值依 data.js:T_GRASS=0 T_LAKE=1 T_RIVER=2 T_ROAD=3
 const MOVE_COST = {
@@ -59,10 +60,16 @@ class MinHeap {
   }
 }
 
-// profile 字串:'foot' | 'horse' | 'heavy' | 'foot:w'(牆代價 ×0.25)
+// profile 字串:'foot' | 'horse' | 'heavy' | 'foot:w'(牆代價 ×0.25)| 'foot:nc'(關閉攀爬)| ':m'(近戰:cat 目標站位需同高或有階梯 / 斜坡,見 goalCells)
+// climb:僅 foot 系列預設可攀爬(±1 層、正交);horse / heavy 永不攀爬
 function pathParseProfile(profile) {
-  const s = String(profile), k = s.indexOf(':');
-  return { base: k < 0 ? s : s.slice(0, k), wallMul: k >= 0 && s.slice(k + 1) === 'w' ? 0.25 : 1 };
+  const parts = String(profile).split(':'), base = parts[0], mods = parts.slice(1);
+  return {
+    base: base,
+    wallMul: mods.indexOf('w') >= 0 ? 0.25 : 1,
+    climb: base === 'foot' && mods.indexOf('nc') < 0,
+    melee: mods.indexOf('m') >= 0
+  };
 }
 
 // 格上存活且可見的建築;摧毀或隱藏視為地面
@@ -123,12 +130,14 @@ function pathRampGrade(b, i, bl) {
 // 斜向邊另需:i、j 與兩個正交鄰格都不擋斜角(不切牆角);牆格只能被正交進入
 // slope[i](Int8Array,僅 ramp 格非 0):+1 = 此格朝 DIRS[facing] 往上、−1 = 往下、0 = 平或非斜坡
 // 行進方向由 b.map.height 判定(低格踏入斜坡為上坡、由高格踏入為下坡)
+// climb[i](Uint8Array)的 bit k 表示 i→i+NB_OFF[k] 是攀爬邊(正交、高差恰為 1、無階梯/斜坡、目標非牆/建築/block);攀爬邊同時設於 edge
+// 攀爬邊的流場代價 = 目標格地面代價 + PATH_CLIMB_COST(見 buildField)
 function buildPass(b, profile) {
   const pr = pathParseProfile(profile);
   const row = MOVE_COST[pr.base];
   const N = MAP_W * MAP_H;
   const cost = new Uint16Array(N), edge = new Uint8Array(N), link = new Uint8Array(N), barrier = new Uint8Array(N);
-  const slope = new Int8Array(N);
+  const slope = new Int8Array(N), climb = new Uint8Array(N);
   const hgt = b.map.height;
   for (let i = 0; i < N; i++) {
     cost[i] = pathCellCost(b, i, row, pr, profile);
@@ -145,12 +154,15 @@ function buildPass(b, profile) {
       if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
       const j = ny * MAP_W + nx;
       if (cost[j] === PATH_UNREACH) continue;
-      if (hgt[i] !== hgt[j] && !link[i] && !link[j]) continue;
+      if (hgt[i] !== hgt[j] && !link[i] && !link[j]) {
+        if (!pr.climb || (k & 1) || Math.abs(hgt[i] - hgt[j]) !== 1 || barrier[j]) continue;
+        climb[i] |= 1 << k;
+      }
       if ((k & 1) && (barrier[i] || barrier[j] || barrier[y * MAP_W + nx] || barrier[ny * MAP_W + x])) continue;
       edge[i] |= 1 << k;
     }
   }
-  return { cost: cost, edge: edge, slope: slope };
+  return { cost: cost, edge: edge, slope: slope, climb: climb };
 }
 
 function getPass(b, profile) {
@@ -201,9 +213,12 @@ function goalCells(b, goal, profile) {
     if (b.bld[n]) blds.push(n);
   }
   const P = profile ? getPass(b, profile) : null;
+  const melee = !!profile && pathParseProfile(profile).melee;
+  const hgt = b.map.height, near = b.linkNear || null;
   const inGoal = new Uint8Array(N), seen = new Uint8Array(N);
   blds.forEach(function (n) { pathEachFootprint(b.bld[n], function (c) { inGoal[c] = 1; }); });
   blds.forEach(function (n) {
+    const hb = hgt[b.bld[n].y * MAP_W + b.bld[n].x];
     pathEachFootprint(b.bld[n], function (c) {
       const x = c % MAP_W, y = (c - x) / MAP_W;
       for (let dy = -1; dy <= 1; dy++)
@@ -213,6 +228,8 @@ function goalCells(b, goal, profile) {
           const d = ny * MAP_W + nx;
           if (inGoal[d] || seen[d]) continue;
           if (P ? P.cost[d] === PATH_UNREACH : b.map.block[d] === 1) continue;
+          // 近戰站位(profile 含 'm'):與目標同高,或高差 1 且站位格有階梯 / 斜坡相連(與 td.js tdHitOkBld 一致),否則不列為目標格
+          if (melee) { const dh = Math.abs(hgt[d] - hb); if (dh > 1 || (dh === 1 && !(near && near[d] === 1))) continue; }
           seen[d] = 1;
           out.push(d);
         }
@@ -242,7 +259,9 @@ function buildField(b, profile, goal) {
       if (!(e & (1 << k))) continue;
       const j = i + NB_OFF[k], c = P.cost[j];
       if (c === PATH_UNREACH) continue;
-      const nd = d + ((k & 1) ? Math.floor(c * 14 / 10) : c);
+      let step = (k & 1) ? Math.floor(c * 14 / 10) : c;
+      if (P.climb && (P.climb[i] & (1 << k))) step += PATH_CLIMB_COST;
+      const nd = d + step;
       if (nd < dist[j]) { dist[j] = nd; heap.push(nd * PATH_KEY_SHIFT + j); }
     }
   }

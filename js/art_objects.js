@@ -875,4 +875,885 @@
     },
     lights: function () { return [[0.75, 0.7, 16, 28, C.lamp, 0.6]]; }
   });
+
+  // =====================================================================
+  // 戰陣建築 camp_*(10 種,對應 js/units.js CAMP_OBJECTS,占格相同)
+  // v.dmg:0 完好 / 1 受損(血量 <50%:牆面裂痕、冒煙)/ 2 重創(血量 <20%:局部倒塌、火苗)
+  // =====================================================================
+  var CK_DARK = '#2a1c18';
+  // 螢幕上旗面飄向:+x 在右、-x 在左、+y 在左、-y 在右(與 A.P 的 sx = (gx-gy)*32 相符)
+  var CK_DIR = { '+x': 1, '-x': -1, '+y': -1, '-y': 1 };
+  function ckDir(m) { return CK_DIR[m.wdir('F')] || 1; }
+  // 裂痕:自 (s, z) 向下的折線
+  function ckCrack(ctx, f, s, z, len) {
+    var p = f.pt(s, z), i, q;
+    ctx.beginPath(); ctx.moveTo(p[0], p[1]);
+    for (i = 1; i <= 4; i++) { q = f.pt(s + (i % 2 ? 0.025 : -0.02), z - len * i / 4); ctx.lineTo(q[0], q[1]); }
+    ctx.strokeStyle = CK_DARK; ctx.lineWidth = 1.3; ctx.lineJoin = 'round'; ctx.stroke();
+  }
+  // 受損牆面:dmg 1 兩道裂痕;dmg 2 再加一個破洞
+  function ckDamageFace(ctx, f, dmg, s, z) {
+    if (!dmg) return;
+    ckCrack(ctx, f, s, z, 10);
+    ckCrack(ctx, f, s + 0.14, z - 2, 7);
+    if (dmg >= 2) A.poly(ctx, A.quad(f, s - 0.07, s + 0.02, z - 9, z - 3), CK_DARK, 0.3);
+  }
+  // 水平層線(木板 / 夯土層)
+  function ckLayers(ctx, f, z0, z1, step, col) {
+    for (var z = z0; z < z1; z += step) A.line(ctx, f.pt(0, z), f.pt(1, z), A.tone(col, f.light * 0.82), 1);
+  }
+  // 箭窗 / 木窗:白天深色;昏夜點亮(自發光)
+  function ckWin(ctx, f, s, z, hh, wg) {
+    A.poly(ctx, A.quad(f, s - wg / 2, s + wg / 2, z, z + hh), CK_DARK, 0.45);
+    if (A.state.lit) A.lit(ctx, function () { A.poly(ctx, A.quad(f, s - wg * 0.32, s + wg * 0.32, z + 1, z + hh - 1), C.lamp, 0); });
+  }
+  // 女牆:台基頂緣的齒牆(沿可見面)
+  function ckMerlon(ctx, f) {
+    for (var s = 0; s < 1; s += 0.2) A.poly(ctx, A.quad(f, s, s + 0.1, f.h, f.h + 5), A.tone(C.earth, f.light), 0.45);
+  }
+  // 戰旗:旗面波動;(x, y) 為旗桿頂;dir 飄向;lean 1 = 旗面下垂;glyph 可為 null
+  function ckFlag(ctx, x, y, fw, fh, col, t, seed, dir, glyph, lean) {
+    var n = 6, top = [], bot = [], i, u, wv, dy;
+    for (i = 0; i <= n; i++) {
+      u = i / n; wv = Math.sin(t * 5 - u * 4 + seed) * 2.4 * u; dy = (lean || 0) * u * fh * 0.5;
+      top.push([x + dir * fw * u, y + 1 + wv + dy]);
+      bot.push([x + dir * fw * u * 0.94, y + 1 + fh + wv + u * 2 + dy]);
+    }
+    A.poly(ctx, top.concat(bot.slice().reverse()), col, 0.9);
+    A.poly(ctx, [top[0], top[1], bot[1], bot[0]], A.tone(col, 0.7), 0);
+    A.line(ctx, top[0], top[n], C.gold, 1.2);
+    if (glyph) A.glyph(ctx, glyph, (top[3][0] + bot[3][0]) / 2, (top[3][1] + bot[3][1]) / 2, Math.max(6, fh * 0.45), C.gold);
+  }
+  // Q 版小人偶剪影(靜態):p 為腳底世界座標;spear 持矛
+  function ckFigure(ctx, p, cloth, spear) {
+    var x = p[0], y = p[1];
+    if (spear) {
+      A.line(ctx, [x + 7, y + 1], [x + 7, y - 38], C.ink, 2.6); A.line(ctx, [x + 7, y + 1], [x + 7, y - 38], C.wood[2], 1.2);
+      A.poly(ctx, [[x + 5, y - 36], [x + 9, y - 36], [x + 7, y - 43]], '#dfe6ea', 0.6);
+    }
+    A.line(ctx, [x - 2, y - 1], [x - 2.6, y + 2], C.lacquer, 1.8);
+    A.line(ctx, [x + 2, y - 1], [x + 2.6, y + 2], C.lacquer, 1.8);
+    A.poly(ctx, [[x - 4.5, y - 11], [x + 4.5, y - 11], [x + 5, y - 1], [x - 5, y - 1]], cloth, 0.7);
+    A.circle(ctx, x, y - 17, 5, C.skin, 0.6);
+    ctx.beginPath(); ctx.arc(x, y - 17, 5.2, Math.PI, 0); ctx.closePath(); ctx.fillStyle = C.hair; ctx.fill();
+    A.circle(ctx, x + 1.6, y - 16.5, 0.7, C.ink, 0);
+  }
+  function ckFig(m, u, v, z, cloth, spear, bias) {
+    m.custom(u - 0.12, v - 0.12, 0.24, 0.24, z, function (ctx, mm) { ckFigure(ctx, mm.pt(u, v, z), cloth, spear); }, bias || 0);
+  }
+  // 火盆:三足 + 銅盆;z 為地面(台面)高度
+  function ckBrazier(m, u, v, z) {
+    m.custom(u - 0.2, v - 0.2, 0.4, 0.4, z, function (ctx, mm) {
+      var c = mm.pt(u, v, z);
+      [[-6, 2], [6, 2], [0, 5]].forEach(function (l) {
+        A.line(ctx, [c[0] + l[0], c[1] + l[1]], [c[0] + l[0] * 0.4, c[1] - 12], C.ink, 2.8);
+        A.line(ctx, [c[0] + l[0], c[1] + l[1]], [c[0] + l[0] * 0.4, c[1] - 12], C.bronze, 1.5);
+      });
+    });
+    m.cyl(u, v, z + 12, 0.16, 5, C.bronze, { topCol: C.lacquer, bias: 1 });
+  }
+  // 木輪(輪軸沿 u,輪面在 v-z 平面)
+  function ckWheel(m, u, v, z, r) {
+    m.custom(u - 0.03, v - 0.3, 0.06, 0.6, 1, function (ctx, mm) {
+      A.disc(ctx, mm, u, v, z, r, 'v', C.wood[1]);
+      A.disc(ctx, mm, u, v, z, r * 0.7, 'v', A.tone(C.wood[1], 0.82), 0.4);
+      for (var i = 0; i < 4; i++) {
+        var a = i * Math.PI / 4;
+        A.line(ctx, mm.pt(u, v + Math.cos(a) * r / 34, z + Math.sin(a) * r), mm.pt(u, v - Math.cos(a) * r / 34, z - Math.sin(a) * r), C.wood[0], 1.2);
+      }
+      var h = mm.pt(u, v, z); A.circle(ctx, h[0], h[1], 2, C.gold, 0.6);
+    }, 1);
+  }
+  // 麻袋(畫在世界座標 x,y 的底部)
+  function ckSack(ctx, x, y, s) {
+    ctx.beginPath(); ctx.moveTo(x - 7 * s, y); ctx.quadraticCurveTo(x - 9 * s, y - 9 * s, x - 3 * s, y - 12 * s); ctx.lineTo(x + 3 * s, y - 12 * s);
+    ctx.quadraticCurveTo(x + 9 * s, y - 9 * s, x + 7 * s, y); ctx.quadraticCurveTo(x, y + 2 * s, x - 7 * s, y); ctx.closePath();
+    ctx.fillStyle = '#e2c99a'; ctx.fill(); A.edge(ctx, 0.75);
+    A.line(ctx, [x - 3 * s, y - 12 * s], [x + 3 * s, y - 12 * s], C.wood[0], 1);
+  }
+
+  // ---- 帥帳 camp_hq 4x4:台基 + 朱紅頂大帳 + 金頂 + 帳前台階 + 兩名衛兵 + 鼓架 + 兩面大旗 ----
+  A.def('camp_hq', {
+    w: 4, d: 4, hmax: 124,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, snow = v.season === 'winter';
+      var plinth = function (ctx, f) { ckLayers(ctx, f, 2, 4, 2, C.earthDk); ckDamageFace(ctx, f, dmg, 0.6, 3.5); };
+      m.box(0.08, 0.08, 0, 3.84, 3.84, 4, C.earth, { top: C.earth, deco: { F: plinth, B: plinth, L: plinth, R: plinth } });
+      m.box(1.3, 3.3, 4, 1.4, 0.7, 2, C.stone[2], { top: C.stone[2] });
+      m.box(1.3, 3.6, 6, 1.4, 0.4, 2, C.stone[2], { top: C.stone[2] });
+      var wallF = function (ctx, f) {
+        A.band(ctx, f, 0, 3, C.hanRed);
+        A.posts(ctx, f, [0, 0.25, 0.75, 1], 0.1, C.hanRed);
+        A.door(ctx, f, 0.5, 0.56, 15, C.hanRed);
+        ckDamageFace(ctx, f, dmg, 0.15, 17);
+      };
+      var wallS = function (ctx, f) {
+        A.band(ctx, f, 0, 3, C.hanRed);
+        A.posts(ctx, f, [0, 0.5, 1], 0.1, C.hanRed);
+        A.lattice(ctx, f, 0.5, 0.5, 9, 6, C.hanRed);
+        ckDamageFace(ctx, f, dmg, 0.6, 16);
+      };
+      m.box(0.45, 0.4, 4, 3.1, 3.2, 20, C.silk, { deco: { F: wallF, B: wallS, L: wallS, R: wallS } });
+      m.hip(0.45, 0.4, 24, 3.1, 3.2, 22, C.hanRed, { over: 0.34, curl: 6, sag: 2, hipK: 0.7, ridgeCol: C.lacquer, ridgeHi: C.gold, ridgeW: 4, hooks: true, hookSize: 4, snow: snow });
+      m.cone(2.0, 2.0, 46, 0.12, 10, C.gold);
+      ckFig(m, 0.9, 3.55, 4, C.hanRed, true, 0);
+      ckFig(m, 3.1, 3.55, 4, C.hanRed, true, 0);
+      m.box(0.12, 3.1, 4, 0.06, 0.06, 20, C.wood[1]);
+      m.box(0.68, 3.1, 4, 0.06, 0.06, 20, C.wood[1]);
+      m.custom(0.1, 3.08, 0.66, 0.1, 24, function (ctx, mm) { var a = mm.pt(0.12, 3.13, 24), b = mm.pt(0.74, 3.13, 24); A.line(ctx, a, b, C.ink, 3); A.line(ctx, a, b, C.wood[2], 1.8); }, 1);
+      m.cyl(0.42, 3.13, 9, 0.24, 14, C.hanRed, { topCol: '#f2dfb2', hoops: [3, 11], bias: 1 });
+      m.cyl(0.14, 3.86, 4, 0.045, 60, C.lacquer, { topCol: C.gold, bias: 1 });
+      m.cyl(3.86, 3.86, 4, 0.045, 60, C.lacquer, { topCol: C.gold, bias: 1 });
+      m.custom(0.9, 3.7, 0.2, 0.2, 14, function (ctx, mm) { var p = mm.pt(1.0, 3.8, 14); A.lantern(ctx, p[0], p[1], 1.1); }, 2);
+      m.custom(2.9, 3.7, 0.2, 0.2, 14, function (ctx, mm) { var p = mm.pt(3.0, 3.8, 14); A.lantern(ctx, p[0], p[1], 1.1); }, 2);
+      if (dmg >= 2) {
+        m.box(3.2, 0.1, 4, 0.45, 0.4, 5, C.tile, { top: C.tileDk });
+        m.box(2.85, 0.15, 4, 0.3, 0.3, 3, C.tile, { top: C.tileDk });
+      }
+    },
+    lights: function (v) {
+      var L = [[1.0, 3.75, 16, 22, C.lantern, 0.9, 'F'], [3.0, 3.75, 16, 22, C.lantern, 0.9, 'F'], [2.0, 3.6, 22, 30, C.lamp, 0.8, 'F']];
+      if ((v.dmg || 0) >= 2) L.push([3.1, 0.3, 30, 30, C.fire, 0.9]);
+      return L;
+    },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0, dir = ckDir(m);
+      var a = m.pt(0.14, 3.86, 64), b = m.pt(3.86, 3.86, 64);
+      ckFlag(ctx, a[0], a[1], 24, 19, C.hanRed, t, 0, dir, '帥', 0);
+      ckFlag(ctx, b[0], b[1], 24, 19, C.hanRed, t, 1.6, dir, '漢', 0);
+      if (dmg >= 1) { var s = m.pt(3.1, 0.9, 50); A.smoke(ctx, s[0], s[1], t, 2.2); }
+      if (dmg >= 2) { var q = m.pt(3.1, 0.9, 30); A.fire(ctx, q[0], q[1], t, 1.2); }
+    }
+  });
+
+  // ---- 箭樓 camp_tower 2x2:夯土台基(女牆)+ 三層木樓 + 青瓦檐 + 頂層火盆 ----
+  A.def('camp_tower', {
+    w: 2, d: 2, hmax: 112,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, snow = v.season === 'winter';
+      var base = function (ctx, f) { ckLayers(ctx, f, 3, 8, 3, C.earthDk); ckDamageFace(ctx, f, dmg, 0.3, 6); ckMerlon(ctx, f); };
+      m.box(0.06, 0.06, 0, 1.88, 1.88, 8, C.earth, { top: C.earth, deco: { F: base, B: base, L: base, R: base } });
+      var t1F = function (ctx, f) {
+        ckLayers(ctx, f, 6, 24, 6, C.wood[0]); A.posts(ctx, f, [0, 0.5, 1], 0.08, C.wood[0]);
+        A.door(ctx, f, 0.5, 0.34, 14, C.wood[0]); ckWin(ctx, f, 0.85, 15, 7, 0.14); ckDamageFace(ctx, f, dmg, 0.15, 22);
+      };
+      var t1S = function (ctx, f) { ckLayers(ctx, f, 6, 24, 6, C.wood[0]); A.posts(ctx, f, [0, 1], 0.08, C.wood[0]); ckWin(ctx, f, 0.5, 15, 7, 0.16); };
+      m.box(0.22, 0.22, 8, 1.56, 1.56, 24, C.wood[1], { top: C.wood[2], deco: { F: t1F, B: t1S, L: t1S, R: t1S } });
+      m.hip(0.14, 0.14, 32, 1.72, 1.72, 9, C.tile, { over: 0.2, curl: 4, sag: 1.5, hipK: 0.8, ridgeCol: C.tileDk, hookSize: 3, snow: snow });
+      var t2 = function (ctx, f) { ckLayers(ctx, f, 5, 20, 5, C.wood[0]); A.posts(ctx, f, [0, 1], 0.08, C.wood[0]); ckWin(ctx, f, 0.5, 8, 7, 0.22); ckDamageFace(ctx, f, dmg, 0.3, 16); };
+      m.box(0.4, 0.4, 41, 1.2, 1.2, 17, C.wood[1], { top: C.wood[2], deco: { F: t2, B: t2, L: t2, R: t2 } });
+      if (dmg < 2) m.hip(0.32, 0.32, 58, 1.36, 1.36, 8, C.tile, { over: 0.2, curl: 3, sag: 1, hipK: 0.8, ridgeCol: C.tileDk, hookSize: 2.5, snow: snow });
+      else m.box(1.6, 0.2, 8, 0.2, 0.3, 4, C.tile, { top: C.tileDk });
+      // 頂層望台:木板 + 四柱 + 欄杆 + 火盆(不加頂,火焰外露)
+      m.box(0.5, 0.5, 66, 1.0, 1.0, 2, C.wood[0], { top: C.wood[2] });
+      [[0.5, 0.5], [1.44, 0.5], [0.5, 1.44], [1.44, 1.44]].forEach(function (p) { m.box(p[0], p[1], 68, 0.06, 0.06, 13, C.wood[0]); });
+      m.custom(0.5, 0.5, 1.0, 1.0, 74, function (ctx, mm) {
+        [[0.5, 0.5, 1.5, 0.5], [1.5, 0.5, 1.5, 1.5], [1.5, 1.5, 0.5, 1.5], [0.5, 1.5, 0.5, 0.5]].forEach(function (s) {
+          var a = mm.pt(s[0], s[1], 74), b = mm.pt(s[2], s[3], 74); A.line(ctx, a, b, C.ink, 2.6); A.line(ctx, a, b, C.wood[2], 1.4);
+        });
+      });
+      ckBrazier(m, 1.0, 1.0, 68);
+    },
+    lights: function (v) {
+      var L = [[1.55, 1.78, 25, 18, C.lamp, 0.6, 'F'], [1.0, 1.78, 12, 16, C.lamp, 0.5, 'F'], [1.0, 1.6, 50, 18, C.lamp, 0.5, 'F'], [1.0, 1.0, 85, 44, C.fire, 1]];
+      return L;
+    },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      var b = m.pt(1.0, 1.0, 86);
+      A.fire(ctx, b[0], b[1], t, 1.0);
+      if (dmg >= 1) { var s = m.pt(1.0, 1.0, 41); A.smoke(ctx, s[0], s[1], t, 1.4); }
+      if (dmg >= 2) { var q = m.pt(1.0, 1.0, 60); A.fire(ctx, q[0], q[1], t + 0.5, 1.0); }
+    }
+  });
+
+  // ---- 弩台 camp_nutai 2x2:夯土台基 + 大型床弩(弩臂、弦、箭)+ 兩名操作員 ----
+  A.def('camp_nutai', {
+    w: 2, d: 2, hmax: 84,
+    build: function (m, v) {
+      var dmg = v.dmg || 0;
+      var earth = function (ctx, f) { ckLayers(ctx, f, 3, 12, 3, C.earthDk); ckDamageFace(ctx, f, dmg, 0.5, 9); };
+      m.box(0.05, 0.05, 0, 1.9, 1.9, 12, C.earth, { deco: { F: earth, B: earth, L: earth, R: earth } });
+      m.box(0.9, 0.15, 12, 0.2, 1.7, 5, C.wood[1], { top: C.wood[2] });
+      var post = function (ctx, f) { ckDamageFace(ctx, f, dmg, 0.3, 20); };
+      m.box(0.45, 0.8, 12, 0.14, 0.3, 26, C.wood[0], { deco: { F: post, B: post, L: post, R: post } });
+      m.box(1.41, 0.8, 12, 0.14, 0.3, 26, C.wood[0], { deco: { F: post, B: post, L: post, R: post } });
+      m.custom(0.0, 0.8, 2.0, 0.3, 36, function (ctx, mm) {
+        var L0 = mm.pt(0.52, 0.95, 36), L1 = mm.pt(-0.02, 0.95, 42), cL = mm.pt(0.22, 0.95, 30);
+        var R0 = mm.pt(1.48, 0.95, 36), R1 = mm.pt(2.02, 0.95, 42), cR = mm.pt(1.78, 0.95, 30), N = mm.pt(1.0, 0.55, 35);
+        var arm = function (a, c, b) {
+          ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(c[0], c[1], b[0], b[1]);
+          ctx.lineCap = 'round'; ctx.strokeStyle = C.ink; ctx.lineWidth = 4.2; ctx.stroke();
+          ctx.strokeStyle = C.wood[2]; ctx.lineWidth = 2.4; ctx.stroke();
+        };
+        arm(L1, cL, L0);
+        if (dmg >= 2) A.line(ctx, R0, mm.pt(1.62, 0.95, 40), C.ink, 3);
+        else arm(R1, cR, R0);
+        A.line(ctx, L1, N, '#e8dcc0', 0.9);
+        if (dmg < 2) A.line(ctx, N, R1, '#e8dcc0', 0.9);
+        var A1 = mm.pt(1.0, 2.0, 35);
+        A.line(ctx, N, A1, C.ink, 2.4); A.line(ctx, N, A1, C.wood[2], 1.2);
+        A.poly(ctx, [[A1[0] - 2.5, A1[1] + 1.5], [A1[0] + 2.5, A1[1] + 1.5], [A1[0], A1[1] - 4]], '#dfe6ea', 0.6);
+      }, 1);
+      ckFig(m, 0.36, 0.45, 12, '#8a6a3a', false, 0);
+      ckFig(m, 1.64, 0.45, 12, C.hanRed, false, 0);
+    },
+    lights: function (v) { return (v.dmg || 0) >= 2 ? [[0.4, 0.4, 16, 30, C.fire, 1]] : []; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      if (dmg >= 1) { var s = m.pt(0.5, 0.8, 40); A.smoke(ctx, s[0], s[1], t, 0.6); }
+      if (dmg >= 2) { var f = m.pt(0.4, 0.4, 14); A.fire(ctx, f[0], f[1], t, 1.0); }
+    }
+  });
+
+  // ---- 投石台 camp_shitai 2x2:石砌台基 + A 形支架 + 配重式投石臂 + 石堆 ----
+  A.def('camp_shitai', {
+    w: 2, d: 2, hmax: 100,
+    build: function (m, v) {
+      var dmg = v.dmg || 0;
+      var stone = function (ctx, f) {
+        ckLayers(ctx, f, 3, 10, 3.5, C.stone[0]);
+        for (var s = 0.25; s < 1; s += 0.5) A.line(ctx, f.pt(s, 0), f.pt(s, 10), A.tone(C.stone[0], f.light * 0.9), 1);
+        ckDamageFace(ctx, f, dmg, 0.4, 9);
+      };
+      m.box(0.05, 0.05, 0, 1.9, 1.9, 10, C.stone[1], { top: C.stone[2], deco: { F: stone, B: stone, L: stone, R: stone } });
+      m.custom(0.4, 0.8, 1.2, 0.4, 10, function (ctx, mm) {
+        var pv = mm.pt(1.0, 1.0, 60);
+        [0.42, 1.58].forEach(function (u) { var a = mm.pt(u, 1.0, 12); A.line(ctx, a, pv, C.ink, 5); A.line(ctx, a, pv, C.wood[1], 2.8); });
+        var c1 = mm.pt(0.44, 1.0, 36), c2 = mm.pt(1.56, 1.0, 36); A.line(ctx, c1, c2, C.ink, 3.4); A.line(ctx, c1, c2, C.wood[0], 1.8);
+        A.circle(ctx, pv[0], pv[1], 3, C.gold, 0.6);
+      }, 1);
+      m.box(0.84, 0.0, 28, 0.32, 0.3, 16, C.stone[0], { top: C.stone[2] });
+      m.custom(0.8, 0.1, 0.4, 1.9, 40, function (ctx, mm) {
+        var b = mm.pt(1.0, 0.25, 44), pv = mm.pt(1.0, 1.0, 60), t = mm.pt(1.0, 1.75, 76);
+        if (dmg < 2) {
+          A.line(ctx, b, t, C.ink, 6.4); A.line(ctx, b, t, C.wood[2], 4);
+          var S = mm.pt(1.0, 1.9, 50);
+          A.line(ctx, t, S, '#8a7a5a', 0.9);
+          A.circle(ctx, S[0], S[1], 3.4, C.stone[2], 0.7);
+        } else {
+          A.line(ctx, b, pv, C.ink, 6.4); A.line(ctx, b, pv, C.wood[2], 4);
+          A.line(ctx, pv, mm.pt(1.0, 1.9, 22), C.wood[1], 3);
+        }
+      }, 2);
+      m.custom(0.2, 1.3, 1.0, 0.8, 10, function (ctx, mm) {
+        [[0.3, 1.5, 1.0], [0.55, 1.75, 0.8], [0.25, 1.85, 0.7]].forEach(function (s, i) { var p = mm.pt(s[0], s[1], 10); A.rock(ctx, p[0], p[1], s[2], i + 5, C.stone[1]); });
+      }, 1);
+    },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      if (dmg >= 1) { var s = m.pt(1.0, 1.0, 62); A.smoke(ctx, s[0], s[1], t, 1.1); }
+    }
+  });
+
+  // ---- 營帳系:camp_tent(帥營小帳)與 camp_fake(疑營)共用 ----
+  // o:u0 偏移 / w 寬 / rise 帳高 / cloth 布色 / doorU 帳門 / lean 旗倒向 / flag 旗色 / braziers 火盆位置
+  function ckTent(m, v, o) {
+    var dmg = v.dmg || 0, snow = v.season === 'winter', apexU = o.u0 + o.w / 2;
+    var ro = { axis: 'v', over: 0.04, overEnd: 0.04, curl: 0, sag: 0.3, tiles: false, hooks: false, ridgeCol: C.hanRed, ridgeW: 3, eaveCol: '#c9b88e', endCol: A.tone(o.cloth, 0.94), snow: snow };
+    var du = o.doorU;
+    if (dmg < 2) m.gable(o.u0, 0.15, 0, o.w, 1.7, o.rise, o.cloth, ro);
+    else {
+      m.gable(o.u0, 0.15, 0, o.w * 0.5, 1.7, o.rise * 0.7, A.tone(o.cloth, 0.86), ro);
+      du = o.u0 + o.w * 0.25;
+      m.custom(apexU + 0.1, 0.5, 0.8, 1.0, 1, function (ctx, mm) {
+        var a = mm.pt(apexU + 0.2, 0.6, 2), b = mm.pt(apexU + 0.9, 1.4, 2);
+        A.line(ctx, a, b, C.wood[0], 2.4);
+        var c = mm.pt(apexU + 0.55, 1.0, 1);
+        A.poly(ctx, [[c[0] - 8, c[1]], [c[0] + 6, c[1] - 3], [c[0] + 10, c[1] + 4], [c[0] - 4, c[1] + 6]], A.tone(o.cloth, 0.8), 0.5);
+      }, 1);
+    }
+    m.custom(du - 0.2, 1.84, 0.4, 0.06, 1, function (ctx, mm) {
+      if (!A.visible(mm, 'F')) return;
+      var p = [mm.pt(du - 0.14, 1.9, 0), mm.pt(du + 0.14, 1.9, 0), mm.pt(du, 1.9, o.rise * 0.5)];
+      if (A.state.lit) A.lit(ctx, function () { A.poly(ctx, p, C.lamp, 0.7); }); else A.poly(ctx, p, CK_DARK, 0.7);
+      if (dmg >= 1) A.line(ctx, mm.pt(du + 0.2, 1.9, o.rise * 0.8), mm.pt(du + 0.12, 1.9, o.rise * 0.4), CK_DARK, 1.2);
+    }, 1);
+    o.braziers.forEach(function (b) { ckBrazier(m, b[0], b[1], 0); });
+    if (dmg < 2) m.cyl(apexU, 1.0, o.rise - 2, 0.035, 16, C.wood[1], { topCol: C.gold, bias: 2 });
+  }
+  function ckTentLights(v, o) {
+    var L = o.braziers.map(function (b) { return [b[0], b[1], 20, 40, C.fire, 0.9]; });
+    L.push([o.doorU, 1.9, 8, 18, C.lamp, 0.5, 'F']);
+    return L;
+  }
+  function ckTentAnim(ctx, m, t, v, o) {
+    var dmg = v.dmg || 0;
+    if (dmg < 2) { var p = m.pt(o.u0 + o.w / 2, 1.0, o.rise + 14); ckFlag(ctx, p[0], p[1], 14, 9, o.flag, t, 0.5, ckDir(m), null, o.lean); }
+    o.braziers.forEach(function (b, i) { var q = m.pt(b[0], b[1], 17); A.fire(ctx, q[0], q[1], t + i * 0.7, 0.9); });
+    if (dmg >= 1) { var s = m.pt(o.u0 + o.w / 2, 1.0, o.rise); A.smoke(ctx, s[0], s[1] - 4, t, 1.7); }
+  }
+  var CK_TENT = { u0: 0.15, w: 1.7, rise: 40, cloth: '#f4ead2', doorU: 1.0, lean: 0, flag: C.hanRed, braziers: [[0.25, 1.95], [1.75, 1.95]] };
+  var CK_FAKE = { u0: 0.22, w: 1.56, rise: 30, cloth: '#efe4c4', doorU: 0.88, lean: 1, flag: '#d9b24a', braziers: [[1.75, 1.95]] };
+  A.def('camp_tent', {
+    w: 2, d: 2, hmax: 66,
+    build: function (m, v) { ckTent(m, v, CK_TENT); },
+    lights: function (v) { return ckTentLights(v, CK_TENT); },
+    anim: function (ctx, m, t, v) { ckTentAnim(ctx, m, t, v, CK_TENT); }
+  });
+  A.def('camp_fake', {
+    w: 2, d: 2, hmax: 62,
+    build: function (m, v) { ckTent(m, v, CK_FAKE); },
+    lights: function (v) { return ckTentLights(v, CK_FAKE); },
+    anim: function (ctx, m, t, v) { ckTentAnim(ctx, m, t, v, CK_FAKE); }
+  });
+
+  // ---- 輜重車 camp_wagon 2x2:木輪糧車,車斗載麻袋與木箱,前端車轅 ----
+  A.def('camp_wagon', {
+    w: 2, d: 2, hmax: 60,
+    build: function (m, v) {
+      var dmg = v.dmg || 0;
+      var planks = function (ctx, f) { ckLayers(ctx, f, 2, 8, 2.5, C.wood[0]); ckDamageFace(ctx, f, dmg, 0.3, 6); };
+      m.box(0.15, 0.25, 8, 1.7, 1.5, 6, C.wood[1], { top: C.wood[2], deco: { F: planks, B: planks, L: planks, R: planks } });
+      m.box(0.1, 0.25, 14, 0.07, 1.5, 7, C.wood[0]);
+      m.box(1.83, 0.25, 14, 0.07, 1.5, 7, C.wood[0]);
+      m.box(0.3, 0.3, 14, 0.6, 0.55, 9, C.wood[2], { top: C.wood[2], deco: { F: planks, B: planks, L: planks, R: planks } });
+      m.box(1.05, 1.0, 14, 0.55, 0.5, 8, C.wood[1], { top: C.wood[2], deco: { F: planks, B: planks, L: planks, R: planks } });
+      ckWheel(m, 0.04, 1.0, 11, 12);
+      if (dmg < 2) ckWheel(m, 1.96, 1.0, 11, 12);
+      m.custom(0.85, 1.75, 0.3, 0.3, 8, function (ctx, mm) { var a = mm.pt(0.9, 1.7, 8), b = mm.pt(0.9, 2.0, 2); A.line(ctx, a, b, C.ink, 3.4); A.line(ctx, a, b, C.wood[0], 2); });
+      m.custom(0.2, 0.2, 1.6, 1.6, 14, function (ctx, mm) {
+        [[0.6, 1.35, 14], [1.45, 0.6, 14], [0.6, 0.6, 23]].forEach(function (s) { var p = mm.pt(s[0], s[1], s[2]); ckSack(ctx, p[0], p[1], 1.0); });
+      }, 2);
+      if (dmg >= 2) m.custom(1.0, 1.7, 1.0, 0.6, 1, function (ctx, mm) {
+        var p = mm.pt(1.4, 1.9, 0); A.ellipse(ctx, p[0], p[1] - 2, 11, 4.5, '#f2d27a', 0.6);
+        var q = mm.pt(1.2, 1.7, 0); ckSack(ctx, q[0], q[1], 0.8);
+      }, 1);
+    },
+    anim: function (ctx, m, t, v) {
+      if ((v.dmg || 0) >= 2) { var p = m.pt(1.2, 0.9, 26); A.fire(ctx, p[0], p[1], t, 1.0); }
+    }
+  });
+
+  // ---- 糧囤 camp_granary 2x2:夯土圓囷 + 圓頂 + 旁側陶倉 + 梯子 ----
+  A.def('camp_granary', {
+    w: 2, d: 2, hmax: 70,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, snow = v.season === 'winter';
+      m.box(0.05, 0.05, 0, 1.9, 1.9, 3, C.stone[1], { top: C.stone[2] });
+      m.cyl(0.8, 0.8, 3, 0.6, 30, C.earth, { noTop: true, hoops: [9, 19] });
+      m.custom(0.2, 0.2, 1.2, 1.2, 3, function (ctx, mm) {
+        if (!dmg || !A.visible(mm, 'F')) return;
+        ctx.beginPath();
+        for (var i = 0; i <= 4; i++) { var p = mm.pt(0.8 + (i % 2 ? 0.08 : -0.06), 1.37, 6 + i * 5); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
+        ctx.strokeStyle = CK_DARK; ctx.lineWidth = 1.3; ctx.stroke();
+      }, 1);
+      m.cone(0.8, 0.8, 33, 0.66, 16, C.earthDk);
+      if (dmg >= 2) m.custom(0.4, 0.4, 0.8, 0.8, 44, function (ctx, mm) { var p = mm.pt(0.8, 0.8, 44); A.ellipse(ctx, p[0], p[1], 9, 4, CK_DARK); }, 1);
+      m.cyl(1.55, 1.42, 3, 0.2, 12, C.earthDk, { topCol: C.stone[1] });
+      m.cone(1.55, 1.42, 15, 0.24, 6, C.tile);
+      m.cyl(1.5, 0.4, 3, 0.16, 10, C.earthDk, { topCol: C.stone[1] });
+      m.cone(1.5, 0.4, 13, 0.2, 5, C.tile);
+      m.custom(1.2, 0.5, 0.7, 0.4, 3, function (ctx, mm) {
+        var a1 = mm.pt(1.85, 0.6, 3), b1 = mm.pt(1.45, 0.6, 26), a2 = mm.pt(1.85, 0.8, 3), b2 = mm.pt(1.45, 0.8, 26);
+        A.line(ctx, a1, b1, C.ink, 3); A.line(ctx, a1, b1, C.wood[1], 1.6);
+        A.line(ctx, a2, b2, C.ink, 3); A.line(ctx, a2, b2, C.wood[1], 1.6);
+        for (var i = 1; i < 7; i++) {
+          var k = i / 7;
+          A.line(ctx, [a1[0] + (b1[0] - a1[0]) * k, a1[1] + (b1[1] - a1[1]) * k], [a2[0] + (b2[0] - a2[0]) * k, a2[1] + (b2[1] - a2[1]) * k], C.wood[2], 1.2);
+        }
+      }, 1);
+      if (dmg >= 2) m.custom(0.9, 1.7, 1.0, 0.5, 3, function (ctx, mm) {
+        var p = mm.pt(1.2, 1.8, 3); A.ellipse(ctx, p[0], p[1] - 2, 11, 4.5, '#f2d27a', 0.6); A.ellipse(ctx, p[0] + 2, p[1] - 3, 7, 3, '#fbe9a8', 0.4);
+      }, 1);
+    },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      if (dmg >= 1) { var s = m.pt(0.8, 0.8, 46); A.smoke(ctx, s[0], s[1], t, 0.9); }
+      if (dmg >= 2) { var q = m.pt(1.2, 1.5, 6); A.fire(ctx, q[0], q[1], t, 0.9); }
+    }
+  });
+
+  // ---- 屯兵營 camp_muster 2x2:木柵方營 + 營帳 + 兵器架 + 營門 + 瞭望台 ----
+  A.def('camp_muster', {
+    w: 2, d: 2, hmax: 60,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, snow = v.season === 'winter', cloth = dmg >= 2 ? '#6a5a52' : C.silk;
+      // 木柵:沿一邊立樁;g0/g1 為缺口(t 比例),缺口處不畫柵
+      var fence = function (u0, v0, u1, v1, n, g0, g1) {
+        var i, t, u, vv, segs;
+        for (i = 0; i <= n; i++) {
+          t = i / n;
+          if (g0 !== undefined && t > g0 && t < g1) continue;
+          u = u0 + (u1 - u0) * t; vv = v0 + (v1 - v0) * t;
+          m.box(u - 0.04, vv - 0.04, 0, 0.08, 0.08, 26, C.wood[1], { top: C.wood[2] });
+        }
+        segs = g0 === undefined ? [[0, 1]] : [[0, g0], [g1, 1]];
+        segs.forEach(function (sg) {
+          var a0 = [u0 + (u1 - u0) * sg[0], v0 + (v1 - v0) * sg[0]], a1 = [u0 + (u1 - u0) * sg[1], v0 + (v1 - v0) * sg[1]];
+          m.custom(Math.min(a0[0], a1[0]) - 0.02, Math.min(a0[1], a1[1]) - 0.02, Math.abs(a1[0] - a0[0]) + 0.04, Math.abs(a1[1] - a0[1]) + 0.04, 14, function (ctx, mm) {
+            [14, 22].forEach(function (z) { var p = mm.pt(a0[0], a0[1], z), q = mm.pt(a1[0], a1[1], z); A.line(ctx, p, q, C.ink, 3); A.line(ctx, p, q, C.wood[2], 1.8); });
+          }, 0);
+        });
+      };
+      var gate = dmg >= 2 ? [0.375, 1.0] : [0.375, 0.625];
+      fence(0, 0, 2, 0, 6);
+      fence(0, 0, 0, 2, 6);
+      fence(2, 0, 2, 2, 6);
+      fence(0, 2, 2, 2, 6, gate[0], gate[1]);
+      m.gable(0.2, 0.25, 0, 1.0, 1.0, 26, cloth, { axis: 'v', over: 0.04, overEnd: 0.04, curl: 0, sag: 0.3, tiles: false, hooks: false, ridgeCol: C.hanRed, ridgeW: 2.5, eaveCol: '#c9b88e', endCol: A.tone(cloth, 0.94), snow: snow });
+      m.place('weaponrack', 1.3, 0.2, 0, v);
+      [[1.56, 0.1], [1.9, 0.1], [1.56, 0.45], [1.9, 0.45]].forEach(function (p) { m.box(p[0], p[1], 0, 0.06, 0.06, 34, C.wood[0]); });
+      m.box(1.5, 0.05, 34, 0.46, 0.46, 3, C.wood[2], { top: C.wood[2] });
+      m.hip(1.45, 0.0, 37, 0.56, 0.56, 8, C.thatch, { over: 0.1, curl: 1, sag: 0.3, tileDensity: 8, ridgeCol: C.thatchDk, hooks: false, hipK: 1, snow: snow });
+      m.box(0.7, 1.92, 0, 0.08, 0.08, 40, C.wood[0]);
+      m.box(1.22, 1.92, 0, 0.08, 0.08, 40, C.wood[0]);
+      m.box(0.66, 1.9, 36, 0.66, 0.1, 5, C.wood[1], { top: C.wood[2], deco: { F: function (ctx, f) { ckDamageFace(ctx, f, dmg, 0.3, 4); } } });
+      m.custom(0.66, 1.96, 0.1, 0.1, 28, function (ctx, mm) { var p = mm.pt(0.72, 2.02, 28); A.lantern(ctx, p[0], p[1], 1); }, 2);
+      m.custom(1.22, 1.96, 0.1, 0.1, 28, function (ctx, mm) { var p = mm.pt(1.28, 2.02, 28); A.lantern(ctx, p[0], p[1], 1); }, 2);
+      ckFig(m, 1.0, 1.7, 0, C.hanRed, true, 0);
+    },
+    lights: function (v) {
+      var L = [[0.74, 2.0, 30, 20, C.lantern, 0.8, 'F'], [1.26, 2.0, 30, 20, C.lantern, 0.8, 'F']];
+      if ((v.dmg || 0) >= 2) L.push([1.0, 1.9, 8, 32, C.fire, 1, 'F']);
+      return L;
+    },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0, dir = ckDir(m);
+      var a = m.pt(0.74, 1.96, 40), b = m.pt(1.26, 1.96, 40);
+      ckFlag(ctx, a[0], a[1], 16, 11, C.hanRed, t, 0.2, dir, null, dmg >= 2 ? 1 : 0);
+      ckFlag(ctx, b[0], b[1], 16, 11, C.hanRed, t, 1.3, dir, null, dmg >= 2 ? 1 : 0);
+      if (dmg >= 1) { var s = m.pt(1.0, 1.0, 30); A.smoke(ctx, s[0], s[1], t, 2.6); }
+      if (dmg >= 2) { var q = m.pt(1.0, 1.9, 6); A.fire(ctx, q[0], q[1], t, 1.0); }
+    }
+  });
+
+  // ---- 將旗 camp_banner 1x1:石座 + 高旗桿 + 大型戰旗(旗面飄動、大字「將」)----
+  A.def('camp_banner', {
+    w: 1, d: 1, hmax: 100,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, poleH = dmg >= 2 ? 58 : 88;
+      var face = function (ctx, f) { ckDamageFace(ctx, f, dmg, 0.25, 4); };
+      m.box(0.26, 0.26, 0, 0.48, 0.48, 7, C.stone[1], { top: C.stone[2], deco: { F: face, B: face, L: face, R: face } });
+      m.cyl(0.5, 0.5, 7, 0.05, poleH, C.lacquer, { topCol: C.gold, hoops: [poleH * 0.35, poleH * 0.7], bias: 1 });
+      m.cone(0.5, 0.5, 7 + poleH, 0.07, 6, C.gold);
+    },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0, top = dmg >= 2 ? 58 : 88;
+      var p = m.pt(0.5, 0.5, 7 + top);
+      ckFlag(ctx, p[0], p[1], 30, 36, C.hanRed, t, 0.3, ckDir(m), '將', dmg >= 2 ? 1 : 0);
+    }
+  });
+  // =====================================================================
+  // 城防設備 16 種(PLAN_DEFENSE §B.6;key 與 CAMP_OBJECTS 相同;lujiao 與 art_deco3 裝飾撞名,改為 camp_lujiao)
+  // v.dmg:0 完好 / 1 受損(裂痕、冒煙)/ 2 重創(局部倒塌、火苗);朝向四向;夜間光 lights;動畫 anim
+  // =====================================================================
+  var CZ_BLUE = '#3f6fb0', CZ_YELLOW = '#e8b23a', CZ_STEEL = '#dfe6ea';
+  // 旗竿:底座 (u,v) 於 z 起,高 h(旗面由 anim 的 czFlag 畫在竿頂)
+  function czPole(m, u, v, z, h) { m.cyl(u, v, z, 0.04, h, C.lacquer, { topCol: C.gold, bias: 1 }); }
+  function czFlag(ctx, m, u, v, z, fw, fh, col, t, seed, dmg, glyph) {
+    var p = m.pt(u, v, z);
+    ckFlag(ctx, p[0], p[1], fw, fh, col, t, seed, ckDir(m), glyph || null, dmg >= 2 ? 1 : 0);
+  }
+  // 木樁 / 長槍:自 p=[u,v,z] 到 q=[u,v,z](絕對高度)
+  function czSpear(m, p, q, col) {
+    var u0 = Math.min(p[0], q[0]), v0 = Math.min(p[1], q[1]);
+    m.custom(u0 - 0.03, v0 - 0.03, Math.abs(p[0] - q[0]) + 0.06, Math.abs(p[1] - q[1]) + 0.06, Math.min(p[2], q[2]), function (ctx, mm) {
+      var a = mm.pt(p[0], p[1], p[2]), b = mm.pt(q[0], q[1], q[2]);
+      A.line(ctx, a, b, C.ink, 2.6); A.line(ctx, a, b, col || C.wood[1], 1.4);
+      A.circle(ctx, b[0], b[1], 1.2, CZ_STEEL, 0.5);
+    }, 0);
+  }
+  // 石砌方塊(面上為橫縫,受損顯示裂痕;此處 deco 的 z 皆為相對箱底)
+  function czStone(m, u, v, z, w, d, h, dmg, top) {
+    var f = function (ctx, fc) { ckLayers(ctx, fc, 4, h, 4, C.stone[0]); ckDamageFace(ctx, fc, dmg, 0.35, h * 0.45); };
+    m.box(u, v, z, w, d, h, C.stone[1], { top: top || C.stone[2], deco: { F: f, B: f, L: f, R: f } });
+  }
+  // 木板牆(含箭窗;相對箱底)
+  function czWood(dmg, winZ) {
+    return function (ctx, f) { ckLayers(ctx, f, 3, f.h, 5, C.wood[0]); ckWin(ctx, f, 0.5, winZ, 7, 0.16); ckDamageFace(ctx, f, dmg, 0.2, f.h * 0.6); };
+  }
+
+  // ---- 輕箭樓 qtower 1×1:細高兩層木樓 + 小青瓦頂 + 藍旗 ----
+  A.def('qtower', {
+    w: 1, d: 1, hmax: 76,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, snow = v.season === 'winter', wall = czWood(dmg, 14);
+      czStone(m, 0.18, 0.18, 0, 0.64, 0.64, 6, dmg);
+      m.box(0.26, 0.26, 6, 0.48, 0.48, 30, C.wood[1], { top: C.wood[2], deco: { F: wall, B: wall, L: wall, R: wall } });
+      if (dmg < 2) {
+        m.box(0.32, 0.32, 36, 0.36, 0.36, 14, C.wood[2], { deco: { F: wall, B: wall, L: wall, R: wall } });
+        m.hip(0.2, 0.2, 50, 0.6, 0.6, 9, C.tile, { over: 0.14, curl: 2.5, sag: 0.8, snow: snow, ridgeCol: C.tileDk, hipK: 0.8 });
+        czPole(m, 0.5, 0.5, 59, 10);
+      } else {
+        m.hip(0.26, 0.26, 36, 0.48, 0.48, 4, C.tile, { over: 0.1, curl: 0, sag: 0.5, ridgeCol: C.tileDk });
+      }
+    },
+    lights: function (v) { return (v.dmg || 0) >= 2 ? [] : [[0.5, 0.95, 20, 16, C.lamp, 0.6, 'F']]; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      if (dmg < 2) czFlag(ctx, m, 0.5, 0.5, 69, 16, 9, CZ_BLUE, t, 0.4, dmg);
+      if (dmg >= 1) { var s = m.pt(0.5, 0.5, 40); A.smoke(ctx, s[0], s[1], t, 1.1); }
+    }
+  });
+
+  // ---- 重箭樓 ztower 2×2:厚石基 + 木樓身 + 寬檐廡殿(重樓);黑漆旗 ----
+  A.def('ztower', {
+    w: 2, d: 2, hmax: 92,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, snow = v.season === 'winter', wall = czWood(dmg, 9);
+      czStone(m, 0.05, 0.05, 0, 1.9, 1.9, 24, dmg);
+      m.box(0.2, 0.2, 24, 1.6, 1.6, 26, C.wood[1], { top: C.wood[2], deco: { F: wall, B: wall, L: wall, R: wall } });
+      if (dmg < 2) {
+        m.hip(0.12, 0.12, 50, 1.76, 1.76, 16, C.tile, { over: 0.22, curl: 3, sag: 1.2, snow: snow, ridgeCol: C.lacquer, ridgeHi: C.gold, hipK: 0.7 });
+        czPole(m, 1.0, 1.0, 66, 18);
+      } else {
+        m.hip(0.12, 0.12, 50, 1.76, 1.76, 5, C.tile, { over: 0.1, curl: 0, sag: 0.5, ridgeCol: C.tileDk });
+      }
+    },
+    lights: function (v) { return (v.dmg || 0) >= 2 ? [] : [[0.5, 1.9, 14, 16, C.lamp, 0.5, 'F'], [1.9, 0.5, 14, 16, C.lamp, 0.5, 'R']]; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      if (dmg < 2) czFlag(ctx, m, 1.0, 1.0, 84, 22, 14, C.lacquer, t, 0.5, dmg, '重');
+      if (dmg >= 1) { var s = m.pt(0.3, 0.3, 50); A.smoke(ctx, s[0], s[1], t, 2.1); }
+      if (dmg >= 2) { var q = m.pt(1.0, 2.0, 24); A.fire(ctx, q[0], q[1], t, 1.0); }
+    }
+  });
+
+  // ---- 連弩樓 lianu 2×2:四柱木架 + 平台 + 三具連弩(弩臂朝前)+ 黃旗 ----
+  A.def('lianu', {
+    w: 2, d: 2, hmax: 100,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, snow = v.season === 'winter';
+      var post = function (ctx, f) { ckDamageFace(ctx, f, dmg, 0.3, 30); };
+      czStone(m, 0.0, 0.0, 0, 2.0, 2.0, 6, dmg);
+      [[0.1, 0.1], [1.7, 0.1], [0.1, 1.7], [1.7, 1.7]].forEach(function (p, i) {
+        if (dmg >= 2 && i === 3) return;
+        m.box(p[0], p[1], 6, 0.2, 0.2, 58, C.wood[1], { top: C.wood[2], deco: { F: post, B: post, L: post, R: post } });
+      });
+      m.box(0.0, 0.0, 60, 2.0, 2.0, 4, C.wood[1], { top: C.wood[2] });
+      var stocks = dmg >= 2 ? [0.35, 1.0] : [0.35, 1.0, 1.65];
+      stocks.forEach(function (u) { m.box(u - 0.04, 0.3, 64, 0.08, 1.6, 4, C.wood[0], { top: C.wood[2] }); });
+      m.custom(0.0, 0.2, 2.0, 1.8, 66, function (ctx, mm) {
+        stocks.forEach(function (u) {
+          var a = mm.pt(u - 0.32, 1.95, 72), b = mm.pt(u, 1.9, 68), c = mm.pt(u + 0.32, 1.95, 72);
+          A.line(ctx, a, b, C.ink, 3.4); A.line(ctx, a, b, C.wood[2], 1.8);
+          A.line(ctx, b, c, C.ink, 3.4); A.line(ctx, b, c, C.wood[2], 1.8);
+          var p = mm.pt(u, 1.6, 67); A.line(ctx, p, mm.pt(u, 1.95, 67), '#e8dcc0', 0.9);
+        });
+      }, 1);
+      if (dmg < 2) czPole(m, 1.0, 0.25, 64, 22);
+      m.box(0.3, 0.3, 64, 1.4, 0.1, 1, C.lacquer, { bias: 1 });
+    },
+    lights: function (v) { return (v.dmg || 0) >= 2 ? [] : [[0.35, 1.95, 66, 14, C.lantern, 0.6, 'F'], [1.65, 1.95, 66, 14, C.lantern, 0.6, 'F']]; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      if (dmg < 2) czFlag(ctx, m, 1.0, 0.25, 86, 20, 12, CZ_YELLOW, t, 0.9, dmg);
+      if (dmg >= 1) { var s = m.pt(1.0, 0.9, 62); A.smoke(ctx, s[0], s[1], t, 0.4); }
+      if (dmg >= 2) { var q = m.pt(0.3, 1.9, 30); A.fire(ctx, q[0], q[1], t, 1.0); }
+    }
+  });
+
+  // ---- 火箭樓 huojian 2×2:石基 + 高木塔 + 頂層火盆(火矢);朱砂旗;火焰動畫 ----
+  A.def('huojian', {
+    w: 2, d: 2, hmax: 100,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, wall = czWood(dmg, 22);
+      czStone(m, 0.05, 0.05, 0, 1.9, 1.9, 10, dmg);
+      m.box(0.3, 0.3, 10, 1.4, 1.4, 50, C.wood[1], { top: C.wood[2], deco: { F: wall, B: wall, L: wall, R: wall } });
+      m.box(0.1, 0.1, 60, 1.8, 1.8, 5, C.wood[2], { top: C.wood[1] });
+      if (dmg < 2) ckBrazier(m, 1.0, 1.0, 65);
+      czPole(m, 0.25, 0.25, 65, 26);
+    },
+    lights: function (v) { return (v.dmg || 0) >= 2 ? [] : [[1.0, 1.0, 80, 30, C.fire, 0.9]]; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      if (dmg < 2) { var p = m.pt(1.0, 1.0, 78); A.fire(ctx, p[0], p[1], t, 1.3); }
+      czFlag(ctx, m, 0.25, 0.25, 91, 16, 10, C.cinnabar, t, 0.2, dmg);
+      if (dmg >= 1) { var s = m.pt(1.0, 1.0, 70); A.smoke(ctx, s[0], s[1], t, 1.7); }
+    }
+  });
+
+  // ---- 熏煙台 xunyan 2×2:圓窯(艾煙)+ 煙囪 + 艾草堆;常時冒煙 ----
+  A.def('xunyan', {
+    w: 2, d: 2, hmax: 74,
+    build: function (m, v) {
+      var dmg = v.dmg || 0;
+      m.cyl(1.0, 1.0, 0, 0.85, 30, C.earthDk, { topCol: A.tone(C.earthDk, 1.1), hoops: [8, 20], bias: 1 });
+      if (dmg < 2) m.cone(1.0, 1.0, 30, 0.7, 10, C.stone[1]);
+      m.cyl(1.6, 0.4, 0, 0.1, 54, C.stone[1], { topCol: C.stone[2] });
+      m.box(0.1, 0.1, 0, 0.5, 0.4, 10, '#6f8f3e', { top: '#8fb05a' });
+      m.box(0.2, 1.5, 0, 0.4, 0.4, 8, '#7a9a4a', { top: '#9bbb62' });
+      if (dmg >= 1) m.custom(0.6, 0.6, 0.8, 0.8, 16, function (ctx, mm) {
+        A.line(ctx, mm.pt(1.2, 1.9, 20), mm.pt(1.26, 1.9, 8), CK_DARK, 1.3);
+        A.line(ctx, mm.pt(0.8, 1.9, 24), mm.pt(0.84, 1.9, 14), CK_DARK, 1.3);
+      }, 2);
+    },
+    lights: function (v) { return (v.dmg || 0) >= 2 ? [] : [[1.0, 1.9, 8, 18, C.fire, 0.7, 'F']]; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      var s = m.pt(1.6, 0.4, 58); A.smoke(ctx, s[0], s[1], t, 0.7);
+      if (dmg >= 1) { var k = m.pt(1.0, 1.9, 18); A.smoke(ctx, k[0], k[1], t, 2.4); }
+      if (dmg >= 2) { var f = m.pt(1.0, 2.1, 4); A.fire(ctx, f[0], f[1], t, 1.1); }
+    }
+  });
+
+  // ---- 床弩台 chuangtai 2×2:高架木台(四柱+梯)+ 迴轉座上的大床弩;不靠土台,與 camp_nutai 區隔 ----
+  A.def('chuangtai', {
+    w: 2, d: 2, hmax: 84,
+    build: function (m, v) {
+      var dmg = v.dmg || 0;
+      var post = function (ctx, f) { ckDamageFace(ctx, f, dmg, 0.3, 12); };
+      [[0.15, 0.15], [1.6, 0.15], [0.15, 1.6], [1.6, 1.6]].forEach(function (p, i) {
+        if (dmg >= 2 && i === 2) return;
+        m.box(p[0], p[1], 0, 0.25, 0.25, 26, C.wood[1], { top: C.wood[2], deco: { F: post, B: post, L: post, R: post } });
+      });
+      var deck = function (ctx, f) { ckLayers(ctx, f, 2, 5, 2, C.wood[0]); };
+      m.box(0.05, 0.05, 25, 1.9, 1.9, 5, C.wood[1], { top: C.wood[2], deco: { F: deck, B: deck, L: deck, R: deck } });
+      m.cyl(1.0, 1.0, 30, 0.3, 6, C.wood[0], { topCol: C.wood[2], bias: 1 });
+      m.custom(0.0, 0.2, 2.0, 1.8, 36, function (ctx, mm) {
+        var st0 = mm.pt(1.0, 0.1, 36), st1 = mm.pt(1.0, 1.95, 36);
+        A.line(ctx, st0, st1, C.ink, 4.4); A.line(ctx, st0, st1, C.wood[1], 2.4);
+        var l0 = mm.pt(0.0, 1.2, 42), l1 = mm.pt(1.0, 1.4, 37), l2 = mm.pt(2.0, 1.2, 42);
+        A.line(ctx, l0, l1, C.ink, 4); A.line(ctx, l0, l1, C.wood[2], 2);
+        if (dmg < 2) { A.line(ctx, l1, l2, C.ink, 4); A.line(ctx, l1, l2, C.wood[2], 2); }
+        A.line(ctx, mm.pt(1.0, 0.9, 36), mm.pt(1.0, 1.95, 36), CZ_STEEL, 1.1);
+      }, 2);
+    },
+    lights: function (v) { return (v.dmg || 0) >= 2 ? [] : [[0.2, 0.2, 26, 14, C.lamp, 0.5, 'F']]; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      if (dmg >= 1) { var s = m.pt(1.0, 1.0, 40); A.smoke(ctx, s[0], s[1], t, 1.9); }
+      if (dmg >= 2) { var q = m.pt(0.2, 1.7, 6); A.fire(ctx, q[0], q[1], t, 0.9); }
+    }
+  });
+
+  // ---- 霹靂車 pili 3×3:石台 + A 字木架 + 配重投石臂(長臂、吊籃)+ 玄旗 ----
+  A.def('pili', {
+    w: 3, d: 3, hmax: 110,
+    build: function (m, v) {
+      var dmg = v.dmg || 0;
+      czStone(m, 0.1, 0.1, 0, 2.8, 2.8, 8, dmg);
+      m.box(1.1, 0.3, 12, 0.8, 0.6, 14, C.stone[0], { top: C.stone[2] });
+      m.custom(0.6, 1.3, 1.8, 0.4, 8, function (ctx, mm) {
+        var a = mm.pt(0.7, 1.5, 8), b = mm.pt(1.5, 1.5, 62), c = mm.pt(2.3, 1.5, 8);
+        A.line(ctx, a, b, C.ink, 5.2); A.line(ctx, a, b, C.wood[1], 3);
+        A.line(ctx, c, b, C.ink, 5.2); A.line(ctx, c, b, C.wood[1], 3);
+        var d = mm.pt(0.95, 1.5, 30), e = mm.pt(2.05, 1.5, 30); A.line(ctx, d, e, C.ink, 3); A.line(ctx, d, e, C.wood[2], 1.6);
+      }, 1);
+      m.cyl(1.5, 1.5, 58, 0.12, 6, C.ink, { topCol: C.stone[2], bias: 2 });
+      m.custom(1.2, 0.2, 0.6, 2.6, 14, function (ctx, mm) {
+        var a = mm.pt(1.5, 0.6, 20), b = mm.pt(1.5, 1.5, 61), c = mm.pt(1.5, dmg >= 2 ? 2.0 : 2.6, dmg >= 2 ? 50 : 78);
+        A.line(ctx, a, b, C.ink, 6); A.line(ctx, a, b, C.wood[2], 3.6);
+        A.line(ctx, b, c, C.ink, 6); A.line(ctx, b, c, C.wood[2], 3.6);
+        if (dmg < 2) { var s = mm.pt(1.5, 2.6, 78); A.line(ctx, c, s, '#8a7a5a', 0.9); A.circle(ctx, s[0], s[1], 3.2, C.stone[2], 0.7); }
+      }, 2);
+      if (dmg < 2) czPole(m, 2.7, 2.7, 8, 22);
+    },
+    lights: function () { return []; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      if (dmg < 2) czFlag(ctx, m, 2.7, 2.7, 30, 16, 10, C.lacquer, t, 0.7, dmg);
+      if (dmg >= 1) { var s = m.pt(1.0, 1.0, 14); A.smoke(ctx, s[0], s[1], t, 2.8); }
+    }
+  });
+
+  // ---- 擂鼓台 gutai 2×2:木台 + 欄杆 + 大鼓(鼓面脈動)+ 四柱小頂 ----
+  A.def('gutai', {
+    w: 2, d: 2, hmax: 82,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, snow = v.season === 'winter';
+      var rail = function (ctx, f) { ckDamageFace(ctx, f, dmg, 0.2, 14); };
+      m.box(0.05, 0.05, 0, 1.9, 1.9, 10, C.wood[1], { top: C.wood[2], deco: { F: rail, B: rail, L: rail, R: rail } });
+      m.custom(0.05, 0.05, 1.9, 1.9, 24, function (ctx, mm) {
+        [[0.05, 0.05, 1.95, 0.05], [0.05, 1.95, 1.95, 1.95], [0.05, 0.05, 0.05, 1.95], [1.95, 0.05, 1.95, 1.95]].forEach(function (s) {
+          var a = mm.pt(s[0], s[1], 20), b = mm.pt(s[2], s[3], 20); A.line(ctx, a, b, C.ink, 3); A.line(ctx, a, b, C.lacquer, 1.6);
+        });
+      }, 1);
+      m.cyl(1.0, 1.0, 10, 0.6, 26, C.hanRed, { topCol: '#f2dfb2', hoops: [6, 22], bias: 2 });
+      [[0.1, 0.1], [1.75, 0.1], [0.1, 1.75], [1.75, 1.75]].forEach(function (p) { m.box(p[0], p[1], 10, 0.15, 0.15, 26, C.wood[0]); });
+      if (dmg < 2) m.hip(0.0, 0.0, 36, 2.0, 2.0, 12, C.tile, { over: 0.2, curl: 3, sag: 1, snow: snow, ridgeCol: C.tileDk, hipK: 0.8 });
+      else m.box(0.0, 0.0, 36, 2.0, 2.0, 3, C.tileDk, { top: C.tile });
+    },
+    lights: function (v) { return (v.dmg || 0) >= 2 ? [] : [[0.3, 1.95, 30, 14, C.lantern, 0.6, 'F'], [1.7, 1.95, 30, 14, C.lantern, 0.6, 'F']]; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0, p = m.pt(1.0, 1.0, 36), k = 1 + 0.08 * Math.sin(t * 9);
+      ctx.save(); ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.ellipse(p[0], p[1], 15 * k, 7.5 * k, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = '#f2dfb2'; ctx.lineWidth = 1.2; ctx.stroke(); ctx.restore();
+      if (dmg >= 1) { var s = m.pt(0.2, 0.2, 40); A.smoke(ctx, s[0], s[1], t, 0.9); }
+    }
+  });
+
+  // ---- 烽燧台 fengsui 1×1:石座 + 細高木柱 + 頂端鐵籃;夜間點火(動畫)----
+  A.def('fengsui', {
+    w: 1, d: 1, hmax: 104,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, grain = function (ctx, f) { ckLayers(ctx, f, 4, 70, 8, C.wood[1]); };
+      czStone(m, 0.25, 0.25, 0, 0.5, 0.5, 8, dmg);
+      m.box(0.42, 0.42, 8, 0.16, 0.16, 72, C.wood[0], { top: C.wood[2], deco: { F: grain, B: grain, L: grain, R: grain } });
+      m.cyl(0.5, 0.5, 80, 0.22, 10, C.stone[0], { topCol: C.lacquer, hoops: [4], bias: 1 });
+      m.cone(0.5, 0.5, 90, 0.26, 4, C.stone[1], { bias: 1 });
+    },
+    lights: function () { return [[0.5, 0.5, 92, 40, C.fire, 1.0]]; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0, p = m.pt(0.5, 0.5, 92);
+      if (A.todOf(v).lit) { A.fire(ctx, p[0], p[1], t, 1.6); A.fire(ctx, p[0] + 3, p[1] + 1, t + 0.7, 1.0); }
+      else if (dmg >= 1) A.smoke(ctx, p[0], p[1], t, 1.3);
+      if (dmg >= 2) { var q = m.pt(0.5, 0.5, 9); A.fire(ctx, q[0], q[1], t, 0.8); }
+    }
+  });
+
+  // ---- 望樓 wanglou 1×1:四腳高架木構 + 小木屋 + 小廡殿頂;與 watchtower(2×2)區隔 ----
+  A.def('wanglou', {
+    w: 1, d: 1, hmax: 132,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, snow = v.season === 'winter', wall = czWood(dmg, 8);
+      [[0.05, 0.05], [0.85, 0.05], [0.05, 0.85], [0.85, 0.85]].forEach(function (p) { m.box(p[0], p[1], 0, 0.1, 0.1, 96, C.wood[1], { top: C.wood[2] }); });
+      m.custom(0.0, 0.0, 1.0, 1.0, 2, function (ctx, mm) {
+        [[0.05, 0.9, 0.9, 0.05], [0.05, 0.05, 0.9, 0.9]].forEach(function (s) {
+          var a = mm.pt(s[0], s[1], 4), b = mm.pt(s[2], s[3], 90);
+          A.line(ctx, a, b, C.ink, 2.6); A.line(ctx, a, b, C.wood[0], 1.4);
+        });
+      }, 0);
+      m.box(0.0, 0.0, 96, 1.0, 1.0, 4, C.wood[1], { top: C.wood[2] });
+      m.box(0.12, 0.12, 100, 0.76, 0.76, 16, C.wood[2], { top: C.wood[1], deco: { F: wall, B: wall, L: wall, R: wall } });
+      if (dmg < 2) m.hip(0.06, 0.06, 116, 0.88, 0.88, 10, C.tile, { over: 0.12, curl: 2, sag: 0.8, snow: snow, ridgeCol: C.lacquer, hipK: 0.8 });
+      else m.hip(0.06, 0.06, 116, 0.88, 0.88, 3, C.tile, { over: 0.06, curl: 0, sag: 0.3, ridgeCol: C.tileDk });
+    },
+    lights: function (v) { return (v.dmg || 0) >= 2 ? [] : [[0.5, 0.9, 106, 16, C.lamp, 0.7, 'F'], [0.9, 0.5, 106, 16, C.lamp, 0.6, 'R']]; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      if (dmg >= 1) { var s = m.pt(0.5, 0.5, 120); A.smoke(ctx, s[0], s[1], t, 1.5); }
+    }
+  });
+
+  // ---- 拒馬槍陣 qiangzhen 2×2:木架橫樑 + 向外斜伸的長槍;矮而寬,阻騎 ----
+  A.def('qiangzhen', {
+    w: 2, d: 2, hmax: 44,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, beamZ = dmg >= 2 ? 6 : 14;
+      [0.3, 1.7].forEach(function (u) {
+        m.custom(u - 0.1, 0.5, 0.2, 1.0, 0, function (ctx, mm) {
+          var a = mm.pt(u, 0.6, 0), b = mm.pt(u, 1.4, beamZ + 2), c = mm.pt(u, 1.4, 0), d = mm.pt(u, 0.6, beamZ + 2);
+          A.line(ctx, a, b, C.ink, 3); A.line(ctx, a, b, C.wood[0], 1.6);
+          A.line(ctx, c, d, C.ink, 3); A.line(ctx, c, d, C.wood[0], 1.6);
+        }, 0);
+      });
+      m.box(0.05, 0.85, beamZ, 1.9, 0.14, 4, C.wood[1], { top: C.wood[2] });
+      [0.1, 0.55, 1.0, 1.45, 1.9].forEach(function (u, i) {
+        if (dmg >= 1 && i === 2) return;
+        czSpear(m, [u, 0.9, beamZ + 1], [u, 2.25, beamZ + 8 + (i % 2) * 4], i % 2 ? C.wood[0] : C.wood[1]);
+      });
+    },
+    lights: function () { return []; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      if (dmg >= 2) { var s = m.pt(1.0, 1.0, 10); A.smoke(ctx, s[0], s[1], t, 0.5); }
+    }
+  });
+
+  // ---- 破甲弩 ponu 2×2:石座 + 大型重弩(雙弓臂)+ 絞盤;弩矢粗而沉 ----
+  A.def('ponu', {
+    w: 2, d: 2, hmax: 72,
+    build: function (m, v) {
+      var dmg = v.dmg || 0;
+      czStone(m, 0.25, 0.25, 0, 1.5, 1.5, 22, dmg);
+      m.box(0.85, 0.2, 22, 0.3, 1.6, 6, C.wood[0], { top: C.wood[2] });
+      m.box(0.55, 0.5, 28, 0.8, 0.7, 10, C.wood[1], { top: C.wood[2] });
+      m.custom(-0.1, 0.2, 2.2, 1.6, 28, function (ctx, mm) {
+        var a = mm.pt(-0.1, 1.5, 46), b = mm.pt(0.5, 1.4, 41), c = mm.pt(1.0, 1.3, 38), d = mm.pt(1.5, 1.4, 41), e = mm.pt(2.1, 1.5, 46);
+        var seg = function (p, q) { A.line(ctx, p, q, C.ink, 5); A.line(ctx, p, q, C.wood[2], 2.8); };
+        if (dmg < 2) seg(a, b);
+        seg(b, c); seg(c, d); seg(d, e);
+        A.line(ctx, mm.pt(-0.1, 1.5, 46), mm.pt(2.1, 1.5, 46), '#e8dcc0', 0.8);
+      }, 1);
+      m.custom(0.8, 0.2, 0.4, 1.8, 28, function (ctx, mm) {
+        var a = mm.pt(1.0, 0.2, 31), b = mm.pt(1.0, 1.9, 31);
+        A.line(ctx, a, b, C.ink, 4); A.line(ctx, a, b, CZ_STEEL, 2.4);
+        A.poly(ctx, [mm.pt(1.0, 1.9, 33), mm.pt(1.0, 2.05, 31), mm.pt(1.0, 1.9, 29)], CZ_STEEL, 0.5);
+      }, 2);
+    },
+    lights: function () { return []; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      if (dmg >= 1) { var s = m.pt(1.0, 1.0, 40); A.smoke(ctx, s[0], s[1], t, 1.6); }
+    }
+  });
+
+  // ---- 敵樓 dilou 2×2:厚石城角堡,頂為平台與女牆(無屋頂)+ 玄旗 ----
+  A.def('dilou', {
+    w: 2, d: 2, hmax: 112,
+    build: function (m, v) {
+      var dmg = v.dmg || 0;
+      var fw = function (ctx, f) { ckLayers(ctx, f, 8, 88, 8, C.stone[0]); ckWin(ctx, f, 0.3, 40, 10, 0.12); ckWin(ctx, f, 0.7, 40, 10, 0.12); ckDamageFace(ctx, f, dmg, 0.5, 60); };
+      m.box(0.05, 0.05, 0, 1.9, 1.9, 88, C.stone[1], { top: C.stone[2], deco: { F: fw, B: fw, L: fw, R: fw } });
+      var mer = [0.05, 0.5, 0.95, 1.4, 1.75];
+      mer.forEach(function (p) {
+        m.box(p, 0.0, 88, 0.2, 0.2, 8, C.stone[1], { top: C.stone[2] });
+        m.box(p, 1.8, 88, 0.2, 0.2, 8, C.stone[1], { top: C.stone[2] });
+        if (dmg < 2) m.box(1.8, p, 88, 0.2, 0.2, 8, C.stone[1], { top: C.stone[2] });
+        m.box(0.0, p, 88, 0.2, 0.2, 8, C.stone[1], { top: C.stone[2] });
+      });
+      if (dmg < 2) czPole(m, 1.0, 1.0, 96, 14);
+    },
+    lights: function (v) { return (v.dmg || 0) >= 2 ? [] : [[0.7, 1.92, 40, 14, C.lamp, 0.6, 'F'], [1.92, 0.7, 40, 14, C.lamp, 0.5, 'R']]; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      if (dmg < 2) czFlag(ctx, m, 1.0, 1.0, 110, 22, 12, C.lacquer, t, 0.3, dmg);
+      if (dmg >= 1) { var s = m.pt(1.9, 1.9, 96); A.smoke(ctx, s[0], s[1], t, 2.2); }
+    }
+  });
+
+  // ---- 閘樓 zhalou 3×1:營門箭閘,下方為石砌門洞(鐵閘下垂)、上為木樓與寬檐;可旋轉 ----
+  A.def('zhalou', {
+    w: 3, d: 1, hmax: 96,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, snow = v.season === 'winter';
+      var base = function (ctx, f) {
+        ckLayers(ctx, f, 4, 28, 5, C.stone[0]);
+        A.poly(ctx, A.quad(f, 0.35, 0.65, 0, 18), CK_DARK, 0.5);
+        var s;
+        for (s = 0.37; s < 0.64; s += 0.065) {
+          if (dmg >= 2 && s > 0.5) continue;
+          A.line(ctx, f.pt(s, 0), f.pt(s, 17), CZ_STEEL, 1.2);
+        }
+        [6, 12].forEach(function (z) { A.line(ctx, f.pt(0.35, z), f.pt(0.65, z), CZ_STEEL, 1.2); });
+        ckDamageFace(ctx, f, dmg, 0.08, 20);
+      };
+      m.box(0.0, 0.1, 0, 3.0, 0.8, 28, C.stone[1], { top: C.stone[2], deco: { F: base, B: base, L: base, R: base } });
+      var up = function (ctx, f) { ckLayers(ctx, f, 4, 22, 5, C.wood[0]); ckWin(ctx, f, 0.22, 8, 6, 0.16); ckWin(ctx, f, 0.78, 8, 6, 0.16); ckDamageFace(ctx, f, dmg, 0.5, 14); };
+      m.box(0.2, 0.1, 28, 2.6, 0.8, 22, C.wood[1], { top: C.wood[2], deco: { F: up, B: up, L: up, R: up } });
+      if (dmg < 2) m.hip(0.1, 0.05, 50, 2.8, 0.9, 14, C.tile, { over: 0.2, curl: 3, sag: 1.2, snow: snow, ridgeCol: C.lacquer, ridgeHi: C.gold, hipK: 0.7 });
+      else m.hip(0.1, 0.05, 50, 2.8, 0.9, 4, C.tile, { over: 0.1, curl: 0, sag: 0.4, ridgeCol: C.tileDk });
+      if (dmg < 2) czPole(m, 1.5, 0.5, 64, 14);
+    },
+    lights: function (v) { return (v.dmg || 0) >= 2 ? [] : [[1.5, 0.95, 16, 22, C.lamp, 0.6, 'F']]; },
+    anim: function (ctx, m, t, v) {
+      var dmg = v.dmg || 0;
+      if (dmg < 2) czFlag(ctx, m, 1.5, 0.5, 78, 16, 9, C.lacquer, t, 1.1, dmg);
+      if (dmg >= 1) { var s = m.pt(0.6, 0.5, 52); A.smoke(ctx, s[0], s[1], t, 0.2); }
+      if (dmg >= 2) { var q = m.pt(2.4, 0.5, 4); A.fire(ctx, q[0], q[1], t, 1.0); }
+    }
+  });
+
+  // ---- 鹿角 camp_lujiao 1×1(key lujiao;與 art_deco3 裝飾撞名故加 camp_ 前綴):放射狀削尖木枝 ----
+  A.def('camp_lujiao', {
+    w: 1, d: 1, hmax: 24,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, i, a, tipZ = dmg >= 2 ? 6 : 14;
+      for (i = 0; i < 8; i++) {
+        if (dmg >= 1 && i % 3 === 0) continue;
+        a = i / 8 * Math.PI * 2 + 0.2;
+        czSpear(m, [0.5, 0.5, 1], [0.5 + Math.cos(a) * 0.42, 0.5 + Math.sin(a) * 0.42, tipZ + (i % 2) * 4], i % 2 ? C.wood[2] : C.wood[1]);
+      }
+      m.cyl(0.5, 0.5, 0, 0.12, 4, C.wood[0], { topCol: C.wood[2], bias: 2 });
+    }
+  });
+
+  // ---- 尖樁陣 jianzhuang 2×2:地面斜插的尖木樁(減速,低矮);受損樁倒伏 ----
+  A.def('jianzhuang', {
+    w: 2, d: 2, hmax: 18,
+    build: function (m, v) {
+      var dmg = v.dmg || 0, n = 0;
+      [0.3, 1.0, 1.7].forEach(function (u, iu) {
+        [0.3, 1.0, 1.7].forEach(function (w, iv) {
+          n++;
+          if (dmg >= 1 && n % 4 === 0) return;
+          var z = dmg >= 2 ? 5 : 12, lean = dmg >= 2 ? 0.4 : 0.25;
+          czSpear(m, [u, w, 0], [u + (iu % 2 ? -0.08 : 0.08), w + lean, z], iv % 2 ? C.wood[1] : C.wood[0]);
+        });
+      });
+    }
+  });
+
 })(ART);

@@ -1,18 +1,20 @@
 // mapio.js — 棋盤序列化與驗證(PLAN_TD_MASTER §6.1)
 // 只宣告函式與常數,不執行碰 DOM 或 world 的程式。
-// 執行期才使用的外部全域:MAP_W MAP_H T_LAKE T_RIVER OBJECTS footprint CAMP_CAPS CAMP_LV
+// 執行期才使用的外部全域:MAP_W MAP_H T_LAKE T_RIVER OBJECTS footprint CAMP_CAPS CAMP_CP CAMP_CP_PCT CAMP_LV
 
 const MIO_LAYERS = ['terrain', 'height', 'flow', 'block', 'zone'];
 const MIO_EXTRA_KEYS = ['dev', 'trig', 'mimic'];
 const MIO_K = { none: 0, wall: 1, obstacle: 2, solid: 3 };
-const MIO_RING = 8;
+const DEPLOY_RED = 3;   // 部署紅區:實體建築周圍 Chebyshev 距離 ≤ 此值的格不可部署(部落衝突式)
 const MIO_DX = [1, -1, 0, 0];
 const MIO_DY = [0, 0, 1, -1];
+// 硬上限 key → 計數的物件型別(每 key 對應自身);以格數計的 key 見 MIO_CAP_CELLS
 const MIO_CAP_PARTS = {
-  hq: ['hq'], tower: ['tower'], nutai: ['nutai'], shitai: ['shitai'],
-  support: ['tent', 'wagon', 'granary'], muster: ['muster'], banner: ['banner'],
-  wall: ['wall'], gate: ['gate'], fakecamp: ['fakecamp']
+  hq: ['hq'], wall: ['wall'], lujiao: ['lujiao'], gate: ['gate'], zhalou: ['zhalou'],
+  pili: ['pili'], fengsui: ['fengsui'], gutai: ['gutai'], dilou: ['dilou'],
+  muster: ['muster'], banner: ['banner'], fakecamp: ['fakecamp']
 };
+const MIO_CAP_CELLS = { wall: true, lujiao: true };
 
 function rleEncode(arr) {
   const parts = [];
@@ -174,67 +176,73 @@ function mioAnalyze(bd) {
   return { occ: occ, pass: pass, ground: ground, bld: bld, height: height, stairs: stairs };
 }
 
-function mioNearBld(bld, x, y) {
-  for (let dy = -2; dy <= 2; dy++)
-    for (let dx = -2; dx <= 2; dx++) {
-      const xx = x + dx, yy = y + dy;
-      if (xx < 0 || yy < 0 || xx >= MAP_W || yy >= MAP_H) continue;
-      if (bld[yy * MAP_W + xx]) return true;
-    }
-  return false;
+// 紅區來源:有血量的建築或實心 / 牆體。陷阱與不可偵察(scoutVisible 為假)的隱藏物件不產生紅區,否則會洩漏位置
+function mioIsRedSource(o) {
+  if (!scoutVisible(o.type)) return false;
+  const cb = mioCb(o.type);
+  return cb.hp > 0 || cb.block === 'solid' || cb.block === 'wall';
 }
 
+// 部署區(部落衝突式):所有可站立地面格中,不在任何紅區來源 DEPLOY_RED 格(Chebyshev)內者。
+// 放兵位置不再由 marks.deploy 決定(該資料保留但不讀取)。front 與 flank 回傳同一集合。
+// 外圍一圈不在紅區內的格必然包含在內(即使被封閉牆圍住不連通,攻方仍可由邊緣放兵)。
 function deployCells(bd, kind) {
   if (kind !== 'front' && kind !== 'flank') throw new Error('deployCells kind 錯誤: ' + kind);
   const sig = mioSig(bd);
   if (!bd.__dc || bd.__dc.sig !== sig) bd.__dc = { sig: sig, cells: {} };
   if (bd.__dc.cells[kind]) return bd.__dc.cells[kind];
   const A = mioAnalyze(bd);
-  const out = new Uint8Array(MAP_W * MAP_H);
-  const rects = (bd.marks && bd.marks.deploy) || [];
-  if (rects.length) {
-    rects.forEach(r => {
-      if (kind === 'front' && r.kind !== 'front') return;
-      if (kind === 'flank' && r.kind !== 'front' && r.kind !== 'flank') return;
-      const x0 = Math.max(0, r.r[0]), y0 = Math.max(0, r.r[1]);
-      const x1 = Math.min(MAP_W, r.r[0] + r.r[2]), y1 = Math.min(MAP_H, r.r[1] + r.r[3]);
-      for (let y = y0; y < y1; y++)
-        for (let x = x0; x < x1; x++)
-          if (A.ground[y * MAP_W + x]) out[y * MAP_W + x] = 1;
+  const red = new Uint8Array(MAP_W * MAP_H);
+  (bd.objects || []).forEach(o => {
+    if (!mioIsRedSource(o)) return;
+    mioEachCell(o, i => {
+      const x = i % MAP_W, y = (i - x) / MAP_W;
+      for (let dy = -DEPLOY_RED; dy <= DEPLOY_RED; dy++)
+        for (let dx = -DEPLOY_RED; dx <= DEPLOY_RED; dx++) {
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= MAP_W || yy >= MAP_H) continue;
+          red[yy * MAP_W + xx] = 1;
+        }
     });
-  } else {
-    for (let y = 0; y < MAP_H; y++)
-      for (let x = 0; x < MAP_W; x++) {
-        const i = y * MAP_W + x;
-        if (!A.ground[i]) continue;
-        if (x >= MIO_RING && y >= MIO_RING && x < MAP_W - MIO_RING && y < MAP_H - MIO_RING) continue;
-        if (mioNearBld(A.bld, x, y)) continue;
-        out[i] = 1;
-      }
-  }
+  });
+  const out = new Uint8Array(MAP_W * MAP_H);
+  for (let i = 0; i < out.length; i++) if (A.ground[i] && !red[i]) out[i] = 1;
   bd.__dc.cells[kind] = out;
   return out;
 }
 
+// 回傳超限項目 { key, have, max }:硬上限 key;總容量點 key 'cp';單一 type 的 key 'cp:' + type
 function campCapCheck(bd) {
-  const have = {};
+  const have = {}, cpBy = {};
+  const keys = Object.keys(CAMP_CAPS);
+  let cpSum = 0;
   (bd.objects || []).forEach(o => {
     const fp = mioFp(o);
-    Object.keys(MIO_CAP_PARTS).forEach(key => {
-      if (MIO_CAP_PARTS[key].indexOf(o.type) < 0) return;
-      have[key] = (have[key] || 0) + (o.type === 'wall' ? fp[0] * fp[1] : 1);
+    keys.forEach(key => {
+      const parts = MIO_CAP_PARTS[key] || [key];
+      if (parts.indexOf(o.type) < 0) return;
+      have[key] = (have[key] || 0) + (MIO_CAP_CELLS[key] ? fp[0] * fp[1] : 1);
     });
+    const cp = mioCb(o.type).cp || 0;
+    if (cp > 0) { cpSum += cp; cpBy[o.type] = (cpBy[o.type] || 0) + cp; }
   });
   const out = [];
-  Object.keys(CAMP_CAPS).forEach(key => {
+  keys.forEach(key => {
     const max = CAMP_CAPS[key][CAMP_LV - 1];
     const n = have[key] || 0;
     if (n > max) out.push({ key: key, have: n, max: max });
   });
+  const cpMax = CAMP_CP[CAMP_LV - 1];
+  if (cpSum > cpMax) out.push({ key: 'cp', have: cpSum, max: cpMax });
+  const pctMax = Math.floor(cpMax * CAMP_CP_PCT);
+  Object.keys(cpBy).forEach(t => {
+    if (cpBy[t] > pctMax) out.push({ key: 'cp:' + t, have: cpBy[t], max: pctMax });
+  });
   return out;
 }
 
-function mioBfs(A, start, target, noWall) {
+// climb:允許正交相鄰且高差恰為 1 的移動(步兵攀爬);階梯 / 斜坡的高差不受限
+function mioBfs(A, start, target, noWall, climb) {
   const N = MAP_W * MAP_H;
   const dist = new Int32Array(N).fill(-1);
   const q = new Int32Array(N);
@@ -255,7 +263,8 @@ function mioBfs(A, start, target, noWall) {
       const n = ny * MAP_W + nx;
       if (dist[n] >= 0 || !A.pass[n]) continue;
       if (noWall && A.occ[n] === MIO_K.wall) continue;
-      if (A.height[n] !== A.height[c] && !A.stairs[n] && !A.stairs[c]) continue;
+      const dh = Math.abs(A.height[n] - A.height[c]);
+      if (dh !== 0 && !A.stairs[n] && !A.stairs[c] && !(climb && dh === 1)) continue;
       dist[n] = dist[c] + 1;
       q[tail++] = n;
     }
@@ -283,13 +292,13 @@ function validateCamp(bd, opt) {
     }
   }
 
-  const front = deployCells(bd, 'front'), flank = deployCells(bd, 'flank');
+  const dep = deployCells(bd, 'front');
   let nDeploy = 0;
   for (let i = 0; i < N; i++)
-    if (front[i] || flank[i]) { start[i] = 1; nDeploy++; }
+    if (dep[i]) { start[i] = 1; nDeploy++; }
   if (nDeploy < 20) errors.push('可部署格 ' + nDeploy + ' 格,需 ≥ 20');
 
-  if (cores.length > 0 && nDeploy > 0 && mioBfs(A, start, target, false) < 0)
+  if (cores.length > 0 && nDeploy > 0 && mioBfs(A, start, target, false, true) < 0)
     errors.push('部署區無法抵達核心(可通行路徑被懸崖、湖河或障礙封死)');
 
   const nAtk = objs.filter(o => mioKind(o.type) === 'solid' && mioCb(o.type).hp > 0).length;
@@ -300,8 +309,32 @@ function validateCamp(bd, opt) {
   });
 
   if (cores.length > 0 && nDeploy > 0) {
-    const d = mioBfs(A, start, target, true);
+    const d = mioBfs(A, start, target, true, true);
     if (d >= 0 && d < 10) warnings.push('部署區到核心不經牆的最短路僅 ' + d + ' 格(< 10)');
+  }
+
+  // §A.6 路徑長度:D = 可部署格到核心的最近 Chebyshev 距離;L = 步兵(可攀爬)從任一可部署格到核心的最少步數
+  if (cores.length > 0 && nDeploy > 0) {
+    const coreIdx = [];
+    for (let i = 0; i < N; i++) if (coreCell[i]) coreIdx.push(i);
+    let D = Infinity;
+    for (let i = 0; i < N; i++) {
+      if (!start[i]) continue;
+      const x = i % MAP_W, y = (i - x) / MAP_W;
+      coreIdx.forEach(c => {
+        const cx = c % MAP_W, cy = (c - cx) / MAP_W;
+        const cheb = Math.max(Math.abs(x - cx), Math.abs(y - cy));
+        if (cheb < D) D = cheb;
+      });
+    }
+    const L = mioBfs(A, start, target, false, true);
+    if (L >= 0) {
+      const lim = 2.0 * D + 12, warnLim = 1.6 * D + 8;
+      if (L > lim) errors.push('路徑過長:部署區到核心的路徑 ' + L + ' / 上限 ' + Math.floor(lim) + ',請減少迂迴的高台、湖或實心建築');
+      else if (L > warnLim) warnings.push('部署區到核心的路徑偏長(' + L + ' / 警告線 ' + Math.floor(warnLim) + ')');
+    }
+    // 騎兵 / 器械:不攀爬、牆可過;無路只是警告
+    if (mioBfs(A, start, target, false, false) < 0) warnings.push('騎兵無路:騎兵 / 器械無法抵達核心');
   }
   const zone = mioLayer(bd, 'zone');
   let zoneBad = 0;
@@ -323,7 +356,7 @@ function scoutVisible(type) {
   const d = OBJECTS[type];
   const cb = d && d.cb;
   if (!cb) return true;
-  if (cb.scout !== undefined) return cb.scout;
+  if (cb.scout !== undefined && cb.scout !== null) return cb.scout;
   return SCOUT_HIDDEN_CATS.indexOf(cb.cat) < 0;
 }
 

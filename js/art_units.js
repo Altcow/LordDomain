@@ -75,4 +75,81 @@
     shuizei: { name: '水賊', tunic: '#3a6a7a', trim: '#e8dcc4', pants: '#2b1d1b', head: 'scarf', headCol: '#2b1d1b', weapon: 'dao', fierce: true }
   };
   Object.keys(NPC).forEach(function (k) { NPC[k].id = k; A.UNIT[k] = NPC[k]; });
+
+  // ---- 戰鬥單位(UNITS key)補齊;已存在者(militia、hunter、daodun、gongbing、hjzong、zeishuai,以及與 NPC 共用的 tuqi、huqi、hjlishi、changji、shuizei)沿用上方定義 ----
+  // 騎兵:mount 為 A.ANIMAL 的馬;scale 0.9 讓騎兵高度約 44px(人物 translate 固定 (1,-13),無法只靠馬縮小)
+  A.UNIT.qingqi = { id: 'qingqi', name: '輕騎', tunic: '#6f8fb0', trim: '#ffc94a', head: 'scarf', headCol: '#3a2a26', armor: '#9a7a52', weapon: 'spear', mount: 'horse', scale: 0.9 };
+  A.UNIT.chihou = { id: 'chihou', name: '斥候', tunic: '#7f9e4c', trim: '#3a2a26', head: 'scarf', headCol: '#3a2a26', weapon: 'bow', mount: 'horse', scale: 0.9 };
+  A.UNIT.hushe = { id: 'hushe', name: '胡騎射手', tunic: '#5a7ab0', trim: '#e8dcc4', head: 'fur', headCol: '#8a6a4a', weapon: 'bow', mount: 'horse', scale: 0.9 };
+  // 敵軍(山賊):棕 / 灰綠服色與頭巾、帽區分
+  A.UNIT.szdao = { id: 'szdao', name: '山賊刀手', tunic: '#8a5a3a', trim: '#3a2a26', pants: '#3a2a26', head: 'scarf', headCol: '#6b4226', weapon: 'dao', shield: 'round', shieldCol: '#6b4226', fierce: true };
+  A.UNIT.szgong = { id: 'szgong', name: '山賊弓手', tunic: '#6b5a3a', trim: '#3a2a26', pants: '#4a3a2a', head: 'hat', headCol: '#5a4a2a', weapon: 'bow', fierce: true };
+  // 器械:spec.draw 取代人物身體繪製(見下方 chibiRaw 包裝);座標同人物(腳底 y=0,正面朝 +x)
+  A.UNIT.chuangnu = { id: 'chuangnu', name: '床弩', tunic: '#d23a2c', trim: '#ffc94a', pants: '#5a3a2a', headCol: '#6f7e8c', draw: drawChuangnu };
+  A.UNIT.chongche = { id: 'chongche', name: '衝車', tunic: '#d23a2c', trim: '#ffc94a', pants: '#5a3a2a', headCol: '#6f7e8c', draw: drawChongche };
+  A.UNIT.toushi = { id: 'toushi', name: '投石車', tunic: '#d23a2c', trim: '#ffc94a', pants: '#5a3a2a', headCol: '#6f7e8c', draw: drawToushi };
+  A.UNIT.zeishuai.scale = 1.3;
+
+  // 操作員(簡化 Q 版):shade 為後排較暗者
+  function crew(ctx, s, x, bob, back, shade) {
+    var C = A.C, tun = shade ? A.tone(s.tunic, 0.78) : s.tunic, pn = A.tone(s.pants || C.wood[0], shade ? 0.78 : 1);
+    A.poly(ctx, [[x - 3.4, -6], [x - 0.6, -6], [x - 0.8, -0.5], [x - 3.6, -0.5]], pn, 0.5);
+    A.poly(ctx, [[x + 0.6, -6], [x + 3.4, -6], [x + 3.8, -0.5], [x + 0.8, -0.5]], pn, 0.5);
+    A.poly(ctx, [[x - 4.6, -17 + bob], [x + 4.6, -17 + bob], [x + 5, -6], [x - 5, -6]], tun, 0.7);
+    A.line(ctx, [x + 3.2, -15 + bob], [x + 8, -11 + bob], tun, 2.6);
+    A.circle(ctx, x + 8, -11 + bob, 1.8, C.skin, 0.5);
+    A.circle(ctx, x, -25 + bob, 7.4, C.hair, 0.6);
+    if (!back) {
+      A.ellipse(ctx, x - 0.8, -24 + bob, 5.4, 5.2, C.skin, 0.5);
+      A.circle(ctx, x - 2.6, -24.6 + bob, 0.7, '#1a120e'); A.circle(ctx, x + 0.6, -24.6 + bob, 0.7, '#1a120e');
+    }
+    A.poly(ctx, [[x - 7.2, -26 + bob], [x + 7.2, -26 + bob], [x + 5.6, -30 + bob], [x - 5.6, -30 + bob]], s.headCol || C.hair, 0.5);
+  }
+  // 床弩:木座車 + 橫向弩臂(弦與箭)+ 兩名操作員
+  function drawChuangnu(ctx, s, back, fr) {
+    var C = A.C, bob = fr === 1 ? -0.8 : 0;
+    crew(ctx, s, -19, bob, back, true);
+    A.poly(ctx, [[-2, -7], [16, -7], [16, -4], [-2, -4]], C.wood[0], 0.6);
+    A.poly(ctx, [[-4, -15], [20, -15], [20, -11], [-4, -11]], C.wood[1], 0.7);
+    A.ellipse(ctx, 0, -3, 3.4, 4.2, C.wood[0], 0.7); A.ellipse(ctx, 12, -3, 3.4, 4.2, C.wood[0], 0.7);
+    ctx.beginPath(); ctx.arc(14, -13, 11, -1.25, 1.25);
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 3.2; ctx.lineCap = 'round'; ctx.stroke();
+    ctx.strokeStyle = C.wood[2]; ctx.lineWidth = 1.6; ctx.stroke();
+    A.line(ctx, [17.5, -23.4], [9, -13], '#e6dcc0', 0.8); A.line(ctx, [17.5, -2.6], [9, -13], '#e6dcc0', 0.8);
+    A.line(ctx, [6, -13], [24, -13], C.ink, 1.6);
+    A.poly(ctx, [[23, -14.8], [27, -13], [23, -11.2]], '#e6eef4', 0.5);
+    crew(ctx, s, -9, bob, back, false);
+  }
+  // 投石車:A 形支架 + 配重杆 + 投臂與石彈,一名操作員
+  function drawToushi(ctx, s, back, fr) {
+    var C = A.C, bob = fr === 1 ? -0.8 : 0;
+    A.poly(ctx, [[-2, -6], [18, -6], [18, -2], [-2, -2]], C.wood[0], 0.6);
+    A.ellipse(ctx, 1, -2.5, 3.2, 3.8, C.wood[1], 0.7); A.ellipse(ctx, 15, -2.5, 3.2, 3.8, C.wood[1], 0.7);
+    A.line(ctx, [4, -6], [9, -19], C.ink, 3.2); A.line(ctx, [4, -6], [9, -19], C.wood[1], 1.6);
+    A.line(ctx, [14, -6], [9, -19], C.ink, 3.2); A.line(ctx, [14, -6], [9, -19], C.wood[1], 1.6);
+    A.poly(ctx, [[-4, -11], [2, -11], [2, -5], [-4, -5]], C.stone[0], 0.6);
+    A.line(ctx, [-1, -6], [22, -36], C.ink, 3.4); A.line(ctx, [-1, -6], [22, -36], C.wood[2], 1.8);
+    A.poly(ctx, [[19, -38], [25, -37], [23, -32], [20, -32]], C.wood[0], 0.6);
+    A.circle(ctx, 22, -40, 2.6, C.stone[1], 0.6);
+    crew(ctx, s, -12, bob, back, false);
+  }
+  // 衝車:有頂棚的木車 + 前伸撞木(鐵頭)+ 兩名推車者
+  function drawChongche(ctx, s, back, fr) {
+    var C = A.C, bob = fr === 1 ? -0.8 : 0;
+    crew(ctx, s, -19, bob, back, true);
+    A.poly(ctx, [[-4, -6], [22, -6], [22, -2], [-4, -2]], C.wood[0], 0.6);
+    A.ellipse(ctx, 0, -2, 3.2, 3.6, C.wood[1], 0.7); A.ellipse(ctx, 18, -2, 3.2, 3.6, C.wood[1], 0.7);
+    A.poly(ctx, [[-4, -6], [-2, -22], [18, -22], [20, -6]], '#9a8a66', 0.7);
+    A.line(ctx, [-2, -22], [18, -22], C.wood[0], 2.4);
+    A.line(ctx, [-1, -17], [19, -17], A.tone('#9a8a66', 0.8), 0.8);
+    A.poly(ctx, [[12, -12], [28, -12], [28, -8], [12, -8]], C.wood[1], 0.7);
+    A.poly(ctx, [[26, -15], [30, -10], [26, -5]], C.stone[0], 0.8);
+    crew(ctx, s, -9, bob, back, false);
+  }
+
+  // 包裝 chibiRaw:spec.draw 存在時改由其繪製(器械用),否則走原本的人物繪製
+  var chibiRawBase = A.chibiRaw;
+  A.chibiRaw = function (ctx, s, back, fr) {
+    if (s.draw) s.draw(ctx, s, back, fr); else chibiRawBase(ctx, s, back, fr);
+  };
 })(ART);

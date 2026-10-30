@@ -97,11 +97,11 @@ const UNITS = {
 
   hjzong:   { name: '黃巾賊眾', fac: 'yellow', cls: 'shield', profile: 'foot', hp: 55, atk: 6, def: 3, range: 1, spd: 1.0, cd: 1.0, pop: 1, squad: 10, value: 11, targetPrefs: ['house', 'storage', 'any'], camp: null, look: null, habitText: '見營帳就搶', cautious: true },
   hjlishi:  { name: '黃巾力士', fac: 'yellow', cls: 'shield', profile: 'foot', hp: 220, atk: 10, def: 8, range: 1, spd: 0.7, cd: 1.2, pop: 2, squad: 3, value: 30, targetPrefs: ['defense', 'any'], camp: null, look: null, habitText: '專撲箭樓' },
-  szdao:    { name: '山賊刀手', fac: 'bandit', cls: 'shield', profile: 'foot', hp: 95, atk: 9, def: 6, range: 1, spd: 1.0, cd: 1.0, pop: 1, squad: 8, value: 20, targetPrefs: ['resource', 'house', 'any'], camp: null, look: null, habitText: '先劫輜重' },
+  szdao:    { name: '山賊刀手', fac: 'bandit', cls: 'shield', profile: 'foot', hp: 95, atk: 9, def: 6, range: 1, spd: 1.0, cd: 1.0, pop: 1, squad: 8, value: 20, targetPrefs: ['resource', 'house', 'storage', 'any'], camp: null, look: null, habitText: '先劫輜重' },
   szgong:   { name: '山賊弓手', fac: 'bandit', cls: 'archer', profile: 'foot', hp: 45, atk: 10, def: 2, range: 4, spd: 1.0, cd: 1.2, pop: 1, squad: 6, value: 18, targetPrefs: ['unit', 'defense', 'any'], camp: null, look: null, habitText: '冷箭射兵' },
-  huqi:     { name: '胡騎', fac: 'hu', cls: 'cavalry', profile: 'horse', hp: 140, atk: 12, def: 5, range: 1, spd: 2.2, cd: 1.1, pop: 2, squad: 4, value: 33, targetPrefs: ['resource', 'barracks', 'any'], camp: null, look: null, habitText: '掠糧車、燒營' },
+  huqi:     { name: '胡騎', fac: 'hu', cls: 'cavalry', profile: 'horse', hp: 140, atk: 12, def: 5, range: 1, spd: 2.2, cd: 1.1, pop: 2, squad: 4, value: 33, targetPrefs: ['resource', 'storage', 'barracks', 'any'], camp: null, look: null, habitText: '掠糧車、燒營' },
   hushe:    { name: '胡騎射手', fac: 'hu', cls: 'cavalry', profile: 'horse', hp: 120, atk: 10, def: 3, range: 3, spd: 2.0, cd: 1.3, pop: 2, squad: 4, value: 30, targetPrefs: ['unit', 'house', 'any'], camp: null, look: null, habitText: '騎射獵兵' },
-  shuizei:  { name: '水賊', fac: 'pirate', cls: 'shield', profile: 'foot', hp: 70, atk: 7, def: 4, range: 1, spd: 1.0, cd: 1.0, pop: 1, squad: 8, value: 14, targetPrefs: ['resource', 'house', 'any'], swim: true, camp: null, look: null, habitText: '從水路摸上岸' },
+  shuizei:  { name: '水賊', fac: 'pirate', cls: 'shield', profile: 'foot', hp: 70, atk: 7, def: 4, range: 1, spd: 1.0, cd: 1.0, pop: 1, squad: 8, value: 14, targetPrefs: ['resource', 'house', 'storage', 'any'], swim: true, camp: null, look: null, habitText: '從水路摸上岸' },
   chongche: { name: '衝車', fac: 'both', cls: 'siege', profile: 'heavy', hp: 380, atk: 30, def: 14, range: 1, spd: 0.5, cd: 2.5, pop: 5, squad: 1, value: 60, targetPrefs: ['wall', 'core'], ignoreTroops: true, bldOther: 0.4, camp: 'siege', look: null, habitText: '只撞城門' },
   toushi:   { name: '投石車', fac: 'both', cls: 'siege', profile: 'heavy', hp: 180, atk: 40, def: 4, range: 7, spd: 0.5, cd: 4.0, pop: 4, squad: 1, value: 70, targetPrefs: ['defense', 'wall', 'any'], minRange: 2, aoe: 1, aoeMax: 3, splash: 0.5, camp: 'siege', look: null, habitText: '拔箭樓' },
   zeishuai: { name: '賊帥', fac: 'npc', cls: 'shield', profile: 'foot', hp: 900, atk: 20, def: 14, range: 1, spd: 0.8, cd: 1.2, pop: 6, squad: 1, value: 150, targetPrefs: ['core', 'any'], aura: { r: 3, atk: 0.15 }, boss: true, char: null, camp: null, look: null, habitText: null }
@@ -119,19 +119,35 @@ const UNIT_BUFFS = {
 
 // 戰鬥陣建築戰鬥屬性(§3.1、§3.2);無攻擊的建築省略 atk 等欄位。scoreW 為摧毀度權重(pts)
 const BUILD_COMBAT = {
-  hq:      { cat: 'core', hp: 1800, def: 15, atk: 8, cd: 1.0, range: 4, mode: 'single', scoreW: 30, mat: 'wood', scout: true },
-  tower:   { cat: 'defense', hp: 450, def: 10, atk: 12, cd: 1.0, range: 5, mode: 'single', scoreW: 5, mat: 'wood', scout: true },
-  nutai:   { cat: 'defense', hp: 400, def: 10, atk: 22, cd: 2.5, range: 6, mode: 'pierce', pierce: [1, 0.7, 0.5], vs: { cavalry: 1.5 }, scoreW: 6, mat: 'wood', scout: true },
-  shitai:  { cat: 'defense', hp: 500, def: 12, atk: 30, cd: 4.0, range: 7, minRange: 2, mode: 'aoe', aoe: 1.2, aoeMax: 4, splash: 0.6, vs: { shield: 1.25 }, scoreW: 7, mat: 'stone', scout: true },
-  tent:    { cat: 'house', hp: 200, def: 6, scoreW: 3, mat: 'wood', scout: true, garrison: { militia: 1 }, trig: 'range', alert: 6 },
-  wagon:   { cat: 'resource', hp: 300, def: 6, scoreW: 4, mat: 'wood', scout: true },
-  granary: { cat: 'storage', hp: 450, def: 8, scoreW: 5, mat: 'earth', scout: true },
-  muster:  { cat: 'barracks', hp: 500, def: 10, scoreW: 6, mat: 'wood', scout: true, garrison: { daodun: 3, gongbing: 2 }, trigger: 7, leash: 10, trig: 'range', alert: 8 },
-  banner:  { cat: 'barracks', hp: 250, def: 6, scoreW: 4, mat: 'wood', scout: true, garrison: { hunter: 2 }, trigger: 5, leash: 7, trig: 'range', alert: 5 },
-  fakecamp: { cat: 'house', hp: 80, def: 0, scoreW: 0, mat: 'wood', scout: true, looksAs: 'tent' },
+  hq:      { cat: 'core', hp: 2400, def: 15, scoreW: 30, mat: 'wood', scout: true, cp: 0, garrison: { daodun: 3, gongbing: 3, qingqi: 2, chuangnu: 1 }, trig: 'hit', alert: 6, leash: 10 },
+  tower:   { cat: 'defense', hp: 450, def: 10, atk: 12, cd: 1.0, range: 5, mode: 'single', scoreW: 5, mat: 'wood', scout: true, cp: 2 },
+  qtower:  { cat: 'defense', hp: 250, def: 6, atk: 7, cd: 0.6, range: 4.5, mode: 'single', scoreW: 2, mat: 'wood', scout: true, cp: 1 },
+  ztower:  { cat: 'defense', hp: 650, def: 12, atk: 26, cd: 2.2, range: 5.5, mode: 'single', scoreW: 6, mat: 'wood', scout: true, cp: 3 },
+  lianu:   { cat: 'defense', hp: 450, def: 10, atk: 8, cd: 1.2, range: 5, mode: 'multi', multi: 3, scoreW: 6, mat: 'wood', scout: true, cp: 3 },
+  huojian: { cat: 'defense', hp: 400, def: 8, atk: 10, cd: 2.0, range: 4.5, mode: 'aoe', aoe: 1.0, aoeMax: 3, splash: 0.6, burn: { dps: 4, dur: 3, vs: { archer: 1.5, siege: 1.5, shield: 0.8 } }, vs: { siege: 1.5 }, scoreW: 6, mat: 'wood', scout: true, cp: 3 },
+  xunyan:  { cat: 'defense', hp: 400, def: 8, atk: 4, cd: 2.0, range: 3.5, mode: 'aoe', aoe: 1.5, aoeMax: 6, splash: 1.0, burn: { dps: 3, dur: 4 }, slow: { mul: 0.6, dur: 2 }, scoreW: 5, mat: 'earth', scout: true, cp: 3 },
+  nutai:   { cat: 'defense', hp: 400, def: 10, atk: 22, cd: 2.5, range: 6, mode: 'pierce', pierce: [1, 0.7, 0.5], vs: { cavalry: 1.5 }, scoreW: 6, mat: 'wood', scout: true, cp: 3 },
+  chuangtai: { cat: 'defense', hp: 500, def: 10, atk: 40, cd: 4.0, range: 9, minRange: 2, mode: 'single', vs: { siege: 1.5 }, scoreW: 7, mat: 'wood', scout: true, cp: 4 },
+  shitai:  { cat: 'defense', hp: 500, def: 12, atk: 30, cd: 4.0, range: 7, minRange: 2, mode: 'aoe', aoe: 1.2, aoeMax: 4, splash: 0.6, vs: { shield: 1.25 }, scoreW: 7, mat: 'stone', scout: true, cp: 4 },
+  pili:    { cat: 'defense', hp: 900, def: 14, atk: 45, cd: 5.0, range: 9, minRange: 3, mode: 'aoe', aoe: 1.5, aoeMax: 6, splash: 0.6, vs: { shield: 1.25, siege: 1.25 }, scoreW: 10, mat: 'wood', scout: true, cp: 6 },
+  gutai:   { cat: 'defense', hp: 450, def: 10, aura: { r: 6, aps: 0.2 }, scoreW: 4, mat: 'wood', scout: true, cp: 3 },
+  fengsui: { cat: 'defense', hp: 300, def: 8, alarm: { r: 8, aps: 0.15, dur: 20, mark: 0.1 }, scoreW: 3, mat: 'earth', scout: true, cp: 2 },
+  wanglou: { cat: 'defense', hp: 300, def: 8, atk: 8, cd: 1.2, range: 7, mode: 'single', vs: { archer: 1.3 }, reveal: 8, scoreW: 3, mat: 'wood', scout: true, cp: 1 },
+  qiangzhen: { cat: 'defense', hp: 600, def: 14, atk: 18, cd: 1.5, range: 2, mode: 'aoe', aoe: 1.2, aoeMax: 4, splash: 0.8, vs: { cavalry: 2.0, shield: 0.6 }, scoreW: 4, mat: 'wood', scout: true, cp: 2 },
+  ponu:    { cat: 'defense', hp: 400, def: 10, atk: 20, cd: 2.0, range: 6, mode: 'single', ap: 0.7, vs: { shield: 1.5 }, scoreW: 5, mat: 'wood', scout: true, cp: 3 },
+  dilou:   { cat: 'defense', hp: 1000, def: 16, atk: 14, cd: 1.0, range: 5, mode: 'single', scoreW: 7, mat: 'stone', scout: true, cp: 4 },
+  zhalou:  { cat: 'wall', hp: 900, def: 20, atk: 10, cd: 1.2, range: 4, mode: 'single', scoreW: 0, mat: 'wood', scout: true, cp: 3 },
+  lujiao:  { cat: 'wall', hp: 120, def: 8, scoreW: 0, mat: 'wood', scout: true, cp: 0 },
+  jianzhuang: { cat: 'trap', scoreW: 0, mat: 'wood', scout: true, slow: { foot: 0.8, horse: 0.5, heavy: 0.5 }, cp: 1 },
+  tent:    { cat: 'house', hp: 200, def: 6, scoreW: 3, mat: 'wood', scout: true, trig: 'range', alert: 6, cp: 1 },
+  wagon:   { cat: 'resource', hp: 300, def: 6, scoreW: 4, mat: 'wood', scout: true, cp: 1 },
+  granary: { cat: 'storage', hp: 450, def: 8, scoreW: 5, mat: 'earth', scout: true, cp: 1 },
+  muster:  { cat: 'barracks', hp: 600, def: 10, scoreW: 6, mat: 'wood', scout: true, garrison: { daodun: 2, gongbing: 2 }, trigger: 7, leash: 10, trig: 'range', alert: 8, cp: 4 },
+  banner:  { cat: 'barracks', hp: 250, def: 6, scoreW: 4, mat: 'wood', scout: true, garrison: { hunter: 2 }, trigger: 5, leash: 7, trig: 'range', alert: 5, cp: 1 },
+  fakecamp: { cat: 'house', hp: 80, def: 0, scoreW: 0, mat: 'wood', scout: true, looksAs: 'tent', cp: 1 },
   wall:    { cat: 'wall', hp: 200, def: 15, scoreW: 0, mat: 'stone', scout: true },
   gate:    { cat: 'wall', hp: 600, def: 18, scoreW: 0, mat: 'wood', scout: true },
-  palace:  { cat: 'core', hp: 1800, def: 15, atk: 8, range: 4, scoreW: 30 },
+  palace:  { cat: 'core', hp: 2400, def: 15, scoreW: 30, garrison: { daodun: 3, changji: 2, gongbing: 3, qingqi: 2, chuangnu: 1 }, trig: 'hit' },
   house:   { cat: 'house', hp: 200, def: 6, scoreW: 3, garrison: { militia: 1 }, trig: 'range', alert: 4 },
   market:  { cat: 'resource', hp: 300, def: 6, scoreW: 4 },
   lumber:  { cat: 'resource', hp: 300, def: 6, scoreW: 4, garrison: { hunter: 1 }, trig: 'range', alert: 7 },
@@ -149,19 +165,30 @@ const BUILD_COMBAT = {
   bridge: {}
 };
 
-// 戰鬥陣的建造限制(§3.3):索引 = CAMP_LV − 1;support = 營帳 + 輜重車 + 糧囤 合計
+// 陣地容量點(PLAN_DEFENSE §B.4):索引 = CAMP_LV − 1。CAMP_CP 為各等級的總點數上限;單一 type 上限 = floor(CAMP_CP × CAMP_CP_PCT)
+// 每種物件的點數見 BUILD_COMBAT[type].cp
+const CAMP_CP = [40, 60, 100, 120, 140];
+const CAMP_CP_PCT = 0.3;
+// 只剩格數 / 唯一 / 強力建築的硬上限(牆、鹿角以格數計,其餘以座數計)
 const CAMP_CAPS = {
   hq:        [1, 1, 1, 1, 1],
-  tower:     [2, 3, 3, 4, 5],
-  nutai:     [0, 1, 1, 2, 2],
-  shitai:    [0, 0, 1, 1, 2],
-  muster:    [1, 1, 1, 2, 2],
-  banner:    [0, 1, 1, 1, 2],
-  support:   [6, 8, 10, 12, 14],
-  wall:      [30, 50, 70, 90, 110],
-  gate:      [1, 1, 2, 2, 3],
-  fakecamp:  [0, 1, 1, 2, 2]
+  wall:      [60, 110, 160, 190, 220],
+  lujiao:    [20, 40, 60, 70, 80],
+  gate:      [1, 2, 3, 3, 4],
+  zhalou:    [0, 1, 2, 2, 2],
+  pili:      [0, 0, 1, 1, 2],
+  fengsui:   [0, 1, 1, 1, 1],
+  gutai:     [0, 1, 2, 2, 3],
+  dilou:     [0, 2, 4, 4, 4],
+  muster:    [1, 2, 3, 3, 4],
+  banner:    [1, 2, 3, 3, 4],
+  fakecamp:  [1, 1, 2, 2, 3]
 };
+// 目前等級的硬上限;沒有硬上限的 key 回傳 null(舊的 tower / nutai / shitai / support 已改由 CP 管)
+function campCap(key) {
+  const a = CAMP_CAPS[key];
+  return a ? a[CAMP_LV - 1] : null;
+}
 
 // 戰陣物件(§6.1、規格 M0-03 第 3 點);side 'camp' 只在戰鬥陣
 const CAMP_OBJECTS = {
@@ -174,17 +201,35 @@ const CAMP_OBJECTS = {
   granary:  { name: '糧囤', icon: '🌾', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
   muster:   { name: '屯兵營', icon: '⚔️', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
   banner:   { name: '將旗', icon: '🚩', w: 1, h: 1, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
-  fakecamp: { name: '疑營', icon: '⛺', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' }
+  fakecamp: { name: '疑營', icon: '⛺', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  qtower:   { name: '輕箭樓', icon: '🏹', w: 1, h: 1, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  ztower:   { name: '重箭樓', icon: '🗼', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  lianu:    { name: '連弩樓', icon: '🎯', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  huojian:  { name: '火箭樓', icon: '🔥', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  xunyan:   { name: '熏煙台', icon: '💨', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  chuangtai: { name: '床弩台', icon: '🏹', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  pili:     { name: '霹靂車', icon: '☄️', w: 3, h: 3, max: 1, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  gutai:    { name: '擂鼓台', icon: '🥁', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  fengsui:  { name: '烽燧台', icon: '🔥', w: 1, h: 1, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  wanglou:  { name: '望樓', icon: '👁️', w: 1, h: 1, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  qiangzhen: { name: '拒馬槍陣', icon: '🔱', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  ponu:     { name: '破甲弩', icon: '🎯', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  dilou:    { name: '敵樓', icon: '🏯', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  zhalou:   { name: '閘樓', icon: '🚪', w: 3, h: 1, swap: true, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  lujiao:   { name: '鹿角', icon: '🪵', w: 1, h: 1, drag: true, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' },
+  jianzhuang: { name: '尖樁陣', icon: '📍', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: {}, side: 'camp' }
 };
 Object.assign(OBJECTS, CAMP_OBJECTS);
 
 // 既有物件的 side(§3.1、§3.2)
 ['tree', 'stone', 'wall', 'gate', 'stairs', 'bridge'].forEach(function (k) { OBJECTS[k].side = 'both'; });
-['house', 'lumber', 'quarry', 'market', 'palace', 'research', 'archer', 'shield', 'cavalry', 'siege', 'hospital'].forEach(function (k) { OBJECTS[k].side = 'estate'; });
+['lumber', 'quarry', 'research', 'archer', 'shield', 'cavalry', 'siege', 'hospital'].forEach(function (k) { OBJECTS[k].side = 'estate'; });
+// 洛陽城範本用到的經營建築(戰鬥布置棋盤也要能放);戰鬥工具列不列出它們(buildCampToolbar 只列 CAMP_GROUPS 明列的項目)
+['house', 'market', 'palace'].forEach(function (k) { OBJECTS[k].side = 'both'; });
 
 // 把 BUILD_COMBAT 轉成 OBJECTS[type].cb;未列的欄位為 null
-const CB_KEYS = ['hp', 'def', 'cat', 'block', 'scoreW', 'atk', 'cd', 'range', 'minRange', 'mode', 'aoe', 'aoeMax', 'splash', 'pierce', 'vs', 'garrison', 'trigger', 'leash', 'trig', 'alert', 'mat', 'scout', 'looksAs'];
-const BLOCK_OF = { tree: 'obstacle', stone: 'obstacle', stairs: 'none', bridge: 'none', wall: 'wall', gate: 'wall' };
+const CB_KEYS = ['hp', 'def', 'cat', 'block', 'scoreW', 'atk', 'cd', 'range', 'minRange', 'mode', 'aoe', 'aoeMax', 'splash', 'pierce', 'vs', 'garrison', 'trigger', 'leash', 'trig', 'alert', 'mat', 'scout', 'looksAs', 'multi', 'burn', 'slow', 'ap', 'aura', 'alarm', 'reveal', 'cp'];
+const BLOCK_OF = { tree: 'obstacle', stone: 'obstacle', stairs: 'none', bridge: 'none', wall: 'wall', gate: 'wall', lujiao: 'wall', zhalou: 'wall', jianzhuang: 'none' };
 Object.keys(BUILD_COMBAT).forEach(function (type) {
   const src = BUILD_COMBAT[type], cb = {};
   CB_KEYS.forEach(function (k) { cb[k] = src[k] !== undefined ? src[k] : null; });
@@ -400,17 +445,15 @@ function garrisonTarget(unit, enemies, home) {
 // estateObjs:經營基地物件陣列(取 o.type);回傳 { byCls: {shield, archer, cavalry, siege}, levy, total }
 function marchCapacity(estateObjs) {
   const cnt = { shield: 0, archer: 0, cavalry: 0, siege: 0 };
-  let houses = 0;
   const objs = estateObjs || [];
   for (let k = 0; k < objs.length; k++) {
     const t = objs[k] && objs[k].type;
     if (cnt.hasOwnProperty(t)) cnt[t]++;
-    else if (t === 'house') houses++;
   }
   const byCls = {};
   let sum = 0;
   CLS_ORDER.forEach(function (c) { byCls[c] = cnt[c] * CAMP_POP[c]; sum += byCls[c]; });
-  const levy = Math.min(LEVY_MAX, Math.floor(houses / 2));
+  const levy = LEVY_MAX;
   return { byCls: byCls, levy: levy, total: sum + levy };
 }
 // 一張卡的人口 = UNITS[u].pop × UNITS[u].squad × n(§4.2)
