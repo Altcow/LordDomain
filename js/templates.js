@@ -5,7 +5,7 @@ const TEMPLATE_KEEP_RES = false;
 const TEMPLATES = [
   {
     id: 'demo', name: '城主府小鎮', desc: '原示範場景：高台城主府、兩河合流注入大湖。',
-    w: 40, h: 40, focus: [13, 10], legacy: 'demo'
+    w: 40, h: 40, focus: [13, 10], legacy: 'demo', isDefault: true
   },
   {
     id: 'jun', name: '東漢郡城', desc: '方城四門與護城壕、井字街、郡府高台、武庫倉廩、東西二市與六里，城外關廂、農田與塢堡。',
@@ -72,5 +72,52 @@ const TEMPLATES = [
       { type: 'tree', line: [49, 0, 49, 20, 2] },
       { type: 'tree', line: [49, 34, 49, 46, 2] }
     ]
+  },
+  {
+    id: 'camp_pass', kind: 'camp', name: '山口隘道陣', desc: '兩側高台夾三格谷道，谷口城門與短牆，帥帳居谷北高台；箭樓、弩台與投石台依山設防。',
+    w: 56, h: 56, focus: [27, 24],
+    heights: [[2, 12, 1, 31, 5], [2, 12, 6, 14, 40], [2, 29, 6, 14, 40]],
+    roads: [[26, 6, 3, 42]],
+    objects: [
+      { type: 'stairs', line: [26, 5, 28, 5, 1], rot: 1 },
+      { type: 'hq', at: [26, 1] },
+      { type: 'tower', pts: [[14, 12], [14, 38], [39, 25]] },
+      { type: 'nutai', at: [39, 38] },
+      { type: 'shitai', at: [14, 25] },
+      { type: 'muster', at: [35, 12] },
+      { type: 'banner', at: [20, 19] },
+      { type: 'tent', pts: [[18, 12], [33, 20]] },
+      { type: 'wagon', pts: [[18, 38], [33, 32]] },
+      { type: 'granary', at: [18, 25] },
+      { type: 'gate', pts: [[26, 44]] },
+      { type: 'wall', rect: [22, 44, 4, 1] },
+      { type: 'wall', rect: [29, 44, 4, 1] }
+    ],
+    marks: {
+      deploy: [{ r: [18, 48, 17, 4], kind: 'front' }, { r: [44, 20, 8, 16], kind: 'flank' }],
+      rally: [{ id: 'r1', x: 27, y: 36, name: '谷口內' }, { id: 'r2', x: 27, y: 14, name: '谷北' }]
+    }
+  },
+  {
+    id: 'camp_square', kind: 'camp', name: '方城陣', desc: '平地方城一圈高牆，南東二門，四角箭樓與弩台、投石台守城，帥帳居中，營帳輜重城內外各半。',
+    w: 56, h: 56, focus: [27, 27], isDefault: true,
+    objects: [
+      { type: 'wall', ring: [19, 19, 18, 18], skip: [[27, 36, 3, 1], [36, 27, 1, 3]] },
+      { type: 'gate', pts: [[27, 36]] },
+      { type: 'gate', pts: [[36, 27]], rot: 1 },
+      { type: 'tower', pts: [[20, 20], [34, 20], [20, 34]] },
+      { type: 'nutai', at: [34, 34] },
+      { type: 'shitai', at: [30, 21] },
+      { type: 'hq', at: [26, 26] },
+      { type: 'muster', at: [22, 24] },
+      { type: 'banner', at: [28, 33] },
+      { type: 'tent', pts: [[24, 31], [39, 31]] },
+      { type: 'wagon', pts: [[31, 24], [39, 36]] },
+      { type: 'granary', at: [24, 24] }
+    ],
+    marks: {
+      deploy: [{ r: [4, 16, 12, 24], kind: 'front' }, { r: [16, 4, 24, 12], kind: 'front' }],
+      rally: []
+    }
   }
 ];

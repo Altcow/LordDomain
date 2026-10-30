@@ -8,7 +8,7 @@ const TERRAIN_TOOLS = {
   erase: { name: '拆除', icon: '🧹', drag: true }
 };
 
-const ui = { tool: null, rot: 0, shopOpen: false, dealDay: '', tplOpen: false };
+const ui = { tool: null, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco' };
 
 const TERRAIN_OF = { road: T_ROAD, grass: T_GRASS, lake: T_LAKE, river: T_RIVER };
 const TERRAIN_NAME = ['草地', '湖', '河', '道路'];
@@ -16,7 +16,7 @@ const TERRAIN_NAME = ['草地', '湖', '河', '道路'];
 // 指標手勢狀態: mode = null | pan | tool | pending | paint | pinch
 const gs = { ptrs: new Map(), mode: null, primary: null, pinch: null, timer: 0, op: null, last: null };
 let toastEl = null, toastTimer = 0;
-let lastResHtml = '', lastShopHtml = '';
+let lastResHtml = '', lastShopHtml = '', lastPendHtml = '', lastTechHtml = '';
 
 function initUI(canvas) {
   toastEl = document.createElement('div');
@@ -28,6 +28,7 @@ function initUI(canvas) {
   bindEvents(canvas);
   syncSeasonSelect();
   updateResBar();
+  if (typeof initMapEdit === 'function') initMapEdit();
 }
 
 function bindEvents(canvas) {
@@ -49,9 +50,14 @@ function bindEvents(canvas) {
   const tplMenu = document.getElementById('tplMenu');
   tplMenu.addEventListener('pointerdown', e => e.stopPropagation());
   tplMenu.addEventListener('click', onTplClick);
+  document.getElementById('techPanel').addEventListener('click', onTechClick);
+  const pendBar = document.getElementById('pendBar');
+  pendBar.addEventListener('pointerdown', e => e.stopPropagation());
+  pendBar.addEventListener('click', onPendClick);
 
   document.getElementById('btnShop').addEventListener('click', () => toggleShop());
   document.getElementById('btnRot').addEventListener('click', () => rotate());
+  document.getElementById('btnHide').addEventListener('click', () => toggleHide());
   document.getElementById('selSeason').addEventListener('change', e => {
     setSeason(e.target.value);
     saveWorld();
@@ -61,8 +67,15 @@ function bindEvents(canvas) {
   document.getElementById('panoClose').addEventListener('click', () => closePanorama());
   document.getElementById('panoSave').addEventListener('click', () => savePanorama());
   document.getElementById('btnClear').addEventListener('click', () => {
-    if (!confirm('清空整個領地？資源會重設。')) return;
+    if (game.mode === 'battleDesign') {
+      mapeditClear();
+      return;
+    }
+    if (!confirm('清空整個領地？資源、兵力與科技進度會重設。' + pendWarnText())) return;
+    pendClear();
+    hideReset();
     clearWorld();
+    techReset();
     saveWorld();
     updateResBar();
   });
@@ -72,13 +85,26 @@ function bindEvents(canvas) {
       if (e.key === 'Escape') closePanorama();
       return;
     }
+    if (e.key === 'h' || e.key === 'H') {
+      if (document.activeElement && document.activeElement.tagName === 'SELECT') return;
+      toggleHide();
+      return;
+    }
     if (e.key === 'r' || e.key === 'R') {
       if (document.activeElement && document.activeElement.tagName === 'SELECT') return;
       rotate();
     } else if (e.key === 'Escape') {
+      if (pend.sel >= 0 || pend.moving) {
+        pend.sel = -1;
+        pend.moving = false;
+        preview.visible = false;
+        updatePendBar();
+        return;
+      }
       setTool(null);
       toggleShop(false);
       toggleTplMenu(false);
+      toggleTechPanel(false);
     }
   });
 }
@@ -92,7 +118,25 @@ function buildToolbar() {
   sep.className = 'sep';
   sep.textContent = '｜';
   bar.appendChild(sep);
-  for (const id in OBJECTS) addToolButton(bar, id, OBJECTS[id].icon, OBJECTS[id].name, OBJECTS[id]);
+  let milSep = false;
+  for (const id in OBJECTS) {
+    if (!sideOk(id)) continue;
+    if (OBJECTS[id].mil && !milSep) {
+      const s2 = document.createElement('span');
+      s2.className = 'sep';
+      s2.textContent = '｜';
+      bar.appendChild(s2);
+      milSep = true;
+    }
+    addToolButton(bar, id, OBJECTS[id].icon, OBJECTS[id].name, OBJECTS[id]);
+  }
+  if (game.mode === 'battleDesign' && typeof CAMP_TOOLS !== 'undefined') {
+    const s3 = document.createElement('span');
+    s3.className = 'sep';
+    s3.textContent = '｜';
+    bar.appendChild(s3);
+    for (const id in CAMP_TOOLS) addToolButton(bar, id, CAMP_TOOLS[id].icon, CAMP_TOOLS[id].name, null);
+  }
 }
 
 function addToolButton(bar, id, icon, name, def) {
@@ -101,18 +145,30 @@ function addToolButton(bar, id, icon, name, def) {
   let html = '<span class="ic">' + icon + '</span><span>' + name + '</span>';
   let title = name;
   if (def) {
-    html += '<span class="cost">' + costText(def.cost) + '</span>';
-    title += ' ' + costText(def.cost);
+    html += '<span class="cost">' + costText(objCost(id)) + '</span>';
+    title += ' ' + costText(objCost(id));
     if (def.prod) title += ' 產出 ' + prodText(def.prod);
     if (def.max) title += ' (上限 ' + def.max + ' 座)';
+    if (def.unit && CAMP_POP[def.unit]) title += ' 出征容量 +' + CAMP_POP[def.unit];
   }
   btn.innerHTML = html;
   btn.title = title;
-  btn.addEventListener('click', () => setTool(ui.tool === id ? null : id));
+  btn.addEventListener('click', () => {
+    if (isCampTool(id) && CAMP_TOOLS[id].act) {
+      CAMP_TOOLS[id].act();
+      return;
+    }
+    setTool(ui.tool === id ? null : id);
+  });
   bar.appendChild(btn);
 }
 
+function isCampTool(t) {
+  return t !== null && typeof CAMP_TOOLS !== 'undefined' && Object.prototype.hasOwnProperty.call(CAMP_TOOLS, t);
+}
+
 function setTool(id) {
+  if (hide.on && id !== null && OBJECTS[id] && !toggleHide(false)) return;
   ui.tool = id;
   const key = id === null ? '' : id;
   document.querySelectorAll('#toolbar button').forEach(b => {
@@ -121,21 +177,31 @@ function setTool(id) {
   preview.tool = id;
   preview.visible = false;
   document.getElementById('info').textContent = toolInfo();
+  pend.sel = -1;
+  pend.moving = false;
+  updatePendBar();
 }
 
 function toolInfo() {
   const t = ui.tool;
   if (t === null) return '瀏覽模式：拖曳移動、滾輪／雙指縮放';
+  if (isCampTool(t)) return CAMP_TOOLS[t].name;
   if (OBJECTS[t]) {
     const d = OBJECTS[t];
-    let s = d.name + '　成本 ' + costText(d.cost);
+    let s = d.name + '　成本 ' + costText(objCost(t));
     if (d.prod) s += '　產出 ' + prodText(d.prod);
+    if (d.unit && CAMP_POP[d.unit]) s += '　出征容量 +' + CAMP_POP[d.unit];
     return s;
   }
   return TERRAIN_TOOLS[t].name;
 }
 
 function rotate() {
+  if (pend.sel >= 0) {
+    pendRotateSel();
+    updatePendBar();
+    return;
+  }
   ui.rot = (ui.rot + 1) % 4;
   document.getElementById('btnRot').textContent = DIR_ARROWS[ui.rot];
   preview.rot = ui.rot;
@@ -143,17 +209,19 @@ function rotate() {
 }
 
 function isDraggable(t) {
+  if (pend.moving) return false;
   if (t === null) return false;
-  return !!((OBJECTS[t] && OBJECTS[t].drag) || (TERRAIN_TOOLS[t] && TERRAIN_TOOLS[t].drag));
+  return !!((OBJECTS[t] && OBJECTS[t].drag) || (TERRAIN_TOOLS[t] && TERRAIN_TOOLS[t].drag) || (isCampTool(t) && CAMP_TOOLS[t].drag));
 }
 
 function previewOk(t, x, y) {
   const i = idx(x, y);
-  if (OBJECTS[t]) return canPlace(t, x, y, ui.rot) && canAfford(OBJECTS[t].cost);
-  if (t === 'raise') return !world.occ[i] && world.height[i] < MAX_H;
-  if (t === 'lower') return !world.occ[i] && world.height[i] > 0;
-  if (t === 'erase') return !!world.occ[i] || world.terrain[i] === T_ROAD;
-  return !world.occ[i];
+  if (hide.on) return previewOkHidden(t, x, y, i);
+  if (OBJECTS[t]) return canPlacePending(t, x, y, ui.rot, -1) && canAfford(addCost(pendTotal(), objCost(t)));
+  if (t === 'raise') return !world.occ[i] && !pend.occ[i] && world.height[i] < MAX_H;
+  if (t === 'lower') return !world.occ[i] && !pend.occ[i] && world.height[i] > 0;
+  if (t === 'erase') return !!world.occ[i] || !!pend.occ[i] || world.terrain[i] === T_ROAD;
+  return !world.occ[i] && !pend.occ[i];
 }
 
 function updatePreviewAt(sx, sy) {
@@ -167,10 +235,18 @@ function updatePreviewAt(sx, sy) {
   const i = idx(c.x, c.y);
   preview.x = c.x;
   preview.y = c.y;
-  preview.tool = ui.tool;
-  preview.rot = ui.rot;
-  preview.visible = ui.tool !== null;
-  preview.ok = ui.tool === null || previewOk(ui.tool, c.x, c.y);
+  if (pend.moving && pend.sel >= 0) {
+    const o = pend.list[pend.sel];
+    preview.tool = o.type;
+    preview.rot = o.rot;
+    preview.visible = true;
+    preview.ok = canPlacePending(o.type, c.x, c.y, o.rot, pend.sel);
+  } else {
+    preview.tool = ui.tool;
+    preview.rot = ui.rot;
+    preview.visible = ui.tool !== null && !isCampTool(ui.tool);
+    preview.ok = ui.tool === null || previewOk(ui.tool, c.x, c.y);
+  }
   info.textContent = toolInfo() + '　(' + c.x + ',' + c.y + ') ' + TERRAIN_NAME[world.terrain[i]] + ' 高度' + world.height[i];
 }
 
@@ -190,6 +266,163 @@ function placeFailReason(type, x, y, rot) {
   return '未知原因';
 }
 
+function pendFailReason(type, x, y, rot, skip) {
+  const d = OBJECTS[type];
+  if (d.max && countObjects(type) + pendCount(type, skip) >= d.max) return d.name + '最多只能蓋 ' + d.max + ' 座（含待購）';
+  if (canPlace(type, x, y, rot)) return '與待購建築重疊';
+  return placeFailReason(type, x, y, rot);
+}
+
+function pendWarnText() {
+  return pend.list.length ? '\n（目前 ' + pend.list.length + ' 件待購建築也會一併取消）' : '';
+}
+
+function toolActive() {
+  return ui.tool !== null || pend.moving;
+}
+
+// 費用不足：一次操作（含拖曳）只響一次、提示一次
+function denyCost(need) {
+  if (gs.op) {
+    if (gs.op.poor) return;
+    gs.op.poor = true;
+  }
+  beep();
+  showToast('資源不足：缺 ' + costText(missingOf(need)));
+}
+
+function selectPending(n) {
+  pend.sel = pend.sel === n ? -1 : n;
+  pend.moving = false;
+  if (gs.op) gs.op.selectOnly = true;
+  updatePendBar();
+}
+
+function pendMoveTo(x, y) {
+  const o = pend.list[pend.sel];
+  if (!canPlacePending(o.type, x, y, o.rot, pend.sel)) {
+    showToast('無法移到此處：' + pendFailReason(o.type, x, y, o.rot, pend.sel));
+    return;
+  }
+  o.x = x;
+  o.y = y;
+  pend.moving = false;
+  pendRebuild();
+  preview.visible = false;
+  updatePendBar();
+}
+
+function pendRotateSel() {
+  const o = pend.list[pend.sel];
+  for (let k = 1; k <= 3; k++) {
+    const r = (o.rot + k) % 4;
+    if (canPlacePending(o.type, o.x, o.y, r, pend.sel)) {
+      o.rot = r;
+      pendRebuild();
+      return true;
+    }
+  }
+  showToast('此處空間不足，無法旋轉');
+  return false;
+}
+
+// 隱藏建築（PLAN 12.17）。on 省略 = 切換。回傳是否已切到目標狀態（關閉時使用者取消 confirm → false）
+function toggleHide(on) {
+  on = on === undefined ? !hide.on : !!on;
+  if (on === hide.on) return true;
+  if (on) {
+    pend.sel = -1;
+    pend.moving = false;
+    hide.on = true;
+    if (ui.tool !== null && OBJECTS[ui.tool]) setTool(null);
+    const n = hideAudit();
+    showToast(n ? '建築已隱藏；' + n + ' 件位置不合法（紅框）' : '建築已隱藏：可整地，不能布置或拆除建築');
+  } else {
+    const n = hideAudit();
+    if (n && !confirm('有 ' + n + ' 件建築位置不合法（紅框），顯示後會維持原樣。仍要顯示建築？')) return false;
+    hide.on = false;
+    showToast('已顯示建築');
+  }
+  syncHideBtn();
+  preview.visible = false;
+  updatePendBar();
+  return true;
+}
+
+function syncHideBtn() {
+  const b = document.getElementById('btnHide');
+  b.classList.toggle('on', hide.on);
+  b.querySelector('.ic').textContent = hide.on ? '🙈' : '👁';
+  b.querySelector('.lbl').textContent = hide.on ? '隱藏中' : '建築';
+  document.body.classList.toggle('hideobj', hide.on);
+}
+
+// 套用範本／清空時：世界整個換掉，直接恢復顯示（不驗證、不 confirm）
+function hideReset() {
+  hide.on = false;
+  hide.bad = [];
+  hide.badCell.fill(0);
+  syncHideBtn();
+}
+
+// 隱藏中的工具套用：只允許不會讓已建物件不合法的修改（PLAN 12.17.3）
+function applyHidden(t, x, y, i, pn) {
+  if (OBJECTS[t]) {
+    warnOnce('隱藏建築中無法布置，請先按 👁 顯示建築');
+    return false;
+  }
+  if (pn) {
+    warnOnce('該格有待購建築');
+    return false;
+  }
+  const n = world.occ[i];
+  if (t in TERRAIN_OF) {
+    const target = TERRAIN_OF[t];
+    if (world.terrain[i] === target && (target !== T_RIVER || world.flow[i] === ui.rot)) return false;
+    if (!terrainOkUnder(x, y, target)) {
+      warnOnce(OBJECTS[world.objects[n - 1].type].name + '不能在' + TERRAIN_NAME[target] + '上，此格不可改');
+      return false;
+    }
+    paintTerrainKeep(x, y, target, ui.rot);
+    return true;
+  }
+  if (t === 'raise' || t === 'lower') {
+    const delta = t === 'raise' ? 1 : -1;
+    if (!n) return changeHeight(x, y, delta);
+    if (gs.op) {
+      if (gs.op.blocks.has(n)) return false;
+      gs.op.blocks.add(n);
+    }
+    const why = changeHeightBlock(n - 1, delta);
+    if (why) {
+      warnOnce(why);
+      return false;
+    }
+    return true;
+  }
+  if (n) {
+    warnOnce('隱藏建築中無法拆除，請先按 👁 顯示建築');
+    return false;
+  }
+  if (world.terrain[i] === T_ROAD) {
+    paintTerrainKeep(x, y, T_GRASS, 0);
+    return true;
+  }
+  return false;
+}
+
+function previewOkHidden(t, x, y, i) {
+  if (OBJECTS[t] || pend.occ[i]) return false;
+  const n = world.occ[i];
+  if (t in TERRAIN_OF) return terrainOkUnder(x, y, TERRAIN_OF[t]);
+  if (t === 'raise' || t === 'lower') {
+    const o = n ? world.objects[n - 1] : null;
+    const h = world.height[o ? idx(o.x, o.y) : i];
+    return t === 'raise' ? h < MAX_H : h > 0;
+  }
+  return !n && world.terrain[i] === T_ROAD;
+}
+
 function missingOf(cost) {
   const m = {};
   for (const k in cost) {
@@ -200,7 +433,7 @@ function missingOf(cost) {
 }
 
 function refundOf(type) {
-  const r = {}, c = OBJECTS[type].cost;
+  const r = {}, c = objCost(type);
   for (const k in c) r[k] = Math.floor(c[k] * REFUND_RATE);
   return r;
 }
@@ -215,27 +448,55 @@ function warnOnce(msg) {
 
 function applyToolAt(x, y) {
   const ok = applyOne(x, y);
+  if (ok && hide.on) hideAudit();
   if (ok) updateResBar();
   return ok;
 }
 
 function applyOne(x, y) {
+  if (pend.moving && pend.sel >= 0) {
+    pendMoveTo(x, y);
+    return false;
+  }
   const t = ui.tool;
   if (t === null) return false;
+  if (isCampTool(t)) return mapeditApply(t, x, y, 'down');
   const i = idx(x, y);
+  const pn = pend.occ[i];
+  if (hide.on) return applyHidden(t, x, y, i, pn);
   if (OBJECTS[t]) {
-    const d = OBJECTS[t];
-    if (!canPlace(t, x, y, ui.rot)) {
-      showToast('無法放置：' + placeFailReason(t, x, y, ui.rot));
+    if (pn) {
+      if (!gs.op || gs.op.applied.size === 1) selectPending(pn - 1);
       return false;
     }
-    if (!canAfford(d.cost)) {
-      showToast('資源不足：缺 ' + costText(missingOf(d.cost)));
+    if (gs.op && gs.op.selectOnly) return false;
+    if (pend.list.length >= pendMax()) {
+      warnOnce('待購最多 ' + pendMax() + ' 件，請先購買或取消');
       return false;
     }
-    spend(d.cost);
-    place(t, x, y, ui.rot);
-    return true;
+    if (!canPlacePending(t, x, y, ui.rot, -1)) {
+      showToast('無法放置：' + pendFailReason(t, x, y, ui.rot, -1));
+      return false;
+    }
+    const need = addCost(pendTotal(), objCost(t));
+    if (!canAfford(need)) {
+      denyCost(need);
+      return false;
+    }
+    pendAdd(t, x, y, ui.rot);
+    updateResBar();
+    return false;
+  }
+  if (pn) {
+    if (t === 'erase') {
+      const name = OBJECTS[pend.list[pn - 1].type].name;
+      pendRemove(pn - 1);
+      updateResBar();
+      showToast('已取消待購 ' + name);
+    } else {
+      warnOnce('該格有待購建築');
+    }
+    return false;
   }
   if (t in TERRAIN_OF) {
     if (world.occ[i]) {
@@ -256,7 +517,8 @@ function applyOne(x, y) {
     const o = world.objects[world.occ[i] - 1];
     const refund = refundOf(o.type);
     removeObjectAt(x, y, true);
-    showToast('已拆除 ' + OBJECTS[o.type].name + '，退還 ' + costText(refund));
+    if (o.type === LAB_TYPE && world.tech.cur) showToast('已拆除 科研院，退還 ' + costText(refund) + '；研發暫停，重建後繼續');
+    else showToast('已拆除 ' + OBJECTS[o.type].name + '，退還 ' + costText(refund));
     return true;
   }
   if (world.terrain[i] === T_ROAD) {
@@ -267,12 +529,20 @@ function applyOne(x, y) {
 }
 
 function beginOp() {
-  gs.op = { applied: new Set(), changed: false, warned: false };
+  gs.op = { applied: new Set(), changed: false, warned: false, poor: false, selectOnly: false, blocks: new Set() };
 }
 
 function endOp() {
   if (gs.op && gs.op.changed) saveWorld();
   gs.op = null;
+  mapeditRefresh();
+}
+
+// 矩形類戰陣工具:放開時的格(按下格已由 applyOne 記下)
+function applyUpAt(sx, sy) {
+  if (!gs.op || !isCampTool(ui.tool)) return;
+  const c = screenToCell(sx, sy);
+  if (c && mapeditApply(ui.tool, c.x, c.y, 'up')) gs.op.changed = true;
 }
 
 function applyCellAt(sx, sy) {
@@ -305,16 +575,17 @@ function pinchMove() {
 }
 
 function onPointerDown(e) {
+  audioUnlock();
   const x = e.clientX, y = e.clientY;
   e.currentTarget.setPointerCapture(e.pointerId);
-  gs.ptrs.set(e.pointerId, { x: x, y: y, x0: x, y0: y });
+  gs.ptrs.set(e.pointerId, { x: x, y: y, x0: x, y0: y, t0: performance.now() });
   gs.last = { x: x, y: y };
   if (gs.ptrs.size >= 2) {
     startPinch();
     return;
   }
   if (e.pointerType === 'mouse') {
-    if (e.button === 0 && ui.tool !== null) {
+    if (e.button === 0 && toolActive()) {
       gs.mode = 'tool';
       beginOp();
       applyCellAt(x, y);
@@ -323,7 +594,7 @@ function onPointerDown(e) {
     }
     return;
   }
-  if (ui.tool === null) {
+  if (!toolActive()) {
     gs.mode = 'pan';
     return;
   }
@@ -371,22 +642,35 @@ function onPointerMove(e) {
 }
 
 function onPointerEnd(e) {
+  audioUnlock();
   const p = gs.ptrs.get(e.pointerId);
   if (!p) return;
+  if (e.type === 'pointerup' && gs.mode === 'pan' && gs.ptrs.size === 1 && ui.tool === null && !hide.on &&
+      Math.hypot(p.x - p.x0, p.y - p.y0) < 8 && performance.now() - p.t0 < 400) tapObjectAt(p.x, p.y);
   gs.ptrs.delete(e.pointerId);
   if (e.type === 'pointerup' && gs.mode === 'pending' && e.pointerId === gs.primary) {
     clearTimeout(gs.timer);
     gs.mode = null;
     beginOp();
     applyCellAt(p.x, p.y);
+    applyUpAt(e.clientX, e.clientY);
     endOp();
   }
   if (gs.ptrs.size === 0) {
+    if (e.type === 'pointerup' && (gs.mode === 'tool' || gs.mode === 'paint')) applyUpAt(e.clientX, e.clientY);
     clearTimeout(gs.timer);
     endOp();
     gs.mode = null;
     gs.pinch = null;
   }
+}
+
+// 瀏覽模式點一下建築（目前只有科研院有反應）
+function tapObjectAt(sx, sy) {
+  const c = screenToCell(sx, sy);
+  if (!c) return;
+  const n = world.occ[idx(c.x, c.y)];
+  if (n && world.objects[n - 1].type === LAB_TYPE) toggleTechPanel(true);
 }
 
 function onShopClick(e) {
@@ -428,11 +712,14 @@ function updateResBar() {
     lastResHtml = html;
     document.getElementById('resbar').innerHTML = html;
   }
+  const base = pendTotal();
   document.querySelectorAll('#toolbar button[data-tool]').forEach(b => {
     const d = OBJECTS[b.getAttribute('data-tool')];
-    if (d) b.classList.toggle('poor', !canAfford(d.cost));
+    if (d) b.classList.toggle('poor', !canAfford(addCost(base, objCost(b.getAttribute('data-tool')))));
   });
   if (ui.shopOpen) updateShop();
+  if (ui.techOpen) updateTechPanel();
+  updatePendBar();
 }
 
 function updateShop() {
@@ -442,7 +729,7 @@ function updateShop() {
   let html = '<div class="head"><b>商店</b><button class="close">✕</button></div>';
   for (const k in SHOP) {
     const s = SHOP[k], r = RESOURCES[k], have = world.res[k] || 0;
-    const buyCost = s.buy * SHOP_LOT, sellGain = s.sell * SHOP_LOT;
+    const buyCost = shopPrice(k, 'buy'), sellGain = shopPrice(k, 'sell');
     html += '<div class="row"><span>' + r.icon + ' ' + r.name + ' 持有 ' + Math.floor(have).toLocaleString() + '</span>' +
       '<button data-kind="' + k + '" data-mode="buy"' + (canAfford({ coin: buyCost }) ? '' : ' disabled') + '>買 ' + SHOP_LOT + '（🪙 ' + buyCost + '）</button>' +
       '<button data-kind="' + k + '" data-mode="sell"' + (have >= SHOP_LOT ? '' : ' disabled') + '>賣 ' + SHOP_LOT + '（得 🪙 ' + sellGain + '）</button></div>';
@@ -481,6 +768,7 @@ function toggleShop(open) {
   document.getElementById('shop').hidden = !ui.shopOpen;
   if (ui.shopOpen) {
     toggleTplMenu(false);
+    toggleTechPanel(false);
     updateShop();
   }
 }
@@ -490,6 +778,7 @@ function toggleTplMenu(open) {
   document.getElementById('tplMenu').hidden = !ui.tplOpen;
   if (ui.tplOpen) {
     toggleShop(false);
+    toggleTechPanel(false);
     buildTplMenu();
   }
 }
@@ -504,11 +793,23 @@ function buildTplMenu() {
   close.className = 'close';
   close.textContent = '✕';
   menu.appendChild(close);
-  for (const t of TEMPLATES) {
+  const dflt = defaultTemplate(world.board);
+  const restore = document.createElement('button');
+  restore.className = 'tpl';
+  restore.setAttribute('data-default', '');
+  restore.textContent = '恢復預設';
+  const rs = document.createElement('small');
+  rs.textContent = dflt ? '套用本布置的預設範本：' + dflt.name : '此布置沒有預設範本';
+  restore.appendChild(rs);
+  restore.disabled = !dflt;
+  menu.appendChild(restore);
+  const list = TEMPLATES.filter(t => (t.kind || 'estate') === world.board);
+  const ordered = list.filter(t => t.isDefault).concat(list.filter(t => !t.isDefault));
+  for (const t of ordered) {
     const btn = document.createElement('button');
     btn.className = 'tpl';
     btn.setAttribute('data-tpl', t.id);
-    btn.textContent = t.name;
+    btn.textContent = t.name + (t.isDefault ? ' ★預設' : '');
     const small = document.createElement('small');
     small.textContent = t.desc + '　' + t.w + '×' + t.h;
     btn.appendChild(small);
@@ -524,19 +825,304 @@ function onTplClick(e) {
     toggleTplMenu(false);
     return;
   }
-  const t = TEMPLATES.find(tp => tp.id === b.getAttribute('data-tpl'));
+  const isDef = b.hasAttribute('data-default');
+  const t = isDef ? defaultTemplate(world.board) : TEMPLATES.find(tp => tp.id === b.getAttribute('data-tpl'));
   if (!t) return;
-  if (!confirm('套用範本「' + t.name + '」？目前的領地會被覆蓋' + (TEMPLATE_KEEP_RES ? '。' : '，資源重設為初始值。'))) return;
-  const r = applyTemplate(t.id);
+  if (!confirm('套用範本「' + t.name + '」？目前的領地會被覆蓋' + (TEMPLATE_KEEP_RES ? '。' : '，資源重設為初始值。') + pendWarnText())) return;
+  pendClear();
+  hideReset();
+  const r = isDef ? applyDefaultTemplate(world.board) : applyTemplate(t.id);
   if (!r) {
     showToast('範本無法套用');
     return;
   }
   saveWorld();
   centerOnCell(r.ox + t.focus[0], r.oy + t.focus[1]);
+  mapeditRefresh();
   updateResBar();
   toggleTplMenu(false);
   showToast('已套用 ' + t.name + (r.failed ? '（' + r.failed + ' 件無法放置）' : ''));
+}
+
+// 科研院面板（PLAN_TECH §5）：研發中卡片＋軍事／經濟頁籤，依階分組
+function toggleTechPanel(open) {
+  ui.techOpen = open === undefined ? !ui.techOpen : !!open;
+  document.getElementById('techPanel').hidden = !ui.techOpen;
+  if (ui.techOpen) {
+    toggleShop(false);
+    toggleTplMenu(false);
+    lastTechHtml = '';
+    updateTechPanel();
+  }
+}
+
+function techTimeText(sec) {
+  const m = Math.ceil(sec / 60), h = Math.floor(m / 60), r = m % 60;
+  return h > 0 ? h + ' 時' + (r ? ' ' + r + ' 分' : '') : m + ' 分';
+}
+
+function techNodeHtml(id) {
+  const T = TECHS[id];
+  const name = T.icon + ' ' + T.name;
+  if (techHas(id)) return '<div class="node done"><div class="ninfo"><span>✅ ' + name + '</span><small>' + T.desc + '</small></div></div>';
+  if (world.tech.cur && world.tech.cur.id === id) return '<div class="node"><div class="ninfo"><span>⏳ ' + name + '</span><small>研發中</small></div></div>';
+  if (!techAvailable(id)) {
+    const miss = T.req.filter(r => !techHas(r)).map(r => TECHS[r].name).join('、');
+    return '<div class="node lock"><div class="ninfo"><span>' + name + '</span><small>需先研發 ' + miss + '</small></div><span>🔒</span></div>';
+  }
+  const why = canResearch(id);
+  let extra = '';
+  if (why === '資源不足') extra = '<small class="lack">缺 ' + costText(missingOf(techCost(id))) + '</small>';
+  else if (why && why.indexOf('正在研發') !== 0) extra = '<small>' + why + '</small>';
+  return '<div class="node"><div class="ninfo"><span>' + name + '</span><small>' + T.desc + '</small><small>' +
+    costText(techCost(id)) + ' · ' + techTimeText(techTime(id)) + '</small>' + extra + '</div>' +
+    '<button data-tech="' + id + '"' + (why ? ' disabled' : '') + '>研發</button></div>';
+}
+
+function updateTechPanel() {
+  const c = world.tech.cur;
+  let html = '<b>📜 科研院</b><button class="close">✕</button>';
+  if (c) {
+    const T = TECHS[c.id];
+    html += '<div class="tcur"><div><b>⏳ ' + T.icon + ' ' + T.name + '</b> ' + T.desc + '</div>';
+    if (!labBuilt()) html += '<div>科研院已拆除：研發暫停</div>';
+    html += '<div class="tbar"><i id="techBarFill"></i></div><span id="techTimer"></span> <button data-tact="cancel">取消</button></div>';
+  } else {
+    html += '<div class="tier">尚未研發，選一項開始</div>';
+  }
+  html += '<div class="ttabs">';
+  for (const tr in TECH_TREES) {
+    if (tr === 'mil') continue;   // M2-01：軍事分頁隱藏（tech.js 軍事資料保留）
+    let n = 0, all = 0;
+    for (const id in TECHS) {
+      if (TECHS[id].tree !== tr) continue;
+      all++;
+      if (techHas(id)) n++;
+    }
+    html += '<button data-ttab="' + tr + '"' + (ui.techTab === tr ? ' class="on"' : '') + '>' + (tr === 'mil' ? '⚔️' : '🌾') + ' ' + TECH_TREES[tr] + ' ' + n + '/' + all + '</button>';
+  }
+  html += '</div>';
+  for (let t = 1; t <= 5; t++) {
+    const ids = Object.keys(TECHS).filter(id => TECHS[id].tree === ui.techTab && TECHS[id].tier === t);
+    if (!ids.length) continue;
+    html += '<div class="tier">' + TECH_TIER[t].name + ' · ' + techTimeText(techTime(ids[0])) + '</div>';
+    ids.forEach(id => { html += techNodeHtml(id); });
+  }
+  if (html !== lastTechHtml) {
+    lastTechHtml = html;
+    document.getElementById('techPanel').innerHTML = html;
+  }
+  updateTechTimer();
+}
+
+function updateTechTimer() {
+  const c = world.tech.cur;
+  if (!c) return;
+  const s = Math.max(0, Math.ceil(c.left));
+  const p = n => (n < 10 ? '0' : '') + n;
+  const el = document.getElementById('techTimer');
+  const fill = document.getElementById('techBarFill');
+  if (el) el.textContent = !labBuilt() ? '暫停' : (s >= 3600 ? Math.floor(s / 3600) + ':' : '') + p(Math.floor(s % 3600 / 60)) + ':' + p(s % 60);
+  if (fill) fill.style.width = ((1 - c.left / c.total) * 100).toFixed(1) + '%';
+}
+
+function onTechClick(e) {
+  const b = e.target.closest('button');
+  if (!b) return;
+  audioUnlock();
+  if (b.classList.contains('close')) {
+    toggleTechPanel(false);
+    return;
+  }
+  const tab = b.getAttribute('data-ttab');
+  if (tab !== null) {
+    ui.techTab = tab;
+    updateTechPanel();
+    return;
+  }
+  const tid = b.getAttribute('data-tech');
+  if (tid !== null) {
+    const r = startResearch(tid);
+    if (r === '') {
+      saveWorld();
+      updateResBar();
+      showToast('開始研發 ' + TECHS[tid].name + '，需 ' + techTimeText(techTime(tid)));
+    } else {
+      beep();
+      showToast(r);
+    }
+    return;
+  }
+  if (b.getAttribute('data-tact') === 'cancel') {
+    const c = world.tech.cur;
+    if (!c) return;
+    if (c.total - c.left >= 60 && !confirm('取消研發「' + TECHS[c.id].name + '」？進度會消失，資源全額退還。')) return;
+    const cid = c.id;
+    cancelResearch();
+    saveWorld();
+    updateResBar();
+    showToast('已取消研發，退還 ' + costText(techCost(cid)));
+  }
+}
+
+function onTechDone(id, delayed) {
+  const T = TECHS[id];
+  saveWorld();
+  lastShopHtml = '';
+  if (T.fx.some(f => f.key === 'build.cost')) {
+    buildToolbar();
+    const key = ui.tool === null ? '' : ui.tool;
+    document.querySelectorAll('#toolbar button').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-tool') === key);
+    });
+  }
+  updateResBar();
+  const msg = '📜 研發完成：' + T.icon + ' ' + T.name;
+  if (delayed) setTimeout(() => showToast(msg), 2200);
+  else showToast(msg);
+}
+
+function flushTechDone() {
+  if (techOfflineDone) {
+    const id = techOfflineDone;
+    techOfflineDone = '';
+    onTechDone(id, true);
+  }
+}
+
+// 短促低音（PLAN 12.6）：WebAudio 即時合成，不用音檔；任何失敗只 warn，不影響遊戲
+const MUTE_KEY = 'lorddomain.mute';
+let audioCtx = null;
+
+// 需在使用者手勢內呼叫（pointerdown/pointerup/click），iOS 才允許建立／恢復 AudioContext
+function audioUnlock() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!audioCtx) audioCtx = new AC();
+    if (audioCtx.state === 'suspended') {
+      const p = audioCtx.resume();
+      if (p && p.catch) p.catch(e => console.warn('[beep] resume failed', e));
+    }
+    return audioCtx;
+  } catch (e) {
+    console.warn('[beep] init failed', e);
+    return null;
+  }
+}
+
+function isMuted() {
+  try {
+    return localStorage.getItem(MUTE_KEY) === '1';
+  } catch (e) {
+    console.warn('[beep] storage unavailable', e);
+    return false;
+  }
+}
+
+function beep() {
+  if (isMuted()) return;
+  const ac = audioUnlock();
+  if (!ac) return;
+  try {
+    const t = ac.currentTime;
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(220, t);
+    osc.frequency.exponentialRampToValueAtTime(150, t + 0.12);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.05, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+    osc.connect(g);
+    g.connect(ac.destination);
+    osc.start(t);
+    osc.stop(t + 0.14);
+  } catch (e) {
+    console.warn('[beep] play failed', e);
+  }
+}
+
+function updatePendBar() {
+  const bar = document.getElementById('pendBar');
+  const n = pend.list.length;
+  document.body.classList.toggle('pending', n > 0);
+  document.body.classList.toggle('psel', n > 0 && pend.sel >= 0);
+  if (!n) {
+    bar.hidden = true;
+    lastPendHtml = '';
+    return;
+  }
+  const total = pendTotal();
+  let html = '<div class="prow"><b>待購 ' + n + ' 件</b><span class="pcost">';
+  for (const k in RESOURCES) {
+    if (!total[k]) continue;
+    html += '<span' + ((world.res[k] || 0) < total[k] ? ' class="lack"' : '') + '>' + RESOURCES[k].icon + total[k].toLocaleString() + '</span>';
+  }
+  html += '</span><button class="pno" data-pact="cancel" title="全部取消">✕</button><button class="pok" data-pact="buy" title="全部購買">✓</button></div>';
+  if (pend.sel >= 0) {
+    const d = OBJECTS[pend.list[pend.sel].type];
+    html += '<div class="prow sel"><span class="pname">' + d.icon + ' ' + d.name + '</span>' +
+      '<button data-pact="rot">↻ 旋轉</button>' +
+      '<button data-pact="move"' + (pend.moving ? ' class="on"' : '') + '>✥ 移動</button>' +
+      '<button data-pact="del">🗑 移除</button>' +
+      '<button data-pact="done">完成</button></div>';
+  }
+  if (html !== lastPendHtml) {
+    lastPendHtml = html;
+    bar.innerHTML = html;
+  }
+  bar.hidden = false;
+  bar.style.bottom = (document.getElementById('toolbar').offsetHeight + 6) + 'px';
+}
+
+function onPendClick(e) {
+  const b = e.target.closest('button');
+  if (!b) return;
+  audioUnlock();
+  const act = b.getAttribute('data-pact');
+  if (act === 'buy') {
+    commitPending();
+  } else if (act === 'cancel') {
+    const n = pend.list.length;
+    if (n >= 5 && !confirm('取消全部 ' + n + ' 件待購建築？')) return;
+    pendClear();
+    showToast('已取消 ' + n + ' 件待購');
+  } else if (pend.sel < 0) {
+    return;
+  } else if (act === 'rot') {
+    pendRotateSel();
+  } else if (act === 'move') {
+    pend.moving = !pend.moving;
+  } else if (act === 'del') {
+    const name = OBJECTS[pend.list[pend.sel].type].name;
+    pendRemove(pend.sel);
+    showToast('已移除待購 ' + name);
+  } else if (act === 'done') {
+    pend.sel = -1;
+    pend.moving = false;
+  }
+  preview.visible = false;
+  updateResBar();
+}
+
+function commitPending() {
+  const total = pendTotal();
+  const hadLab = labBuilt();
+  const r = pendCommit();
+  if (r.ok) {
+    saveWorld();
+    showToast('已建造 ' + r.n + ' 件，花費 ' + costText(r.cost));
+    if (!hadLab && labBuilt()) showToast('科研院落成！切到 ✋ 瀏覽，點一下科研院即可研發');
+  } else if (r.why === 'res') {
+    beep();
+    showToast('資源不足：缺 ' + costText(missingOf(total)));
+  } else {
+    pend.sel = r.i;
+    pend.moving = false;
+    showToast('第 ' + (r.i + 1) + ' 件已無法放置，請移動或移除');
+  }
+  mapeditRefresh();
 }
 
 function showToast(msg) {

@@ -191,6 +191,33 @@ function drawLog(ctx, gx, gy, len, dep, baseH, r) {
   ctx.fill();
 }
 
+// 軍事建築固定色（不隨季節）；皆 6 位 hex，可用 shade()
+const MIL_COL = { red: '#b8322c', black: '#2e2b2b', herb: '#3f8a66', hay: '#d8b04a', white: '#f4efe4', horse: '#6e4a30' };
+
+// 科研院固定色（不隨季節）；皆 6 位 hex，可用 shade()
+const TECH_COL = { wood: '#5b3a29', roof: '#2f6b5e', bamboo: '#cdb46a', lacquer: '#7a2e26', bronze: '#b08d57' };
+
+// 旗：竿立於格點 (px,py)，旗面沿 +x 方向展開 fw 格、高 fh 像素
+function drawFlag(ctx, px, py, base, poleH, fw, fh, color) {
+  drawBox(ctx, px - 0.03, py - 0.03, 0.06, 0.06, base, poleH, shade(PAL.wood, 0.7));
+  const top = base + poleH;
+  const pts = [gpt(px, py, top), gpt(px + fw, py, top - 2), gpt(px + fw, py, top - 2 - fh), gpt(px, py, top - fh)];
+  poly(ctx, pts, color);
+  outline(ctx, pts, shade(color, 0.6), 1);
+}
+
+// 箭靶：木柱＋三圈靶面
+function drawTarget(ctx, tx, ty, base) {
+  drawBox(ctx, tx - 0.04, ty - 0.04, 0.08, 0.08, base, 12, PAL.wood);
+  const c = gpt(tx, ty, base + 16);
+  [[6, MIL_COL.white], [4, MIL_COL.red], [2, MIL_COL.white]].forEach(r => {
+    ctx.beginPath();
+    ctx.arc(c[0], c[1], r[0], 0, Math.PI * 2);
+    ctx.fillStyle = r[1];
+    ctx.fill();
+  });
+}
+
 // 地形繪製
 function drawCliffFace(ctx, ax, ay, bx, by, h, hn, color) {
   poly(ctx, [
@@ -274,7 +301,9 @@ function drawTile(ctx, x, y, time) {
 
   const p = topPts(x, y, h, wet ? 3 : 0);
   polyPath(ctx, p);
-  ctx.fillStyle = t === T_ROAD ? PAL.road : (wet ? PAL.water : PAL.grass[cellHash(x, y) % 3]);
+  let tileCol = t === T_ROAD ? PAL.road : (wet ? PAL.water : PAL.grass[cellHash(x, y) % 3]);
+  if (typeof artTile === 'function') tileCol = artTile(tileCol);
+  ctx.fillStyle = tileCol;
   ctx.fill();
 
   // 邊線: 0 上→1 右 面向 (x,y-1); 1→2 面向 (x+1,y); 2→3 面向 (x,y+1); 3→0 面向 (x-1,y)
@@ -297,6 +326,7 @@ function drawTile(ctx, x, y, time) {
 
 // 物件繪製
 function drawObject(ctx, o, alpha) {
+  if (typeof artDrawObject === 'function' && artDrawObject(ctx, o, alpha)) return;
   if (alpha === undefined) alpha = 1;
   const x = o.x, y = o.y;
   const bh = world.height[idx(x, y)] * HL;
@@ -406,6 +436,29 @@ function drawObject(ctx, o, alpha) {
       });
       break;
     }
+    case 'ramp': {
+      const hHere = world.height[idx(x, y)];
+      const dir = DIRS[o.rot];
+      const dx = dir[0], dy = dir[1];
+      const nx = x + dx, ny = y + dy;
+      const rise = (inBounds(nx, ny) && world.height[idx(nx, ny)] > hHere) ? (world.height[idx(nx, ny)] - hHere) * HL : HL;
+      const order = (dx < 0 || dy < 0) ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
+      order.forEach(k => {
+        const t0 = k / 8, t1 = (k + 1) / 8;
+        let gx, gy, gw, gd;
+        if (dx !== 0) {
+          const p0 = dx > 0 ? x + t0 : x + 1 - t0, p1 = dx > 0 ? x + t1 : x + 1 - t1;
+          gx = Math.min(p0, p1); gw = Math.abs(p1 - p0);
+          gy = y; gd = 2;
+        } else {
+          const p0 = dy > 0 ? y + t0 : y + 1 - t0, p1 = dy > 0 ? y + t1 : y + 1 - t1;
+          gy = Math.min(p0, p1); gd = Math.abs(p1 - p0);
+          gx = x; gw = 2;
+        }
+        drawBox(ctx, gx, gy, gw, gd, bh, rise * (k + 1) / 8, shade(PAL.road, 1.05));
+      });
+      break;
+    }
     case 'bridge': {
       const even = o.rot % 2 === 0;
       drawBox(ctx, x, y, 1, 1, bh + 1, 3, PAL.wood);
@@ -423,10 +476,143 @@ function drawObject(ctx, o, alpha) {
       }
       break;
     }
+    case 'archer': {
+      drawBox(ctx, x + 0.05, y + 0.05, 2.9, 2.9, bh, 2, PAL.road);
+      drawBox(ctx, x + 0.15, y + 0.15, 1.1, 2.7, bh + 2, 16, PAL.wood);
+      drawPyramid(ctx, x + 0.1, y + 0.1, 1.2, 2.8, bh + 18, 10, PAL.houseRoof);
+      drawFlag(ctx, x + 1.45, y + 0.35, bh + 2, 40, 0.45, 10, MIL_COL.black);
+      drawTarget(ctx, x + 2.5, y + 0.7, bh + 2);
+      drawTarget(ctx, x + 2.5, y + 1.7, bh + 2);
+      for (let k = 0; k < 3; k++) drawBox(ctx, x + 1.5 + k * 0.18, y + 2.55, 0.05, 0.05, bh + 2, 12, shade(PAL.wood, 0.6));
+      break;
+    }
+    case 'shield': {
+      drawBox(ctx, x + 0.05, y + 0.05, 2.9, 2.9, bh, 2, PAL.road);
+      drawBox(ctx, x + 0.2, y + 0.2, 2.0, 1.4, bh + 2, 18, PAL.houseWall);
+      drawPyramid(ctx, x + 0.1, y + 0.1, 2.2, 1.6, bh + 20, 12, PAL.palaceRoof);
+      drawFlag(ctx, x + 2.6, y + 0.4, bh + 2, 56, 0.8, 18, MIL_COL.red);
+      for (let k = 0; k < 4; k++) {
+        drawBox(ctx, x + 0.25 + k * 0.62, y + 2.55, 0.45, 0.1, bh + 2, 14, MIL_COL.red);
+        drawBox(ctx, x + 0.42 + k * 0.62, y + 2.65, 0.1, 0.04, bh + 8, 3, PAL.gold);
+      }
+      break;
+    }
+    case 'cavalry': {
+      const L = w > h; // 長邊沿 x；否則沿 y（a = 長邊座標、b = 短邊座標）
+      const B = (a, b, la, lb, base, ht, col) => L ? drawBox(ctx, x + a, y + b, la, lb, base, ht, col) : drawBox(ctx, x + b, y + a, lb, la, base, ht, col);
+      B(0.05, 0.05, 3.9, 2.9, bh, 2, PAL.road);
+      B(0.1, 0.1, 3.8, 1.0, bh + 2, 14, PAL.wood);
+      for (let k = 0; k < 4; k++) {
+        if (L) drawDoor(ctx, false, y + 1.1, x + 0.55 + k * 0.95, bh + 2);
+        else drawDoor(ctx, true, x + 1.1, y + 0.55 + k * 0.95, bh + 2);
+      }
+      if (L) drawPyramid(ctx, x + 0.05, y + 0.05, 3.9, 1.15, bh + 16, 10, shade(PAL.wood, 0.7));
+      else drawPyramid(ctx, x + 0.05, y + 0.05, 1.15, 3.9, bh + 16, 10, shade(PAL.wood, 0.7));
+      B(3.2, 1.45, 0.5, 0.4, bh + 2, 7, MIL_COL.hay);
+      [1.0, 2.1].forEach(a => {
+        B(a + 0.05, 1.95, 0.06, 0.06, bh + 2, 6, shade(MIL_COL.horse, 0.7));
+        B(a + 0.45, 1.95, 0.06, 0.06, bh + 2, 6, shade(MIL_COL.horse, 0.7));
+        B(a, 1.92, 0.56, 0.14, bh + 8, 6, MIL_COL.horse);
+        B(a + 0.5, 1.92, 0.14, 0.14, bh + 12, 7, MIL_COL.horse);
+      });
+      B(0.1, 2.85, 3.8, 0.05, bh + 7, 2, PAL.wood);
+      B(0.1, 2.85, 3.8, 0.05, bh + 12, 2, PAL.wood);
+      [0.1, 1.05, 2.0, 2.95, 3.84].forEach(a => B(a, 2.83, 0.06, 0.06, bh + 2, 13, shade(PAL.wood, 0.75)));
+      break;
+    }
+    case 'siege': {
+      drawBox(ctx, x + 0.05, y + 0.05, 2.9, 2.9, bh, 2, PAL.road);
+      drawBox(ctx, x + 0.15, y + 0.15, 0.1, 0.1, bh + 2, 20, PAL.wood);
+      drawBox(ctx, x + 1.35, y + 0.15, 0.1, 0.1, bh + 2, 20, PAL.wood);
+      for (let k = 0; k < 3; k++) drawLog(ctx, x + 0.35, y + 0.5 + k * 0.7, 0.9, 0.3, bh + 2, 4);
+      drawBox(ctx, x + 0.15, y + 2.75, 0.1, 0.1, bh + 2, 20, PAL.wood);
+      drawBox(ctx, x + 1.35, y + 2.75, 0.1, 0.1, bh + 2, 20, PAL.wood);
+      drawPyramid(ctx, x + 0.1, y + 0.1, 1.4, 2.8, bh + 22, 10, PAL.houseRoof);
+      drawBox(ctx, x + 1.9, y + 0.9, 0.9, 1.2, bh + 2, 4, shade(PAL.wood, 0.85));
+      drawBox(ctx, x + 2.3, y + 0.95, 0.08, 0.08, bh + 6, 26, PAL.wood);
+      drawBox(ctx, x + 2.3, y + 0.95, 0.08, 1.1, bh + 32, 3, shade(PAL.wood, 0.7));
+      const armA = gpt(x + 1.8, y + 1.5, bh + 14), armB = gpt(x + 2.95, y + 1.5, bh + 50);
+      edgeLine(ctx, armA, armB, shade(PAL.wood, 0.55), 3, ctx.globalAlpha);
+      edgeLine(ctx, armB, gpt(x + 2.95, y + 1.5, bh + 38), '#333333', 1, ctx.globalAlpha);
+      drawBox(ctx, x + 2.3, y + 1.97, 0.08, 0.08, bh + 6, 26, PAL.wood);
+      drawBox(ctx, x + 2.35, y + 2.4, 0.35, 0.35, bh + 2, 5, PAL.stone);
+      break;
+    }
+    case 'hospital': {
+      drawBox(ctx, x + 0.08, y + 0.08, 1.84, 1.84, bh, 3, PAL.stone);
+      drawBox(ctx, x + 0.2, y + 0.2, 1.6, 1.2, bh + 3, 18, MIL_COL.white);
+      drawDoor(ctx, false, y + 1.4, x + 0.8, bh + 3);
+      drawPyramid(ctx, x + 0.1, y + 0.1, 1.8, 1.4, bh + 21, 12, PAL.palaceRoof);
+      drawBox(ctx, x + 0.25, y + 1.55, 0.35, 0.3, bh + 3, 4, MIL_COL.herb);
+      drawBox(ctx, x + 0.7, y + 1.55, 0.35, 0.3, bh + 3, 4, shade(MIL_COL.herb, 1.25));
+      [[bh + 10, 3.5], [bh + 15, 2.5]].forEach(g => {
+        const c = gpt(x + 1.3, y + 1.42, g[0]);
+        ctx.beginPath();
+        ctx.arc(c[0], c[1], g[1], 0, Math.PI * 2);
+        ctx.fillStyle = PAL.gold;
+        ctx.fill();
+      });
+      drawFlag(ctx, x + 1.7, y + 1.7, bh + 3, 36, 0.22, 22, MIL_COL.herb);
+      break;
+    }
+    case 'research': {
+      drawBox(ctx, x + 0.05, y + 0.05, 2.9, 2.9, bh, 4, PAL.stone);
+      drawBox(ctx, x + 2.0, y + 0.3, 0.75, 0.3, bh + 4, 10, TECH_COL.lacquer);
+      for (let k = 0; k < 3; k++) drawBox(ctx, x + 2.04 + k * 0.24, y + 0.33, 0.2, 0.24, bh + 14, 4, TECH_COL.bamboo);
+      drawBox(ctx, x + 0.25, y + 0.25, 1.5, 1.7, bh + 4, 20, TECH_COL.wood);
+      drawDoor(ctx, false, y + 1.95, x + 1.0, bh + 4);
+      drawPyramid(ctx, x + 0.1, y + 0.1, 1.8, 2.0, bh + 24, 7, TECH_COL.roof);
+      drawBox(ctx, x + 0.45, y + 0.5, 1.1, 1.2, bh + 27, 14, TECH_COL.wood);
+      drawPyramid(ctx, x + 0.3, y + 0.35, 1.4, 1.5, bh + 41, 14, TECH_COL.roof);
+      outline(ctx, [gpt(x + 0.3, y + 0.35, bh + 41), gpt(x + 1.7, y + 0.35, bh + 41), gpt(x + 1.7, y + 1.85, bh + 41), gpt(x + 0.3, y + 1.85, bh + 41)], PAL.gold, 1.2);
+      drawBox(ctx, x + 2.1, y + 1.7, 0.6, 0.6, bh + 4, 8, PAL.stone);
+      drawBox(ctx, x + 2.37, y + 1.97, 0.06, 0.06, bh + 12, 6, TECH_COL.bronze);
+      const ring = gpt(x + 2.4, y + 2.0, bh + 26);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = TECH_COL.bronze;
+      [[9, 9, 0], [9, 3.5, 0], [9, 3.5, Math.PI / 3], [3.5, 9, 0]].forEach(r => {
+        ctx.beginPath();
+        ctx.ellipse(ring[0], ring[1], r[0], r[1], r[2], 0, Math.PI * 2);
+        ctx.stroke();
+      });
+      break;
+    }
     default:
+      if (typeof drawCampObject === 'function' && drawCampObject(ctx, o, x, y, w, h, bh, drawNow)) break;
       drawBox(ctx, x, y, w, h, bh, 10, '#ff00ff');
   }
   ctx.restore();
+}
+
+// 待購物件：金色底＋半透明本體＋金色虛線外框；選取中改白色實線
+function drawPendingObj(ctx, o) {
+  const fp = footprint(o.type, o.rot);
+  const bh = world.height[idx(o.x, o.y)] * HL;
+  const sel = pend.sel >= 0 && pend.list[pend.sel] === o;
+  const pts = [gpt(o.x, o.y, bh), gpt(o.x + fp[0], o.y, bh), gpt(o.x + fp[0], o.y + fp[1], bh), gpt(o.x, o.y + fp[1], bh)];
+  poly(ctx, pts, sel ? 'rgba(255,255,255,.30)' : 'rgba(255,214,90,.22)');
+  drawObject(ctx, o, sel && pend.moving ? 0.3 : 0.6);
+  ctx.save();
+  ctx.setLineDash(sel ? [] : [5, 4]);
+  outline(ctx, pts, sel ? '#ffffff' : '#ffd65a', sel ? 2.5 : 1.5);
+  ctx.restore();
+}
+
+// 隱藏建築時的佔格輪廓（PLAN 12.17）：已建 = 白、待購 = 金、不合法 = 紅；只畫物件外緣的邊
+function drawGhostCell(ctx, x, y) {
+  const i = idx(x, y);
+  const n = world.occ[i], pn = pend.occ[i];
+  if (!n && !pn) return;
+  const bad = n && hide.badCell[i];
+  const p = topPts(x, y, world.height[i], 0);
+  poly(ctx, p, bad ? 'rgba(230,70,70,.40)' : (n ? 'rgba(255,255,255,.14)' : 'rgba(255,214,90,.18)'));
+  const col = bad ? '#ff5a4a' : (n ? 'rgba(255,255,255,.8)' : '#ffd65a');
+  const edges = [[0, 1, x, y - 1], [1, 2, x + 1, y], [2, 3, x, y + 1], [3, 0, x - 1, y]];
+  edges.forEach(e => {
+    const j = inBounds(e[2], e[3]) ? idx(e[2], e[3]) : -1;
+    const same = j >= 0 && (n ? world.occ[j] === n : pend.occ[j] === pn);
+    if (!same) edgeLine(ctx, p[e[0]], p[e[1]], col, bad ? 2 : 1.5, 1);
+  });
 }
 
 // 懸停預覽
@@ -457,6 +643,17 @@ function drawPreview(ctx) {
     fillCells(ctx, x, y, fp[0], fp[1], okColor);
     drawObject(ctx, { type: t, x: x, y: y, rot: preview.rot }, 0.55);
   } else if (t === 'erase') {
+    if (hide.on) {
+      strokeCell(ctx, x, y, preview.ok ? 'rgba(80,220,120,1)' : 'rgba(230,70,70,1)', 2);
+      return;
+    }
+    const pn = pend.occ[idx(x, y)];
+    if (pn) {
+      const po = pend.list[pn - 1];
+      const pf = footprint(po.type, po.rot);
+      fillCells(ctx, po.x, po.y, pf[0], pf[1], 'rgba(230,70,70,.45)');
+      return;
+    }
     const n = world.occ[idx(x, y)];
     if (n) {
       const o = world.objects[n - 1];
@@ -466,6 +663,13 @@ function drawPreview(ctx) {
       strokeCell(ctx, x, y, 'rgba(230,70,70,1)', 2);
     }
   } else {
+    const hn = hide.on && (t === 'raise' || t === 'lower') ? world.occ[idx(x, y)] : 0;
+    if (hn) {
+      const ho = world.objects[hn - 1];
+      const hf = footprint(ho.type, ho.rot);
+      fillCells(ctx, ho.x, ho.y, hf[0], hf[1], okColor);
+      return;
+    }
     strokeCell(ctx, x, y, preview.ok ? 'rgba(80,220,120,1)' : 'rgba(230,70,70,1)', 2);
     if (t === 'river') {
       const d = DIRS[preview.rot];
@@ -507,27 +711,48 @@ function objVisible(o) {
   return rectVisible(isoX(o.x, o.y + h), isoY(o.x, o.y, 0) - 100, isoX(o.x + w, o.y), isoY(o.x + w, o.y + h, 0) + TH);
 }
 
+var drawNow = 0;
 function draw(ctx, time) {
+  drawNow = time;
   const cv = ctx.canvas;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = PAL.bg;
+  let bgCol = PAL.bg;
+  if (typeof artSky === 'function') bgCol = artSky(bgCol);
+  ctx.fillStyle = bgCol;
   ctx.fillRect(0, 0, cv.width, cv.height);
 
   const z = view.zoom, r = viewport.dpr;
   ctx.setTransform(r * z, 0, 0, r * z, r * (viewport.w / 2 - view.x * z), r * (viewport.h / 2 - view.y * z));
 
+  const hid = hide.on && !pano.open; // 隱藏建築（PLAN 12.17）；全景一律畫實際建築
+
   for (let d = 0; d <= MAP_W + MAP_H - 2; d++) {
     for (let x = Math.max(0, d - MAP_H + 1); x <= Math.min(d, MAP_W - 1); x++) {
       const y = d - x;
-      if (cellVisible(x, y)) drawTile(ctx, x, y, time);
+      if (cellVisible(x, y)) {
+        drawTile(ctx, x, y, time);
+        if (hid) drawGhostCell(ctx, x, y);
+      }
     }
-    const list = world.objDiag[d];
+    if (typeof drawOverlayDiag === 'function') drawOverlayDiag(ctx, d, time);
+    const list = hid ? null : world.objDiag[d];
     if (list) {
       list.slice().sort((a, b) => a.x - b.x).forEach(o => {
-        if (objVisible(o)) drawObject(ctx, o, 1);
+        if (objVisible(o) && !(typeof tdObjSkip === 'function' && tdObjSkip(o))) drawObject(ctx, o, 1);
       });
     }
+    const pl = pano.open || hid ? null : pend.diag[d];
+    if (pl) {
+      pl.slice().sort((a, b) => a.x - b.x).forEach(o => {
+        if (objVisible(o)) drawPendingObj(ctx, o);
+      });
+    }
+    if (typeof drawBattleDiag === 'function') drawBattleDiag(ctx, d, time);
   }
 
+  if (typeof drawWorldOverlay === 'function') drawWorldOverlay(ctx, time);
+  if (typeof artLights === 'function') artLights(ctx, time);
   if (preview.visible) drawPreview(ctx);
+  ctx.setTransform(r, 0, 0, r, 0, 0);
+  if (typeof drawScreenHud === 'function') drawScreenHud(ctx, time);
 }

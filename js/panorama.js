@@ -77,6 +77,7 @@ function openPanorama() {
   if (pano.open) return;
   toggleShop(false);
   toggleTplMenu(false);
+  toggleTechPanel(false);
   pano.open = true;
   pano.busy = true;
   const token = ++pano.token;

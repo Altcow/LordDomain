@@ -10,17 +10,23 @@ function boot() {
   window.addEventListener('resize', () => resizeCanvas(canvas));
   if (!loadWorld()) applyTemplate(DEFAULT_TEMPLATE);
   initUI(canvas);
+  if (typeof initBattleUI === 'function') initBattleUI();
   const before = Object.assign({}, world.res);
   const sec = applyOfflineGains();
   if (sec > 0) reportOffline(sec, before);
+  flushTechDone();
   updateResBar();
   const palace = world.objects.find(o => o.type === 'palace');
   if (palace) centerOnCell(palace.x + 2, palace.y + 2);
   else centerOnCell(MAP_W >> 1, MAP_H >> 1);
   saveWorld();
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') saveWorld();
-    else handleResume();
+    if (document.visibilityState === 'hidden') {
+      if (typeof battleUiHide === 'function') battleUiHide();
+      saveWorld();
+    } else {
+      handleResume();
+    }
   });
   window.addEventListener('pagehide', () => saveWorld());
   lastFrameMs = performance.now();
@@ -31,6 +37,19 @@ function frame(nowMs) {
   const dt = Math.min(0.25, Math.max(0, (nowMs - lastFrameMs) / 1000));
   lastFrameMs = nowMs;
   tickResources(dt);
+  const td = tickResearch(dt);
+  if (td) onTechDone(td, false);
+  if (battle && ((game.mode === 'attack' && game.phase === 'march') || game.mode === 'replay')) {
+    const sp = typeof game.simSpeed === 'number' ? game.simSpeed : 1;
+    battle.acc += dt * sp;
+    let n = 0;
+    while (battle.acc >= SIM_DT && n < 8) {
+      simTick(battle);
+      battle.acc -= SIM_DT;
+      n++;
+    }
+    if (n === 8) battle.acc = 0;
+  }
   resBarTimer += dt;
   if (resBarTimer >= 0.25) {
     resBarTimer = 0;
@@ -41,6 +60,8 @@ function frame(nowMs) {
     saveTimer = 0;
     saveWorld();
   }
+  if (typeof battleUiTick === 'function') battleUiTick(dt);
+  if (typeof game !== 'undefined' && game.mode === 'fishing') { requestAnimationFrame(frame); return; }
   if (!pano.open) draw(ctx, nowMs / 1000);
   requestAnimationFrame(frame);
 }
@@ -49,6 +70,7 @@ function handleResume() {
   const before = Object.assign({}, world.res);
   const sec = applyOfflineGains();
   if (sec > 0) reportOffline(sec, before);
+  flushTechDone();
   updateResBar();
   lastFrameMs = performance.now();
 }

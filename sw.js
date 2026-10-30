@@ -1,4 +1,4 @@
-const VERSION = 'v3';                 // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v9';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const PRECACHE = [
@@ -7,11 +7,32 @@ const PRECACHE = [
   './manifest.webmanifest',
   './css/style.css',
   './js/data.js',
+  './js/units.js',
+  './js/stratagems.js',
+  './js/fishdata.js',
   './js/map.js',
+  './js/mapio.js',
+  './js/tech.js',
   './js/templates.js',
+  './js/npc.js',
+  './js/path.js',
+  './js/hazards.js',
+  './js/td.js',
+  './js/art.js',
+  './js/art_objects.js',
+  './js/art_units.js',
   './js/render.js',
+  './js/tddraw.js',
+  './js/fishdraw.js',
+  './js/fishing.js',
+  './js/lifedata.js',
+  './js/roster_data.js',
+  './js/citylife.js',
   './js/panorama.js',
   './js/ui.js',
+  './js/mapedit.js',
+  './js/battleui.js',
+  './js/fishui.js',
   './js/main.js',
   './js/pwa.js',
   './icons/icon-180.png',

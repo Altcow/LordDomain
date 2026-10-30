@@ -48,7 +48,7 @@ const DEAL_POOL = [
   { id: 'l_chest',  rarity: 'legendary', name: '豐收寶箱',       icon: '🎁', give: { wood: 500, stone: 400 } }
 ];
 
-// on: 可放置的地形; swap: 旋轉奇數次時長寬對調; cost: 建造成本; prod: 每秒產出; max: 同類建築數量上限
+// on: 可放置的地形; swap: 旋轉奇數次時長寬對調; cost: 建造成本; prod: 每秒產出; max: 同類建築數量上限; mil: 軍事類(工具列分組); unit: 所屬兵種營(出征容量見 units.js CAMP_POP)
 const OBJECTS = {
   tree:   { name: '樹木', icon: '🌳', w: 1, h: 1, on: [T_GRASS], drag: true, cost: { coin: 10 } },
   stone:  { name: '石頭', icon: '🪨', w: 1, h: 1, on: [T_GRASS], drag: true, cost: { coin: 8 } },
@@ -60,7 +60,16 @@ const OBJECTS = {
   gate:   { name: '城門', icon: '🚪', w: 3, h: 1, on: [T_GRASS, T_ROAD], swap: true, cost: { coin: 30, wood: 20, stone: 20 } },
   wall:   { name: '城牆', icon: '🧱', w: 1, h: 1, on: [T_GRASS, T_ROAD], drag: true, cost: { stone: 3 } },
   stairs: { name: '階梯', icon: '🪜', w: 1, h: 1, on: [T_GRASS, T_ROAD], cost: { stone: 5 } },
-  bridge: { name: '橋梁', icon: '🌉', w: 1, h: 1, on: [T_LAKE, T_RIVER], cost: { wood: 8 } }
+  // 斜坡:寬 2 格、沿坡 1 格(footprint 以 swap 處理:rot 偶數為 1×2,奇數為 2×1);上坡方向 DIRS[rot] 與 stairs 相同
+  ramp: { name: '斜坡', icon: '📐', w: 1, h: 2, swap: true, on: [T_GRASS, T_ROAD], cost: { coin: 8, stone: 4 }, side: 'both', cb: { block: 'none', hp: null, cat: null } },
+  bridge: { name: '橋梁', icon: '🌉', w: 1, h: 1, on: [T_LAKE, T_RIVER], cost: { wood: 8 } },
+  research: { name: '科研院', icon: '📜', w: 3, h: 3, max: 1, on: [T_GRASS], cost: { coin: 300, wood: 200, stone: 150 } },
+  // 軍事建築（PLAN 12.10）：mil = 工具列分組；unit = 所屬兵種（出征容量）；本身無產出
+  archer:   { name: '弓箭營', icon: '🏹', w: 3, h: 3, max: 2, mil: true, on: [T_GRASS], cost: { coin: 160, wood: 120, stone: 30 }, unit: 'archer' },
+  shield:   { name: '盾兵營', icon: '🛡️', w: 3, h: 3, max: 2, mil: true, on: [T_GRASS], cost: { coin: 150, wood: 80, stone: 60 }, unit: 'shield' },
+  cavalry:  { name: '騎兵營', icon: '🐎', w: 4, h: 3, max: 2, mil: true, on: [T_GRASS], swap: true, cost: { coin: 300, wood: 150, stone: 50 }, unit: 'cavalry' },
+  siege:    { name: '器械營', icon: '⚙️', w: 3, h: 3, max: 1, mil: true, on: [T_GRASS], cost: { coin: 250, wood: 250, stone: 120 }, unit: 'siege' },
+  hospital: { name: '醫館',   icon: '🌿', w: 2, h: 2, mil: true, on: [T_GRASS], cost: { coin: 120, wood: 40, stone: 30 }, retired: true }
 };
 
 const PALETTES = {
