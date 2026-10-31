@@ -288,7 +288,93 @@ function stDisplaySec() {
       stRender();
     })));
   }
+  if (typeof uiSetCompact === 'function') {
+    nodes.push(stRow('精簡介面', stSwitch(typeof uiGetCompact === 'function' && uiGetCompact(), function (v) {
+      uiSetCompact(v);
+      stRender();
+    })));
+  }
   return stSec('畫面', nodes);
+}
+
+// 全螢幕說明:瀏覽器列佔空間時的做法;不支援 requestFullscreen 的瀏覽器(如 iPhone Safari)不顯示按鈕
+function stFsSupported() {
+  const el = document.documentElement;
+  return !!(el && typeof el.requestFullscreen === 'function' && document.fullscreenEnabled !== false);
+}
+
+function stFsRequest() {
+  try {
+    const p = document.documentElement.requestFullscreen();
+    if (p && typeof p.catch === 'function') p.catch(function (e) { console.warn('[fs] request failed', e); });
+  } catch (e) {
+    console.warn('[fs] request failed', e);
+  }
+}
+
+function stHowtoSec() {
+  const wrap = stEl('div', 'st-howto');
+  wrap.appendChild(stEl('p', '', '網址列與瀏覽器工具列會佔掉螢幕。下列方法可讓遊戲畫面更大:'));
+  wrap.appendChild(stEl('p', '', 'iPhone(Safari)'));
+  const ios = stEl('ol', '');
+  ['點下方「分享」鈕', '選「加入主畫面」', '之後從主畫面的「城主領地」圖示開啟,就不會有瀏覽器列'].forEach(function (t) {
+    ios.appendChild(stEl('li', '', t));
+  });
+  wrap.appendChild(ios);
+  wrap.appendChild(stEl('p', '', '或在網址列點「aA」→「隱藏工具列」(每次開啟可能要重做)。'));
+  wrap.appendChild(stEl('p', '', 'Android(Chrome)'));
+  const and = stEl('ol', '');
+  ['點右上角「⋮」選單', '選「加到主畫面」(或「安裝應用程式」)', '之後從主畫面圖示開啟'].forEach(function (t) {
+    and.appendChild(stEl('li', '', t));
+  });
+  wrap.appendChild(and);
+  wrap.appendChild(stEl('p', '', '或進入遊戲後向上滑動隱藏網址列。'));
+  if (stFsSupported()) {
+    const b = stEl('button', 'st-link', '進入全螢幕');
+    b.addEventListener('click', stFsRequest);
+    wrap.appendChild(b);
+  }
+  return stSec('如何看更大畫面', [wrap]);
+}
+
+// 一次性提示條:手機版且未以主畫面開啟;關閉後記入 localStorage 不再顯示
+const FS_TIP_KEY = 'lorddomain.ui.fsTipDismissed';
+function stIsStandalone() {
+  if (typeof matchMedia === 'function' && matchMedia('(display-mode: standalone)').matches) return true;
+  return navigator.standalone === true;
+}
+function stIsPhone() {
+  return window.innerWidth <= 600 || navigator.maxTouchPoints > 0;
+}
+function stFsTipMaybe() {
+  if (!document.body || stIsStandalone() || !stIsPhone()) return;
+  try {
+    if (localStorage.getItem(FS_TIP_KEY) === '1') return;
+  } catch (e) {
+    console.warn('[au] fs tip read failed', e);
+  }
+  const tip = stEl('div', '');
+  tip.id = 'fsTip';
+  tip.appendChild(stEl('span', 'ftx', '想要更大畫面?加入主畫面後從圖示開啟,即可隱藏瀏覽器列。'));
+  const more = stEl('button', '', '說明');
+  const x = stEl('button', '', '✕');
+  x.setAttribute('aria-label', '關閉提示');
+  const dismiss = function () {
+    try {
+      localStorage.setItem(FS_TIP_KEY, '1');
+    } catch (e) {
+      console.warn('[au] fs tip write failed', e);
+    }
+    tip.remove();
+  };
+  more.addEventListener('click', function () {
+    dismiss();
+    stOpenPanel();
+  });
+  x.addEventListener('click', dismiss);
+  tip.appendChild(more);
+  tip.appendChild(x);
+  document.body.appendChild(tip);
 }
 
 function stAboutSec() {
@@ -341,6 +427,7 @@ function stRender() {
   });
   if (battle) return;
   stBodyEl.appendChild(stDisplaySec());
+  stBodyEl.appendChild(stHowtoSec());
   stBodyEl.appendChild(stAboutSec());
   stBodyEl.appendChild(stDangerSec());
 }
@@ -411,7 +498,7 @@ function initSettingsUI() {
   stInited = true;
   const bar = document.getElementById('topbar');
   if (bar) {
-    const btn = stEl('button', 'st-menu-btn', '☰');
+    const btn = stEl('button', 'st-menu-btn', '⚙');
     btn.id = 'btnMenu';
     btn.title = '設定';
     btn.setAttribute('aria-label', '設定');
@@ -425,6 +512,7 @@ function initSettingsUI() {
   settingsGet();
   stLoadVersion();
   setTimeout(stApplyAutoSeason, 0);
+  setTimeout(stFsTipMaybe, 1200);
   setInterval(stApplyAutoSeason, 3600000);
 }
 

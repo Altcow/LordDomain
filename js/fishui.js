@@ -1,18 +1,74 @@
-// fishui.js — 釣魚覆蓋層(F0 + 彩頭):頂列 🎣 鈕、全螢幕場景、指標輸入、安全區頂列(↩ 📖)、左上 HUD、面板(開始 / 結算 / 清單 / 排行榜)、進出流程。內部函式皆以 fu 開頭。
+// fishui.js — 釣魚覆蓋層(F0 + 彩頭 + 直橫版):頂列 🎣 鈕、全螢幕場景、指標輸入、安全區按鈕(↩ 📖)、左上 HUD、面板(開始 / 結算 / 清單 / 排行榜)、進出流程。內部函式皆以 fu 開頭。
 var fuLayer = null, fuStage = null, fuCv = null, fuCtx = null, fuMain = null, fuDex = null, fuDexRows = [], fuDexTitles = null,
   fuTop = null, fuHud = null, fuHudEls = null, fuHudKey = '', fuSheet = null, fuSheetBody = null, fuSheetKind = '', fuSel = null,
-  fuRaf = 0, fuLast = 0, fuPaused = false, fuDrag = null, fuLabel = '', fuTopTimer = 0, fuResShown = false, fuBoardFrom = 'start';
+  fuRaf = 0, fuLast = 0, fuPaused = false, fuDrag = null, fuLabel = '', fuTopTimer = 0, fuResShown = false, fuBoardFrom = 'start',
+  fuView = null, fuExitB = null, fuDexB = null, fuAngL = null, fuAngR = null, fuHint = null, fuProbe = null;
 
-function fuMkBtn(parent, text, cls, x, y, w, h, onDown) {
-  var b = fuBtn(parent, text, cls, onDown);
-  b.style.left = x + 'px'; b.style.top = y + 'px'; b.style.width = w + 'px'; b.style.height = h + 'px';
-  return b;
+// 按鈕的停用樣式:只換 class(.fu-dis 灰階半透明),位置與尺寸永遠不動。
+function fuSetDis(el, on) {
+  if (!el || el._dis === on) return;
+  el._dis = on;
+  el.className = 'fu-btn ' + el._cls + (on ? ' fu-dis' : '');
+}
+
+// 依版面算出所有 DOM 元件的矩形(px)。只看方向、螢幕尺寸與安全區,不看遊戲狀態,故同一方向下位置固定。
+// 回傳 {exit, dex, main, angL, angR, hud, dexPanel, hint} 皆為 [x, y, w, h](hud/dexPanel 的 h 為 0 表示自動)。
+function fuRects(v) {
+  var I = v.ins, M = 12, B = 44, R = {}, ui = v.ui, d, sx, sy;
+  R.exit = [I.l + M, I.t + M, B, B];
+  if (v.orient === 'landscape') {
+    R.dex = [I.l + M, I.t + M + B + 8, B, B];
+    R.hud = [I.l + M, I.t + M + 2 * B + 18, v.colL - 2 * M, 0];
+    R.dexPanel = [v.ox + 8, I.t + M, v.W * v.s - 16, v.sh - I.t - I.b - 2 * M];
+    R.hint = null;
+  } else {
+    R.dex = [v.sw - I.r - M - B, I.t + M, B, B];
+    R.hud = [I.l + M, I.t + M + B + 10, Math.min(250, v.sw - I.l - I.r - 2 * M), 0];
+    R.dexPanel = [I.l + M, I.t + M + B + 8, v.sw - I.l - I.r - 2 * M, v.sh - I.t - I.b - 2 * M - B - 8];
+    R.hint = [(v.sw - 200) / 2, I.t + M, 200, 0];
+  }
+  d = 2 * ui.mainR * v.s;
+  sx = v.ox + ui.mainX * v.s; sy = v.oy + ui.mainY * v.s;
+  R.main = [sx - d / 2, sy - d / 2, d, d];
+  R.angL = [v.ox + ui.angLX * v.s - B / 2, v.oy + ui.angLY * v.s - B / 2, B, B];
+  R.angR = [v.ox + ui.angRX * v.s - B / 2, v.oy + ui.angRY * v.s - B / 2, B, B];
+  return R;
+}
+
+function fuPlaceBox(el, r) {
+  if (!el) return;
+  el.style.left = r[0] + 'px'; el.style.top = r[1] + 'px';
+  if (r[2] !== undefined) el.style.width = r[2] + 'px';
+  if (r[3]) el.style.height = r[3] + 'px';
+}
+
+// 套用 fuRects。只在建立與旋轉 / 視窗尺寸改變時呼叫,不在遊戲狀態改變時呼叫。
+function fuPlace() {
+  var R, v = fuView;
+  if (!v || !fuLayer) return;
+  R = fuRects(v);
+  fuPlaceBox(fuExitB, R.exit);
+  fuPlaceBox(fuDexB, R.dex);
+  fuPlaceBox(fuMain, R.main);
+  fuPlaceBox(fuAngL, R.angL);
+  fuPlaceBox(fuAngR, R.angR);
+  fuPlaceBox(fuHud, R.hud);
+  if (fuHud) fuHud.style.width = R.hud[2] + 'px';
+  if (fuDex) {
+    fuDex.style.left = R.dexPanel[0] + 'px'; fuDex.style.top = R.dexPanel[1] + 'px';
+    fuDex.style.width = R.dexPanel[2] + 'px'; fuDex.style.maxHeight = R.dexPanel[3] + 'px';
+  }
+  if (fuHint) {
+    fuHint.style.display = R.hint ? '' : 'none';
+    if (R.hint) fuPlaceBox(fuHint, R.hint);
+  }
 }
 
 // 不定位的按鈕(頂列、HUD、面板用);按下時阻止事件冒泡到覆蓋層的拖曳處理。
 function fuBtn(parent, text, cls, onDown) {
   var b = document.createElement('button');
   b.className = 'fu-btn ' + cls;
+  b._cls = cls;
   b.setAttribute('data-ui', '1');
   b.textContent = text;
   b.addEventListener('pointerdown', function (e) { e.preventDefault(); e.stopPropagation(); onDown(); });
@@ -79,9 +135,10 @@ function fuDialTo(p) {
   fs.angle = Math.max(-mx, Math.min(mx, th));
 }
 
+// 螢幕座標 → 邏輯座標(依目前版面;畫布為整個螢幕)。
 function fuLogical(e) {
-  var r = fuCv.getBoundingClientRect();
-  return [(e.clientX - r.left) * FISH_LAYER.W / r.width, (e.clientY - r.top) * FISH_LAYER.H / r.height];
+  var v = fuView || { s: 1, ox: 0, oy: 0 };
+  return [(e.clientX - v.ox) / v.s, (e.clientY - v.oy) / v.s];
 }
 
 function fuDown(e) {
@@ -92,8 +149,9 @@ function fuDown(e) {
   U = FISH_LAYER.ui;
   dd = Math.sqrt((p[0] - U.dialX) * (p[0] - U.dialX) + (p[1] - U.dialY) * (p[1] - U.dialY));
   if (dd < U.dialR + 18 && p[1] > U.dialY - 6) { fuDrag = { k: 'dial' }; fuDialTo(p); }
+  else if (p[0] < 0 || p[0] > FISH_LAYER.W) return;
   else if (p[1] < FISH_LAYER[1][1]) fuDrag = { k: 'boat', x0: p[0], b0: fs.boatX };
-  else if (p[1] < 700) fuDrag = { k: 'ang', x0: p[0], a0: fs.angle };
+  else if (p[1] < FISH_LAYER.floor + 10) fuDrag = { k: 'ang', x0: p[0], a0: fs.angle };
   if (fuDrag && fuDrag.k === 'ang') { mx = fishGear().angMax; fuDrag.mx = mx; }
 }
 
@@ -102,7 +160,7 @@ function fuMove(e) {
   if (!fuDrag || fs.phase !== 'aim') return;
   p = fuLogical(e);
   if (fuDrag.k === 'boat') {
-    fs.boatX = Math.max(60, Math.min(330, fuDrag.b0 + p[0] - fuDrag.x0));
+    fs.boatX = Math.max(60, Math.min(FISH_LAYER.W - 60, fuDrag.b0 + p[0] - fuDrag.x0));
   } else if (fuDrag.k === 'ang') {
     mx = fuDrag.mx;
     fs.angle = Math.max(-mx, Math.min(mx, fuDrag.a0 + (p[0] - fuDrag.x0) * 0.5));
@@ -114,8 +172,13 @@ function fuMove(e) {
 function fuUp() { fuDrag = null; }
 
 function fuSyncUI() {
-  var lab = fs.phase === 'aim' ? '拋' : fs.phase === 'sink' ? '收' : fs.phase === 'fight' ? '拉' : '…';
+  var ph, lab =fs.phase === 'aim' ? '拋' : fs.phase === 'sink' ? '收' : fs.phase === 'fight' ? '拉' : '…';
   if (lab !== fuLabel && fuMain) { fuLabel = lab; fuMain.textContent = lab; }
+  // 停用只換灰階樣式,不移動、不改尺寸、不隱藏
+  ph = fs.phase;
+  fuSetDis(fuMain, !(ph === 'aim' || ph === 'sink' || ph === 'fight' || (ph === 'result' && fs.card && fs.card.hold)));
+  fuSetDis(fuAngL, ph !== 'aim');
+  fuSetDis(fuAngR, ph !== 'aim');
 }
 
 // 左上 HUD:分數、時間(挑戰)、連擊、本局尾數、最近 6 種魚(小圖 + 數量)、「全部 ›」、最近一次釣獲的短提示(2 秒淡出)。
@@ -334,21 +397,23 @@ function fuBuild() {
   fuCv.id = 'fishCv';
   fuCtx = fuCv.getContext('2d');
   stage.appendChild(fuCv);
-  fuMain = fuMkBtn(stage, '拋', 'fu-main', U.mainX - U.mainR, U.mainY - U.mainR, U.mainR * 2, U.mainR * 2, fuMainDown);
+  // 拋 / 角度鈕位置由 fuPlace 依方向決定(見 fishdata.js 的座標表),這裡只建立元件
+  fuMain = fuBtn(stage, '拋', 'fu-main', fuMainDown);
   fuMain.addEventListener('pointerup', fuMainUp);
   fuMain.addEventListener('pointercancel', fuMainUp);
   fuMain.addEventListener('pointerleave', fuMainUp);
-  fuMkBtn(stage, '◀', 'fu-ang', U.angX, U.angY, 44, 44, function () { fuNudge(-5); });
-  fuMkBtn(stage, '▶', 'fu-ang', U.angX + 54, U.angY, 44, 44, function () { fuNudge(5); });
+  fuAngL = fuBtn(stage, '◀', 'fu-ang', function () { fuNudge(-5); });
+  fuAngR = fuBtn(stage, '▶', 'fu-ang', function () { fuNudge(5); });
   layer.appendChild(stage);
 
-  // 頂列:安全區(瀏海 / 動態島)之下,至少 44 px;只有按鈕吃指標事件
+  // 頂列:只有按鈕吃指標事件;位置由 fuPlace 依安全區與方向決定
   top = document.createElement('div');
   top.id = 'fishTop';
-  fuBtn(top, '↩', 'fu-exit', function () { fishExit(); });
-  fuBtn(top, '📖', 'fu-dexbtn', function () { fuToggleDex(); });
+  fuExitB = fuBtn(top, '↩', 'fu-exit', function () { fishExit(); });
+  fuDexB = fuBtn(top, '📖', 'fu-dexbtn', function () { fuToggleDex(); });
   layer.appendChild(top);
   fuTop = top;
+  fuHint = fuEl(layer, 'div', 'fu-hint', '橫放手機體驗更好');
 
   // 左上 HUD(頂列之下)
   hud = document.createElement('div');
@@ -442,19 +507,50 @@ function fuBuild() {
   fuLabel = '';
 }
 
+// 讀取安全區(CSS env())。用隱藏探針讓瀏覽器換算成 px;讀不到(測試環境)時為 0。
+function fuInsets() {
+  var r = { t: 0, r: 0, b: 0, l: 0 }, cs;
+  try {
+    if (!fuProbe) {
+      fuProbe = document.createElement('div');
+      fuProbe.style.cssText = 'position:fixed;left:0;top:0;visibility:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+      fuLayer.appendChild(fuProbe);
+    }
+    cs = window.getComputedStyle(fuProbe);
+    r.t = parseFloat(cs.paddingTop) || 0;
+    r.r = parseFloat(cs.paddingRight) || 0;
+    r.b = parseFloat(cs.paddingBottom) || 0;
+    r.l = parseFloat(cs.paddingLeft) || 0;
+  } catch (e) {}
+  return r;
+}
+
+// 視窗尺寸或方向改變:重算版面、換算實體座標(挑戰不中斷)、重設畫布與按鈕位置。
 function fuResize() {
-  var W, H, s, dpr, ox, oy;
+  var sw, sh, v, dpr;
   if (!fuLayer) return;
-  W = window.innerWidth || 390;
-  H = window.innerHeight || 844;
-  s = Math.min(W / FISH_LAYER.W, H / FISH_LAYER.H);
+  sw = window.innerWidth || 390;
+  sh = window.innerHeight || 844;
+  v = fishLayoutCalc(sw, sh, fuInsets());
   dpr = window.devicePixelRatio || 1;
-  ox = (W - FISH_LAYER.W * s) / 2;
-  oy = (H - FISH_LAYER.H * s) / 2;
-  fuStage.style.transform = 'translate(' + ox + 'px,' + oy + 'px) scale(' + s + ')';
-  fuCv.width = Math.round(FISH_LAYER.W * s * dpr);
-  fuCv.height = Math.round(FISH_LAYER.H * s * dpr);
-  fuCtx.setTransform(fuCv.width / FISH_LAYER.W, 0, 0, fuCv.height / FISH_LAYER.H, 0, 0);
+  fishRelayout(v);
+  fuView = v;
+  fuCv.width = Math.round(sw * dpr);
+  fuCv.height = Math.round(sh * dpr);
+  // 邏輯座標 → 畫布像素:x_px = dpr·(s·x + ox)
+  fuCtx.setTransform(dpr * v.s, 0, 0, dpr * v.s, dpr * v.ox, dpr * v.oy);
+  fuPlace();
+}
+
+// 旋轉 / 尺寸事件只綁一次(進入時綁、離開時解綁;重複綁定前先移除)。
+function fuOnResize() { fuResize(); }
+function fuBindResize(on) {
+  window.removeEventListener('resize', fuOnResize);
+  window.removeEventListener('orientationchange', fuOnResize);
+  if (on) {
+    window.addEventListener('resize', fuOnResize);
+    window.addEventListener('orientationchange', fuOnResize);
+  }
 }
 
 function fuFrame(now) {
@@ -499,7 +595,7 @@ function fishEnter(src) {
   fuDrag = null;
   fuLast = performance.now();
   document.addEventListener('visibilitychange', fuOnVis);
-  window.addEventListener('resize', fuResize);
+  fuBindResize(true);
   fuSheetOpen('start');
   fuResize();
   fuRaf = requestAnimationFrame(fuFrame);
@@ -517,9 +613,10 @@ function fishExit() {
   fuPaused = false;
   fuDrag = null;
   document.removeEventListener('visibilitychange', fuOnVis);
-  window.removeEventListener('resize', fuResize);
+  fuBindResize(false);
   fuLayer.parentNode.removeChild(fuLayer);
   fuLayer = null; fuStage = null; fuCv = null; fuCtx = null; fuMain = null; fuDex = null; fuDexRows = [];
+  fuView = null; fuExitB = null; fuDexB = null; fuAngL = null; fuAngR = null; fuHint = null; fuProbe = null;
   fuTop = null; fuHud = null; fuHudEls = null; fuHudKey = ''; fuSheet = null; fuSheetBody = null; fuSheetKind = ''; fuDexTitles = null;
   fuLabel = '';
   game.mode = 'estate';

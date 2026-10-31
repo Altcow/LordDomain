@@ -79,10 +79,32 @@ function fishSave() {
   }
 }
 
+// 版面改變(旋轉 / 視窗尺寸)時換算所有實體座標;相位、計時、拉扯、結算等狀態不動,挑戰不中斷。
+// 版面相同時等同 no-op。v 為 fishLayoutCalc 的結果。
+function fishRelayout(v) {
+  var nl = fishLayerOf(v.W, v.H, v.orient === 'portrait'), ow = FISH_LAYER.W, osurf = FISH_LAYER.surf, ofl = FISH_LAYER.floor,
+    kx = ow ? v.W / ow : 1, ky = (ofl - osurf) ? (nl.floor - nl.surf) / (ofl - osurf) : 1, i, j, f, o, p;
+  function ym(y) { return nl.surf + (y - osurf) * ky; }
+  fishLayerSet(v);
+  fs.boatX = Math.max(60, Math.min(v.W - 60, fs.boatX * kx));
+  for (i = 0; i < fs.fishes.length; i++) {
+    f = fs.fishes[i]; f.x *= kx; f.y0 = ym(f.y0); f.v *= kx;
+  }
+  for (i = 0; i < fs.obs.length; i++) {
+    o = fs.obs[i]; o.x *= kx; o.w *= kx; o.y = ym(o.y); o.h *= ky;
+  }
+  for (i = 0; i < fs.bub.length; i++) fs.bub[i].x *= kx;
+  if (fs.hook) {
+    p = fs.hook;
+    p.pos[0] *= kx; p.pos[1] = ym(p.pos[1]); p.v[0] *= kx; p.v[1] *= ky;
+    for (j = 0; j < p.path.length; j++) { p.path[j][0] *= kx; p.path[j][1] = ym(p.path[j][1]); }
+  }
+}
+
 // 一次出航的狀態重設(存檔不動)。會先快轉 15 秒,讓畫面上一開始就有魚。
 function fishReset() {
   var W = FISH_LAYER.W, fl = FISH_LAYER.floor, i, n, x;
-  fs.phase = 'aim'; fs.boatX = 195; fs.hook = null; fs.fishes = []; fs.obs = [];
+  fs.phase = 'aim'; fs.boatX = W / 2; fs.hook = null; fs.fishes = []; fs.obs = [];
   fs.spawnT = [0, Math.random() * 0.5, Math.random() * 0.5, Math.random() * 0.5];
   fs.fight = null; fs.reelFish = null; fs.reelWhy = ''; fs.card = null;
   fs.pending = 0; fs.holding = false; fs.abort = false; fs.dismiss = false; fs.bub = []; fs.bubT = 0;
@@ -97,7 +119,7 @@ function fishReset() {
   }
   n = 1 + Math.floor(Math.random() * 2);
   for (i = 0; i < n; i++) {
-    fs.obs.push({ x: 40 + Math.random() * (W - 120), y: 600, w: 26, h: 90, weed: true, ph: Math.random() * 6 });
+    fs.obs.push({ x: 40 + Math.random() * (W - 120), y: fl - 90, w: 26, h: 90, weed: true, ph: Math.random() * 6 });
   }
   for (i = 0; i < 60; i++) fishStep(0.25);
   fs.t = 0;

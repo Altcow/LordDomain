@@ -63,6 +63,7 @@ function uiDeploy(b, u, x, y) {
   if (why !== true) return why;
   issueCmd(b, { op: 'deploy', u: u, part: 'van', x: x, y: y });
   tdApplyCmds(b);
+  if (typeof sfxwarDeploy === 'function') sfxwarDeploy(u, UNITS[u].squad, x + 0.5, y + 0.5);
   return true;
 }
 
@@ -422,12 +423,12 @@ function initAttackUI() {
   if (!top || document.getElementById('btnAttack')) return;
   const btn = document.createElement('button');
   btn.id = 'btnAttack';
-  btn.title = '出征：選擇 NPC 據點，整軍後進攻';
-  btn.textContent = '⚔ 出征';
-  top.insertBefore(btn, document.getElementById('btnHide'));
+  btn.className = 'corner corner-atk';
+  btn.title = '戰鬥：隨機戰鬥、朋友邀請碼、戰報';
+  btn.textContent = '⚔ 戰鬥';
+  document.body.appendChild(btn);
   btn.addEventListener('click', () => {
-    if (atk.open) atkClosePanel();
-    else atkOpenList();
+    if (typeof cornerToggleFight === 'function') cornerToggleFight();
   });
   atk.btn = btn;
 
@@ -497,7 +498,7 @@ function initAttackUI() {
 function atkSync() {
   if (!atk.btn) return;
   const m = game.mode;
-  atk.btn.hidden = atk.on || !!game.backup || (m !== 'estate' && m !== 'battleDesign');
+  atk.btn.hidden = atk.on || !!game.backup || (m !== 'estate' && m !== 'battleDesign') || (typeof cornerHidden === 'function' && cornerHidden());
 }
 
 // 面板貼齊工具列上方(進攻中工具列隱藏,貼底)
@@ -706,6 +707,7 @@ function atkStartBattle(x, y) {
   battle = b;
   issueCmd(b, { op: 'deploy', u: atk.unit, part: 'van', x: x, y: y });
   tdApplyCmds(b);
+  if (typeof sfxwarDeploy === 'function') sfxwarDeploy(atk.unit, UNITS[atk.unit].squad, x + 0.5, y + 0.5);
   game.phase = 'march';
   game.sel = -1;
   atkSetSub('第一通鼓・開戰', 3);

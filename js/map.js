@@ -771,6 +771,25 @@ function objValidAt(n) {
   return true;
 }
 
+// 已建物件 n 改為 (x,y)/rot 後是否可放：canPlace 規則，排除自己的舊佔格；不計數量上限、不看 sideOk；避開待購佔格
+function objFitAt(n, x, y, rot) {
+  const o = world.objects[n];
+  if (!o) return false;
+  const d = OBJECTS[o.type];
+  const [w, h] = footprint(o.type, rot);
+  if (x < 0 || y < 0 || x + w > MAP_W || y + h > MAP_H) return false;
+  const h0 = world.height[idx(x, y)];
+  for (let yy = y; yy < y + h; yy++) {
+    for (let xx = x; xx < x + w; xx++) {
+      const i = idx(xx, yy);
+      if ((world.occ[i] && world.occ[i] !== n + 1) || pend.occ[i]) return false;
+      if (world.height[i] !== h0) return false;
+      if (d.on.indexOf(world.terrain[i]) < 0) return false;
+    }
+  }
+  return true;
+}
+
 // 重新驗證全部已建物件，回傳不合法件數（O(物件格數)，郡城範本 < 1ms）
 function hideAudit() {
   hide.bad = [];

@@ -1,4 +1,7 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-text-size-adjust: 100%; overscroll-behavior: none; }
+input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
+img, canvas { -webkit-user-drag: none; -webkit-touch-callout: none; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #1c2430; color: #e8edf2; font-family: "Microsoft JhengHei", "PingFang TC", sans-serif; }
 #game { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
 #topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 6px 10px; padding-top: max(6px, env(safe-area-inset-top)); background: rgba(20, 26, 36, .82); backdrop-filter: blur(4px); font-size: 14px; }
@@ -56,7 +59,7 @@ button:active { background: #45566e; }
 #panoMsg { font-size: 12px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 #panoSave:disabled { opacity: .4; }
 #panoImg { flex: 1 1 0; min-height: 0; width: 100%; object-fit: contain; display: block; -webkit-touch-callout: default; }
-#pendBar { position: fixed; left: 8px; right: 8px; bottom: calc(96px + env(safe-area-inset-bottom)); max-width: 480px; margin: 0 auto; z-index: 3; padding: 6px 8px; border-radius: 10px; background: rgba(20, 26, 36, .92); border: 1px solid #f0b45a; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
+#pendBar { position: fixed; left: 84px; right: 52px; bottom: calc(96px + env(safe-area-inset-bottom)); max-width: 480px; margin: 0 auto; z-index: 3; padding: 6px 8px; border-radius: 10px; background: rgba(20, 26, 36, .92); border: 1px solid #f0b45a; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
 #pendBar[hidden] { display: none; }
 #pendBar .prow { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 #pendBar .prow.sel { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, .15); }
@@ -95,13 +98,7 @@ body.hideobj #info { color: #f0b45a; }
 #techPanel .lack { color: #ff6b5e; font-weight: bold; }
 @media (max-width: 480px) { #techPanel { top: calc(84px + env(safe-area-inset-top)); } }
 @media (max-width: 480px) { #topbar { gap: 4px; padding-left: 6px; padding-right: 6px; } #topbar button, #topbar select { padding: 4px 5px; } }
-#topbar button, #topbar select, #boardSwitch { flex-shrink: 0; }
-#boardSwitch { position: relative; display: inline-flex; }
-#boardSwitch button { border-radius: 0; padding: 5px 8px; }
-#boardSwitch button:first-of-type { border-radius: 6px 0 0 6px; }
-#boardSwitch button:last-of-type { border-radius: 0 6px 6px 0; margin-left: -1px; }
-#boardSwitch button.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; font-weight: bold; }
-#boardSwitch .lbl { margin-left: 3px; }
+#topbar button, #topbar select { flex-shrink: 0; }
 .vdot { position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; border-radius: 50%; border: 1px solid #1c2430; }
 .vdot.ok { background: #3fbf6a; }
 .vdot.bad { background: #e5484d; }
@@ -118,8 +115,6 @@ body.camp-mode #btnPano { display: none; }
 #campPick .box button small { display: block; font-size: 11px; opacity: .75; margin-top: 2px; white-space: normal; }
 #campPick .box button[data-cpick="cancel"] { text-align: center; }
 @media (max-width: 480px) {
-  #boardSwitch .lbl { display: none; }
-  #boardSwitch button { padding: 4px 6px; }
   #topbar { overflow-x: auto; }
 }
 /* 沙盤推演（M1-05） */
@@ -289,15 +284,18 @@ body.replay-mode #toast { top: calc(100px + env(safe-area-inset-top)); bottom: a
 
 /* ===== 釣魚覆蓋層(fishui.js / fishdraw.js,PLAN_FISHING F0) ===== */
 #fishLayer { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 30; background: #0b1622; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-#fishStage { position: absolute; top: 0; left: 0; width: 390px; height: 844px; transform-origin: 0 0; }
-#fishCv { position: absolute; top: 0; left: 0; width: 390px; height: 844px; display: block; }
+#fishStage { position: absolute; inset: 0; }
+#fishCv { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+/* 停用:灰階 + 半透明,位置與尺寸不變(fishui.js fuSetDis) */
+#fishLayer .fu-btn.fu-dis { opacity: .4; filter: grayscale(1); }
+#fishLayer .fu-hint { position: absolute; padding: 4px 10px; border-radius: 999px; background: rgba(12, 20, 30, .6); color: #ffe9a8; font-size: 12px; white-space: nowrap; text-align: center; pointer-events: none; }
 #fishLayer .fu-btn { position: absolute; margin: 0; padding: 0; border: 0; border-radius: 10px; background: rgba(20, 26, 36, .72); color: #f4f4f4; font-size: 16px; font-weight: 700; line-height: 1; touch-action: none; }
 #fishLayer .fu-btn.fu-main { border-radius: 50%; background: rgba(230, 150, 60, .92); color: #fff; font-size: 18px; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
-/* 頂列:安全區(瀏海 / 動態島)之下,至少 44 px;只有按鈕吃指標事件 */
-#fishTop { position: absolute; top: 0; left: 0; right: 0; box-sizing: border-box; display: flex; justify-content: space-between; align-items: flex-start; padding-left: 12px; padding-right: 12px; padding-top: max(env(safe-area-inset-top), 44px); pointer-events: none; }
-#fishTop .fu-btn { position: static; width: 44px; height: 36px; pointer-events: auto; }
-/* 左上 HUD(頂列之下) */
-#fishHud { position: absolute; left: 12px; top: calc(max(env(safe-area-inset-top), 44px) + 44px); max-width: 250px; box-sizing: border-box; padding: 6px 10px; border-radius: 10px; background: rgba(12, 20, 30, .5); color: #fff; font-size: 13px; pointer-events: none; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
+/* 頂列容器不排版;↩ 📖 的位置由 fishui.js fuPlace 依安全區與方向設定(邊距 12 px、鈕 44×44) */
+#fishTop { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
+#fishTop .fu-btn { position: absolute; width: 44px; height: 44px; pointer-events: auto; }
+/* 左上 HUD(位置由 fuPlace 設定) */
+#fishHud { position: absolute; box-sizing: border-box; padding: 6px 10px; border-radius: 10px; background: rgba(12, 20, 30, .5); color: #fff; font-size: 13px; pointer-events: none; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
 #fishHud .fu-hud-row { display: flex; align-items: center; gap: 8px; min-height: 20px; }
 #fishHud .fu-hud-score { font-size: 26px; font-weight: 800; line-height: 1.1; }
 #fishHud .fu-hud-time { margin-left: auto; font-weight: 700; }
@@ -308,13 +306,13 @@ body.replay-mode #toast { top: calc(100px + env(safe-area-inset-top)); bottom: a
 #fishHud .fu-hud-item canvas { width: 36px; height: 20px; }
 #fishHud .fu-more { position: static; pointer-events: auto; margin: 0; padding: 2px 6px; font-size: 12px; font-weight: 600; background: rgba(20, 26, 36, .8); }
 #fishHud .fu-toast { margin-top: 4px; font-size: 13px; font-weight: 700; color: #ffe9a8; white-space: pre-line; }
-#fishDex { position: absolute; top: calc(max(env(safe-area-inset-top), 44px) + 44px); left: 12px; right: 12px; max-height: calc(100% - 120px); overflow-y: auto; touch-action: pan-y; box-sizing: border-box; padding: 12px; border-radius: 12px; background: rgba(12, 20, 30, .94); color: #eee; font-size: 14px; }
+#fishDex { position: absolute; overflow-y: auto; touch-action: pan-y; box-sizing: border-box; padding: 12px; border-radius: 12px; background: rgba(12, 20, 30, .94); color: #eee; font-size: 14px; }
 #fishDex .fu-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, .12); }
 #fishDex .fu-row canvas { width: 64px; height: 36px; flex-shrink: 0; }
 #fishDex .fu-btn { position: static; margin-top: 10px; padding: 8px 14px; font-size: 14px; }
 #fishDex .fu-dex-titles { margin-top: 10px; font-size: 13px; line-height: 1.6; white-space: pre-line; }
 /* 面板:開始 / 挑戰結算 / 本局清單 / 排行榜(整層吃掉指標事件) */
-#fishSheet { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center; box-sizing: border-box; padding: 16px; background: rgba(4, 10, 16, .6); touch-action: pan-y; }
+#fishSheet { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center; box-sizing: border-box; padding: calc(env(safe-area-inset-top) + 12px) calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 12px) calc(env(safe-area-inset-left) + 12px); background: rgba(4, 10, 16, .6); touch-action: pan-y; }
 #fishSheet .fu-panel { width: 100%; max-width: 358px; max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; box-sizing: border-box; padding: 14px; border-radius: 14px; background: rgba(12, 20, 30, .96); color: #eee; font-size: 14px; }
 #fishSheet .fu-h { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
 #fishSheet .fu-sub { font-size: 13px; opacity: .85; margin: 2px 0; }
@@ -501,3 +499,80 @@ body.atk-mode #toast { top: calc(162px + env(safe-area-inset-top)); bottom: auto
 #atkPanel .arule { margin-top: 8px; }
 #atkPanel .arule p { margin: 3px 0; font-size: 12px; opacity: 1; }
 #atkPanel .sact .abig { min-height: 52px; font-size: 17px; font-weight: 700; }
+
+/* ===== 收合鈕、精簡介面、全螢幕說明(ui.js initFoldUI / settingsui.js) ===== */
+/* 收合鈕為 fixed 定位,位置只隨直向/橫向切換,展開或收合都不移動 */
+.fold-btn { position: fixed; z-index: 3; width: 36px; height: 36px; min-width: 36px; min-height: 36px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; background: rgba(47, 59, 77, .72); border-color: rgba(69, 86, 110, .8); opacity: .85; touch-action: manipulation; }
+.fold-btn:active { background: rgba(69, 86, 110, .9); }
+#topbar { padding-right: 52px; }
+#toolbar { padding-right: 52px; }
+@media (orientation: portrait) {
+  #tpFold { top: calc(6px + env(safe-area-inset-top)); right: 8px; }
+  #tbFold { bottom: calc(8px + env(safe-area-inset-bottom)); right: 8px; }
+  #fsTip { top: calc(84px + env(safe-area-inset-top)); }
+}
+@media (orientation: landscape) {
+  #tpFold { top: calc(6px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); }
+  #tbFold { bottom: calc(8px + env(safe-area-inset-bottom)); right: calc(8px + env(safe-area-inset-right)); }
+  #fsTip { top: calc(84px + env(safe-area-inset-top)); }
+}
+/* 戰鬥、回放、沙盤、戰鬥布置時不顯示收合鈕與提示條,避免遮住戰鬥 HUD */
+body.atk-mode #tpFold, body.atk-mode #tbFold, body.replay-mode #tpFold, body.replay-mode #tbFold,
+body.sandbox #tpFold, body.sandbox #tbFold, body.camp-mode #tpFold, body.camp-mode #tbFold,
+body.atk-mode #fsTip, body.replay-mode #fsTip, body.sandbox #fsTip, body.camp-mode #fsTip { display: none !important; }
+/* 頂列收合:只留 ⚙ 設定鈕(位置固定在右上,收合鈕左側) */
+body.tp-fold:not(.camp-mode):not(.atk-mode):not(.replay-mode):not(.sandbox) #topbar { left: auto; right: 52px; padding: 6px 0; background: none; backdrop-filter: none; }
+body.tp-fold:not(.camp-mode):not(.atk-mode):not(.replay-mode):not(.sandbox) #topbar > *:not(#btnMenu) { display: none; }
+body.tb-fold:not(.camp-mode):not(.atk-mode):not(.replay-mode):not(.sandbox) #toolbar,
+body.tb-fold:not(.camp-mode):not(.atk-mode):not(.replay-mode):not(.sandbox) #catbar { display: none; }
+body.tb-fold #pendBar { bottom: calc(12px + env(safe-area-inset-bottom)); right: 52px; }
+/* 精簡介面:按鈕約縮小為 80%,留足 36px 點擊區 */
+body.ui-compact #topbar { gap: 4px; }
+body.ui-compact #topbar button, body.ui-compact #topbar select { min-height: 36px; padding: 3px 5px; font-size: 12px; }
+body.ui-compact #toolbar { gap: 4px; padding-top: 6px; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
+body.ui-compact #toolbar button { min-width: 46px; min-height: 36px; padding: 3px 4px; font-size: 11px; }
+body.ui-compact #toolbar button .ic { font-size: 18px; }
+body.ui-compact #catbar { padding: 3px 8px; gap: 4px; }
+body.ui-compact #catbar button { min-height: 36px; font-size: 11px; padding: 2px 8px; }
+/* 全螢幕說明與一次性提示條 */
+#stRoot .st-howto p { font-size: 13px; line-height: 1.6; margin: 6px 0; opacity: .9; }
+#stRoot .st-howto ol { margin: 4px 0 4px 20px; padding: 0; font-size: 13px; line-height: 1.6; }
+#stRoot .st-howto li { margin: 2px 0; }
+#stRoot .st-howto .st-link { margin-top: 8px; }
+#fsTip { position: fixed; left: 8px; right: 8px; max-width: 480px; margin: 0 auto; z-index: 3; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 10px; border-radius: 10px; background: rgba(20, 26, 36, .94); border: 1px solid #f0b45a; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
+#fsTip .ftx { flex: 1; min-width: 0; }
+#fsTip button { min-height: 36px; min-width: 36px; padding: 4px 8px; font-size: 12px; }
+
+/* ===== 角落操作群(A'):左下 經營/戰鬥布置、其正上方 ⚔ 戰鬥(+選單)、右下 🌤 季節時段。位置固定,不隨模式移動(mapedit.js cornerBuild) ===== */
+/* 左側 84px 為角落群保留區:工具列與待購/物件列都從 84px 起排 */
+#toolbar { padding-left: 84px; }
+#catbar { padding-left: 84px; padding-right: 52px; }
+#modeBtn, #btnAttack.corner-atk, #seasonBtn { position: fixed; z-index: 3; margin: 0; }
+#modeBtn { left: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); width: 64px; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px; font-size: 12px; border-radius: 10px; }
+#modeBtn .ic { font-size: 18px; line-height: 1; }
+#modeBtn .nm { font-size: 12px; white-space: nowrap; }
+#modeBtn.camp { background: #8b1a1a; border-color: #d9534f; color: #fff; font-weight: bold; }
+#modeBtn .vdot { top: -4px; right: -4px; }
+#btnAttack.corner-atk { left: 8px; bottom: calc(72px + env(safe-area-inset-bottom)); width: 64px; height: 44px; padding: 4px; font-size: 13px; font-weight: bold; border-radius: 10px; background: #7a2a2a; border-color: #c96a5f; }
+#btnAttack.corner-atk::before { content: none; }
+#seasonBtn { right: 8px; bottom: calc(52px + env(safe-area-inset-bottom)); width: 36px; height: 36px; min-width: 36px; padding: 0; border-radius: 50%; font-size: 16px; line-height: 1; display: flex; align-items: center; justify-content: center; background: rgba(47, 59, 77, .72); border-color: rgba(69, 86, 110, .8); }
+.corner[hidden], #fightMenu[hidden], #seasonPop[hidden], #objBar[hidden] { display: none !important; }
+#fightMenu { position: fixed; z-index: 4; left: 78px; bottom: calc(72px + env(safe-area-inset-bottom)); width: min(220px, calc(100vw - 92px)); display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 10px; background: rgba(20, 26, 36, .94); border: 1px solid #c96a5f; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
+#fightMenu button { display: block; width: 100%; min-height: 44px; text-align: left; font-size: 14px; }
+#fightMenu .fm-friend { display: flex; flex-wrap: wrap; gap: 4px; }
+#fightMenu .fm-friend input { flex: 1 1 100%; min-height: 40px; padding: 4px 8px; border-radius: 6px; border: 1px solid #45566e; background: #1c2430; color: inherit; font: inherit; }
+#fightMenu .fm-friend button { flex: 1 1 0; width: auto; min-height: 40px; text-align: center; }
+#seasonPop { position: fixed; z-index: 4; right: 8px; bottom: calc(96px + env(safe-area-inset-bottom)); padding: 6px; border-radius: 10px; background: rgba(20, 26, 36, .45); border: 1px solid rgba(255, 255, 255, .2); }
+#seasonPop .sp-row { display: flex; gap: 4px; }
+#seasonPop .sp-row + .sp-row { margin-top: 4px; }
+#seasonPop button { min-width: 44px; min-height: 40px; padding: 4px 6px; font-size: 13px; background: rgba(47, 59, 77, .7); }
+#seasonPop button.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; font-weight: bold; }
+/* 經營布置瀏覽模式點選已蓋建築的操作列(ui.js updateObjBar):左側避開角落群,右側避開 🌤 與收合鈕 */
+#objBar { position: fixed; left: 84px; right: 52px; max-width: 480px; margin: 0 auto; z-index: 3; padding: 6px 8px; border-radius: 10px; background: rgba(20, 26, 36, .92); border: 1px solid #5fa8f0; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
+#objBar .prow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+#objBar .pname { flex: 1 1 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#objBar button { min-height: 40px; padding: 4px 8px; font-size: 12px; }
+#objBar button.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; }
+#objBar button.del { background: #6b2b2b; border-color: #c96a5f; }
+body.tb-fold #objBar { right: 52px; }
+#pendBar .prow.sel { flex-wrap: wrap; }

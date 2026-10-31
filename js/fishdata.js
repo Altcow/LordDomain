@@ -41,17 +41,75 @@ const FISH_DIFF = {
   3: { fight:true, tap:6, decay:14, thrash:[2, 3.5] }
 };
 
-// 1~3 = 深度層的上下界(邏輯 y);floor = 水底;surf = 水面線。
-// W、H 為邏輯畫面;ui 為操作鈕與角度盤的版面(fishui.js 與 fishdraw.js 共用)。
-// 水面線依高度比例 15%(F0 為 42 px ≈ 5%,約下移 10% 螢幕高度);水下三層依 F0 的相對比例分配 surf~floor 之間的距離。
-const FISH_LAYER = (function () {
-  var W = 390, H = 844, surf = Math.round(H * 0.15), fl = 690, span = fl - surf,
+// ===== 版面(PLAN_FISHING §1.6 的延伸:直版 / 橫版) =====
+// 邏輯座標:直版固定 390×844;橫版高固定 390、寬依螢幕長寬比(水面至少佔 60% 寬,不拉伸)。
+// 方向決定版面,遊戲狀態不影響版面:同一方向下所有按鈕矩形永遠相同,只有旋轉螢幕才換一套。
+//
+// 按鈕座標表(px 為螢幕 CSS 像素,邏輯座標 ×s 後加 ox/oy;安全區 = env(safe-area-inset-*),M = 12 px 額外邊距,鈕 ≥ 44 px):
+//   ┌ 直版 portrait(sw ≤ sh)──────────────────────────────────────────┐
+//   │ ↩ 離開   左上 (安全左+12, 安全上+12)  44×44                        │
+//   │ 📖 圖鑑  右上 (sw−安全右−12−44, 安全上+12)  44×44                  │
+//   │ 資訊 HUD 左上,位於 ↩ 之下 (x 安全左+12, y 安全上+66),寬 ≤ 250     │
+//   │ 角度盤  邏輯 (200,736) 半徑 62(下半弧)                           │
+//   │ ◀ 中心 邏輯 (38,774)   ▶ 中心 邏輯 (92,774)   各 44×44 px           │
+//   │ 拋/收/拉 邏輯 (334,774) 半徑 38(直徑約 73 px)                     │
+//   └────────────────────────────────────────────────────────────────┘
+//   ┌ 橫版 landscape(sw > sh):左欄 ↩ 📖 與資訊 HUD;中央水面;右欄角度盤與拋 ──┐
+//   │ ↩ 離開   左欄第一顆 (安全左+12, 安全上+12)  44×44                     │
+//   │ 📖 圖鑑  左欄第二顆 (安全左+12, 安全上+64)  44×44                     │
+//   │ 資訊 HUD 左欄 (x 安全左+12, y 安全上+118),寬 = 左欄寬 −24              │
+//   │ 右欄中心 cxR = W + 右欄寬邏輯/2                                       │
+//   │ 角度盤  邏輯 (cxR,118) 半徑 40                                       │
+//   │ ◀ 中心 邏輯 (cxR−26,186)   ▶ 中心 邏輯 (cxR+26,186)                    │
+//   │ 拋/收/拉 邏輯 (cxR,H−62=328) 半徑 38                                  │
+//   └──────────────────────────────────────────────────────────────────────┘
+// 停用(例如拋竿中的 ◀ ▶、非可拋時的拋鈕)只改灰階與透明度(.fu-dis),位置與尺寸不變。
+//
+// 1~3 = 深度層的上下界(邏輯 y);floor = 水底;surf = 水面線(直版 = 844 × 18%,天空與 HUD 帶在上方)。
+// ui 為角度盤與拋鈕的邏輯座標(fishui.js 與 fishdraw.js 共用);physics 只讀 W、H、surf、floor、1~3。
+function fishClamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// 依螢幕尺寸與安全區算版面。ins = {t,r,b,l}(px,可為 null)。回傳 view,fishLayerSet 會寫入 FISH_LAYER。
+function fishLayoutCalc(sw, sh, ins) {
+  var I = ins || { t: 0, r: 0, b: 0, l: 0 }, uw = Math.max(1, sw - I.l - I.r), uh = Math.max(1, sh - I.t - I.b),
+    v, cl, cr, cxR;
+  v = { sw: sw, sh: sh, ins: I, orient: sw > sh ? 'landscape' : 'portrait', s: 1, ox: 0, oy: 0, W: 390, H: 844, colL: 0, colR: 0 };
+  if (v.orient === 'landscape') {
+    v.H = 390;
+    v.s = uh / v.H;
+    cl = fishClamp(Math.round(uw * 0.14), 100, 140);
+    cr = fishClamp(Math.round(uw * 0.18), 110, 170);
+    while (uw - cl - cr < uw * 0.6 && (cl > 100 || cr > 110)) { if (cr > 110) cr--; else cl--; }
+    v.colL = cl; v.colR = cr;
+    v.W = (uw - cl - cr) / v.s;
+    v.ox = I.l + cl; v.oy = I.t;
+    cxR = v.W + (cr / v.s) / 2;
+    v.ui = { dialX: cxR, dialY: 118, dialR: 40, mainX: cxR, mainY: 328, mainR: 38, angLX: cxR - 26, angLY: 186, angRX: cxR + 26, angRY: 186 };
+  } else {
+    v.s = Math.min(uw / 390, uh / 844);
+    v.ox = I.l + (uw - 390 * v.s) / 2; v.oy = I.t + (uh - 844 * v.s) / 2;
+    v.ui = { dialX: 200, dialY: 736, dialR: 62, mainX: 334, mainY: 774, mainR: 38, angLX: 38, angLY: 774, angRX: 92, angRY: 774 };
+  }
+  // 螢幕在邏輯座標中的範圍(含左右欄與邊界外),供 fishdraw 補底色
+  v.bg = { x0: -v.ox / v.s, y0: -v.oy / v.s, x1: (sw - v.ox) / v.s, y1: (sh - v.oy) / v.s };
+  return v;
+}
+
+// 深度層與水面:直版水底固定 690;橫版水底 = H − 40。
+function fishLayerOf(W, H, portrait) {
+  var surf = Math.round(H * 0.18), fl = portrait ? 690 : H - 40, span = fl - surf,
     l1 = surf + Math.round(span * 218 / 648), l2 = surf + Math.round(span * 438 / 648);
-  return {
-    1: [surf, l1], 2: [l1, l2], 3: [l2, fl], floor: fl, surf: surf, W: W, H: H,
-    ui: { dialX: 200, dialY: 736, dialR: 62, mainX: 334, mainY: 774, mainR: 38, angX: 16, angY: 752 }
-  };
-})();
+  return { 1: [surf, l1], 2: [l1, l2], 3: [l2, fl], floor: fl, surf: surf, W: W, H: H };
+}
+
+var FISH_LAYER = {};
+function fishLayerSet(v) {
+  var L = fishLayerOf(v.W, v.H, v.orient === 'portrait'), k;
+  for (k in L) FISH_LAYER[k] = L[k];
+  FISH_LAYER.ui = v.ui;
+  FISH_LAYER.bg = v.bg;
+}
+fishLayerSet(fishLayoutCalc(390, 844, null));
 
 const FISH_RODS = {
   bamboo: { name:'竹竿', ang:45, cap:3, reel:1.0, note:'無特殊能力,預設' }

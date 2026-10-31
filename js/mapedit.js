@@ -233,19 +233,8 @@ applyTemplate = function (id) {
 
 function initMapEdit() {
   const top = document.getElementById('topbar');
-  if (!top || document.getElementById('boardSwitch')) return;
-  const wrap = document.createElement('span');
-  wrap.id = 'boardSwitch';
-  wrap.innerHTML =
-    '<button data-board="estate" title="經營布置(領地、生產、美觀)"><span class="ic">🏘</span><span class="lbl">經營布置</span></button>' +
-    '<button data-board="camp" title="戰鬥布置(被攻打時的戰陣)"><span class="ic">⚔</span><span class="lbl">戰鬥布置</span></button>' +
-    '<i id="campDot" class="vdot none"></i>';
-  const title = document.getElementById('title');
-  top.insertBefore(wrap, title ? title.nextSibling : top.firstChild);
-  wrap.addEventListener('click', e => {
-    const b = e.target.closest('button');
-    if (b) setBoardMode(b.getAttribute('data-board'));
-  });
+  if (!top || document.getElementById('modeBtn')) return;
+  cornerBuild();
 
   const btnHelp = document.createElement('button');
   btnHelp.id = 'btnToolHelp';
@@ -304,11 +293,220 @@ function initMapEdit() {
   mapeditUpdateDot();
 }
 
-function updateBoardSwitch() {
-  const cur = game.mode === 'battleDesign' ? 'camp' : 'estate';
-  document.querySelectorAll('#boardSwitch button').forEach(b => {
-    b.classList.toggle('on', b.getAttribute('data-board') === cur);
+// 角落操作群(A'):左下 經營/戰鬥布置鈕 + 其正上方 ⚔ 戰鬥鈕與選單;右下 🌤 季節時段浮層。位置全部由 CSS 固定
+function cornerBuild() {
+  if (document.getElementById('modeBtn')) return;
+  const mode = document.createElement('button');
+  mode.id = 'modeBtn';
+  mode.className = 'corner';
+  mode.title = '切換經營布置 / 戰鬥布置';
+  mode.icEl = document.createElement('span');
+  mode.icEl.className = 'ic';
+  mode.nmEl = document.createElement('span');
+  mode.nmEl.className = 'nm';
+  mode.appendChild(mode.icEl);
+  mode.appendChild(mode.nmEl);
+  const dot = document.createElement('i');
+  dot.id = 'campDot';
+  dot.className = 'vdot none';
+  mode.appendChild(dot);
+  mode.addEventListener('click', () => setBoardMode(game.mode === 'battleDesign' ? 'estate' : 'camp'));
+  document.body.appendChild(mode);
+
+  const menu = document.createElement('div');
+  menu.id = 'fightMenu';
+  menu.hidden = true;
+  menu.addEventListener('pointerdown', e => e.stopPropagation());
+  menu.addEventListener('click', onFightMenuClick);
+  document.body.appendChild(menu);
+
+  const pop = document.createElement('div');
+  pop.id = 'seasonPop';
+  pop.hidden = true;
+  pop.addEventListener('pointerdown', e => e.stopPropagation());
+  pop.addEventListener('click', onSeasonPopClick);
+  document.body.appendChild(pop);
+  const sbtn = document.createElement('button');
+  sbtn.id = 'seasonBtn';
+  sbtn.className = 'corner';
+  sbtn.title = '季節與時段';
+  sbtn.textContent = '🌤';
+  sbtn.addEventListener('click', () => cornerSeasonToggle());
+  document.body.appendChild(sbtn);
+
+  document.addEventListener('pointerdown', e => {
+    if (!menu.hidden && !e.target.closest('#fightMenu, #btnAttack')) cornerFightClose();
+    if (!pop.hidden && !e.target.closest('#seasonPop, #seasonBtn')) cornerSeasonClose();
   });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { cornerFightClose(); cornerSeasonClose(); }
+  });
+  if (typeof setInterval === 'function') setInterval(cornerSync, 300);
+  cornerSync();
+}
+
+// 飛行模式 / 進攻 / 回放 / 沙盤 / 釣魚時隱藏角落群(atkSync 另外處理 ⚔ 鈕的 atk 狀態)
+function cornerHidden() {
+  const b = document.body;
+  const cls = b && b.classList && (b.classList.contains('atk-mode') || b.classList.contains('replay-mode') || b.classList.contains('sandbox'));
+  return !!cls || (typeof game !== 'undefined' && (game.mode === 'fishing' || game.mode === 'attack' || game.mode === 'replay'));
+}
+
+function cornerSync() {
+  const off = cornerHidden();
+  ['modeBtn', 'seasonBtn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.hidden = off;
+  });
+  if (off) {
+    cornerFightClose();
+    cornerSeasonClose();
+  }
+  if (typeof atkSync === 'function') atkSync();
+  updateBoardSwitch();
+}
+
+function updateBoardSwitch() {
+  const b = document.getElementById('modeBtn');
+  if (!b || !b.icEl) return;
+  const camp = game.mode === 'battleDesign';
+  b.classList.toggle('camp', camp);
+  b.icEl.textContent = camp ? '⚔' : '🏘';
+  b.nmEl.textContent = camp ? '戰鬥布置' : '經營';
+}
+
+function cornerFightOpen() {
+  const menu = document.getElementById('fightMenu');
+  if (!menu) return;
+  menu.textContent = '';
+  menu.appendChild(cornerMenuBtn('rand', '🎲 隨機戰鬥'));
+  menu.appendChild(cornerMenuBtn('friend', '🤝 朋友邀請碼'));
+  const row = document.createElement('div');
+  row.id = 'fmFriend';
+  row.className = 'fm-friend';
+  row.hidden = true;
+  const input = document.createElement('input');
+  input.id = 'fmCode';
+  input.placeholder = '輸入邀請碼';
+  input.maxLength = 32;
+  input.setAttribute('autocomplete', 'off');
+  row.appendChild(input);
+  row.appendChild(cornerMenuBtn('paste', '貼上'));
+  row.appendChild(cornerMenuBtn('send', '送出'));
+  menu.appendChild(row);
+  const rb = document.getElementById('btnReport');
+  if (rb && !rb.hidden) menu.appendChild(cornerMenuBtn('report', '📜 戰報／錄影'));
+  menu.hidden = false;
+}
+
+function cornerMenuBtn(act, label) {
+  const b = document.createElement('button');
+  b.setAttribute('data-fm', act);
+  b.textContent = label;
+  return b;
+}
+
+function cornerFightClose() {
+  const menu = document.getElementById('fightMenu');
+  if (menu) menu.hidden = true;
+}
+
+function cornerToggleFight() {
+  const menu = document.getElementById('fightMenu');
+  if (!menu) return;
+  if (menu.hidden) cornerFightOpen();
+  else cornerFightClose();
+}
+
+function onFightMenuClick(e) {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const act = b.getAttribute('data-fm');
+  if (act === 'rand') {
+    cornerFightClose();
+    if (typeof atk !== 'undefined' && atk.open && typeof atkClosePanel === 'function') atkClosePanel();
+    else if (typeof atkOpenList === 'function') atkOpenList();
+  } else if (act === 'friend') {
+    const row = document.getElementById('fmFriend');
+    if (row) row.hidden = !row.hidden;
+  } else if (act === 'paste') {
+    const input = document.getElementById('fmCode');
+    try {
+      navigator.clipboard.readText().then(t => { if (input) input.value = String(t).trim(); })
+        .catch(() => showToast('無法讀取剪貼簿，請手動輸入'));
+    } catch (err) {
+      showToast('無法讀取剪貼簿，請手動輸入');
+    }
+  } else if (act === 'send') {
+    const input = document.getElementById('fmCode');
+    if (!input || !input.value.trim()) {
+      showToast('請先輸入邀請碼');
+      return;
+    }
+    showToast('朋友對戰即將開放');
+  } else if (act === 'report') {
+    cornerFightClose();
+    const rb = document.getElementById('btnReport');
+    if (rb) rb.click();
+  }
+}
+
+// 🌤 季節與時段浮層:半透明、貼右下角、非全螢幕遮罩;季節沿用 stApplySeason(ui 的 selSeason change),時段沿用 ART_TOD 設定
+const CORNER_SEASONS = [['spring', '春'], ['summer', '夏'], ['autumn', '秋'], ['winter', '冬']];
+const CORNER_TODS = [['auto', '自動'], ['dawn', '早'], ['noon', '日'], ['dusk', '昏'], ['night', '夜']];
+
+function cornerSeasonRender() {
+  const pop = document.getElementById('seasonPop');
+  if (!pop) return;
+  pop.textContent = '';
+  const tod = typeof stReadTodLock === 'function' ? stReadTodLock() : 'auto';
+  const rowOf = (list, cur, kind) => {
+    const row = document.createElement('div');
+    row.className = 'sp-row';
+    list.forEach(it => {
+      const b = document.createElement('button');
+      b.setAttribute('data-' + kind, it[0]);
+      b.textContent = it[1];
+      if (it[0] === cur) b.className = 'on';
+      row.appendChild(b);
+    });
+    return row;
+  };
+  pop.appendChild(rowOf(CORNER_SEASONS, typeof currentSeason === 'string' ? currentSeason : '', 'season'));
+  pop.appendChild(rowOf(CORNER_TODS, tod, 'tod'));
+}
+
+function onSeasonPopClick(e) {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const s = b.getAttribute('data-season');
+  const t = b.getAttribute('data-tod');
+  if (s !== null) {
+    if (typeof settingsSet === 'function') settingsSet('seasonMode', 'manual');
+    if (typeof stApplySeason === 'function') stApplySeason(s);
+  } else if (t !== null) {
+    ART_TOD = t;
+  }
+  cornerSeasonRender();
+}
+
+function cornerSeasonOpen() {
+  const pop = document.getElementById('seasonPop');
+  if (!pop) return;
+  cornerSeasonRender();
+  pop.hidden = false;
+}
+
+function cornerSeasonClose() {
+  const pop = document.getElementById('seasonPop');
+  if (pop) pop.hidden = true;
+}
+
+function cornerSeasonToggle() {
+  const pop = document.getElementById('seasonPop');
+  if (!pop) return;
+  if (pop.hidden) cornerSeasonOpen();
+  else cornerSeasonClose();
 }
 
 // 切換棋盤名與模式。戰鬥陣尚未建立(campBoard() 為 null)時先開三選一
@@ -338,6 +536,7 @@ function enterBoard(to) {
   updateBoardSwitch();
   mapeditUpdateDot();
   saveWorld();
+  showToast('已切到' + (to === 'camp' ? '戰鬥布置' : '經營布置'));
 }
 
 function pickCampStart(k) {

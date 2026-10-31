@@ -16,6 +16,7 @@ function boot() {
   if (sec > 0) reportOffline(sec, before);
   flushTechDone();
   updateResBar();
+  applyStartZoom();
   const palace = world.objects.find(o => o.type === 'palace');
   if (palace) centerOnCell(palace.x + 2, palace.y + 2);
   else centerOnCell(MAP_W >> 1, MAP_H >> 1);
@@ -91,3 +92,12 @@ function reportOffline(sec, before) {
 
 if (document.readyState !== 'loading') boot();
 else document.addEventListener('DOMContentLoaded', boot);
+
+// 關閉瀏覽器原生行為(長按選字/選單/翻譯提示/拖曳/iOS 捏合縮放),讓畫面像原生遊戲
+(function lockBrowserUi() {
+  const editable = t => !!(t && t.closest && t.closest('input, textarea, [contenteditable]'));
+  document.addEventListener('contextmenu', e => { if (!editable(e.target)) e.preventDefault(); });
+  document.addEventListener('selectstart', e => { if (!editable(e.target)) e.preventDefault(); });
+  document.addEventListener('dragstart', e => e.preventDefault());
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(n => document.addEventListener(n, e => e.preventDefault()));
+})();

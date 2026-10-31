@@ -21,7 +21,7 @@ const TERRAIN_TOOLS = {
   erase: { name: '拆除', icon: '🧹', drag: true }
 };
 
-const ui = { tool: null, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco', buildCat: '常用' };
+const ui = { tool: null, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco', buildCat: '常用', objSel: null, objMove: null };
 
 const TERRAIN_OF = { road: T_ROAD, grass: T_GRASS, lake: T_LAKE, river: T_RIVER };
 const TERRAIN_NAME = ['草地', '湖', '河', '道路'];
@@ -29,19 +29,83 @@ const TERRAIN_NAME = ['草地', '湖', '河', '道路'];
 // 指標手勢狀態: mode = null | pan | tool | pending | paint | pinch
 const gs = { ptrs: new Map(), mode: null, primary: null, pinch: null, timer: 0, op: null, last: null };
 let toastEl = null, toastTimer = 0;
-let lastResHtml = '', lastShopHtml = '', lastPendHtml = '', lastTechHtml = '';
+let lastResHtml = '', lastShopHtml = '', lastPendHtml = '', lastTechHtml = '', lastObjHtml = '';
 
 function initUI(canvas) {
   toastEl = document.createElement('div');
   toastEl.id = 'toast';
   document.body.appendChild(toastEl);
   buildToolbar();
+  initFoldUI();
   setTool(null);
   document.getElementById('btnRot').textContent = DIR_ARROWS[ui.rot];
   bindEvents(canvas);
   syncSeasonSelect();
   updateResBar();
   if (typeof initMapEdit === 'function') initMapEdit();
+}
+
+// 收合鈕與精簡介面:頂列 / 底部建築列可收成一顆小圓鈕。收合鈕位置由 CSS 固定(直向/橫向各一套),展開與否都不移動
+const UI_PREF = { tp: 'lorddomain.ui.tpFold', tb: 'lorddomain.ui.tbFold', compact: 'lorddomain.ui.compact' };
+function uiPrefGet(key) {
+  try {
+    return localStorage.getItem(key) === '1';
+  } catch (e) {
+    console.warn('[ui] pref read failed', e);
+    return false;
+  }
+}
+function uiPrefSet(key, on) {
+  try {
+    localStorage.setItem(key, on ? '1' : '0');
+  } catch (e) {
+    console.warn('[ui] pref write failed', e);
+  }
+}
+function uiFoldLabel(btn, collapsed, top) {
+  // 頂列展開為 ▲(收起)、收合為 ▼(展開);底部列相反
+  const up = top ? !collapsed : collapsed;
+  btn.textContent = up ? '▲' : '▼';
+  const label = (top ? '頂列' : '建築列') + (collapsed ? '展開' : '收合');
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+}
+function uiApplyPrefs() {
+  const b = document.body;
+  if (!b) return;
+  b.classList.toggle('tp-fold', uiPrefGet(UI_PREF.tp));
+  b.classList.toggle('tb-fold', uiPrefGet(UI_PREF.tb));
+  b.classList.toggle('ui-compact', uiPrefGet(UI_PREF.compact));
+  const tp = document.getElementById('tpFold');
+  const tb = document.getElementById('tbFold');
+  if (tp) uiFoldLabel(tp, b.classList.contains('tp-fold'), true);
+  if (tb) uiFoldLabel(tb, b.classList.contains('tb-fold'), false);
+}
+function uiToggleFold(which) {
+  const key = which === 'top' ? UI_PREF.tp : UI_PREF.tb;
+  uiPrefSet(key, !uiPrefGet(key));
+  uiApplyPrefs();
+  if (which !== 'top') buildCatBar();
+}
+function initFoldUI() {
+  [['tpFold', 'top'], ['tbFold', 'bottom']].forEach(p => {
+    const btn = document.createElement('button');
+    btn.id = p[0];
+    btn.className = 'fold-btn';
+    btn.addEventListener('click', () => uiToggleFold(p[1]));
+    document.body.appendChild(btn);
+  });
+  uiApplyPrefs();
+}
+function uiGetCompact() {
+  return uiPrefGet(UI_PREF.compact);
+}
+// 精簡介面:按鈕縮小;開啟時預設收合底部建築列
+function uiSetCompact(on) {
+  uiPrefSet(UI_PREF.compact, on);
+  if (on) uiPrefSet(UI_PREF.tb, true);
+  uiApplyPrefs();
+  buildCatBar();
 }
 
 function bindEvents(canvas) {
@@ -67,6 +131,12 @@ function bindEvents(canvas) {
   const pendBar = document.getElementById('pendBar');
   pendBar.addEventListener('pointerdown', e => e.stopPropagation());
   pendBar.addEventListener('click', onPendClick);
+  const objBar = document.createElement('div');
+  objBar.id = 'objBar';
+  objBar.hidden = true;
+  document.body.appendChild(objBar);
+  objBar.addEventListener('pointerdown', e => e.stopPropagation());
+  objBar.addEventListener('click', onObjClick);
 
   document.getElementById('btnShop').addEventListener('click', () => toggleShop());
   document.getElementById('btnRot').addEventListener('click', () => rotate());
@@ -109,6 +179,13 @@ function bindEvents(canvas) {
       if (pend.sel >= 0 || pend.moving) {
         pend.sel = -1;
         pend.moving = false;
+        preview.visible = false;
+        updatePendBar();
+        return;
+      }
+      if (ui.objSel) {
+        ui.objSel = null;
+        ui.objMove = null;
         preview.visible = false;
         updatePendBar();
         return;
@@ -250,12 +327,14 @@ function setTool(id) {
   document.getElementById('info').textContent = toolInfo();
   pend.sel = -1;
   pend.moving = false;
+  ui.objSel = null;
+  ui.objMove = null;
   updatePendBar();
 }
 
 function toolInfo() {
   const t = ui.tool;
-  if (t === null) return '瀏覽模式：拖曳移動、滾輪／雙指縮放';
+  if (t === null) return ui.objMove ? '移動中：點選新位置放下（再按 ✥ 或 Esc 取消）' : '瀏覽模式：拖曳移動、滾輪／雙指縮放';
   const hl = toolHelpLine(t);
   if (hl) return hl;
   if (isCampTool(t)) return CAMP_TOOLS[t].name;
@@ -272,6 +351,11 @@ function toolInfo() {
 function rotate() {
   if (pend.sel >= 0) {
     pendRotateSel();
+    updatePendBar();
+    return;
+  }
+  if (objSelIndex() >= 0) {
+    objRotate();
     updatePendBar();
     return;
   }
@@ -314,6 +398,12 @@ function updatePreviewAt(sx, sy) {
     preview.rot = o.rot;
     preview.visible = true;
     preview.ok = canPlacePending(o.type, c.x, c.y, o.rot, pend.sel);
+  } else if (ui.objMove && objSelIndex() >= 0) {
+    const o = ui.objMove;
+    preview.tool = o.type;
+    preview.rot = o.rot;
+    preview.visible = true;
+    preview.ok = objFitAt(objSelIndex(), c.x, c.y, o.rot);
   } else {
     preview.tool = ui.tool;
     preview.rot = ui.rot;
@@ -351,7 +441,7 @@ function pendWarnText() {
 }
 
 function toolActive() {
-  return ui.tool !== null || pend.moving;
+  return ui.tool !== null || pend.moving || !!ui.objMove;
 }
 
 // 費用不足：一次操作（含拖曳）只響一次、提示一次
@@ -529,6 +619,10 @@ function applyToolAt(x, y) {
 function applyOne(x, y) {
   if (pend.moving && pend.sel >= 0) {
     pendMoveTo(x, y);
+    return false;
+  }
+  if (ui.objMove) {
+    objMoveTo(x, y);
     return false;
   }
   const t = ui.tool;
@@ -748,7 +842,24 @@ function tapObjectAt(sx, sy) {
   const c = screenToCell(sx, sy);
   if (!c) return;
   const n = world.occ[idx(c.x, c.y)];
-  if (n && world.objects[n - 1].type === LAB_TYPE) toggleTechPanel(true);
+  if (!n) {
+    if (ui.objSel) {
+      ui.objSel = null;
+      ui.objMove = null;
+      updatePendBar();
+    }
+    return;
+  }
+  const o = world.objects[n - 1];
+  if (o.type === LAB_TYPE) {
+    toggleTechPanel(true);
+    return;
+  }
+  if (objBarEligible()) {
+    ui.objSel = o;
+    ui.objMove = null;
+    updatePendBar();
+  }
 }
 
 function onShopClick(e) {
@@ -1137,6 +1248,7 @@ function updatePendBar() {
   if (!n) {
     bar.hidden = true;
     lastPendHtml = '';
+    updateObjBar();
     return;
   }
   const total = pendTotal();
@@ -1160,6 +1272,141 @@ function updatePendBar() {
   }
   bar.hidden = false;
   bar.style.bottom = (bottomStackPx() + 6) + 'px';
+  updateObjBar();
+}
+
+// 經營布置瀏覽模式點選已蓋建築:底部操作列(旋轉 / 移動 / 拆除 / 完成)。位於待購條上方(若有)
+function objBarEligible() {
+  return game.mode === 'estate' && ui.tool === null && !hide.on && !game.backup;
+}
+function objSelIndex() {
+  return ui.objSel ? world.objects.indexOf(ui.objSel) : -1;
+}
+function objFailReason(n, x, y, rot) {
+  const o = world.objects[n], d = OBJECTS[o.type];
+  const [w, h] = footprint(o.type, rot);
+  if (x < 0 || y < 0 || x + w > MAP_W || y + h > MAP_H) return '超出邊界';
+  const h0 = world.height[idx(x, y)];
+  for (let yy = y; yy < y + h; yy++) {
+    for (let xx = x; xx < x + w; xx++) {
+      const i = idx(xx, yy);
+      if (pend.occ[i]) return '與待購建築重疊';
+      if (world.occ[i] && world.occ[i] !== n + 1) return '已有物件';
+      if (world.height[i] !== h0) return '高度不一致';
+      if (d.on.indexOf(world.terrain[i]) < 0) return '地形不符';
+    }
+  }
+  return '未知原因';
+}
+function objPost() {
+  rebuildOcc();
+  saveWorld();
+  updateResBar();
+  mapeditRefresh();
+}
+function objRotate() {
+  const n = objSelIndex();
+  if (n < 0) return false;
+  const o = world.objects[n];
+  for (let k = 1; k <= 3; k++) {
+    const r = (o.rot + k) % 4;
+    if (objFitAt(n, o.x, o.y, r)) {
+      o.rot = r;
+      o.facing = r;
+      objPost();
+      return true;
+    }
+  }
+  showToast('此處空間不足，無法旋轉');
+  return false;
+}
+function objMoveTo(x, y) {
+  const n = objSelIndex();
+  if (n < 0) {
+    ui.objMove = null;
+    return false;
+  }
+  const o = world.objects[n];
+  if (!objFitAt(n, x, y, o.rot)) {
+    showToast('無法移到此處：' + objFailReason(n, x, y, o.rot));
+    return false;
+  }
+  o.x = x;
+  o.y = y;
+  ui.objMove = null;
+  preview.visible = false;
+  objPost();
+  showToast('已移動 ' + OBJECTS[o.type].name);
+  return true;
+}
+function objDemolish() {
+  const n = objSelIndex();
+  if (n < 0) return;
+  const o = world.objects[n];
+  const name = OBJECTS[o.type].name;
+  const refund = refundOf(o.type);
+  const labBusy = o.type === LAB_TYPE && world.tech.cur;
+  if (!confirm('拆除「' + name + '」？退還 ' + costText(refund) + '（依拆除規則，約為造價的一半）。' +
+    (labBusy ? '\n科研院研發將暫停，重建後繼續。' : ''))) return;
+  removeObjectAt(o.x, o.y, true);
+  ui.objSel = null;
+  ui.objMove = null;
+  preview.visible = false;
+  if (typeof auPlay === 'function') auPlay('remove');
+  showToast('已拆除 ' + name + '，退還 ' + costText(refund));
+  objPost();
+}
+function updateObjBar() {
+  const bar = document.getElementById('objBar');
+  if (!bar) return;
+  let n = objSelIndex();
+  if (ui.objSel && (n < 0 || !objBarEligible())) {
+    ui.objSel = null;
+    ui.objMove = null;
+    n = -1;
+  }
+  if (n < 0) {
+    bar.hidden = true;
+    lastObjHtml = '';
+    return;
+  }
+  const o = world.objects[n], d = OBJECTS[o.type];
+  const mv = ui.objMove === o;
+  const html = '<div class="prow"><span class="pname">' + d.icon + ' ' + d.name + (mv ? '（點選新位置放下）' : '') + '</span>' +
+    '<button data-oact="rot">↻ 旋轉</button>' +
+    '<button data-oact="move"' + (mv ? ' class="on"' : '') + '>✥ 移動</button>' +
+    '<button data-oact="del" class="del">🗑 拆除</button>' +
+    '<button data-oact="done">完成</button></div>';
+  if (html !== lastObjHtml) {
+    lastObjHtml = html;
+    bar.innerHTML = html;
+  }
+  bar.hidden = false;
+  if (document.body.classList.contains('tb-fold')) {
+    bar.style.bottom = '';
+  } else {
+    const pb = document.getElementById('pendBar');
+    const up = pb && !pb.hidden ? pb.offsetHeight + 6 : 0;
+    bar.style.bottom = 'calc(' + (bottomStackPx() + 6 + up) + 'px + env(safe-area-inset-bottom))';
+  }
+}
+function onObjClick(e) {
+  const b = e.target.closest('button');
+  if (!b) return;
+  audioUnlock();
+  const n = objSelIndex();
+  if (n < 0) return;
+  const act = b.getAttribute('data-oact');
+  const o = world.objects[n];
+  if (act === 'rot') objRotate();
+  else if (act === 'move') ui.objMove = ui.objMove === o ? null : o;
+  else if (act === 'del') objDemolish();
+  else if (act === 'done') {
+    ui.objSel = null;
+    ui.objMove = null;
+  }
+  preview.visible = false;
+  updateResBar();
 }
 
 function onPendClick(e) {

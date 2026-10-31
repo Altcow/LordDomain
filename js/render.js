@@ -33,6 +33,16 @@ function updateZoomMin() {
   if (view.zoom < zoomMin) view.zoom = zoomMin;
 }
 
+// 手機(窗寬 <= 600 或觸控裝置)開機時的預設縮放:可視面積約 1.6 倍;不小於 zoomMin。僅開機套用一次,使用者手動縮放不受影響
+const MOBILE_START_ZOOM = 0.55;
+function isMobileLayout() {
+  return viewport.w <= 600 || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+}
+function applyStartZoom() {
+  if (!isMobileLayout()) return;
+  view.zoom = Math.max(zoomMin, view.zoom * MOBILE_START_ZOOM);
+}
+
 function isoX(gx, gy) { return (gx - gy) * TW / 2; }
 function isoY(gx, gy, h) { return (gx + gy) * TH / 2 - h * HL; }
 

@@ -83,7 +83,6 @@ function lifeActive() {
   if (!LIFE.on || !LIFE_DENSITY[LIFE.density]) return false;
   if (mode !== 'estate' && mode !== 'visit') return false;
   if (typeof hide !== 'undefined' && hide.on) return false;
-  if (typeof pano !== 'undefined' && pano.open) return false;
   return true;
 }
 
@@ -964,11 +963,10 @@ function lifeDrawOne(ctx, n, res, tod, season, useArt, alpha) {
 // 依對角線分桶繪製(每個對角線一次呼叫,總成本 O(n));縮放分三級:正常 / <0.5 簡化 / <0.35 色點
 function lifeDrawDiag(ctx, d, time) {
   if (!LIFE.active || !LIFE.buck) return;
-  if (typeof pano !== 'undefined' && pano.open) return;
   const list = LIFE.buck[d];
   if (!list || !list.length) return;
   const t0 = lifeNow();
-  const z = view.zoom, dpr = viewport.dpr || 1;
+  const z = (typeof pano !== 'undefined' && pano.open) ? Math.max(view.zoom, 0.5) : view.zoom, dpr = viewport.dpr || 1; // 全景截圖也要有人,以正常細緻度繪製
   const dots = z < 0.35;
   LIFE.small = z < 0.5;
   const useArt = !dots && z >= 0.5 && typeof ART !== 'undefined' && !!ART.chibiPose && !!ART.resBucket;

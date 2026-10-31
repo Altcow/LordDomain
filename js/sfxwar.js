@@ -49,7 +49,13 @@ const SFXW_KINDS = {
   woodCrack: { pri: 2, gap: 0.3,  conc: 2, gain: 0.45, rec: 'woodCrack' },
   stoneChip: { pri: 2, gap: 0.3,  conc: 2, gain: 0.45, rec: 'stoneChip' },
   grunt:     { pri: 2, gap: 3.0,  conc: 1, gain: 0.45, rec: 'grunt' },
-  shieldHit: { pri: 2, gap: 3.0,  conc: 1, gain: 0.45, rec: 'shieldHit' }
+  shieldHit: { pri: 2, gap: 3.0,  conc: 1, gain: 0.45, rec: 'shieldHit' },
+  // 放兵音(sfxwarDeploy):floor 為本種最短間隔下限(秒),覆寫 SFXW_MIN_GAP,讓連續放兵可到 90 ms
+  deployShout:      { pri: 1, gap: 0.09, floor: 0.09, conc: 4, gain: 0.5,  rec: 'shout' },
+  deployShoutSharp: { pri: 1, gap: 0.09, floor: 0.09, conc: 4, gain: 0.5,  rec: 'shoutSharp' },
+  deployCall:       { pri: 1, gap: 0.09, floor: 0.09, conc: 4, gain: 0.45, rec: 'lightCall' },
+  deployHorse:      { pri: 1, gap: 0.09, floor: 0.09, conc: 3, gain: 0.55, rec: 'horse' },
+  deploySiege:      { pri: 1, gap: 0.09, floor: 0.09, conc: 2, gain: 0.7,  rec: 'siegeDrop' }
 };
 
 // 發射者 su → 音效變體(刀盾兵刀劈與盾擊、長戟矛刺、民兵木棍輕擊、輕騎/斥候輕蹄、突騎重蹄、衝車重木撞擊)
@@ -215,6 +221,38 @@ const SFXW_REC = {
     { w: 'sine', t: 0.00, d: 0.6, f0: 90, f1: 50, a: 0.7, tau: 0.22 },
     { w: 'sine', t: 0.65, d: 0.7, f0: 80, f1: 42, a: 0.6, tau: 0.25 },
     { w: 'tri', t: 0.35, d: 0.9, f0: 196, f1: 185, a: 0.12, tau: 0.4 }
+  ],
+  // 放兵:步兵吶喊(低頻共振 + 帶噪氣聲)、槍兵較尖的吶喊、弓手號令、騎兵馬嘶 + 蹄聲、器械木響 + 重落地
+  shout: [
+    { w: 'sine', t: 0, d: 0.3, f0: 170, f1: 120, a: 0.3, tau: 0.1 },
+    { w: 'tri', t: 0, d: 0.26, f0: 340, f1: 260, a: 0.12, tau: 0.09 },
+    { w: 'noise', t: 0, d: 0.28, a: 0.18, tau: 0.09, hp: 400, lp: 1800 }
+  ],
+  shoutSharp: [
+    { w: 'sine', t: 0, d: 0.26, f0: 260, f1: 190, a: 0.25, tau: 0.09 },
+    { w: 'tri', t: 0, d: 0.24, f0: 520, f1: 420, a: 0.14, tau: 0.08 },
+    { w: 'noise', t: 0, d: 0.24, a: 0.18, tau: 0.08, hp: 800, lp: 2800 },
+    { w: 'sine', t: 0.02, d: 0.06, f0: 1400, a: 0.05, tau: 0.02 }
+  ],
+  lightCall: [
+    { w: 'sine', t: 0, d: 0.24, f0: 440, f1: 330, a: 0.2, tau: 0.09 },
+    { w: 'tri', t: 0, d: 0.2, f0: 660, f1: 520, a: 0.08, tau: 0.08 },
+    { w: 'noise', t: 0, d: 0.16, a: 0.07, tau: 0.06, hp: 1500, lp: 4000 }
+  ],
+  horse: [
+    { w: 'sine', t: 0, d: 0.42, f0: 680, f1: 1050, a: 0.14, tau: 0.2 },
+    { w: 'tri', t: 0, d: 0.4, f0: 1360, f1: 1900, a: 0.04, tau: 0.18 },
+    { w: 'noise', t: 0, d: 0.4, a: 0.07, tau: 0.18, hp: 1500, lp: 4500, lp1: 2500 },
+    { w: 'sine', t: 0.5, d: 0.12, f0: 110, f1: 70, a: 0.3, tau: 0.035 },
+    { w: 'noise', t: 0.5, d: 0.04, a: 0.12, tau: 0.01, hp: 1200, lp: 3000 },
+    { w: 'sine', t: 0.64, d: 0.12, f0: 110, f1: 70, a: 0.28, tau: 0.035 },
+    { w: 'noise', t: 0.64, d: 0.04, a: 0.12, tau: 0.01, hp: 1200, lp: 3000 }
+  ],
+  siegeDrop: [
+    { w: 'noise', t: 0, d: 0.5, a: 0.16, tau: 0.2, hp: 300, lp: 1400, lp1: 700 },
+    { w: 'sine', t: 0, d: 0.35, f0: 150, f1: 95, a: 0.08, tau: 0.18 },
+    { w: 'sine', t: 0.45, d: 0.35, f0: 80, f1: 38, a: 0.55, tau: 0.12 },
+    { w: 'noise', t: 0.45, d: 0.3, a: 0.3, tau: 0.09, lp: 350 }
   ]
 };
 
@@ -345,7 +383,7 @@ function sfxwPlay(kind, opt) {
   const densMul = cfg.density === 'low' ? 0.5 : (cfg.density === 'high' ? 1.5 : 1);
   const mul = densMul * (opt.speedMul || 1);
   const now = sfxwNow();
-  const gap = Math.max(SFXW_MIN_GAP, def.gap / mul);
+  const gap = Math.max(def.floor != null ? def.floor : SFXW_MIN_GAP, def.gap / mul);
   const last = SFXW.lastPlay[kind];
   if (last !== undefined && now - last < gap) return sfxwDrop(kind);
 
@@ -558,6 +596,37 @@ function sfxwTick() {
 // 錄影快轉 / 拖曳時呼叫(battleui 可選掛點);on = true 時不發聲但仍推進指標
 function sfxwarSeek(on) {
   SFXW.muted = !!on;
+}
+
+// 兵種 id → 放兵音種類(槍兵獨立音色;其餘依 cls / profile:器械、騎兵、弓手,其他為步兵吶喊)
+const SFXW_DEPLOY_OVR = { changji: 'deployShoutSharp' };
+function sfxwDeployKind(u) {
+  const def = typeof UNITS === 'object' && UNITS ? UNITS[u] : null;
+  if (!def) return null;
+  if (SFXW_DEPLOY_OVR[u]) return SFXW_DEPLOY_OVR[u];
+  if (def.cls === 'siege') return 'deploySiege';
+  if (def.cls === 'cavalry' || def.profile === 'horse') return 'deployHorse';
+  if (def.cls === 'archer') return 'deployCall';
+  return 'deployShout';
+}
+
+// 放兵成功時呼叫(一隊只響一聲)。count 為該隊人數(squad),音量隨人數略增且上限 1.25 倍;
+// gx / gy 為格座標(可省略,省略時不做聲像)。連續放兵最短 90 ms;回傳是否實際發聲
+function sfxwarDeploy(unitId, count, gx, gy) {
+  try {
+    const kind = sfxwDeployKind(unitId);
+    if (!kind) return false;
+    const now = sfxwNow();
+    if (SFXW.lastDeploy !== undefined && now - SFXW.lastDeploy < 0.09) return false;
+    const gain = Math.min(1.25, 1 + 0.08 * Math.log2(Math.max(1, count | 0)));
+    const sp = sfxwSpatial(gx, gy);
+    const ok = sfxwPlay(kind, { gain: gain * sp.gain, pan: sp.has ? sp.pan : null });
+    if (ok) SFXW.lastDeploy = now;
+    return ok;
+  } catch (e) {
+    console.warn('[sfxwar] deploy failed', e);
+    return false;
+  }
 }
 
 if (typeof setInterval === 'function') {

@@ -1,5 +1,5 @@
 // fishdraw.js — 釣魚繪製(F0):水下剖面、船與漁人、魚的向量圖、線與鉤、瞄準虛線、角度盤、拉力條、結果卡。
-// 座標為邏輯 390×844;縮放由 fishui.js 在呼叫前用 ctx.setTransform 設好。內部輔助函式皆以 fd 開頭。
+// 座標為邏輯座標(直版 390×844;橫版高 390、寬依長寬比),全部由 FISH_LAYER 推算;縮放與位移由 fishui.js 在呼叫前用 ctx.setTransform 設好。內部輔助函式皆以 fd 開頭。
 var fdSpr = {};
 var fdPal = {
   day:   { sky: ['#9fd9ee', '#dff4fa'], water: ['#6fd0c8', '#2f93b0', '#1f6a90', '#154a6a'], sand: '#d8c18c', rock: '#3b3428' },
@@ -175,37 +175,39 @@ function fdDial(c, ang, maxA) {
   c.restore();
 }
 
+// 結果卡:水平置中於世界區,頂緣距水面 60 邏輯 px(直版約與舊版 y=214 相同)。
 function fdCard(c, card) {
-  var a, col, name;
+  var a, col, name, cx = FISH_LAYER.W / 2, x0 = cx - 135, y0 = FISH_LAYER.surf + 60;
   if (!card) return;
   a = Math.min(1, card.t * 6);
   c.save();
   c.globalAlpha = a;
   c.fillStyle = 'rgba(12,20,30,.9)';
-  c.beginPath(); c.roundRect ? c.roundRect(60, 214, 270, 120, 14) : c.rect(60, 214, 270, 120); c.fill();
+  c.beginPath(); c.roundRect ? c.roundRect(x0, y0, 270, 120, 14) : c.rect(x0, y0, 270, 120); c.fill();
   c.textAlign = 'center'; c.textBaseline = 'middle';
   if (card.kind === 'catch') {
     col = FISH_RARITY[FISH[card.fi].rar].c;
     name = FISH[card.fi].name;
-    c.fillStyle = col; c.fillRect(60, 214, 270, 6);
-    fdFish(c, { sp: card.fi, len: 76, dir: 1 }, 150, 270);
+    c.fillStyle = col; c.fillRect(x0, y0, 270, 6);
+    fdFish(c, { sp: card.fi, len: 76, dir: 1 }, x0 + 90, y0 + 56);
     c.fillStyle = '#ffffff'; c.font = '700 20px sans-serif';
-    c.fillText(name + '  ' + card.cm + ' cm', 230, 262);
+    c.fillText(name + '  ' + card.cm + ' cm', cx + 35, y0 + 48);
     c.font = '600 13px sans-serif';
     c.fillStyle = '#ffd24a';
-    c.fillText('+' + card.pts + ' 分  ' + (card.isNew ? '新收錄!  ' : '') + (card.gold ? '金框' : ''), 230, 288);
+    c.fillText('+' + card.pts + ' 分  ' + (card.isNew ? '新收錄!  ' : '') + (card.gold ? '金框' : ''), cx + 35, y0 + 74);
   } else {
     c.fillStyle = '#ffffff'; c.font = '700 20px sans-serif';
-    c.fillText(card.kind === 'escape' ? '脫鉤了' : '空鉤', 195, 262);
+    c.fillText(card.kind === 'escape' ? '脫鉤了' : '空鉤', cx, y0 + 48);
     c.font = '13px sans-serif'; c.fillStyle = '#c9d3dd';
     var msg = { bottom: '撞到水底', obs: '撞到石頭', bounds: '鉤子飛出畫面', abort: '收回', escape: '魚掙脫了' };
-    c.fillText(msg[card.why] || '', 195, 290);
+    c.fillText(msg[card.why] || '', cx, y0 + 76);
   }
   c.restore();
 }
 
+// 拉力條:水平置中,位於水柱的中下段(依層高比例)。
 function fdTension(c, v) {
-  var x = 85, y = 372, w = 220, h = 14;
+  var x = (FISH_LAYER.W - 220) / 2, y = FISH_LAYER.surf + Math.round((FISH_LAYER.floor - FISH_LAYER.surf) * 0.55), w = 220, h = 14;
   c.save();
   c.fillStyle = 'rgba(12,20,30,.7)'; c.fillRect(x - 4, y - 22, w + 8, h + 30);
   c.fillStyle = '#ffffff'; c.font = '600 13px sans-serif'; c.textAlign = 'center';
@@ -221,7 +223,12 @@ function fdTension(c, v) {
 function fishDrawFrame(ctx, t) {
   var FL = FISH_LAYER, W = FL.W, H = FL.H, surf = FL.surf, fl = FL.floor, tod = fdTodKey(), P = fdPal[tod],
     g, i, x, o, f, y, j, wy, pr, tip, side, gm;
-  ctx.clearRect(0, 0, W, H);
+  // 先鋪滿整個螢幕的底色(橫版左右欄與直版留白),再把世界區剪裁出來;角度盤與結果卡另外繪製。
+  ctx.clearRect(FISH_LAYER.bg.x0, FISH_LAYER.bg.y0, FISH_LAYER.bg.x1 - FISH_LAYER.bg.x0, FISH_LAYER.bg.y1 - FISH_LAYER.bg.y0);
+  ctx.fillStyle = '#0c1622';
+  ctx.fillRect(FISH_LAYER.bg.x0, FISH_LAYER.bg.y0, FISH_LAYER.bg.x1 - FISH_LAYER.bg.x0, FISH_LAYER.bg.y1 - FISH_LAYER.bg.y0);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
   g = ctx.createLinearGradient(0, 0, 0, surf);
   g.addColorStop(0, P.sky[0]); g.addColorStop(1, P.sky[1]);
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, surf + 2);
@@ -244,7 +251,7 @@ function fishDrawFrame(ctx, t) {
   ctx.fillStyle = P.sand; ctx.fillRect(0, fl, W, 40);
   ctx.fillStyle = 'rgba(0,0,0,.12)';
   for (i = 0; i < 9; i++) { ctx.beginPath(); ctx.arc(20 + i * 46, fl + 14 + (i % 3) * 7, 5 + (i % 2) * 2, 0, Math.PI * 2); ctx.fill(); }
-  ctx.fillStyle = P.rock; ctx.fillRect(0, 730, W, H - 730);
+  ctx.fillStyle = P.rock; ctx.fillRect(0, fl + 40, W, H - fl - 40);
   // 障礙物
   for (i = 0; i < fs.obs.length; i++) {
     o = fs.obs[i];
@@ -328,10 +335,11 @@ function fishDrawFrame(ctx, t) {
     ctx.strokeStyle = '#ffd98a'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(fs.hook.pos[0], fs.hook.pos[1], 3, 0, Math.PI * 2); ctx.stroke();
   }
-  // 角度盤
+  if (fs.fight) fdTension(ctx, fs.fight.tension);
+  fdCard(ctx, fs.card);
+  ctx.restore();
+  // 角度盤在世界區之外也要能畫(橫版位於右欄),所以不受剪裁
   gm = fishGear().angMax;
   fdDial(ctx, fs.angle, gm);
   // 連擊、分數與清單在 DOM 的 HUD(fishui.js)顯示
-  if (fs.fight) fdTension(ctx, fs.fight.tension);
-  fdCard(ctx, fs.card);
 }
