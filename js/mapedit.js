@@ -717,7 +717,7 @@ function mapeditUpdateCap(cb) {
   const why = mapeditProgOn() && sum > max ? '(Lv' + prog.lv + ' 上限 ' + max + '，超出 ' + (sum - max) + ')' : '';
   el.textContent = '陣地 ' + sum + ' / ' + max + why;
   el.classList.toggle('over', sum > max);
-  el.style.bottom = (bottomStackPx() + 4) + 'px';
+  el.style.bottom = '';   // 位置由 CSS 的 top 決定;同時設 bottom 會把標籤拉成貫穿畫面的長條
 }
 
 // 編輯後節流 1 秒重算紅綠點(只在戰鬥布置模式)
