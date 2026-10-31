@@ -38,8 +38,24 @@ const SFXW_KINDS = {
   ambush:    { pri: 1, gap: 1.0,  conc: 1, gain: 0.6,  rec: 'gong' },
   partOpen:  { pri: 1, gap: 1.0,  conc: 1, gain: 0.6,  rec: 'gong2' },
   win:       { pri: 0, gap: 5.0,  conc: 1, gain: 0.7,  rec: 'win' },
-  lose:      { pri: 0, gap: 5.0,  conc: 1, gain: 0.7,  rec: 'lose' }
+  lose:      { pri: 0, gap: 5.0,  conc: 1, gain: 0.7,  rec: 'lose' },
+  // 兵種變體(sfxwVariant 依 shot 的發射者 su 選用)
+  blade:     { pri: 2, gap: 0.25, conc: 3, gain: 0.45, rec: 'blade' },
+  spear:     { pri: 2, gap: 0.25, conc: 3, gain: 0.45, rec: 'spear' },
+  stick:     { pri: 2, gap: 0.25, conc: 3, gain: 0.4,  rec: 'stick' },
+  hoofL:     { pri: 2, gap: 0.25, conc: 3, gain: 0.4,  rec: 'hoofL' },
+  hoofH:     { pri: 2, gap: 0.3,  conc: 2, gain: 0.55, rec: 'hoofH' },
+  ram:       { pri: 1, gap: 0.6,  conc: 1, gain: 0.8,  rec: 'ram' },
+  woodCrack: { pri: 2, gap: 0.3,  conc: 2, gain: 0.45, rec: 'woodCrack' },
+  stoneChip: { pri: 2, gap: 0.3,  conc: 2, gain: 0.45, rec: 'stoneChip' },
+  grunt:     { pri: 2, gap: 3.0,  conc: 1, gain: 0.45, rec: 'grunt' },
+  shieldHit: { pri: 2, gap: 3.0,  conc: 1, gain: 0.45, rec: 'shieldHit' }
 };
+
+// 發射者 su → 音效變體(刀盾兵刀劈與盾擊、長戟矛刺、民兵木棍輕擊、輕騎/斥候輕蹄、突騎重蹄、衝車重木撞擊)
+const SFXW_SU = { daodun: 'blade', changji: 'spear', militia: 'stick', qingqi: 'hoofL', chihou: 'hoofL', tuqi: 'hoofH', chongche: 'ram' };
+// 機率與冷卻:被擊中的悶哼 / 盾碎只偶爾出現(見 sfxwTick)
+const SFXW_HURT_P = 0.15;
 
 // 合成配方:layer = { w: sine|tri|square|noise, t 起點, d 長度, f0/f1 頻率(f1 省略同 f0),
 // a 振幅, tau 衰減時間常數, hp 雜訊高通截止(Hz), lp / lp1 雜訊低通截止起 / 迄(Hz,指數掃頻) }
@@ -140,6 +156,60 @@ const SFXW_REC = {
     { w: 'tri', t: 0.50, d: 0.7, f0: 659.25, a: 0.28, tau: 0.45 },
     { w: 'sine', t: 0.50, d: 0.7, f0: 1318.5, a: 0.05, tau: 0.3 },
     { w: 'sine', t: 0.00, d: 0.8, f0: 98, a: 0.2, tau: 0.4 }
+  ],
+  blade: [
+    { w: 'noise', t: 0, d: 0.05, a: 0.35, tau: 0.012, hp: 3500, lp: 10000 },
+    { w: 'sine', t: 0, d: 0.1, f0: 2400, f1: 1400, a: 0.14, tau: 0.03 },
+    { w: 'sine', t: 0.07, d: 0.14, f0: 180, f1: 120, a: 0.4, tau: 0.04 },
+    { w: 'noise', t: 0.07, d: 0.05, a: 0.2, tau: 0.012, lp: 1200 }
+  ],
+  spear: [
+    { w: 'noise', t: 0, d: 0.14, a: 0.22, tau: 0.06, hp: 2500, lp: 9000, lp1: 3000 },
+    { w: 'sine', t: 0.04, d: 0.12, f0: 2600, f1: 1900, a: 0.2, tau: 0.03 },
+    { w: 'noise', t: 0.12, d: 0.06, a: 0.3, tau: 0.02, hp: 1500, lp: 2500 },
+    { w: 'sine', t: 0.12, d: 0.1, f0: 300, f1: 200, a: 0.2, tau: 0.03 }
+  ],
+  stick: [
+    { w: 'sine', t: 0, d: 0.06, f0: 720, f1: 520, a: 0.35, tau: 0.015 },
+    { w: 'noise', t: 0, d: 0.03, a: 0.2, tau: 0.006, hp: 2000, lp: 5000 },
+    { w: 'sine', t: 0.07, d: 0.05, f0: 640, f1: 460, a: 0.25, tau: 0.014 }
+  ],
+  hoofL: [
+    { w: 'sine', t: 0, d: 0.1, f0: 110, f1: 70, a: 0.3, tau: 0.035 },
+    { w: 'noise', t: 0, d: 0.04, a: 0.12, tau: 0.01, hp: 1200, lp: 3000 },
+    { w: 'sine', t: 0.13, d: 0.1, f0: 110, f1: 70, a: 0.28, tau: 0.035 },
+    { w: 'noise', t: 0.13, d: 0.04, a: 0.12, tau: 0.01, hp: 1200, lp: 3000 }
+  ],
+  hoofH: [
+    { w: 'sine', t: 0, d: 0.14, f0: 90, f1: 50, a: 0.45, tau: 0.05 },
+    { w: 'noise', t: 0, d: 0.06, a: 0.22, tau: 0.015, hp: 900, lp: 2500 },
+    { w: 'sine', t: 0.12, d: 0.14, f0: 90, f1: 50, a: 0.42, tau: 0.05 },
+    { w: 'noise', t: 0.12, d: 0.06, a: 0.22, tau: 0.015, hp: 900, lp: 2500 },
+    { w: 'noise', t: 0.05, d: 0.14, a: 0.25, tau: 0.04, hp: 1800, lp: 5000 }
+  ],
+  ram: [
+    { w: 'sine', t: 0, d: 0.6, f0: 70, f1: 38, a: 0.6, tau: 0.18 },
+    { w: 'noise', t: 0, d: 0.45, a: 0.35, tau: 0.12, lp: 350 },
+    { w: 'noise', t: 0.02, d: 0.1, a: 0.2, tau: 0.02, hp: 700, lp: 2000 },
+    { w: 'sine', t: 0.3, d: 0.25, f0: 60, f1: 40, a: 0.35, tau: 0.08 }
+  ],
+  woodCrack: [
+    { w: 'noise', t: 0, d: 0.08, a: 0.3, tau: 0.02, hp: 1500, lp: 5000 },
+    { w: 'sine', t: 0, d: 0.07, f0: 330, f1: 200, a: 0.18, tau: 0.02 }
+  ],
+  stoneChip: [
+    { w: 'noise', t: 0, d: 0.06, a: 0.3, tau: 0.012, hp: 2000, lp: 7000 },
+    { w: 'sine', t: 0, d: 0.05, f0: 500, f1: 300, a: 0.15, tau: 0.01 },
+    { w: 'noise', t: 0.03, d: 0.05, a: 0.15, tau: 0.01, hp: 3000, lp: 9000 }
+  ],
+  grunt: [
+    { w: 'sine', t: 0, d: 0.14, f0: 230, f1: 150, a: 0.2, tau: 0.05 },
+    { w: 'noise', t: 0, d: 0.06, a: 0.1, tau: 0.02, lp: 800 }
+  ],
+  shieldHit: [
+    { w: 'sine', t: 0, d: 0.12, f0: 900, f1: 600, a: 0.2, tau: 0.03 },
+    { w: 'noise', t: 0, d: 0.05, a: 0.25, tau: 0.01, hp: 2500, lp: 7000 },
+    { w: 'noise', t: 0.05, d: 0.08, a: 0.12, tau: 0.03, hp: 1200, lp: 3000 }
   ],
   lose: [
     { w: 'sine', t: 0.00, d: 0.6, f0: 90, f1: 50, a: 0.7, tau: 0.22 },
@@ -350,6 +420,31 @@ function sfxwEventKind(b, e) {
   }
 }
 
+// 攻擊音變體:依發射者 su 取兵種變體,否則沿用 shot 的 k(arrow / bolt / stone / melee)
+function sfxwVariant(r) {
+  if (r.su && SFXW_SU[r.su]) return SFXW_SU[r.su];
+  return r.k;
+}
+
+// 目標格上的建築(bldGrid 存 n+1);無建築回 null
+function sfxwTargetBld(b, r) {
+  const x = Math.floor(r.tx), y = Math.floor(r.ty);
+  if (!b.bldGrid || x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return null;
+  const v = b.bldGrid[y * MAP_W + x];
+  return v > 0 && b.bld[v - 1] ? b.bld[v - 1] : null;
+}
+
+// 目標格上的存活單位(只在需要區分盾兵與其他兵種時查詢)
+function sfxwTargetUnit(b, r) {
+  const cx = Math.floor(r.tx), cy = Math.floor(r.ty);
+  const us = b.units || [];
+  for (let k = 0; k < us.length; k++) {
+    const u = us[k];
+    if (u.hp > 0 && Math.floor(u.x) === cx && Math.floor(u.y) === cy) return u;
+  }
+  return null;
+}
+
 // 建築由 alive true → false 即倒塌
 function sfxwAliveSnap(b) {
   const out = [];
@@ -418,14 +513,28 @@ function sfxwTick() {
 
     // 攻擊:每種每批只播一聲,音量依批量;視窗外 P2/P3 丟棄、P1 降為 0.2
     const groups = {};
-    shots.forEach(function (r) {
-      if (!SFXW_KINDS[r.k] || r.k === 'fire') return;
-      if (!groups[r.k]) groups[r.k] = { n: 0, rep: null, repD: Infinity, aoe: false, team: r.team };
-      const g = groups[r.k];
+    function addG(kind, r) {
+      if (!groups[kind]) groups[kind] = { n: 0, rep: null, repD: Infinity, aoe: false, team: r.team };
+      const g = groups[kind];
       g.n++;
       if (r.aoe) g.aoe = true;
       const sp = sfxwSpatial(r.tx, r.ty);
       if (sp.inView && (1 - sp.gain) < g.repD) { g.repD = 1 - sp.gain; g.rep = sp; g.team = r.team; }
+    }
+    shots.forEach(function (r) {
+      if (r.k === 'fire') return;
+      const vk = sfxwVariant(r);
+      if (SFXW_KINDS[vk]) addG(vk, r);
+      // 目標為建築:依材質播木裂或石屑;目標為單位:偶爾悶哼或盾擊(機率低,冷卻長)
+      const tb = sfxwTargetBld(b, r);
+      if (tb) {
+        const mat = tb.cb && tb.cb.mat;
+        if (mat === 'stone') addG('stoneChip', r);
+        else if (mat === 'wood') addG('woodCrack', r);
+      } else if (Math.random() < SFXW_HURT_P) {
+        const tu = sfxwTargetUnit(b, r);
+        if (tu) addG(UNITS[tu.u] && UNITS[tu.u].cls === 'shield' ? 'shieldHit' : 'grunt', r);
+      }
     });
     Object.keys(groups).forEach(function (k) {
       const g = groups[k];

@@ -12,6 +12,7 @@ const SIM_HZ = 10;
 const SIM_DT = 0.1;
 const MAX_UNITS = 400;
 const BATTLE_TICKS = 1800;
+const TD_POP_CAP = 200;         // 出兵人口上限(攻方整場共用;battleInit 參數 popCap 可覆蓋)。人口 = UNITS[u].pop × squad
 
 const TD_SEP_R = 0.35;          // 分離力半徑(格)
 const TD_SEP_W = 0.6;           // 分離力權重
@@ -39,14 +40,14 @@ const FX = {
   flag: { id: 'flag', r: 6, dur: 12 }
 };
 
-// 四部開放時間(tick,0.1 秒/tick)與「前一部放完即提前開放」的前驅(M2-03;PLAN_TD_CORE §1.5)
-const SEQ_OPEN = { van: 0, main: 200, rear: 400, ambush: 300 };
-const SEQ_PREV = { main: 'van', rear: 'main' };
+// 部開放時間(tick)。人口上限制下已取消時序:全部為 0(任何時間皆可放);舊錄影的 main / rear / ambush 指令一律視為可放
+const SEQ_OPEN = { van: 0, main: 0, rear: 0, ambush: 0 };
 const SEQ_ZONE = { van: 'front', main: 'front', rear: 'front', ambush: 'flank' };
 const SEQ_ORDER = ['van', 'main', 'rear', 'ambush'];
 
 // ---- 戰鬥初始化 ----
-// init: { kind, seed, map(boardJSON), army:[{u,n,part}] }。map 只讀不寫(複製成 typed arrays)
+// init: { kind, seed, map(boardJSON), popCap?, army(舊格式,忽略) }。map 只讀不寫(複製成 typed arrays)
+// 出兵改為人口上限制:攻方可放兵種為所有 fac 為 han / both 的單位,不再預選卡片(b.army = null)
 function battleInit(init) {
   const kind = init.kind || 'sandbox';
   const seed = init.seed >>> 0;
@@ -67,7 +68,7 @@ function battleInit(init) {
     ver: SIM_VER, kind: kind, seed: seed, rng: makeRng(seed), tick: 0, acc: 0, speed: 1, paused: false,
     limitTick: BATTLE_TICKS, refId: init.refId || null,
     map: map,
-    army: (init.army || []).map(function (c) { return { u: c.u, n: c.n | 0, part: c.part || 'van', left: c.n | 0 }; }),
+    army: null, popCap: init.popCap != null ? init.popCap | 0 : TD_POP_CAP, popUsed: 0, minPop: tdMinDeployPop(),
     orders: { drum: 0, flag: 0 },
     units: [], nextUid: 1, nextSquad: 1,
     bld: [], bldGrid: new Uint16Array(N),
@@ -85,7 +86,22 @@ function battleInit(init) {
   b.linkNear = tdBuildLinkNear(b);
   b.marks = map.marks;
   b.seqOpen = function (part) { return tdSeqInfo(b, part); };
+  b.popLeft = function () { return b.popCap - b.popUsed; };
   return b;
+}
+
+// 可放兵種:fac 為 han(我軍)或 both(雙方)者;敵軍 / NPC 專用單位不可放
+function tdDeployable(def) {
+  return !!def && (def.fac === 'han' || def.fac === 'both');
+}
+// 所有可放兵種中最小的一隊人口(判定「用完」用)
+function tdMinDeployPop() {
+  let m = Infinity;
+  Object.keys(UNITS).forEach(function (k) {
+    const d = UNITS[k];
+    if (tdDeployable(d) && d.pop * d.squad < m) m = d.pop * d.squad;
+  });
+  return m === Infinity ? 0 : m;
 }
 
 function tdLayer(src, k, N) {
@@ -128,36 +144,30 @@ function issueCmd(b, cmd) {
   return c;
 }
 
-// 該部是否為「前一部已放完」(須至少有 1 張卡且剩餘隊數為 0)
-function tdPartDone(b, part) {
-  let cards = 0, left = 0;
-  for (let k = 0; k < b.army.length; k++) {
-    if (b.army[k].part !== part) continue;
-    cards++;
-    left += b.army[k].left;
-  }
-  return cards > 0 && left === 0;
-}
-
-// 部開放狀態(§1.5):sandbox 恆開;否則 tick ≥ 開放時間,或前一部放完(提前開放)。伏兵只看時間
+// 部開放狀態:時序已取消(SEQ_OPEN 皆為 0),四部任何時間皆開放;未知部別仍不開放
 function tdSeqInfo(b, part) {
-  if (b.kind === 'sandbox') return { open: true, at: 0, early: false };
   if (SEQ_OPEN[part] === undefined) return { open: false, at: null, early: false };
-  const at = SEQ_OPEN[part];
-  if (b.tick >= at) return { open: true, at: at, early: false };
-  const pre = SEQ_PREV[part];
-  if (pre !== undefined && tdPartDone(b, pre)) return { open: true, at: at, early: true };
-  return { open: false, at: at, early: false };
+  return { open: true, at: SEQ_OPEN[part], early: false };
 }
 
 function tdSeqOpen(b, part) { return tdSeqInfo(b, part).open; }
 
-// 可部署格:部開放(§1.5)且格在該部區域內(先鋒/中軍/後軍 front;伏兵 flank)
+// 可部署格(地形區域):只看格是否在前部區域內(時序與人口另由 tdDeployWhy 判定)。回傳 boolean,供繪圖 / 測試
 function canDeploy(b, part, x, y) {
   if (!(x >= 0 && y >= 0 && x < MAP_W && y < MAP_H)) return false;
-  if (!tdSeqOpen(b, part)) return false;
   const cells = deployCells(b.map, SEQ_ZONE[part] || 'front');
   return cells[y * MAP_W + x] === 1;
+}
+
+// 放一隊 u 於 (x, y) 的判定:回傳 true 或原因字串(noUnit | cell | popcap | cap | over)。不改狀態
+function tdDeployWhy(b, u, x, y) {
+  if (b.over) return 'over';
+  const def = UNITS[u];
+  if (!tdDeployable(def)) return 'noUnit';
+  if (!canDeploy(b, 'van', x, y)) return 'cell';
+  if (b.popUsed + def.pop * def.squad > b.popCap) return 'popcap';
+  if (b.units.length + def.squad > MAX_UNITS) return 'cap';
+  return true;
 }
 
 // 套用到期指令(依 b.cmds 順序);套用過的指令(含失敗者)依序記入 b.cmdLog,供錄影重跑
@@ -180,20 +190,17 @@ function tdRunCmd(b, c) {
   else logEvent(b, 'cmdFail', { op: c.op, why: 'op' });
 }
 
+// 放一隊(c.u);c.part 保留於指令但不影響判定,放入單位一律為 'van'(舊錄影相容)
 function tdDeploy(b, c) {
-  if (b.over) { logEvent(b, 'deployFail', { why: 'over' }); return; }
-  const card = b.army.find(function (k) { return k.u === c.u && k.part === c.part && k.left > 0; });
-  if (!card) { logEvent(b, 'deployFail', { why: 'noCard', u: c.u }); return; }
+  const why = tdDeployWhy(b, c.u, c.x, c.y);
+  if (why !== true) { logEvent(b, 'deployFail', { why: why, u: c.u, x: c.x, y: c.y }); return; }
   const def = UNITS[c.u];
-  if (!def) { logEvent(b, 'deployFail', { why: 'noUnit', u: c.u }); return; }
-  if (!tdSeqOpen(b, c.part)) { logEvent(b, 'deployFail', { why: 'locked', part: c.part }); return; }
-  if (!canDeploy(b, c.part, c.x, c.y)) { logEvent(b, 'deployFail', { why: 'cell', x: c.x, y: c.y, part: c.part }); return; }
-  if (b.units.length + def.squad > MAX_UNITS) { logEvent(b, 'deployFail', { why: 'cap' }); return; }
-  card.left--;
-  tdSpawnSquad(b, c.u, c.part, c.x, c.y);
+  const pop = def.pop * def.squad;
+  b.popUsed += pop;
+  tdSpawnSquad(b, c.u, 'van', c.x, c.y);
   b.stats.deployed++;
-  b.stats.unitsIn += def.squad;
-  logEvent(b, 'deploy', { u: c.u, x: c.x, y: c.y, part: c.part });
+  b.stats.unitsIn += pop;
+  logEvent(b, 'deploy', { u: c.u, x: c.x, y: c.y, part: 'van' });
 }
 
 // 擂鼓:已上場全軍 fx drum;限 1 次
@@ -267,7 +274,7 @@ function tdSpd(u, def) {
 // 地形緩速:站在尖樁陣(jianzhuang)佔格內,依基礎 profile 取 cb.slow[base];其餘建築的 slow 欄位(熏煙台 {mul,dur})無此鍵 → 1
 function tdZoneMul(b, u, i) {
   const bl = tdBldAt(b, i);
-  if (bl === null || !bl.alive || !bl.cb.slow) return 1;
+  if (bl === null || bl.hidden || !bl.alive || !bl.cb.slow) return 1;
   const m = bl.cb.slow[String(u.profile).split(':')[0]];
   return m > 0 ? m : 1;
 }
@@ -654,9 +661,9 @@ function tdMove(b, u, def, P, field, pt) {
   }
 }
 
-// 攻擊事件(只供繪圖):k 為 arrow|bolt|stone|melee|fire;seq 即 b.shotSeq 的序號。不讀、不寫模擬狀態
-function tdShot(b, k, team, ax, ay, tx, ty, aoe) {
-  const rec = { seq: b.shotSeq, tick: b.tick, k: k, team: team, ax: ax, ay: ay, tx: tx, ty: ty, hit: true };
+// 攻擊事件(只供繪圖):k 為 arrow|bolt|stone|melee|fire;seq 即 b.shotSeq 的序號;su 為發射者(單位 id 或建築 type,供音效區分)。不讀、不寫模擬狀態
+function tdShot(b, k, team, ax, ay, tx, ty, aoe, su) {
+  const rec = { seq: b.shotSeq, tick: b.tick, k: k, team: team, ax: ax, ay: ay, tx: tx, ty: ty, hit: true, su: su || null };
   if (aoe) rec.aoe = aoe;
   if (b.shots.length < TD_SHOT_MAX) b.shots.push(rec); else b.shots[b.shotSeq % TD_SHOT_MAX] = rec;
   b.shotSeq++;
@@ -682,7 +689,7 @@ function tdAttack(b, u, def) {
   if (tgt.hp <= 0 && tgt.killer === null) tgt.killer = u.u;
   b.stats.dealt += dmg;
   tdNoteAttack(b, u);
-  tdShot(b, tdShotKind(u, def), u.team, u.x, u.y, tgt.x + tgt.w / 2, tgt.y + tgt.h / 2);
+  tdShot(b, tdShotKind(u, def), u.team, u.x, u.y, tgt.x + tgt.w / 2, tgt.y + tgt.h / 2, null, u.u);
   u.cdT = Math.round(def.cd * SIM_HZ / tdAtkSpd(u));
 }
 
@@ -699,7 +706,7 @@ function tdAttackUnit(b, u, def, t) {
   // 回射(T6,PLAN_DEFENSE §A.4):遠程攻方被守軍命中,且守軍在攻方自身射程內 → 以該守軍為目標直到死亡(ignoreTroops 除外)
   if (u.team === 1 && t.team === 0 && t.hp > 0 && (!t.rev || !(t.rev.hp > 0)) && !tdef.ignoreTroops && tdef.range > TD_COMBAT.meleeReach && tdInReach(b, t, u, tdef)) t.rev = u;
   if (u.team === 0) { b.stats.dealt += dmg; tdNoteAttack(b, u); } else b.stats.dealtDef += dmg;
-  tdShot(b, tdShotKind(u, def), u.team, u.x, u.y, t.x, t.y);
+  tdShot(b, tdShotKind(u, def), u.team, u.x, u.y, t.x, t.y, null, u.u);
   u.cdT = Math.round(def.cd * SIM_HZ / tdAtkSpd(u));
 }
 
@@ -1081,7 +1088,7 @@ function tdCheckEnd(b) {
   if (total > 0 && destroyed === total) reason = 'allDestroyed';
   else if (b.retreat) reason = 'retreat';
   else if (b.tick + 1 >= b.limitTick) reason = 'time';
-  else if (!tdAnyAttacker(b) && !b.army.some(function (c) { return c.left > 0; })) reason = 'wiped';
+  else if (!tdAnyAttacker(b) && b.popLeft() < b.minPop) reason = 'wiped';
   if (reason !== null) {
     b.over = true;
     b.result = tdSettle(b, reason, pct);
@@ -1101,7 +1108,7 @@ function tdSettle(b, reason, pct) {
   if (pct >= 0.5) merits.push('siege');
   if (pct >= 1) merits.push('sweep');
   const stars = merits.length;
-  const lossRatio = b.stats.unitsIn > 0 ? b.stats.lost / b.stats.unitsIn : 0;
+  const lossRatio = b.popUsed > 0 ? b.stats.lost / b.popUsed : 0;
   let grade;
   if (stars === 3) grade = 'grand';
   else if (stars === 2) grade = 'minor';
@@ -1109,7 +1116,8 @@ function tdSettle(b, reason, pct) {
   else grade = (reason === 'wiped' || pct < 0.25) ? 'rout' : 'defeat';
   return { reason: reason, tick: b.tick + 1, pct: pct, stars: stars, merits: merits, grade: grade,
     lost: b.stats.lost, dealt: b.stats.dealt, defLost: b.stats.defLost, dealtDef: b.stats.dealtDef,
-    garrisonOut: b.stats.garrisonOut, coreDown: coreDown, deployedUnits: b.stats.unitsIn, lossRatio: lossRatio };
+    garrisonOut: b.stats.garrisonOut, coreDown: coreDown, deployedUnits: b.stats.unitsIn, lossRatio: lossRatio,
+    popUsed: b.popUsed, popCap: b.popCap };
 }
 
 function tdAnyAttacker(b) {
@@ -1326,8 +1334,8 @@ function tdFireBld(b, bl, main) {
     if (cb.burn) tdApplyBurn(b, t, bl, tdef);
     if (cb.slow && cb.slow.dur) fxAdd(b, t, 'slow', cb.slow.dur, cb.slow.mul, 'slow');
     const bx = bl.x + bl.w / 2, by = bl.y + bl.h / 2;
-    if (cb.mode === 'aoe') { if (k === 0) tdShot(b, kind, 1, bx, by, t.x, t.y, cb.aoe); }
-    else tdShot(b, kind, 1, bx, by, t.x, t.y);
+    if (cb.mode === 'aoe') { if (k === 0) tdShot(b, kind, 1, bx, by, t.x, t.y, cb.aoe, bl.type); }
+    else tdShot(b, kind, 1, bx, by, t.x, t.y, null, bl.type);
   }
 }
 

@@ -282,6 +282,12 @@ function stDisplaySec() {
       stRender();
     })));
   }
+  if (typeof lifeSetDensity === 'function' && typeof lifeGetDensity === 'function') {
+    nodes.push(stRow('居民密度', stSeg([['off', '關'], ['low', '少'], ['mid', '中'], ['high', '多'], ['crowd', '熱鬧']], lifeGetDensity(), function (v) {
+      lifeSetDensity(v);
+      stRender();
+    })));
+  }
   return stSec('畫面', nodes);
 }
 

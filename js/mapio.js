@@ -407,7 +407,7 @@ function replayRevealed(rev, dev) {
   if (!rev) return false;
   if (typeof Map !== 'undefined' && rev instanceof Map) return rev.has(dev);
   if (Array.isArray(rev)) return rev.indexOf(dev) >= 0;
-  return !!rev[dev];
+  return rev[dev] !== undefined && rev[dev] !== null;
 }
 
 function snapTrim(snap, rev) {
@@ -478,6 +478,16 @@ function replayScore(replay) {
   return s;
 }
 
+// 戰場地圖:完整快照(snapFull 形式)經 boardFromJSON / boardToJSON 正規化後帶回 gar(NPC 守軍覆寫)。
+// 出征開戰、錄影重跑、錄影播放共用此函式,確保三者 battleInit 的 map 相同
+function battleMapOf(fullJ) {
+  const bd = boardFromJSON(fullJ);
+  if (!bd) return null;
+  const j = boardToJSON(bd);
+  j.gar = fullJ.gar || null;
+  return j;
+}
+
 // b:已結束的戰鬥(battleInit 產生並跑完);snap:原戰帖快照;meta:{ atk, ts, grade, cmds }
 // cmds 來源:meta.cmds > b.cmdLog > b.cmds(td.js 套用後會清空 b.cmds,故需 cmdLog)
 function replayMake(b, snap, meta) {
@@ -485,7 +495,7 @@ function replayMake(b, snap, meta) {
   const rev = b.revealed || {};
   const trimmed = snapTrim(snap, rev);
   const cmds = mioDeep(meta.cmds || b.cmdLog || b.cmds || []);
-  const army = b.army.map(k => [k.u, k.part, k.n]);
+  const army = { popCap: b.popCap };   // 出兵改人口上限制(舊錄影的 army 陣列僅供讀取相容,重跑不再使用)
   const r = b.result || {};
   const tick = r.tick != null ? r.tick : b.tick;
   const hz = mioHz();
@@ -507,8 +517,8 @@ function replayMake(b, snap, meta) {
   let ok = false;
   try {
     const init = {
-      kind: b.kind, seed: b.seed, refId: b.refId || null, map: snapFull(trimmed),
-      army: army.map(a => ({ u: a[0], part: a[1], n: a[2] }))
+      kind: b.kind, seed: b.seed, refId: b.refId || null, map: battleMapOf(snapFull(trimmed)),
+      popCap: army.popCap
     };
     const re = runHeadless(init, cmds, b.limitTick);
     ok = mioChecksum(re) === base.checksum;

@@ -3,7 +3,9 @@
 var fs = {
   save: null, phase: 'aim', boatX: 195, angle: 0, hook: null, fishes: [], obs: [],
   spawnT: [0, 0, 0, 0], fight: null, reelFish: null, reelWhy: '', card: null,
-  t: 0, pending: 0, holding: false, abort: false, dismiss: false, bub: [], bubT: 0
+  t: 0, pending: 0, holding: false, abort: false, dismiss: false, bub: [], bubT: 0,
+  mode: 'challenge', limit: 90, left: 90, live: false, over: false, summary: null, toast: null,
+  sess: null
 };
 
 function fishIdxOf(id) {
@@ -15,14 +17,15 @@ function fishLoad() {
   function blank() {
     return {
       v: 1, dex: {}, junk: {},
-      stats: { casts: 0, catches: 0, empty: 0, escape: 0, combo: 0, bestCombo: 0, night: 0, deep: 0, angle: 0, hard: 0, multi3: 0, rodUsed: {}, baitUsed: {}, seaKinds: [] },
+      stats: { casts: 0, catches: 0, empty: 0, escape: 0, combo: 0, bestCombo: 0, night: 0, deep: 0, angle: 0, hard: 0, multi3: 0, rodUsed: {}, baitUsed: {}, seaKinds: [], totalScore: 0 },
       ach: {}, log: [],
       tackle: { rod: 'bamboo', line: 'mid', hook: 'mid', sink: 'deep', bait: 'worm', preset: 'balanced', angle: 0 },
-      seen: { gear: false }, opt: { hand: 'R' }, last: { reg: 'home', season: '', tod: '', water: '', wx: '' },
-      friends: [], aq: null
+      seen: { gear: false }, opt: { hand: 'R', skin: 'raft' }, last: { reg: 'home', season: '', tod: '', water: '', wx: '', mode: 'challenge', limit: 90 },
+      friends: [], aq: null,
+      titles: {}, board: [], pb: 0
     };
   }
-  var b = blank(), d = null, raw = null, k, id, e, dx = {}, bad = false;
+  var b = blank(), d = null, raw = null, k, id, e, dx = {}, bad = false, titles = {}, board = [];
   try { raw = localStorage.getItem(FISH_KEY); } catch (err) { raw = null; }
   if (raw) { try { d = JSON.parse(raw); } catch (err2) { d = null; } }
   if (!d || typeof d !== 'object' || d.v !== 1) { d = b; bad = true; }
@@ -40,8 +43,27 @@ function fishLoad() {
       first: Number(e.first) || 0, bestTs: Number(e.bestTs) || 0, gold: !!e.gold };
   }
   d.dex = dx;
+  if (d.titles && typeof d.titles === 'object') {
+    FISH_TITLES.forEach(function (t) { if (d.titles[t.name]) titles[t.name] = Number(d.titles[t.name]) || 1; });
+  }
+  d.titles = titles;
+  if (Array.isArray(d.board)) {
+    d.board.forEach(function (x) {
+      if (x && typeof x === 'object' && Number(x.score) > 0) {
+        board.push({ score: Math.floor(Number(x.score)), ts: Number(x.ts) || 0, dur: Number(x.dur) || 0, title: String(x.title || '') });
+      }
+    });
+  }
+  board.sort(function (p, q) { return q.score - p.score || p.ts - q.ts; });
+  d.board = board.slice(0, FISH_BOARD_N);
+  d.pb = Math.max(0, Number(d.pb) || 0);
+  if (!FISH_SKINS[d.opt.skin]) d.opt.skin = 'raft';
+  if (d.last.mode !== 'leisure' && d.last.mode !== 'challenge') d.last.mode = 'challenge';
+  if (FISH_TIME_OPTS.indexOf(d.last.limit) < 0) d.last.limit = 90;
   fs.save = d;
   fs.angle = d.tackle.angle || 0;
+  fs.mode = d.last.mode;
+  fs.limit = d.last.limit;
   return bad ? null : d;
 }
 
@@ -65,6 +87,9 @@ function fishReset() {
   fs.fight = null; fs.reelFish = null; fs.reelWhy = ''; fs.card = null;
   fs.pending = 0; fs.holding = false; fs.abort = false; fs.dismiss = false; fs.bub = []; fs.bubT = 0;
   fs.angle = fs.save ? (fs.save.tackle.angle || 0) : 0;
+  fs.sess = { score: 0, catches: [], counts: {}, recent: [], best: 0, titles: [] };
+  fs.left = fs.limit; fs.live = false; fs.over = false; fs.summary = null; fs.toast = null;
+  if (fs.save) fs.save.stats.combo = 0;
   n = 2 + Math.floor(Math.random() * 2);
   for (i = 0; i < n; i++) {
     x = 30 + Math.random() * (W - 110);
@@ -126,6 +151,121 @@ function fishSpawnTick(dt) {
   }
 }
 
+// 竿尖與水面的關係:竿尖在水面上方 8 px(F0 為 y=34,水面 42)。水面下移後跟著移動。
+function fishTipY() { return FISH_LAYER.surf - 8; }
+
+// 尺寸係數:cm / 該魚上限 = 0 → 0.6,= 1 → 1.5(線性)。
+function fishSizeF(cm, def) {
+  var r = cm / def.max;
+  return Math.max(0.6, Math.min(1.5, 0.6 + 0.9 * r));
+}
+
+// 連擊倍率:1.0 + 0.1 × min(combo, 10)。
+function fishComboMul(combo) {
+  return 1 + 0.1 * Math.min(Math.max(0, combo), 10);
+}
+
+// 單次得分。kind:'fish'(預設)、'junk' 雜物(固定 −5)、'odd' 奇物(固定 +40)。
+function fishScoreOf(kind, sp, cm, combo) {
+  var def;
+  if (kind === 'junk') return FISH_JUNK_PTS;
+  if (kind === 'odd') return FISH_ODD_PTS;
+  def = FISH[sp];
+  return Math.round(FISH_RAR_PTS[def.rar] * fishSizeF(cm, def) * fishComboMul(combo));
+}
+
+// 分數對應的最高稱號(未達 100 分回傳 null)。
+function fishTitleOf(score) {
+  var best = null, i;
+  for (i = 0; i < FISH_TITLES.length; i++) if (score >= FISH_TITLES[i].min) best = FISH_TITLES[i];
+  return best;
+}
+
+// 達到門檻即永久解鎖;回傳這次新解鎖的稱號名稱陣列。
+function fishUnlockTitles(score) {
+  var out = [], i, t;
+  if (!fs.save) return out;
+  for (i = 0; i < FISH_TITLES.length; i++) {
+    t = FISH_TITLES[i];
+    if (score >= t.min && !fs.save.titles[t.name]) {
+      fs.save.titles[t.name] = Date.now();
+      out.push(t.name);
+    }
+  }
+  return out;
+}
+
+// 船皮膚是否可用(need 為空字串 = 預設可用;否則需已解鎖對應稱號)。
+function fishSkinOk(key) {
+  var s = FISH_SKINS[key];
+  if (!s || !fs.save) return false;
+  if (!s.need) return true;
+  return !!fs.save.titles[s.need];
+}
+
+function fishSkinSet(key) {
+  if (!fishSkinOk(key)) return false;
+  fs.save.opt.skin = key;
+  return true;
+}
+
+// 排行榜:只收 score > 0,依分數高到低(同分先到先排),最多 FISH_BOARD_N 筆。回傳名次(1 起算),未入榜回傳 0。
+function fishBoardAdd(entry) {
+  var b, i, rank = 0;
+  if (!fs.save || !(entry.score > 0)) return 0;
+  b = fs.save.board;
+  b.push(entry);
+  b.sort(function (p, q) { return q.score - p.score || p.ts - q.ts; });
+  if (b.length > FISH_BOARD_N) b.length = FISH_BOARD_N;
+  for (i = 0; i < b.length; i++) if (b[i] === entry) { rank = i + 1; break; }
+  return rank;
+}
+
+// 開始一局:mode 'leisure'(無時限、不給金幣)或 'challenge'(限時,limit 秒)。
+function fishStart(mode, limit) {
+  if (!fs.save || fs.over) return false;
+  fs.mode = mode === 'challenge' ? 'challenge' : 'leisure';
+  fs.limit = FISH_TIME_OPTS.indexOf(limit) >= 0 ? limit : 90;
+  fs.left = fs.limit;
+  fs.live = true;
+  fs.save.last.mode = fs.mode;
+  fs.save.last.limit = fs.limit;
+  fishSave();
+  return true;
+}
+
+// 結算(限時挑戰專用,只會執行一次):停止出竿、移除正在拉的魚、金幣 floor(分數/20) 寫入 world.res.coin、
+// 寫入排行榜與個人紀錄、存檔。回傳 summary;悠閒釣或已結算過則回傳既有值(悠閒釣為 null)。
+function fishSettle() {
+  var sess, score, pb0, newRec, gold = 0, ttl, rank, sm;
+  if (fs.summary) return fs.summary;
+  if (fs.mode !== 'challenge' || !fs.save || !fs.sess) return null;
+  sess = fs.sess;
+  fs.over = true; fs.live = false; fs.phase = 'over';
+  fs.hook = null; fs.fight = null; fs.card = null; fs.reelFish = null; fs.reelWhy = '';
+  fs.fishes = fs.fishes.filter(function (f) { if (f.attached) { f.alive = false; return false; } return true; });
+  score = sess.score;
+  pb0 = fs.save.pb || 0;
+  newRec = score > 0 && score > pb0;
+  if (score > pb0) fs.save.pb = score;
+  gold = Math.floor(score / FISH_GOLD_DIV);
+  if (gold > 0) {
+    try {
+      if (typeof world !== 'undefined' && world && world.res) {
+        world.res.coin = (world.res.coin || 0) + gold;
+        if (typeof saveWorld === 'function') saveWorld();
+      }
+    } catch (e) { console.warn('釣魚金幣寫入失敗', e); }
+  }
+  ttl = fishTitleOf(score);
+  rank = fishBoardAdd({ score: score, ts: Date.now(), dur: fs.limit, title: ttl ? ttl.name : '' });
+  sm = { score: score, count: sess.catches.length, bestCombo: sess.best, catches: sess.catches.slice(),
+    gold: gold, title: ttl ? ttl.name : '', newTitles: sess.titles.slice(), newRecord: newRec, rank: rank, limit: fs.limit };
+  fs.summary = sm;
+  fishSave();
+  return sm;
+}
+
 // 目前這一竿的裝備數值(F0 固定為均衡組合;讀存檔的 tackle,方便之後接裝備面板)。
 function fishGear() {
   var t = fs.save.tackle, rod = FISH_RODS[t.rod] || FISH_RODS.bamboo, line = FISH_LINES[t.line] || FISH_LINES.mid,
@@ -143,7 +283,7 @@ function fishCast(angle) {
   fs.angle = a;
   rad = a * Math.PI / 180;
   tipX = fs.boatX + (a < 0 ? -14 : 14);
-  fs.hook = { pos: [tipX, 34], v: [Math.sin(rad) * g.vh, Math.cos(rad) * g.vh], hr: g.hr, path: [[tipX, 34]] };
+  fs.hook = { pos: [tipX, fishTipY()], v: [Math.sin(rad) * g.vh, Math.cos(rad) * g.vh], hr: g.hr, path: [[tipX, fishTipY()]] };
   fs.phase = 'sink';
   fs.abort = false;
   fs.save.stats.casts++;
@@ -241,7 +381,7 @@ function fishFightStep(f, input, dt) {
 // 預測虛線:同一套 fishSweep 公式,只看障礙物、不看魚。回傳 {pts, end, pos}。
 function fishPredict(angle) {
   var g = fishGear(), side = angle < 0 ? -1 : 1, rad = angle * Math.PI / 180, steps = 0, ev = null, h;
-  h = { pos: [fs.boatX + side * 14, 34], v: [Math.sin(rad) * g.vh, Math.cos(rad) * g.vh], hr: g.hr, path: [] };
+  h = { pos: [fs.boatX + side * 14, fishTipY()], v: [Math.sin(rad) * g.vh, Math.cos(rad) * g.vh], hr: g.hr, path: [] };
   h.path.push([h.pos[0], h.pos[1]]);
   while (steps < 800) {
     ev = fishSweep(h, [], fs.obs, 1 / 120);
@@ -266,7 +406,7 @@ function fishStep(dt) {
     else { fs.fight = { fish: f, tension: 40 }; fs.phase = 'fight'; }
   }
   function catchFish(f, ts) {
-    var def = FISH[f.sp], st = fs.save.stats, e = fs.save.dex[def.id], isNew, gold;
+    var def = FISH[f.sp], st = fs.save.stats, e = fs.save.dex[def.id], isNew, gold, cm = Math.round(f.cm), pts, sess = fs.sess, nt, rc;
     if (!e) e = fs.save.dex[def.id] = { n: 0, best: 0, first: 0, bestTs: 0, gold: false };
     isNew = e.n === 0;
     e.n++;
@@ -276,9 +416,23 @@ function fishStep(dt) {
     if (gold) e.gold = true;
     st.catches++; st.combo++;
     if (st.combo > st.bestCombo) st.bestCombo = st.combo;
-    fs.save.log.push([f.sp, Math.round(f.cm), ts, 0]);
+    pts = fishScoreOf('fish', f.sp, cm, st.combo);
+    sess.score = Math.max(0, sess.score + pts);
+    sess.catches.push({ sp: f.sp, cm: cm, pts: pts });
+    if (sess.catches.length > 300) sess.catches.splice(0, sess.catches.length - 300);
+    sess.counts[def.id] = (sess.counts[def.id] || 0) + 1;
+    sess.recent = sess.recent.filter(function (x) { return x !== f.sp; });
+    sess.recent.unshift(f.sp);
+    if (sess.recent.length > 6) sess.recent.length = 6;
+    if (st.combo > sess.best) sess.best = st.combo;
+    st.totalScore += pts;
+    nt = fishUnlockTitles(sess.score);
+    sess.titles = sess.titles.concat(nt);
+    fs.save.log.push([f.sp, cm, ts, 0]);
     if (fs.save.log.length > 30) fs.save.log.splice(0, fs.save.log.length - 30);
-    return { kind: 'catch', fi: f.sp, cm: Math.round(f.cm), isNew: isNew, gold: gold, t: 0, hold: isNew || gold };
+    fs.toast = { sp: f.sp, cm: cm, pts: pts, t0: fs.t, title: nt.length ? nt[nt.length - 1] : '' };
+    rc = { kind: 'catch', fi: f.sp, cm: cm, isNew: isNew, gold: gold, pts: pts, t: 0, hold: isNew || gold };
+    return rc;
   }
   function finish() {
     var f = fs.reelFish, why = fs.reelWhy, st = fs.save.stats, card;
@@ -316,6 +470,10 @@ function fishStep(dt) {
   }
 
   fs.t += dt;
+  if (fs.mode === 'challenge' && fs.live && !fs.over) {
+    fs.left -= dt;
+    if (fs.left <= 0) { fs.left = 0; fishSettle(); }
+  }
   fishSpawnTick(dt);
   fs.bubT -= dt;
   if (fs.bubT <= 0 && fs.bub.length < 30) {
@@ -355,6 +513,8 @@ function fishStep(dt) {
     fishSweep(null, fs.fishes, fs.obs, dt);
     fs.card.t += dt;
     if (fs.dismiss || (!fs.card.hold && fs.card.t >= 1.2)) { fs.phase = 'aim'; fs.card = null; fs.dismiss = false; }
+  } else if (fs.phase === 'over') {
+    fishSweep(null, fs.fishes, fs.obs, dt);
   }
   if (fs.phase !== 'fight') fs.pending = 0;
 }

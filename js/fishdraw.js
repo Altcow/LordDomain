@@ -117,15 +117,28 @@ function fdFish(ctx, f, x, y) {
 }
 
 // 船與漁人(Q 版簡版):舴艋舟、蓑衣、斗笠、竿。side = 竿尖在船的左(-1)或右(1)。
-function fdBoat(c, x, side) {
+// skin:'raft' 竹筏(預設)、'wu' 烏篷船(旗子)、'hua' 畫舫(燈籠)。整體隨水面下移(dy)。
+function fdBoat(c, x, side, skin) {
+  var dy = FISH_LAYER.surf - 42, hull = '#8a5a2b', trim = '#c08a4a';
+  if (skin === 'wu') { hull = '#4f3d2c'; trim = '#d8c7a0'; }
+  else if (skin === 'hua') { hull = '#8b1e3f'; trim = '#e6b84a'; }
   c.save();
+  c.translate(0, dy);
   c.lineJoin = 'round';
   c.strokeStyle = '#3d2612'; c.lineWidth = 2;
   c.beginPath();
   c.moveTo(x - 34, 36); c.lineTo(x + 34, 36); c.quadraticCurveTo(x + 30, 52, x + 6, 52);
   c.lineTo(x - 10, 52); c.quadraticCurveTo(x - 30, 50, x - 34, 36); c.closePath();
-  c.fillStyle = '#8a5a2b'; c.fill(); c.stroke();
-  c.fillStyle = '#c08a4a'; c.fillRect(x - 34, 34, 68, 4);
+  c.fillStyle = hull; c.fill(); c.stroke();
+  c.fillStyle = trim; c.fillRect(x - 34, 34, 68, 4);
+  if (skin === 'wu') {
+    c.beginPath(); c.moveTo(x - 30, 34); c.lineTo(x - 30, 2); c.stroke();
+    c.fillStyle = '#4f8a5a';
+    c.beginPath(); c.moveTo(x - 30, 2); c.lineTo(x - 16, 7); c.lineTo(x - 30, 12); c.closePath(); c.fill(); c.stroke();
+  } else if (skin === 'hua') {
+    c.fillStyle = '#ffd24a';
+    c.beginPath(); c.arc(x + 30, 22, 5, 0, Math.PI * 2); c.fill(); c.stroke();
+  }
   c.fillStyle = '#4d6b5a';
   c.beginPath(); c.ellipse(x - 2, 27, 11, 9, 0, 0, Math.PI * 2); c.fill(); c.stroke();
   c.fillStyle = '#f4cfa6';
@@ -180,7 +193,7 @@ function fdCard(c, card) {
     c.fillText(name + '  ' + card.cm + ' cm', 230, 262);
     c.font = '600 13px sans-serif';
     c.fillStyle = '#ffd24a';
-    c.fillText((card.isNew ? '新收錄!  ' : '') + (card.gold ? '金框' : ''), 230, 288);
+    c.fillText('+' + card.pts + ' 分  ' + (card.isNew ? '新收錄!  ' : '') + (card.gold ? '金框' : ''), 230, 288);
   } else {
     c.fillStyle = '#ffffff'; c.font = '700 20px sans-serif';
     c.fillText(card.kind === 'escape' ? '脫鉤了' : '空鉤', 195, 262);
@@ -280,7 +293,7 @@ function fishDrawFrame(ctx, t) {
   ctx.stroke();
   // 瞄準虛線(只在瞄準狀態)
   side = fs.angle < 0 ? -1 : 1;
-  tip = [fs.boatX + side * 14, 34];
+  tip = [fs.boatX + side * 14, fishTipY()];
   if (fs.phase === 'aim') {
     pr = fishPredict(fs.angle);
     ctx.save();
@@ -303,7 +316,7 @@ function fishDrawFrame(ctx, t) {
     ctx.restore();
   }
   // 船與漁人
-  fdBoat(ctx, fs.boatX, side);
+  fdBoat(ctx, fs.boatX, side, fs.save && fishSkinOk(fs.save.opt.skin) ? fs.save.opt.skin : 'raft');
   // 線與鉤(非瞄準時)
   if (fs.hook && fs.phase !== 'aim') {
     ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.2;
@@ -318,13 +331,7 @@ function fishDrawFrame(ctx, t) {
   // 角度盤
   gm = fishGear().angMax;
   fdDial(ctx, fs.angle, gm);
-  // 連擊
-  if (fs.save && fs.save.stats.combo > 0) {
-    ctx.fillStyle = '#ffffff';
-    ctx.font = (fs.save.stats.combo >= 5 ? '800 20px' : '600 14px') + ' sans-serif';
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText('連 ×' + fs.save.stats.combo, 50, 24);
-  }
+  // 連擊、分數與清單在 DOM 的 HUD(fishui.js)顯示
   if (fs.fight) fdTension(ctx, fs.fight.tension);
   fdCard(ctx, fs.card);
 }

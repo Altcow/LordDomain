@@ -1,4 +1,4 @@
-// fishdata.js — 釣魚資料(PLAN_FISHING F0:單一釣場、三深度層各一種魚、均衡釣具)
+// fishdata.js — 釣魚資料(PLAN_FISHING F0:單一釣場、三深度層各一種魚、均衡釣具;另含計分 / 稱號 / 船皮膚 / 排行榜常數)
 // 欄位與數值出自 PLAN_FISHING §2、§3;F0 只啟用 鰷 / 鯉 / 鯰、竹竿、均衡組合(中繩 / 中鉤 / 重墜)。
 // 季節、早晚、水域與地區欄位保留在資料中,F0 的生成器暫不讀取(見回報)。
 
@@ -43,10 +43,15 @@ const FISH_DIFF = {
 
 // 1~3 = 深度層的上下界(邏輯 y);floor = 水底;surf = 水面線。
 // W、H 為邏輯畫面;ui 為操作鈕與角度盤的版面(fishui.js 與 fishdraw.js 共用)。
-const FISH_LAYER = {
-  1: [42, 260], 2: [260, 480], 3: [480, 690], floor: 690, surf: 42, W: 390, H: 844,
-  ui: { dialX: 200, dialY: 736, dialR: 62, mainX: 334, mainY: 774, mainR: 38, angX: 16, angY: 752 }
-};
+// 水面線依高度比例 15%(F0 為 42 px ≈ 5%,約下移 10% 螢幕高度);水下三層依 F0 的相對比例分配 surf~floor 之間的距離。
+const FISH_LAYER = (function () {
+  var W = 390, H = 844, surf = Math.round(H * 0.15), fl = 690, span = fl - surf,
+    l1 = surf + Math.round(span * 218 / 648), l2 = surf + Math.round(span * 438 / 648);
+  return {
+    1: [surf, l1], 2: [l1, l2], 3: [l2, fl], floor: fl, surf: surf, W: W, H: H,
+    ui: { dialX: 200, dialY: 736, dialR: 62, mainX: 334, mainY: 774, mainR: 38, angX: 16, angY: 752 }
+  };
+})();
 
 const FISH_RODS = {
   bamboo: { name:'竹竿', ang:45, cap:3, reel:1.0, note:'無特殊能力,預設' }
@@ -65,10 +70,30 @@ const FISH_HOOKS = {
 };
 
 const FISH_SINKS = {
-  shallow: { name:'輕墜', y:260 },
-  mid:     { name:'中墜', y:480 },
-  deep:    { name:'重墜', y:690 }
+  shallow: { name:'輕墜', y:FISH_LAYER[1][1] },
+  mid:     { name:'中墜', y:FISH_LAYER[2][1] },
+  deep:    { name:'重墜', y:FISH_LAYER.floor }
 };
+
+// 彩頭:計分基礎分(稀有度)、雜物 / 奇物固定分、稱號門檻、船皮膚、挑戰時限選項、排行榜筆數、金幣換算(分數 / 20)
+const FISH_RAR_PTS = { common: 10, uncommon: 25, rare: 60, legendary: 150 };
+const FISH_JUNK_PTS = -5;
+const FISH_ODD_PTS = 40;
+const FISH_TITLES = [
+  { min: 100,  name: '初出茅廬' },
+  { min: 300,  name: '垂釣能手' },
+  { min: 600,  name: '漁翁得利' },
+  { min: 1000, name: '江湖釣叟' },
+  { min: 2000, name: '釣魚神' }
+];
+const FISH_SKINS = {
+  raft: { name: '竹筏', need: '' },
+  wu:   { name: '烏篷船', need: '垂釣能手' },
+  hua:  { name: '畫舫', need: '江湖釣叟' }
+};
+const FISH_TIME_OPTS = [60, 90, 120];
+const FISH_BOARD_N = 10;
+const FISH_GOLD_DIV = 20;
 
 const FISH_PRESETS = {
   balanced: { name:'均衡', rod:'bamboo', line:'mid', hook:'mid', sink:'deep' }

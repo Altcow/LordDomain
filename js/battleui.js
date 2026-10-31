@@ -4,21 +4,78 @@
 // 依賴:map.js(game、world、boardToJSON)、ui.js(setTool、showToast、updateResBar)、
 //       render.js(screenToCell)、td.js(battleInit、issueCmd、tdApplyCmds、simTick、runToEnd)
 
-const SAND_CARDS = ['daodun', 'gongbing', 'qingqi'];
-const SAND_MAX = 10;
 const SAND_REASON = { time: '時間到', allDestroyed: '計分建築全毀', wiped: '兵力全滅', retreat: '鳴金' };
-const SAND_FAIL = { over: '戰鬥已結束', noCard: '此兵種已無剩餘隊數', noUnit: '未知兵種', cell: '此處不可部署', cap: '單位已達上限', locked: '此部尚未開放' };
+const POP_CAP_OPTS = [50, 100, 200, 400];
+const DEPLOY_TOAST = { over: '戰鬥已結束', noUnit: '未知兵種', cell: '此處不可放兵', popcap: '人口已滿,無法再放', cap: '單位已達上限' };
+// 兵種圖示(純說明用的 emoji;人口以每隊人口表示)
+const UNIT_ICON = { militia: '🧑‍🌾', hunter: '🦌', daodun: '🛡️', gongbing: '🏹', qingqi: '🐎', tuqi: '🐴', chihou: '🧭', changji: '🔱', chuangnu: '🎯', chongche: '🐏', toushi: '🪨' };
+const DEFAULT_UNIT = 'daodun';
+
+// 可放兵種(fac 為 han / both),依 UNITS 定義順序
+function deployUnitKeys() {
+  return Object.keys(UNITS).filter(k => tdDeployable(UNITS[k]));
+}
+function unitPopOf(u) {
+  const d = UNITS[u];
+  return d ? d.pop * d.squad : 0;
+}
 
 const sand = {
   panel: null,
   btn: null,
   open: false,   // 設定面板開啟中
-  setup: {},     // 兵種 -> 隊數(設定面板)
-  card: null,    // 選中的兵種,點地圖放一隊
+  popCap: TD_POP_CAP,  // 沙盤出兵人口上限(設定面板可選 50/100/200/400)
+  unit: DEFAULT_UNIT,  // 選中的兵種,點地圖放一隊
   dn: null,      // 按下座標,分辨點擊與拖曳
   evSeen: 0,     // 已處理的事件索引
   key: ''        // 戰鬥面板重繪鍵
 };
+
+// 人口條 HTML(沙盤與出征共用):used / cap;滿時變紅並顯示「人口已滿」
+function popBarHtml(used, cap) {
+  const full = used + 1e-9 >= cap;
+  const pct = cap > 0 ? Math.min(100, Math.round(used / cap * 100)) : 0;
+  return '<div class="apop' + (full ? ' full' : '') + '"><span>人口 <b>' + used + '</b> / ' + cap +
+    (full ? ' ・ 人口已滿' : '') + '</span><i><b style="width:' + pct + '%"></b></i></div>';
+}
+
+// 兵種列(一行、可橫向捲動;每格圖示+名稱+每隊人口);scope 為按鈕所屬面板,點擊由該面板處理 data-pick
+function unitStripHtml(sel) {
+  let h = '<div class="ustrip">';
+  deployUnitKeys().forEach(u => {
+    const d = UNITS[u];
+    h += '<button data-pick="' + u + '"' + (sel === u ? ' class="on"' : '') + '><span class="uico">' + UNIT_ICON[u] +
+      '</span><span class="uname">' + tdEsc(d.name) + '</span><small>' + unitPopOf(u) + ' 人/隊</small></button>';
+  });
+  return h + '</div>';
+}
+
+// 目前選中的可放兵種:沙盤戰鬥用 sand.unit,出征觀察期 / 進軍用 atk.unit
+function uiPickedUnit() {
+  if (battle && battle.kind === 'sandbox') return sand.unit;
+  if (atk.on) return atk.unit;
+  return null;
+}
+
+// 放一隊(通過 tdDeployWhy 判定才發指令;即時套用,可連續放)
+function uiDeploy(b, u, x, y) {
+  const why = tdDeployWhy(b, u, x, y);
+  if (why !== true) return why;
+  issueCmd(b, { op: 'deploy', u: u, part: 'van', x: x, y: y });
+  tdApplyCmds(b);
+  return true;
+}
+
+// 點擊可部署格或已有單位的格子:已有單位且此處不可放兵 → 顯示單位小標籤;否則嘗試放兵(失敗 toast)
+function uiFieldTap(b, u, cx, cy) {
+  const why = tdDeployWhy(b, u, cx, cy);
+  if (why !== true && tipUnitAt(cx, cy)) return;
+  if (why !== true) {
+    showToast(DEPLOY_TOAST[why] || '無法放兵');
+    return;
+  }
+  uiDeploy(b, u, cx, cy);
+}
 
 function tdEsc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -141,34 +198,23 @@ function sandClose() {
 
 function sandRenderSetup() {
   let h = '<div class="shd"><b>⚔ 沙盤推演</b><button class="close" data-sact="close">✕</button></div>' +
-    '<small>選擇試打兵力(每種 0~' + SAND_MAX + ' 隊)。不計戰績、不存檔。</small>';
-  SAND_CARDS.forEach(u => {
-    const n = sand.setup[u] | 0;
-    h += '<div class="srow"><span class="sname">' + tdEsc(UNITS[u].name) + ' <small>' + UNITS[u].squad + ' 人/隊</small></span>' +
-      '<button data-u="' + u + '" data-step="-1">−</button><b class="scnt">' + n + '</b>' +
-      '<button data-u="' + u + '" data-step="1">＋</button></div>';
+    '<small>設定出兵人口上限,上限內可連續放兵。不計戰績、不存檔。</small>' +
+    '<div class="scap"><span>出兵人口上限</span>';
+  POP_CAP_OPTS.forEach(v => {
+    h += '<button data-cap="' + v + '"' + (sand.popCap === v ? ' class="on"' : '') + '>' + v + '</button>';
   });
-  h += '<div class="sact"><button data-sact="start">開始沙盤</button></div>';
+  h += '</div><div class="sact"><button data-sact="start">開始沙盤</button></div>';
   sand.panel.innerHTML = h;
 }
 
 function sandStart() {
   if (game.mode !== 'battleDesign' || battle) return;
-  const army = [];
-  SAND_CARDS.forEach(u => {
-    const n = sand.setup[u] | 0;
-    if (n > 0) army.push({ u: u, n: n, part: 'main' });
-  });
-  if (!army.length) {
-    showToast('請至少選 1 隊');
-    return;
-  }
   setTool(null);
   game.mode = 'attack';
   game.phase = 'march';
   game.simSpeed = 1;
-  battle = battleInit({ kind: 'sandbox', seed: 1, map: boardToJSON(world), army: army });
-  sand.card = null;
+  battle = battleInit({ kind: 'sandbox', seed: 1, map: boardToJSON(world), popCap: sand.popCap });
+  sand.unit = sand.unit || DEFAULT_UNIT;
   sand.dn = null;
   sand.evSeen = 0;
   sand.key = '';
@@ -183,21 +229,16 @@ function sandStart() {
 function sandRenderBattle() {
   const b = battle;
   if (!b) return;
-  const key = b.army.map(k => k.u + ':' + k.left).join(',') + '|' + sand.card + '|' + game.simSpeed;
+  const key = b.popUsed + '|' + sand.unit + '|' + game.simSpeed;
   if (key === sand.key) return;
   sand.key = key;
-  let cards = '';
-  b.army.forEach(k => {
-    cards += '<button data-card="' + tdEsc(k.u) + '"' + (sand.card === k.u ? ' class="on"' : '') +
-      (k.left > 0 ? '' : ' disabled') + '>' + tdEsc(UNITS[k.u].name) + '<small>剩 ' + k.left + ' 隊</small></button>';
-  });
   const sp = game.simSpeed;
   const spd = (v, label) => '<button data-speed="' + v + '"' + (sp === v ? ' class="on"' : '') + '>' + label + '</button>';
   sand.panel.innerHTML =
     '<div class="shd"><b>⚔ 沙盤推演</b><small>不計戰績・不存檔</small></div>' +
     '<div class="shud"><span id="sandTimer"></span><span id="sandDestroy"></span></div>' +
-    '<small>點選兵種後,點地圖部署區放一隊</small>' +
-    '<div class="scards">' + cards + '</div>' +
+    popBarHtml(b.popUsed, b.popCap) +
+    unitStripHtml(sand.unit) +
     '<div class="sspd">' + spd(1, '1x') + spd(2, '2x') + spd(4, '4x') + spd(0, '⏸ 暫停') +
     '<button data-sact="end">結束</button></div>';
 }
@@ -212,10 +253,10 @@ function sandHud() {
 function onSandClick(e) {
   const b = e.target.closest('button');
   if (!b) return;
-  const u = b.getAttribute('data-u'), step = b.getAttribute('data-step');
-  const sp = b.getAttribute('data-speed'), card = b.getAttribute('data-card'), act = b.getAttribute('data-sact');
-  if (step !== null) {
-    sand.setup[u] = Math.max(0, Math.min(SAND_MAX, (sand.setup[u] | 0) + (+step)));
+  const cap = b.getAttribute('data-cap'), pick = b.getAttribute('data-pick');
+  const sp = b.getAttribute('data-speed'), act = b.getAttribute('data-sact');
+  if (cap !== null) {
+    sand.popCap = +cap;
     sandRenderSetup();
   } else if (act === 'start') {
     sandStart();
@@ -227,8 +268,8 @@ function onSandClick(e) {
     game.simSpeed = +sp;
     sandRenderBattle();
     sandHud();
-  } else if (card !== null) {
-    sand.card = sand.card === card ? null : card;
+  } else if (pick !== null) {
+    sand.unit = pick;
     sandRenderBattle();
   }
 }
@@ -240,19 +281,11 @@ function sandTap(e) {
   if (atk.on || rp.on) return;
   if (!battle || battle.over || !d || d.id !== e.pointerId) return;
   if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8) return;
-  if (!sand.card) {
-    showToast('請先點選上方兵種');
-    return;
-  }
-  const card = battle.army.find(k => k.u === sand.card && k.part === 'main');
-  if (!card || card.left <= 0) {
-    showToast('此兵種已無剩餘隊數');
-    return;
-  }
+  if (tipIsOpen()) { tipHide(); return; }
   const c = screenToCell(e.clientX, e.clientY);
   if (!c) return;
-  issueCmd(battle, { op: 'deploy', u: sand.card, part: 'main', x: c.x, y: c.y });
-  tdApplyCmds(battle);
+  if (world.occ[idx(c.x, c.y)] > 0) { atkInfo(c.x, c.y); return; }
+  uiFieldTap(battle, sand.unit, c.x, c.y);
   sandRenderBattle();
   sandHud();
 }
@@ -277,7 +310,6 @@ function sandFinish() {
   game.phase = '';
   game.simSpeed = 1;
   document.body.classList.remove('sandbox');
-  sand.card = null;
   sand.dn = null;
   sand.key = '';
   if (sand.panel) sand.panel.hidden = true;
@@ -290,6 +322,7 @@ function sandFinish() {
 // 沙盤結算面板:沿用出征結算的版型(共用 atk.panel 與其樣式),不計戰績、不存檔
 function sandShowResult(b, r) {
   if (!atk.panel) return;
+  atk.panel.classList.remove('abar');
   let h = '<div class="shd"><b>⚔ 沙盤推演結果</b><button class="close" data-atk="sdesign">✕</button></div>';
   h += '<small>不計戰績、不存檔</small>';
   h += battleResBody(b, r);
@@ -301,6 +334,7 @@ function sandShowResult(b, r) {
 
 // 每幀由 main.js 呼叫:同步按鈕、處理新事件、偵測結束、更新面板
 function battleUiTick(dt) {
+  tipTick(dt);
   lootSync();
   sandSyncButton();
   atkTick(dt);
@@ -317,7 +351,7 @@ function battleUiTick(dt) {
   }
   const ev = battle.events;
   for (let k = sand.evSeen; k < ev.length; k++) {
-    if (ev[k].type === 'deployFail') showToast('無法部署：' + (SAND_FAIL[(ev[k].data || {}).why] || '未知原因'));
+    if (ev[k].type === 'deployFail') showToast('無法部署：' + (DEPLOY_TOAST[(ev[k].data || {}).why] || '未知原因'));
   }
   sand.evSeen = ev.length;
   if (battle.over) {
@@ -347,9 +381,6 @@ function battleUiHide() {
 // 出征面板 → 整軍 → 進攻(boardBackup、斥候視野)→ 觀察期(只可放先鋒)→ 放下先鋒開戰 → 進軍 → 結束呼叫 attackFinish(b)。
 // 結算與錄影播放器由之後的任務在 attackFinish 內處理;結束時呼叫 atkRestore(false) 回到進攻前模式。
 const ATK_SCOUT_SEC = 180;
-const ATK_MAX_CARDS = 5;
-const ATK_MAX_N = 10;
-const ATK_PARTS = { van: '先鋒', main: '中軍', rear: '後軍', ambush: '伏兵' };
 const ATK_DIFF = { 1: '易', 2: '中', 3: '難' };
 
 const atk = {
@@ -357,16 +388,19 @@ const atk = {
   open: false,        // 出征面板開啟中
   view: 'list',       // 'list' | 'muster'
   npc: null,          // 選取的 NPC 據點 id
-  cards: [],          // 整軍卡 [{u, n, part}],進攻時即 battle.army 的來源
-  draft: { u: null, n: 1, part: 'van' },
+  unit: DEFAULT_UNIT, // 選中的兵種,點地圖放一隊
   prevMode: 'estate', // 進攻前的 game.mode
-  sel: -1,            // 選中的卡索引
   flagArm: false,     // 令旗待選建築
   ended: false,       // 已呼叫過結束流程
   sub: '', subLeft: 0,
   dn: null, lastHtml: '',
-  btn: null, panel: null, hud: null, hudClock: null, hudSub: null
+  btn: null, panel: null, hud: null, hudClock: null, hudSub: null, hudPop: null, popHtml: '',
+  ctl: null, ctlKey: '', pauseMark: null,  // 進軍期控制列(離開/暫停/速度)與「已暫停」字樣
+  spd: 1,             // 最近一次的非暫停速度(繼續時套用)
+  leaveAsk: false     // 離開鈕的二段確認中
 };
+// 小標籤(#tdTip)與選取圈(#tdSelRing):同一時間只存在一個,3 秒後淡出;bld 為建築索引(單位為 -1)
+const tip = { el: null, ring: null, left: 0, bld: -1, shown: false };
 
 function atkFmt(sec) {
   const s = Math.max(0, Math.ceil(sec));
@@ -379,14 +413,6 @@ function atkStars(n) {
 }
 
 function atkNpc(id) { return NPC_BASES.find(v => v.id === id) || null; }
-function atkCap() { return marchCapacity(estateObjects()); }
-function atkUnitKeys() { return Object.keys(UNITS).filter(k => UNITS[k].fac === 'han' || UNITS[k].fac === 'both'); }
-function atkUnitOk(u, cap) {
-  const d = UNITS[u];
-  if (!d) return false;
-  return LEVY_UNITS[u] ? cap.levy > 0 : cap.byCls[d.cls] > 0;
-}
-function atkArmy() { return atk.cards.map(c => ({ u: c.u, n: c.n, part: c.part })); }
 function atkCanOpen() {
   return !atk.on && !battle && !game.backup && (game.mode === 'estate' || game.mode === 'battleDesign');
 }
@@ -419,8 +445,42 @@ function initAttackUI() {
   atk.hudSub = document.createElement('span');
   hud.appendChild(atk.hudClock);
   hud.appendChild(atk.hudSub);
+  atk.hudPop = document.createElement('div');
+  hud.appendChild(atk.hudPop);
   document.body.appendChild(hud);
   atk.hud = hud;
+
+  const ctl = document.createElement('div');
+  ctl.id = 'atkCtl';
+  ctl.hidden = true;
+  ctl.addEventListener('click', onCtlClick);
+  document.body.appendChild(ctl);
+  atk.ctl = ctl;
+
+  const pauseMark = document.createElement('div');
+  pauseMark.id = 'atkPause';
+  pauseMark.hidden = true;
+  pauseMark.textContent = '已暫停';
+  document.body.appendChild(pauseMark);
+  atk.pauseMark = pauseMark;
+
+  tip.el = document.createElement('div');
+  tip.el.id = 'tdTip';
+  tip.el.hidden = true;
+  document.body.appendChild(tip.el);
+  tip.ring = document.createElement('div');
+  tip.ring.id = 'tdSelRing';
+  tip.ring.hidden = true;
+  document.body.appendChild(tip.ring);
+
+  // ui.js 的 tapObjectAt 會開科研院面板(大面板);進攻/沙盤/錄影中不可開啟任何經營面板
+  if (typeof tapObjectAt === 'function') {
+    const tapObjectOrig = tapObjectAt;
+    tapObjectAt = function (sx, sy) {
+      if (lootMode()) return;
+      tapObjectOrig(sx, sy);
+    };
+  }
 
   const canvas = document.getElementById('game');
   canvas.addEventListener('pointerdown', e => { atk.dn = { id: e.pointerId, x: e.clientX, y: e.clientY }; });
@@ -459,7 +519,83 @@ function atkOpenMuster() {
   atk.open = true;
   atk.view = 'muster';
   atkRenderSetup();
-  if (!CLS_ORDER.some(c => atkCap().byCls[c] > 0)) showToast('尚無兵營,只有鄉勇可用;蓋兵營可帶更多兵');
+}
+
+function atkMusterHtml() {
+  const nb = atkNpc(atk.npc);
+  const best = nb && world.npcBest ? (world.npcBest[nb.id] | 0) : 0;
+  let h = '<div class="shd"><button class="ahd" data-atk="back">‹ 返回</button><b>出征・' + tdEsc(nb ? nb.name : '') +
+    '</b><button class="close" data-atk="close">✕</button></div>';
+  h += '<small>難度 ' + (nb ? ATK_DIFF[nb.diff] : '—') + ' ・ 最佳 ' + atkStars(best) + '</small>';
+  h += '<div class="apopcap">出征人口上限 <b>' + TD_POP_CAP + '</b></div>';
+  h += '<small>可帶兵種(每隊人口)</small><div class="ulist">';
+  deployUnitKeys().forEach(u => {
+    h += '<div class="urow"><span class="uico">' + UNIT_ICON[u] + '</span><span class="uname">' + tdEsc(UNITS[u].name) +
+      '</span><small>每隊 ' + unitPopOf(u) + ' 人</small></div>';
+  });
+  h += '</div>';
+  h += '<div class="arule"><small>軍令</small>' +
+    '<p>🥁 擂鼓:全軍加速,限用一次。</p>' +
+    '<p>🚩 令旗:指定一座可見建築為目標,限用一次。</p>' +
+    '<p>🔔 鳴金:收兵結算,隨時可用。</p></div>';
+  h += '<div class="sact"><button class="abig" data-atk="go"' + (nb ? '' : ' disabled') + '>進攻</button></div>';
+  return h;
+}
+
+function onAtkClick(e) {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const pick = b.getAttribute('data-pick');
+  const act = b.getAttribute('data-atk');
+  if (pick !== null) {
+    atkPick(pick);
+  } else if (!act) {
+    return;
+  } else if (act === 'sdesign') {
+    atk.panel.hidden = true;
+    return;
+  } else if (act === 'sagain') {
+    atk.panel.hidden = true;
+    sandOpen();
+    return;
+  } else if (act === 'close') {
+    atkClosePanel();
+    return;
+  } else if (act === 'pick') {
+    atk.npc = b.getAttribute('data-npc');
+    atk.view = 'muster';
+    atkRenderSetup();
+    return;
+  } else if (act === 'back') {
+    atk.view = 'list';
+    atkRenderSetup();
+    return;
+  } else if (act === 'go') {
+    atkGo();
+  } else if (act === 'rwatch') {
+    rpWatchFromResult();
+  } else if (act === 'again') {
+    atkRestore(false);
+    atkOpenMuster();
+  } else if (act === 'home') {
+    atkRestore(false);
+  } else if (act === 'drum') {
+    atkCmdDrum();
+  } else if (act === 'flag') {
+    atkCmdFlagArm();
+  } else if (act === 'retreat') {
+    atkCmdRetreat();
+  } else if (act === 'scoutRetreat') {
+    atkRetreat();
+  }
+  if (atk.on) atkPaint();
+  else if (atk.open) atkRenderSetup();
+}
+
+function atkGo() {
+  const nb = atkNpc(atk.npc);
+  if (!nb) { showToast('請先選擇據點'); return; }
+  atkLaunch(nb);
 }
 
 function atkClosePanel() {
@@ -469,6 +605,7 @@ function atkClosePanel() {
 
 function atkRenderSetup() {
   if (!atk.panel) return;
+  atk.panel.classList.remove('abar');
   atk.lastHtml = '';
   atk.panel.innerHTML = atk.view === 'muster' ? atkMusterHtml() : atkListHtml();
   atk.panel.hidden = false;
@@ -487,126 +624,8 @@ function atkListHtml() {
   return h;
 }
 
-function atkMusterHtml() {
-  const nb = atkNpc(atk.npc);
-  const cap = atkCap();
-  const res = validateCards(atk.cards, cap);
-  const used = { shield: 0, archer: 0, cavalry: 0, siege: 0 };
-  let levyUsed = 0;
-  atk.cards.forEach(c => {
-    const d = UNITS[c.u];
-    if (!d) return;
-    if (LEVY_UNITS[c.u]) levyUsed += cardPop(c);
-    else used[d.cls] = (used[d.cls] || 0) + cardPop(c);
-  });
-  const bar = (name, u, max) => {
-    const pct = max > 0 ? Math.min(100, Math.round(u / max * 100)) : 0;
-    return '<div class="acap' + (u > max ? ' over' : '') + '"><span class="cn">' + name + '</span><i><b style="width:' + pct +
-      '%"></b></i><small>' + u + ' / ' + max + '</small></div>';
-  };
-  let h = '<div class="shd"><button class="ahd" data-atk="back">‹ 返回</button><b>整軍・' + tdEsc(nb ? nb.name : '') +
-    '</b><button class="close" data-atk="close">✕</button></div>';
-  h += '<div class="acapbox">';
-  CLS_ORDER.forEach(c => { h += bar(CLS_NAME[c], used[c] || 0, cap.byCls[c]); });
-  h += bar('鄉勇', levyUsed, cap.levy) + '</div>';
-  if (!CLS_ORDER.some(c => cap.byCls[c] > 0)) h += '<small>尚無兵營,只有鄉勇可用;蓋兵營可帶更多兵。</small>';
 
-  h += '<div class="acards">';
-  if (!atk.cards.length) h += '<small>尚未編組,請加入兵種卡(最多 ' + ATK_MAX_CARDS + ' 張)。</small>';
-  atk.cards.forEach((c, k) => {
-    const d = UNITS[c.u] || { name: c.u };
-    h += '<div class="arow"><span class="ainfo">' + tdEsc(d.name) + ' × ' + c.n + ' 隊 ・' + ATK_PARTS[c.part] +
-      ' ・ 人口 ' + cardPop(c) + '</span><button data-atk="rm" data-i="' + k + '">移除</button></div>';
-  });
-  h += '</div>';
 
-  h += '<div class="adraft"><small>加入兵種卡:選兵種 → 隊數 → 部別</small><div class="aunits">';
-  atkUnitKeys().forEach(u => {
-    const ok = atkUnitOk(u, cap);
-    h += '<button data-atk="unit" data-u="' + u + '"' + (atk.draft.u === u ? ' class="on"' : '') + (ok ? '' : ' disabled') +
-      '>' + tdEsc(UNITS[u].name) + '<small>' + CLS_NAME[UNITS[u].cls] + '</small></button>';
-  });
-  h += '</div>';
-  h += '<div class="srow"><span class="sname">隊數</span><button data-atk="step" data-d="-1">−</button>' +
-    '<b class="scnt">' + atk.draft.n + '</b><button data-atk="step" data-d="1">＋</button></div>';
-  h += '<div class="aparts">';
-  ['van', 'main', 'rear', 'ambush'].forEach(p => {
-    h += '<button data-atk="part" data-p="' + p + '"' + (atk.draft.part === p ? ' class="on"' : '') + '>' + ATK_PARTS[p] + '</button>';
-  });
-  h += '</div>';
-  h += '<div class="sact"><button data-atk="add"' + (!atk.draft.u || atk.cards.length >= ATK_MAX_CARDS ? ' disabled' : '') + '>加入此卡</button></div></div>';
-
-  h += '<div class="acmd"><small>軍令(開戰後才能用)</small><div class="aparts">' +
-    '<button disabled>🥁 擂鼓</button><button disabled>🚩 令旗</button><button disabled>🔔 鳴金</button></div></div>';
-  h += res.ok ? '<small class="aok">✔ 編組合格,可以進攻</small>' : '<small class="aerr">' + tdEsc(res.err) + '</small>';
-  h += '<div class="sact"><button data-atk="go"' + (res.ok && nb ? '' : ' disabled') + '>進攻</button></div>';
-  return h;
-}
-
-function onAtkClick(e) {
-  const b = e.target.closest('button');
-  if (!b) return;
-  const act = b.getAttribute('data-atk');
-  if (!act) return;
-  if (act === 'sdesign') { atk.panel.hidden = true; return; }
-  if (act === 'sagain') { atk.panel.hidden = true; sandOpen(); return; }
-  if (act === 'close') { atkClosePanel(); return; }
-  if (act === 'pick') {
-    atk.npc = b.getAttribute('data-npc');
-    atk.view = 'muster';
-    atkRenderSetup();
-    return;
-  }
-  if (act === 'back') {
-    atk.view = 'list';
-    atkRenderSetup();
-    return;
-  }
-  if (act === 'unit') {
-    const u = b.getAttribute('data-u');
-    atk.draft.u = atk.draft.u === u ? null : u;
-  } else if (act === 'step') {
-    atk.draft.n = Math.max(1, Math.min(ATK_MAX_N, atk.draft.n + (+b.getAttribute('data-d'))));
-  } else if (act === 'part') {
-    atk.draft.part = b.getAttribute('data-p');
-  } else if (act === 'add') {
-    if (atk.draft.u && atk.cards.length < ATK_MAX_CARDS) {
-      atk.cards.push({ u: atk.draft.u, n: atk.draft.n, part: atk.draft.part });
-      atk.draft.u = null;
-    }
-  } else if (act === 'rm') {
-    atk.cards.splice(+b.getAttribute('data-i'), 1);
-  } else if (act === 'go') {
-    atkGo();
-  } else if (act === 'rwatch') {
-    rpWatchFromResult();
-  } else if (act === 'again') {
-    atkRestore(false);
-    atkOpenMuster();
-  } else if (act === 'home') {
-    atkRestore(false);
-  } else if (act === 'card') {
-    atkPickCard(+b.getAttribute('data-i'));
-  } else if (act === 'drum') {
-    atkCmdDrum();
-  } else if (act === 'flag') {
-    atkCmdFlagArm();
-  } else if (act === 'retreat') {
-    atkCmdRetreat();
-  } else if (act === 'scoutRetreat') {
-    atkRetreat();
-  }
-  if (atk.on) atkPaint();
-  else if (atk.open) atkRenderSetup();
-}
-
-function atkGo() {
-  const nb = atkNpc(atk.npc);
-  const res = validateCards(atk.cards, atkCap());
-  if (!nb) { showToast('請先選擇據點'); return; }
-  if (!res.ok) { showToast(res.err); return; }
-  atkLaunch(nb);
-}
 
 // 進攻:boardBackup → 載入斥候視野 → 觀察期(180 秒)
 function atkLaunch(nb) {
@@ -633,13 +652,17 @@ function atkLaunch(nb) {
   atk.open = false;
   atk.ended = false;
   atk.flagArm = false;
-  atk.sel = atk.cards.findIndex(c => c.part === 'van');
+  atk.unit = DEFAULT_UNIT;
   atk.lastHtml = '';
   atk.sub = ''; atk.subLeft = 0;
   game.phase = 'scout';
   game.scoutLeft = ATK_SCOUT_SEC;
   game.sel = -1;
   game.simSpeed = 1;
+  atk.spd = 1;
+  atk.leaveAsk = false;
+  tipHide();
+  toggleTechPanel(false);
   game.target = { kind: 'npc', refId: nb.id, snap: snap };
   document.body.classList.add('atk-mode');
   atkSync();
@@ -659,46 +682,45 @@ function atkSetSub(text, sec) {
 }
 
 // 觀察期只可選先鋒卡;進軍期可選仍有隊數且已開放的部
-function atkPickCard(k) {
-  if (game.phase === 'scout') {
-    if (atk.cards[k] && atk.cards[k].part === 'van') atk.sel = k;
-    return;
-  }
-  if (!battle || battle.over) return;
-  const c = battle.army[k];
-  if (!c || c.left <= 0 || !battle.seqOpen(c.part).open) return;
-  atk.sel = atk.sel === k ? -1 : k;
+// 選兵種(觀察期與進軍期皆可,任何時間都可放;不可放兵種忽略)
+function atkPick(u) {
+  if (!UNITS[u] || !tdDeployable(UNITS[u])) return;
+  atk.unit = u;
   atk.flagArm = false;
 }
 
 // 放下先鋒即開戰:先以完整地圖試建 battle,可部署才切到戰場棋盤(避免觀察期露出陷阱)
+// 放下第一隊即開戰:先以完整地圖試建 battle,可部署才切到戰場棋盤(避免觀察期露出陷阱)
 function atkStartBattle(x, y) {
   const snap = game.target && game.target.snap;
-  let ai = atk.sel;
-  if (!(atk.cards[ai] && atk.cards[ai].part === 'van')) ai = atk.cards.findIndex(c => c.part === 'van');
-  const card = atk.cards[ai];
-  if (!snap || !card) return;
+  if (!snap) return;
   const bd = boardFromJSON(snapFull(snap));
   if (!bd) return;
-  const b = battleInit({ kind: 'npc', seed: hashStr(snap.snapHash + ':' + Date.now()) >>> 0, map: boardToJSON(bd), army: atkArmy(), refId: atk.npc });
-  if (!canDeploy(b, 'van', x, y)) {
-    showToast('無法部署:' + SAND_FAIL.cell);
+  const b = battleInit({ kind: 'npc', seed: hashStr(snap.snapHash + ':' + Date.now()) >>> 0, map: battleMapOf(snapFull(snap)), refId: atk.npc });
+  const why = tdDeployWhy(b, atk.unit, x, y);
+  if (why !== true) {
+    showToast(DEPLOY_TOAST[why] || '無法放兵');
     return;
   }
   atkSetBoard(bd);
   battle = b;
-  issueCmd(b, { op: 'deploy', u: card.u, part: 'van', x: x, y: y });
-  atk.sel = ai;
-  atk.flagArm = false;
+  issueCmd(b, { op: 'deploy', u: atk.unit, part: 'van', x: x, y: y });
+  tdApplyCmds(b);
   game.phase = 'march';
   game.sel = -1;
-  atkSetSub('第一通鼓・先鋒出陣', 3);
+  atkSetSub('第一通鼓・開戰', 3);
   atkPaint();
+}
+
+// 軍令立即套用(暫停中也生效);與 simTick 第 1 步同一 tick 處理,錄影重跑等價
+function atkIssue(cmd) {
+  issueCmd(battle, cmd);
+  tdApplyCmds(battle);
 }
 
 function atkCmdDrum() {
   if (!battle || battle.over || game.phase !== 'march' || battle.orders.drum >= 1) return;
-  issueCmd(battle, { op: 'drum' });
+  atkIssue({ op: 'drum' });
   atkSetSub('擂鼓・全軍振奮', 3);
 }
 
@@ -710,7 +732,7 @@ function atkCmdFlagArm() {
 
 function atkCmdRetreat() {
   if (!battle || battle.over || game.phase !== 'march' || battle.retreat) return;
-  issueCmd(battle, { op: 'retreat' });
+  atkIssue({ op: 'retreat' });
   atkSetSub('鳴金・收兵', 3);
 }
 
@@ -721,90 +743,186 @@ function atkFlagAt(n) {
     showToast('令旗需指定一座可見且未毀的建築');
     return;
   }
-  issueCmd(battle, { op: 'flag', n: n });
+  atkIssue({ op: 'flag', n: n });
   atk.flagArm = false;
   atkSetSub('令旗插下・' + ((OBJECTS[bl.type] || {}).name || bl.type) + '為目標', 3);
   atkPaint();
 }
 
-// 點建築顯示名稱 / HP / 射程(戰鬥中用戰場的 HP;隱藏且未揭露者不顯示)
+// 小標籤:貼在物件螢幕座標上方,同一時間只一個;3 秒後淡出(tipTick)
+function tipShow(text, gx, gy, bld) {
+  if (!tip.el) return;
+  tipHide();
+  const p = atkScreenOf(gx, gy);
+  const W = (typeof window !== 'undefined' && window.innerWidth) || 375;
+  tip.el.textContent = text;
+  tip.el.style.left = Math.max(96, Math.min(W - 96, p[0])) + 'px';
+  tip.el.style.top = (p[1] - 14) + 'px';
+  tip.el.style.opacity = '1';
+  tip.el.hidden = false;
+  tip.ring.style.left = p[0] + 'px';
+  tip.ring.style.top = p[1] + 'px';
+  tip.ring.style.opacity = '1';
+  tip.ring.hidden = false;
+  tip.left = 3;
+  tip.shown = true;
+  tip.bld = bld;
+  if (bld >= 0 && battle) game.sel = bld;
+}
+
+function tipHide() {
+  if (!tip.shown) return;
+  tip.shown = false;
+  tip.el.hidden = true;
+  tip.ring.hidden = true;
+  if (tip.bld >= 0 && battle && game.sel === tip.bld) game.sel = -1;
+  tip.bld = -1;
+}
+
+function tipIsOpen() { return tip.shown; }
+
+function tipTick(dt) {
+  if (!tip.shown) return;
+  tip.left -= dt;
+  if (tip.left <= 0) { tipHide(); return; }
+  const a = tip.left < 0.5 ? String(Math.max(0, tip.left / 0.5)) : '1';
+  tip.el.style.opacity = a;
+  tip.ring.style.opacity = a;
+}
+
+// 格座標(連續座標)→ 螢幕座標;戰鬥中依戰場地面高度
+function atkScreenOf(gx, gy) {
+  const h = battle ? tdGroundHz(battle, gx, gy) : (world.height[idx(Math.floor(gx), Math.floor(gy))] || 0) * HL;
+  const q = gpt(gx, gy, h);
+  return worldToScreen(q[0], q[1]);
+}
+
+// 點建築:小標籤顯示名稱 / HP / 射程(戰鬥中用戰場的 HP;隱藏且未揭露者顯示「未知設施」)
 function atkInfo(x, y) {
   const n = world.occ[idx(x, y)] - 1;
   if (n < 0) return;
   const o = world.objects[n];
   const bl = battle ? battle.bld[n] : null;
-  if (bl && bl.hidden) { showToast('未知設施'); return; }
   const d = OBJECTS[o.type] || {};
   const cb = d.cb || {};
+  const ax = o.x + (d.w || 1) / 2, ay = o.y + (d.h || 1) / 2;
+  if (bl && bl.hidden) { tipShow('未知設施', ax, ay, n); return; }
   let s = d.name || o.type;
   if (bl && bl.maxHp > 0) s += ' ・ HP ' + Math.ceil(bl.hp) + '/' + Math.ceil(bl.maxHp) + (bl.alive ? '' : '(已毀)');
   else if (!bl && cb.hp > 0) s += ' ・ HP ' + cb.hp;
   if (cb.range > 0) s += ' ・ 射程 ' + cb.range;
-  if (battle) game.sel = n;
-  showToast(s);
+  tipShow(s, ax, ay, n);
 }
 
-// 點擊(移動小於 8px)地圖:觀察期點可部署格即開戰;進軍期點空地放兵或指定令旗目標
+// 點單位:同一格內最近的存活單位;回傳是否已處理
+function tipUnitAt(cx, cy) {
+  if (!battle || !battle.units) return false;
+  let best = null, bd = Infinity;
+  for (let k = 0; k < battle.units.length; k++) {
+    const u = battle.units[k];
+    if (!(u.hp > 0) || Math.floor(u.x) !== cx || Math.floor(u.y) !== cy) continue;
+    const dd = Math.hypot(u.x - (cx + 0.5), u.y - (cy + 0.5));
+    if (dd < bd) { bd = dd; best = u; }
+  }
+  if (!best) return false;
+  const d = UNITS[best.u] || { name: best.u };
+  tipShow(d.name + ' ・ HP ' + Math.ceil(best.hp) + '/' + Math.ceil(best.maxHp), best.x, best.y, -1);
+  return true;
+}
+
+// 點擊(移動小於 8px)地圖:觀察期點可部署格即開戰;進軍期點建築/單位顯示小標籤,點空地放兵或指定令旗目標。
+// 小標籤開啟時,任何一次點擊先只關閉小標籤(不放兵、不開新標籤)
+// 點擊(移動小於 8px)地圖:觀察期點可部署格即放第一隊開戰;進軍期點建築顯示小標籤,點空地或已有單位的可部署格放一隊(連續放),
+// 令旗待選時點建築作為目標。小標籤開啟時,任何一次點擊先只關閉小標籤(不放兵、不開新標籤)
 function atkTap(e) {
   const d = atk.dn;
   atk.dn = null;
   if (!atk.on || !d || d.id !== e.pointerId) return;
   if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8) return;
+  if (tipIsOpen()) { tipHide(); return; }
   const c = screenToCell(e.clientX, e.clientY);
   if (!c) return;
   const n = world.occ[idx(c.x, c.y)] - 1;
   if (game.phase === 'scout') {
     if (n >= 0) { atkInfo(c.x, c.y); return; }
     if (deployCells(world, 'front')[c.y * MAP_W + c.x] === 1) atkStartBattle(c.x, c.y);
-    else showToast('此處不可部署,請點亮起的部署區');
+    else showToast(DEPLOY_TOAST.cell);
     return;
   }
   if (game.phase !== 'march' || !battle || battle.over) return;
   if (atk.flagArm) { atkFlagAt(n); return; }
   if (n >= 0) { atkInfo(c.x, c.y); return; }
-  const card = battle.army[atk.sel];
-  if (!card) return;
-  if (card.left <= 0) { showToast(SAND_FAIL.noCard); return; }
-  if (!battle.seqOpen(card.part).open) { showToast(SAND_FAIL.locked); return; }
-  if (!canDeploy(battle, card.part, c.x, c.y)) { showToast(SAND_FAIL.cell); return; }
-  issueCmd(battle, { op: 'deploy', u: card.u, part: card.part, x: c.x, y: c.y });
+  uiFieldTap(battle, atk.unit, c.x, c.y);
   atkPaint();
 }
 
+// 離開:以目前狀況結算。等同鳴金後立即推進一步(simTick),由 tdCheckEnd 依摧毀率與星數判定;
+// 不要求已放兵,暫停中也可離開;錄影以同一 tick 的 retreat 指令記錄,重播一致
+function atkLeave() {
+  atk.leaveAsk = false;
+  if (!atk.on || game.phase !== 'march' || !battle || battle.over) return;
+  if (!battle.retreat) atkIssue({ op: 'retreat' });
+  simTick(battle);
+  atkSetSub('', 0);
+  if (battle.over) atkEnd();
+}
+
+function atkSetSpeed(v) {
+  atk.spd = v;
+  game.simSpeed = v;
+}
+
+function atkTogglePause() {
+  if (game.simSpeed === 0) game.simSpeed = atk.spd || 1;
+  else game.simSpeed = 0;
+}
+
+// 進軍期控制列:🚪 離開(二段確認)、⏸ 暫停 / ▶ 繼續、1x / 2x / 4x;暫停時中央顯示「已暫停」
+function atkCtlPaint() {
+  if (!atk.ctl) return;
+  const on = atk.on && game.phase === 'march' && !!battle && !battle.over;
+  atk.ctl.hidden = !on;
+  atk.pauseMark.hidden = !(on && game.simSpeed === 0);
+  if (!on) return;
+  const paused = game.simSpeed === 0;
+  const key = (atk.leaveAsk ? 'ask' : 'cmd') + (paused ? 'P' : 'R') + atk.spd;
+  if (key === atk.ctlKey) return;
+  atk.ctlKey = key;
+  if (atk.leaveAsk) {
+    atk.ctl.innerHTML = '<span class="cq">離開戰鬥並結算?</span>' +
+      '<button data-ctl="leaveOk">確定</button><button data-ctl="leaveNo">取消</button>';
+    return;
+  }
+  let h = '<button data-ctl="leave">🚪 離開</button>' +
+    '<button data-ctl="pause">' + (paused ? '▶ 繼續' : '⏸ 暫停') + '</button>';
+  [1, 2, 4].forEach(v => {
+    h += '<button data-ctl="spd" data-s="' + v + '"' + (atk.spd === v ? ' class="on"' : '') + '>' + v + 'x</button>';
+  });
+  atk.ctl.innerHTML = h;
+}
+
+function onCtlClick(e) {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const act = b.getAttribute('data-ctl');
+  if (act === 'leave') atk.leaveAsk = true;
+  else if (act === 'leaveNo') atk.leaveAsk = false;
+  else if (act === 'leaveOk') atkLeave();
+  else if (act === 'pause') atkTogglePause();
+  else if (act === 'spd') atkSetSpeed(+b.getAttribute('data-s'));
+  atkCtlPaint();
+}
+
+// 底部列(一列、總高 ≤ 96px):兵種列(可橫向捲動)+ 軍令三鈕(小按鈕一行);觀察期軍令鈕停用,第三鈕為撤退
 function atkBattleHtml() {
   const scout = game.phase === 'scout';
   const o = scout ? { drum: 1, flag: 1 } : battle.orders;
-  let h = '<div class="shd"><b>' + (scout ? '👁 斥候觀察' : '⚔ 進軍') + '</b>' +
-    (scout ? '<button class="ahd" data-atk="scoutRetreat">撤退</button>' : '') + '</div>';
-  h += '<div class="acards">';
-  const list = scout ? atk.cards : battle.army;
-  list.forEach((c, k) => {
-    const d = UNITS[c.u] || { name: c.u };
-    let usable, note;
-    if (scout) {
-      usable = c.part === 'van';
-      note = usable ? '剩 ' + c.n + ' 隊' : '開戰後';
-    } else {
-      const info = battle.seqOpen(c.part);
-      usable = info.open && c.left > 0;
-      if (!info.open) note = '鎖定' + (info.at != null ? ' ' + atkFmt((info.at - battle.tick) * SIM_DT) + ' 後開放' : '');
-      else note = c.left > 0 ? '剩 ' + c.left + ' 隊' : '已放完';
-    }
-    h += '<button data-atk="card" data-i="' + k + '"' + (atk.sel === k ? ' class="on"' : '') + (usable ? '' : ' disabled') +
-      '>' + tdEsc(d.name) + '<small>' + ATK_PARTS[c.part] + '・' + tdEsc(note) + '</small></button>';
-  });
-  h += '</div>';
-  h += scout
-    ? '<small>只有先鋒可放。點亮的部署區點一下即放下先鋒、擂鼓開戰。</small>'
-    : '<small>點兵種後點空地放一隊;點建築看詳情。</small>';
-  h += '<div class="acmd">' +
-    '<button data-atk="drum"' + (o.drum >= 1 ? ' disabled' : '') + '>🥁 擂鼓<small>' + (scout ? '開戰後' : o.drum >= 1 ? '已用' : '全軍加速') + '</small></button>' +
-    '<button data-atk="flag"' + (o.flag >= 1 ? ' disabled' : '') + (atk.flagArm ? ' class="on"' : '') + '>🚩 令旗<small>' +
-    (scout ? '開戰後' : o.flag >= 1 ? '已用' : '指定建築') + '</small></button>' +
-    '<button data-atk="retreat"' + (scout ? ' disabled' : '') + '>🔔 鳴金<small>' + (scout ? '開戰後' : '收兵') + '</small></button>' +
+  return unitStripHtml(atk.unit) +
+    '<div class="acmd">' +
+    '<button data-atk="drum"' + (o.drum >= 1 ? ' disabled' : '') + '>🥁 擂鼓</button>' +
+    '<button data-atk="flag"' + (o.flag >= 1 ? ' disabled' : '') + (atk.flagArm ? ' class="on"' : '') + '>🚩 令旗</button>' +
+    (scout ? '<button data-atk="scoutRetreat">↩ 撤退</button>' : '<button data-atk="retreat"' + (battle.retreat ? ' disabled' : '') + '>🔔 鳴金</button>') +
     '</div>';
-  if (atk.flagArm) h += '<small>請點選一座可見建築作為令旗目標</small>';
-  return h;
 }
 
 // 每幀更新 HUD 與戰鬥面板(面板只在內容變動時重繪)
@@ -813,8 +931,12 @@ function atkPaint() {
   const scout = game.phase === 'scout';
   atk.hud.hidden = false;
   atk.panel.hidden = false;
+  atk.panel.classList.add('abar');
   atk.hudClock.textContent = scout ? '斥候 ' + atkFmt(game.scoutLeft) : (battle ? '進軍 ' + atkFmt((battle.limitTick - battle.tick) * SIM_DT) : '');
-  atk.hudSub.textContent = atk.subLeft > 0 ? atk.sub : (scout ? '放下先鋒即擂鼓開戰' : '');
+  atk.hudSub.textContent = atk.subLeft > 0 ? atk.sub : (scout ? '點可部署區放下第一隊即開戰' : '');
+  const ph = popBarHtml(battle ? battle.popUsed : 0, battle ? battle.popCap : TD_POP_CAP);
+  if (ph !== atk.popHtml) { atk.popHtml = ph; atk.hudPop.innerHTML = ph; }
+  atkCtlPaint();
   const html = atkBattleHtml();
   if (html !== atk.lastHtml) {
     atk.lastHtml = html;
@@ -863,6 +985,10 @@ function atkHideBattleUI() {
   atk.lastHtml = '';
   if (atk.hud) atk.hud.hidden = true;
   if (atk.panel && !atk.open) atk.panel.hidden = true;
+  if (atk.ctl) atk.ctl.hidden = true;
+  if (atk.pauseMark) atk.pauseMark.hidden = true;
+  atk.leaveAsk = false;
+  tipHide();
 }
 
 // 回到進攻前:棋盤 boardRestore、模式還原、工具列重建。reopen 為 true 時回到整軍面板(觀察期撤退用)
@@ -875,10 +1001,10 @@ function atkRestore(reopen) {
   game.sel = -1;
   game.scoutLeft = 0;
   game.simSpeed = 1;
+  atk.spd = 1;
   atk.on = false;
   atk.ended = false;
   atk.flagArm = false;
-  atk.sel = -1;
   atk.dn = null;
   atk.sub = '';
   atk.subLeft = 0;
@@ -918,7 +1044,7 @@ function rpEl(tag, cls, text) {
 
 function rpPlayable(rep) {
   return !!rep && rep.v === SIM_VER && !!rep.snap && typeof rep.snap === 'object' && Array.isArray(rep.cmds) &&
-    Array.isArray(rep.army) && rep.seed != null;
+    rep.army != null && rep.seed != null;
 }
 
 function rpNpcName(rep) { return rep.def && rep.def.name ? rep.def.name : '未知對手'; }
@@ -1000,6 +1126,7 @@ function battleResBody(b, r) {
 }
 
 function atkShowResult(b, r, nb) {
+  atk.panel.classList.remove('abar');
   let h = '<div class="shd"><b>📜 戰果・' + tdEsc(nb ? nb.name : '') + '</b><button class="close" data-atk="home">✕</button></div>';
   h += battleResBody(b, r);
   if (!atk.resOk) h += '<small class="aerr">本場錄影無法保存(僅存文字戰報)</small>';
@@ -1036,7 +1163,6 @@ function rpPlay(rep) {
     atk.on = false;
     atk.ended = false;
     atk.flagArm = false;
-    atk.sel = -1;
     atk.dn = null;
     atk.open = false;
     atkHideBattleUI();
@@ -1076,9 +1202,10 @@ function rpPlay(rep) {
 // 依 replay.cmds 建立戰鬥並快進到 tick(指令已帶 tick,於 simTick 同一 tick 套用,與 runHeadless 等價)
 function rpStart(tick) {
   const rep = rp.rep;
+  // 錄影的 army 為 { popCap }(人口制);舊格式陣列或缺值一律以預設上限重跑(指令已記錄,不另行解讀兵力)
+  const cap = rep.army && typeof rep.army === 'object' && !Array.isArray(rep.army) && rep.army.popCap > 0 ? rep.army.popCap | 0 : TD_POP_CAP;
   const b = battleInit({
-    kind: rep.kind || 'npc', seed: rep.seed, refId: rep.refId || null, map: snapFull(rep.snap),
-    army: rep.army.map(a => ({ u: a[0], part: a[1], n: a[2] }))
+    kind: rep.kind || 'npc', seed: rep.seed, refId: rep.refId || null, map: battleMapOf(snapFull(rep.snap)), popCap: cap
   });
   b.cmds = JSON.parse(JSON.stringify(rep.cmds));
   rp.checked = null;

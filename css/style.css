@@ -293,10 +293,46 @@ body.replay-mode #toast { top: calc(100px + env(safe-area-inset-top)); bottom: a
 #fishCv { position: absolute; top: 0; left: 0; width: 390px; height: 844px; display: block; }
 #fishLayer .fu-btn { position: absolute; margin: 0; padding: 0; border: 0; border-radius: 10px; background: rgba(20, 26, 36, .72); color: #f4f4f4; font-size: 16px; font-weight: 700; line-height: 1; touch-action: none; }
 #fishLayer .fu-btn.fu-main { border-radius: 50%; background: rgba(230, 150, 60, .92); color: #fff; font-size: 18px; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
-#fishDex { position: absolute; top: 52px; left: 16px; width: 358px; box-sizing: border-box; padding: 12px; border-radius: 12px; background: rgba(12, 20, 30, .94); color: #eee; font-size: 14px; }
+/* 頂列:安全區(瀏海 / 動態島)之下,至少 44 px;只有按鈕吃指標事件 */
+#fishTop { position: absolute; top: 0; left: 0; right: 0; box-sizing: border-box; display: flex; justify-content: space-between; align-items: flex-start; padding-left: 12px; padding-right: 12px; padding-top: max(env(safe-area-inset-top), 44px); pointer-events: none; }
+#fishTop .fu-btn { position: static; width: 44px; height: 36px; pointer-events: auto; }
+/* 左上 HUD(頂列之下) */
+#fishHud { position: absolute; left: 12px; top: calc(max(env(safe-area-inset-top), 44px) + 44px); max-width: 250px; box-sizing: border-box; padding: 6px 10px; border-radius: 10px; background: rgba(12, 20, 30, .5); color: #fff; font-size: 13px; pointer-events: none; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
+#fishHud .fu-hud-row { display: flex; align-items: center; gap: 8px; min-height: 20px; }
+#fishHud .fu-hud-score { font-size: 26px; font-weight: 800; line-height: 1.1; }
+#fishHud .fu-hud-time { margin-left: auto; font-weight: 700; }
+#fishHud .fu-hud-combo { color: #ffd24a; font-weight: 700; }
+#fishHud .fu-hud-count { opacity: .85; }
+#fishHud .fu-hud-strip { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
+#fishHud .fu-hud-item { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; }
+#fishHud .fu-hud-item canvas { width: 36px; height: 20px; }
+#fishHud .fu-more { position: static; pointer-events: auto; margin: 0; padding: 2px 6px; font-size: 12px; font-weight: 600; background: rgba(20, 26, 36, .8); }
+#fishHud .fu-toast { margin-top: 4px; font-size: 13px; font-weight: 700; color: #ffe9a8; white-space: pre-line; }
+#fishDex { position: absolute; top: calc(max(env(safe-area-inset-top), 44px) + 44px); left: 12px; right: 12px; max-height: calc(100% - 120px); overflow-y: auto; touch-action: pan-y; box-sizing: border-box; padding: 12px; border-radius: 12px; background: rgba(12, 20, 30, .94); color: #eee; font-size: 14px; }
 #fishDex .fu-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, .12); }
 #fishDex .fu-row canvas { width: 64px; height: 36px; flex-shrink: 0; }
 #fishDex .fu-btn { position: static; margin-top: 10px; padding: 8px 14px; font-size: 14px; }
+#fishDex .fu-dex-titles { margin-top: 10px; font-size: 13px; line-height: 1.6; white-space: pre-line; }
+/* 面板:開始 / 挑戰結算 / 本局清單 / 排行榜(整層吃掉指標事件) */
+#fishSheet { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center; box-sizing: border-box; padding: 16px; background: rgba(4, 10, 16, .6); touch-action: pan-y; }
+#fishSheet .fu-panel { width: 100%; max-width: 358px; max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; box-sizing: border-box; padding: 14px; border-radius: 14px; background: rgba(12, 20, 30, .96); color: #eee; font-size: 14px; }
+#fishSheet .fu-h { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+#fishSheet .fu-sub { font-size: 13px; opacity: .85; margin: 2px 0; }
+#fishSheet .fu-big { font-size: 34px; font-weight: 800; color: #ffd24a; margin: 4px 0; }
+#fishSheet .fu-hit { color: #ffd24a; font-weight: 700; margin: 3px 0; }
+#fishSheet .fu-sec { margin-top: 12px; font-size: 13px; font-weight: 700; opacity: .9; }
+#fishSheet .fu-note { font-size: 12px; opacity: .75; margin: 6px 0; }
+#fishSheet .fu-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+#fishSheet .fu-chip { position: static; margin: 0; padding: 8px 12px; font-size: 14px; background: rgba(60, 70, 84, .9); }
+#fishSheet .fu-chip.on { background: rgba(230, 150, 60, .95); color: #fff; }
+#fishSheet .fu-chip.lock { opacity: .55; }
+#fishSheet .fu-go { position: static; margin: 0; padding: 10px 22px; font-size: 16px; background: rgba(230, 150, 60, .95); color: #fff; }
+#fishSheet .fu-list { max-height: 40vh; overflow-y: auto; touch-action: pan-y; margin-top: 6px; }
+#fishSheet .fu-lrow { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(255, 255, 255, .12); font-size: 13px; }
+#fishSheet .fu-lrow canvas { width: 40px; height: 22px; flex-shrink: 0; }
+#fishSheet .fu-lname { font-weight: 700; }
+#fishSheet .fu-lcm { opacity: .85; }
+#fishSheet .fu-lpts { margin-left: auto; color: #ffd24a; font-weight: 700; }
 
 /* ===== 自訂音樂(mymusic.js,PLAN_AUDIO §9.3 / AU6) ===== */
 #mmFab { position: fixed; right: 12px; bottom: 12px; z-index: 40; min-height: 44px; padding: 8px 14px; border-radius: 22px; border: 1px solid #3a4658; background: #1c2430; color: #e8edf2; font: inherit; font-size: 14px; }
@@ -417,3 +453,51 @@ body.shooting > *:not(#game):not(#recRoot) { display: none !important; }
 #recRoot.rec-show-review .rec-review { display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; flex-direction: column; justify-content: center; gap: 12px; padding: 16px; box-sizing: border-box; background: #000; }
 #recRoot .rec-video { width: 100%; max-height: 70vh; background: #000; }
 #recRoot .rec-review .rec-actions { justify-content: center; }
+
+/* 進軍期控制列(離開/暫停/速度)、暫停字樣、點選小標籤與選取圈;toast 下移避開控制列 */
+#atkCtl[hidden], #atkPause[hidden], #tdTip[hidden], #tdSelRing[hidden] { display: none; }
+#atkCtl { position: fixed; top: calc(108px + env(safe-area-inset-top)); left: 8px; right: 8px; max-width: 480px; margin: 0 auto; z-index: 3; display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 10px; background: rgba(20, 26, 36, .85); font-size: 13px; }
+#atkCtl button { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 4px 6px; font-size: 13px; white-space: nowrap; }
+#atkCtl button.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; }
+#atkCtl .cq { flex: 1 1 100%; min-width: 0; text-align: center; }
+#atkPause { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 3; padding: 2px 10px; border-radius: 999px; background: rgba(20, 26, 36, .45); color: #e8edf2; font-size: 13px; pointer-events: none; }
+#tdTip { position: fixed; z-index: 4; max-width: 180px; padding: 3px 8px; border-radius: 6px; background: rgba(20, 26, 36, .8); color: #e8edf2; font-size: 12px; line-height: 1.4; text-align: center; pointer-events: none; transform: translate(-50%, -100%); }
+#tdSelRing { position: fixed; z-index: 3; width: 26px; height: 26px; margin: -13px 0 0 -13px; border: 2px solid #f0b45a; border-radius: 50%; box-shadow: 0 0 6px rgba(240, 180, 90, .6); pointer-events: none; }
+body.atk-mode #toast { top: calc(162px + env(safe-area-inset-top)); bottom: auto; }
+
+/* ===== 人口上限出兵(battleui.js:popBarHtml / unitStripHtml;PLAN 人口制) ===== */
+.apop { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.apop span { white-space: nowrap; }
+.apop i { flex: 1; min-width: 0; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .15); overflow: hidden; display: block; }
+.apop i b { display: block; height: 100%; background: #c9892f; }
+.apop.full i b { background: #b8322c; }
+.apop.full span { color: #f2a09b; }
+#atkHud { flex-wrap: wrap; }
+#atkHud .apop { flex: 1 1 100%; margin-top: 0; }
+#atkHud .apop span { flex: 0 0 auto; text-align: left; }
+.ustrip { display: flex; gap: 6px; height: 48px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; align-items: stretch; margin-top: 4px; }
+.ustrip button { flex: 0 0 66px; min-height: 44px; height: 44px; padding: 2px 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; font-size: 11px; white-space: nowrap; }
+.ustrip .uico { font-size: 15px; line-height: 1; }
+.ustrip small { font-size: 10px; opacity: .85; }
+.ustrip button.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; }
+#atkPanel.abar { max-height: none; padding: 6px 8px; }
+#atkPanel.abar .ustrip { margin-top: 0; }
+#atkPanel.abar .acmd { display: flex; gap: 6px; margin-top: 4px; }
+#atkPanel.abar .acmd button { flex: 1; min-width: 0; min-height: 30px; padding: 2px 4px; font-size: 12px; }
+#atkPanel.abar .acmd button.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; }
+#sandPanel .apop { margin-top: 6px; }
+#sandPanel .ustrip { margin-top: 6px; }
+#sandPanel .scap { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+#sandPanel .scap span { flex: 1 1 100%; font-size: 12px; }
+#sandPanel .scap button { flex: 1; min-width: 56px; min-height: 40px; }
+#sandPanel .scap button.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; }
+#atkPanel .apopcap { margin-top: 6px; font-size: 14px; }
+#atkPanel .apopcap b { font-size: 18px; color: #f0c46a; }
+#atkPanel .ulist { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin-top: 4px; }
+#atkPanel .urow { display: flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0; }
+#atkPanel .urow .uname { flex: 1; min-width: 0; }
+#atkPanel .uico { font-size: 18px; line-height: 1; width: 24px; text-align: center; }
+#atkPanel .urow small { white-space: nowrap; }
+#atkPanel .arule { margin-top: 8px; }
+#atkPanel .arule p { margin: 3px 0; font-size: 12px; opacity: 1; }
+#atkPanel .sact .abig { min-height: 52px; font-size: 17px; font-weight: 700; }

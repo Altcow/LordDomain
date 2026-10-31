@@ -497,26 +497,25 @@ let tdDrop = null;                  // 按住地圖的落點 {x, y, x0, y0}(螢�
 //  沙盤:已選卡且仍有隊數時畫正面
 function tdZoneWant() {
   const out = { board: null, front: false, flank: false };
+  const u = typeof uiPickedUnit === 'function' ? uiPickedUnit() : null;
   if (typeof battle === 'undefined' || battle === null) {
     if (typeof atk !== 'undefined' && atk.on && game.phase === 'scout') {
       out.board = world;
-      out.front = atk.cards.some(function (k) { return k.part === 'van'; });
+      out.front = !!u;
     }
     return out;
   }
   if (battle.over) return out;
   out.board = battle.map;
-  if (typeof sand !== 'undefined' && sand !== null && sand.card) {
-    out.front = battle.army.some(function (k) { return k.u === sand.card && k.part === 'main' && k.left > 0; });
-    return out;
-  }
-  if (typeof atk !== 'undefined' && atk.on && game.phase === 'march') {
-    battle.army.forEach(function (k) {
-      if (k.left <= 0 || !battle.seqOpen(k.part).open) return;
-      if (SEQ_ZONE[k.part] === 'flank') out.flank = true; else out.front = true;
-    });
-  }
+  out.front = !!u && tdUnitPopOk(battle, u);
   return out;
+}
+
+// 人口與單位數是否仍容得下一隊 u(與 tdDeployWhy 的 popcap / cap 判定相同,不含地形);供部署區高亮用
+function tdUnitPopOk(b, u) {
+  const d = UNITS[u];
+  if (!d || !tdDeployable(d)) return false;
+  return b.popUsed + d.pop * d.squad <= b.popCap && b.units.length + d.squad <= MAX_UNITS;
 }
 
 // render.js draw() 每幀開頭呼叫
@@ -563,23 +562,14 @@ function tdDropInfo() {
   if (c === null) return null;
   const i = c.y * MAP_W + c.x;
   const occ = world.occ[i] !== 0;
+  const u = typeof uiPickedUnit === 'function' ? uiPickedUnit() : null;
+  if (u === null) return null;
   if (typeof battle === 'undefined' || battle === null) {
     if (typeof atk === 'undefined' || !atk.on || game.phase !== 'scout') return null;
-    const sel = atk.cards[atk.sel];
-    const k = sel && sel.part === 'van' ? sel : atk.cards.find(function (q) { return q.part === 'van'; });
-    if (!k) return null;
-    return { x: c.x, y: c.y, ok: tdDepArr !== null && tdDepArr[i] === 1 && !occ, u: k.u };
+    return { x: c.x, y: c.y, ok: tdDepArr !== null && tdDepArr[i] === 1 && !occ, u: u };
   }
   if (battle.over) return null;
-  if (typeof sand !== 'undefined' && sand !== null && sand.card) {
-    const s = battle.army.find(function (q) { return q.u === sand.card && q.part === 'main'; });
-    if (!s) return null;
-    return { x: c.x, y: c.y, ok: s.left > 0 && canDeploy(battle, 'main', c.x, c.y) && !occ, u: s.u };
-  }
-  if (typeof atk === 'undefined' || !atk.on || game.phase !== 'march') return null;
-  const k = battle.army[atk.sel];
-  if (!k) return null;
-  return { x: c.x, y: c.y, ok: k.left > 0 && canDeploy(battle, k.part, c.x, c.y) && !occ, u: k.u };
+  return { x: c.x, y: c.y, ok: tdDeployWhy(battle, u, c.x, c.y) === true && !occ, u: u };
 }
 
 // 落點預覽:合法綠、不合法紅的格外框 + 兵種影子與色點(攻方,team 0)

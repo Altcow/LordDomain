@@ -442,6 +442,7 @@ function garrisonTarget(unit, enemies, home) {
 }
 
 // ---- 純函式(三):出征容量與兵種卡驗證(PLAN_TD_UNITS §4.2、§7.2;全部確定性,科技倍率 MVP = 1.0)----
+// 【舊制,不再用於出征】出征改為人口上限 TD_POP_CAP(td.js),不再依各科容量 / 鄉勇與卡片驗證;以下函式保留供舊測試與參考。
 // estateObjs:經營基地物件陣列(取 o.type);回傳 { byCls: {shield, archer, cavalry, siege}, levy, total }
 function marchCapacity(estateObjs) {
   const cnt = { shield: 0, archer: 0, cavalry: 0, siege: 0 };
@@ -456,7 +457,7 @@ function marchCapacity(estateObjs) {
   const levy = LEVY_MAX;
   return { byCls: byCls, levy: levy, total: sum + levy };
 }
-// 一張卡的人口 = UNITS[u].pop × UNITS[u].squad × n(§4.2)
+// 一張卡的人口 = UNITS[u].pop × UNITS[u].squad × n(§4.2)。【舊制,不再用於出征】
 function cardPop(card) {
   const def = UNITS[card.u];
   if (!def) return 0;
@@ -465,7 +466,7 @@ function cardPop(card) {
 // 只能用鄉勇容量的兵種(民兵、獵戶)
 const LEVY_UNITS = { militia: true, hunter: true };
 const CARD_PARTS = ['van', 'main', 'rear', 'ambush'];
-// 驗證一組卡(§4.1、§4.2、§7.2):≤5 張;每張為有效兵種且 n ≥ 1;至少 1 張先鋒('van');
+// 【舊制,不再用於出征】驗證一組卡(§4.1、§4.2、§7.2):≤5 張;每張為有效兵種且 n ≥ 1;至少 1 張先鋒('van');
 // 各科人口合計 ≤ cap.byCls[cls];民兵 / 獵戶合計 ≤ cap.levy。回傳 { ok, err }(err 為繁體中文,ok 時 err 為 null)
 function validateCards(cards, cap) {
   const fail = function (msg) { return { ok: false, err: msg }; };
