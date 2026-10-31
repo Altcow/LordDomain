@@ -176,24 +176,28 @@ function fishSpawnTick(dt) {
 // 竿尖與水面的關係:竿尖在水面上方 8 px(F0 為 y=34,水面 42)。水面下移後跟著移動。
 function fishTipY() { return FISH_LAYER.surf - 8; }
 
-// 尺寸係數:cm / 該魚上限 = 0 → 0.6,= 1 → 1.5(線性)。
-function fishSizeF(cm, def) {
-  var r = cm / def.max;
-  return Math.max(0.6, Math.min(1.5, 0.6 + 0.9 * r));
+// 尺寸品質:cm 在該魚 [min, max] 內的位置,0 = 最小、1 = 最大(夾在 0~1)。
+function fishSizeQ(cm, def) {
+  var r = (cm - def.min) / (def.max - def.min);
+  return Math.max(0, Math.min(1, r));
 }
 
-// 連擊倍率:1.0 + 0.1 × min(combo, 10)。
+// 連擊倍率:1 + 0.03 × min(combo, 10),上限 1.3。
 function fishComboMul(combo) {
-  return 1 + 0.1 * Math.min(Math.max(0, combo), 10);
+  return 1 + FISH_COMBO_STEP * Math.min(Math.max(0, combo), FISH_COMBO_CAP);
 }
 
 // 單次得分。kind:'fish'(預設)、'junk' 雜物(固定 −5)、'odd' 奇物(固定 +40)。
+// 魚:層帶 [lo, hi] 內依 0.5 × 稀有度 + 0.5 × 尺寸 插值得到連擊前分數(取整),再乘連擊倍率(取整)。
 function fishScoreOf(kind, sp, cm, combo) {
-  var def;
+  var def, band, q, pre;
   if (kind === 'junk') return FISH_JUNK_PTS;
   if (kind === 'odd') return FISH_ODD_PTS;
   def = FISH[sp];
-  return Math.round(FISH_RAR_PTS[def.rar] * fishSizeF(cm, def) * fishComboMul(combo));
+  band = FISH_BAND[def.depth];
+  q = 0.5 * FISH_RAR_Q[def.rar] + 0.5 * fishSizeQ(cm, def);
+  pre = Math.round(band[0] + (band[1] - band[0]) * q);
+  return Math.round(pre * fishComboMul(combo));
 }
 
 // 分數對應的最高稱號(未達 100 分回傳 null)。

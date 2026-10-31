@@ -149,7 +149,7 @@ function initBattleUI() {
   const btn = document.createElement('button');
   btn.id = 'btnSandbox';
   btn.title = '沙盤推演（用戰陣試打，不計戰績、不存檔）';
-  btn.textContent = '⚔ 沙盤';
+  btn.textContent = '⚔';
   top.insertBefore(btn, document.getElementById('btnHide'));
   btn.addEventListener('click', () => {
     if (sand.open) sandClose();
@@ -1445,7 +1445,7 @@ function initReplayUI() {
   const btn = document.createElement('button');
   btn.id = 'btnReport';
   btn.title = '戰報：與我相關的戰鬥錄影與文字戰報';
-  btn.textContent = '📜 戰報';
+  btn.textContent = '📜';
   top.insertBefore(btn, document.getElementById('btnHide'));
   btn.addEventListener('click', () => {
     if (rpt.open) rptClose();

@@ -7,7 +7,7 @@ function setSeason(name) {
 }
 
 const view = { x: 0, y: 0, zoom: 1 };
-const ZOOM_ABS_MIN = 0.05, ZOOM_MIN_CAP = 1.5, ZOOM_MAX = 2.5;
+const ZOOM_ABS_MIN = 0.35, ZOOM_MIN_CAP = 1.5, ZOOM_MAX = 2.5;
 // 整張地圖的螢幕外框(世界像素、未乘縮放):寬 = 對角投影寬;高 = 頂部留建築高度 + 底邊
 const MAP_FIT_W = (MAP_W + MAP_H) * TW / 2;
 const MAP_FIT_H = (MAP_W + MAP_H) * TH / 2 + MAX_H * HL + 64;
@@ -643,6 +643,24 @@ function drawGhostCell(ctx, x, y) {
   });
 }
 
+// 單一物件草稿虛影(ui.js draft):半透明本體＋綠/紅格底＋虛線外框;不進 occ / 待購,不計價
+function drawDraft(ctx) {
+  const d = draft;
+  if (!d || !OBJECTS[d.type] || !inBounds(d.x, d.y)) return;
+  const fp = footprint(d.type, d.rot);
+  const fill = d.ok ? 'rgba(80,220,120,.30)' : 'rgba(230,70,70,.35)';
+  for (let yy = d.y; yy < d.y + fp[1]; yy++)
+    for (let xx = d.x; xx < d.x + fp[0]; xx++)
+      if (inBounds(xx, yy)) poly(ctx, topPts(xx, yy, world.height[idx(xx, yy)], 0), fill);
+  drawObject(ctx, { type: d.type, x: d.x, y: d.y, rot: d.rot }, 0.55);
+  const bh = world.height[idx(d.x, d.y)] * HL;
+  const pts = [gpt(d.x, d.y, bh), gpt(d.x + fp[0], d.y, bh), gpt(d.x + fp[0], d.y + fp[1], bh), gpt(d.x, d.y + fp[1], bh)];
+  ctx.save();
+  ctx.setLineDash([6, 4]);
+  outline(ctx, pts, d.ok ? '#5fe08a' : '#ff5a4a', 2);
+  ctx.restore();
+}
+
 // 懸停預覽
 function fillCells(ctx, x, y, w, h, color) {
   for (let yy = y; yy < y + h; yy++)
@@ -789,6 +807,12 @@ function draw(ctx, time) {
   if (typeof artLights === 'function') artLights(ctx, time);
   if (typeof lifeDrawTop === 'function') lifeDrawTop(ctx, time);
   if (preview.visible) drawPreview(ctx);
+  // 草稿只在經營模式顯示;離開經營模式(釣魚、仙獸、戰鬥布置等)即丟棄,移動中的建築回原位
+  if (typeof draft !== 'undefined' && draft) {
+    if (game.mode !== 'estate') {
+      if (typeof draftDiscard === 'function') draftDiscard();
+    } else if (!pano.open && !uiIsPhoto()) drawDraft(ctx);
+  }
   ctx.setTransform(r, 0, 0, r, 0, 0);
   if (typeof drawScreenHud === 'function') drawScreenHud(ctx, time);
 }

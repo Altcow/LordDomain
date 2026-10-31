@@ -4,19 +4,19 @@ input, textarea, [contenteditable] { -webkit-user-select: text; user-select: tex
 img, canvas { -webkit-user-drag: none; -webkit-touch-callout: none; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #1c2430; color: #e8edf2; font-family: "Microsoft JhengHei", "PingFang TC", sans-serif; }
 #game { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
-#topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 6px 10px; padding-top: max(6px, env(safe-area-inset-top)); background: rgba(20, 26, 36, .82); backdrop-filter: blur(4px); font-size: 14px; }
+#topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 2; display: flex; align-items: center; gap: 4px; height: calc(var(--top-h) + env(safe-area-inset-top)); box-sizing: border-box; padding: env(safe-area-inset-top) max(6px, env(safe-area-inset-right)) 0 max(6px, env(safe-area-inset-left)); overflow: hidden; background: rgba(20, 26, 36, .78); backdrop-filter: blur(4px); font-size: 13px; }
 #title { font-weight: bold; letter-spacing: 2px; }
 #info { opacity: .7; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .spacer { flex: 1; }
 button, select { font: inherit; color: inherit; background: #2f3b4d; border: 1px solid #45566e; border-radius: 6px; padding: 5px 10px; }
 button:active { background: #45566e; }
-#toolbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; gap: 6px; padding: 8px 10px; padding-bottom: max(8px, env(safe-area-inset-bottom)); overflow-x: auto; background: rgba(20, 26, 36, .85); backdrop-filter: blur(4px); }
-#toolbar button { flex: 0 0 auto; min-width: 58px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; padding: 6px 8px; }
-#toolbar button .ic { font-size: 22px; line-height: 1; }
+#toolbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 4px; padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); overflow-x: auto; background: rgba(20, 26, 36, .85); backdrop-filter: blur(4px); }
+#toolbar button { flex: 0 0 auto; min-width: 46px; height: 42px; min-height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 10px; line-height: 1.1; padding: 2px 4px; }
+#toolbar button .ic { font-size: 18px; line-height: 1; }
 #toolbar button.active { background: #c9892f; border-color: #f0b45a; color: #1b1308; }
-#resbar { position: fixed; top: calc(44px + env(safe-area-inset-top)); left: 10px; z-index: 2; display: flex; gap: 10px; padding: 4px 10px; border-radius: 8px; background: rgba(20, 26, 36, .7); font-size: 14px; pointer-events: none; }
-#resbar .res small { opacity: .7; font-size: 11px; margin-left: 2px; }
-#shop { position: fixed; top: calc(44px + env(safe-area-inset-top)); right: 10px; width: min(320px, calc(100vw - 20px)); z-index: 3; padding: 10px; border-radius: 10px; background: rgba(20, 26, 36, .9); box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
+#resbar { position: static; min-width: 0; flex: 0 1 auto; display: flex; align-items: center; gap: 8px; padding: 0; background: none; font-size: 12px; white-space: nowrap; overflow: hidden; pointer-events: none; }
+#resbar .res small { display: none; opacity: .7; font-size: 10px; margin-left: 2px; }
+#shop { position: fixed; top: calc(40px + env(safe-area-inset-top)); right: calc(var(--side-w) + 6px); width: min(320px, calc(100vw - var(--side-w) - 16px)); z-index: 3; padding: 10px; border-radius: 10px; background: rgba(20, 26, 36, .9); box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
 #shop[hidden] { display: none; }
 #shop .row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
 #shop .row button { font-size: 12px; }
@@ -24,13 +24,13 @@ button:active { background: #45566e; }
 #shop button:disabled { opacity: .4; }
 #toolbar button .cost { font-size: 10px; opacity: .75; white-space: nowrap; }
 #toolbar button.poor { opacity: .45; }
-#toast { position: fixed; bottom: calc(80px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); z-index: 4; padding: 8px 16px; border-radius: 999px; background: rgba(20, 26, 36, .9); color: #e8edf2; font-size: 14px; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 90vw; text-align: center; }
+#toast { position: fixed; bottom: calc(var(--stack) + 10px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); z-index: 4; padding: 8px 16px; border-radius: 999px; background: rgba(20, 26, 36, .9); color: #e8edf2; font-size: 14px; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 90vw; text-align: center; }
 #toast.show { opacity: 1; }
 @media (max-width: 480px) {
   #title { display: none; }
   #info { display: none; }
   #topbar button, #topbar select { padding: 4px 7px; }
-  #shop { top: calc(84px + env(safe-area-inset-top)); }
+  #shop { top: calc(40px + env(safe-area-inset-top)); }
 }
 
 #shop { max-height: calc(100vh - 150px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; }
@@ -43,23 +43,23 @@ button:active { background: #45566e; }
 #shop .deal s { opacity: .5; }
 #shop .deal em { font-style: normal; font-weight: bold; color: #ff8a65; }
 #shop .row.deal.out { opacity: .5; }
-#updateBar { position: fixed; left: 50%; bottom: calc(130px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 999px; background: rgba(20, 26, 36, .95); border: 1px solid #f0b45a; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 14px; white-space: nowrap; }
+#updateBar { position: fixed; left: 50%; bottom: calc(var(--stack) + 66px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 999px; background: rgba(20, 26, 36, .95); border: 1px solid #f0b45a; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 14px; white-space: nowrap; }
 #updateBar .go { background: #c9892f; border-color: #f0b45a; color: #1b1308; }
 #updateBar .later { background: none; border: none; opacity: .75; }
-#tplMenu { position: fixed; top: calc(44px + env(safe-area-inset-top)); right: 10px; width: min(320px, calc(100vw - 20px)); max-height: calc(100vh - 150px); overflow-y: auto; overscroll-behavior: contain; z-index: 3; padding: 10px; border-radius: 10px; background: rgba(20, 26, 36, .9); box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
+#tplMenu { position: fixed; top: calc(40px + env(safe-area-inset-top)); right: calc(var(--side-w) + 6px); width: min(320px, calc(100vw - var(--side-w) - 16px)); max-height: calc(100vh - 150px); overflow-y: auto; overscroll-behavior: contain; z-index: 3; padding: 10px; border-radius: 10px; background: rgba(20, 26, 36, .9); box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
 #tplMenu[hidden] { display: none; }
 #tplMenu .tpl { display: block; width: 100%; text-align: left; margin-top: 8px; padding: 8px; }
 #tplMenu .tpl small { display: block; font-size: 11px; opacity: .75; margin-top: 2px; }
 #tplMenu .close { position: absolute; top: 4px; right: 6px; background: none; border: none; padding: 2px 6px; }
 #tplMenu button:disabled { opacity: .4; }
-@media (max-width: 480px) { #tplMenu { top: calc(84px + env(safe-area-inset-top)); } }
+@media (max-width: 480px) { #tplMenu { top: calc(40px + env(safe-area-inset-top)); } }
 #pano { position: fixed; inset: 0; z-index: 6; display: flex; flex-direction: column; background: #10151d; touch-action: none; padding-bottom: env(safe-area-inset-bottom); }
 #pano[hidden] { display: none; }
 #pano .pbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; padding-top: max(6px, env(safe-area-inset-top)); background: rgba(20, 26, 36, .95); font-size: 14px; }
 #panoMsg { font-size: 12px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 #panoSave:disabled { opacity: .4; }
 #panoImg { flex: 1 1 0; min-height: 0; width: 100%; object-fit: contain; display: block; -webkit-touch-callout: default; }
-#pendBar { position: fixed; left: 84px; right: 52px; bottom: calc(96px + env(safe-area-inset-bottom)); max-width: 480px; margin: 0 auto; z-index: 3; padding: 6px 8px; border-radius: 10px; background: rgba(20, 26, 36, .92); border: 1px solid #f0b45a; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
+#pendBar { position: fixed; left: 70px; right: 6px; bottom: calc(var(--stack) + 8px + env(safe-area-inset-bottom)); max-width: 480px; margin: 0 auto; z-index: 3; padding: 6px 8px; border-radius: 10px; background: rgba(20, 26, 36, .92); border: 1px solid #f0b45a; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
 #pendBar[hidden] { display: none; }
 #pendBar .prow { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 #pendBar .prow.sel { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, .15); }
@@ -71,15 +71,15 @@ button:active { background: #45566e; }
 #pendBar .pno { background: #6b2b2b; border-color: #c96a5f; }
 #pendBar .sel button { font-size: 12px; padding: 5px 7px; }
 #pendBar .sel button.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; }
-body.pending #toast { bottom: calc(150px + env(safe-area-inset-bottom)); }
-body.pending.psel #toast { bottom: calc(192px + env(safe-area-inset-bottom)); }
-body.pending #updateBar { bottom: calc(198px + env(safe-area-inset-bottom)); }
-body.pending.psel #updateBar { bottom: calc(240px + env(safe-area-inset-bottom)); }
+body.pending #toast { bottom: calc(var(--stack) + 70px + env(safe-area-inset-bottom)); }
+body.pending.psel #toast { bottom: calc(var(--stack) + 112px + env(safe-area-inset-bottom)); }
+body.pending #updateBar { bottom: calc(var(--stack) + 118px + env(safe-area-inset-bottom)); }
+body.pending.psel #updateBar { bottom: calc(var(--stack) + 160px + env(safe-area-inset-bottom)); }
 #btnHide.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; font-weight: bold; }
 #btnHide .lbl { margin-left: 3px; }
 body.hideobj #info { color: #f0b45a; }
-@media (max-width: 480px) { #btnHide .lbl { display: none; } #topbar { gap: 6px; } }
-#techPanel { position: fixed; top: calc(44px + env(safe-area-inset-top)); right: 10px; width: min(340px, calc(100vw - 20px)); max-height: calc(100vh - 150px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; z-index: 3; padding: 10px; border-radius: 10px; background: rgba(20, 26, 36, .92); box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
+@media (max-width: 480px) { #btnHide .lbl { display: none; } }
+#techPanel { position: fixed; top: calc(40px + env(safe-area-inset-top)); right: calc(var(--side-w) + 6px); width: min(340px, calc(100vw - var(--side-w) - 16px)); max-height: calc(100vh - 150px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; z-index: 3; padding: 10px; border-radius: 10px; background: rgba(20, 26, 36, .92); box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
 #techPanel[hidden] { display: none; }
 #techPanel .close { position: absolute; top: 4px; right: 6px; background: none; border: none; padding: 2px 6px; }
 #techPanel .tcur { margin-top: 6px; padding: 6px; border-radius: 8px; background: rgba(240, 180, 90, .12); border: 1px solid #f0b45a; }
@@ -96,7 +96,7 @@ body.hideobj #info { color: #f0b45a; }
 #techPanel .node.done { opacity: .5; }
 #techPanel .node.lock { opacity: .55; }
 #techPanel .lack { color: #ff6b5e; font-weight: bold; }
-@media (max-width: 480px) { #techPanel { top: calc(84px + env(safe-area-inset-top)); } }
+@media (max-width: 480px) { #techPanel { top: calc(40px + env(safe-area-inset-top)); } }
 @media (max-width: 480px) { #topbar { gap: 4px; padding-left: 6px; padding-right: 6px; } #topbar button, #topbar select { padding: 4px 5px; } }
 #topbar button, #topbar select { flex-shrink: 0; }
 .vdot { position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; border-radius: 50%; border: 1px solid #1c2430; }
@@ -114,9 +114,6 @@ body.camp-mode #btnPano { display: none; }
 #campPick .box button { display: block; width: 100%; text-align: left; margin-top: 8px; padding: 8px 10px; }
 #campPick .box button small { display: block; font-size: 11px; opacity: .75; margin-top: 2px; white-space: normal; }
 #campPick .box button[data-cpick="cancel"] { text-align: center; }
-@media (max-width: 480px) {
-  #topbar { overflow-x: auto; }
-}
 /* 沙盤推演（M1-05） */
 #btnSandbox[hidden] { display: none; }
 #sandPanel { position: fixed; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); max-width: 480px; max-height: 60vh; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; margin: 0 auto; z-index: 3; padding: 8px 10px; border-radius: 10px; background: rgba(20, 26, 36, .94); box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
@@ -245,7 +242,7 @@ body.replay-mode #toast { top: calc(100px + env(safe-area-inset-top)); bottom: a
 #atkPanel .rloot b { margin-right: 2px; }
 
 /* ---- AU0 ☰ 設定面板(settingsui.js 建立;只追加) ---- */
-#btnMenu.st-menu-btn { min-width: 44px; min-height: 44px; font-size: 18px; padding: 4px 8px; }
+#btnMenu.st-menu-btn { min-width: 30px; min-height: 30px; height: 30px; font-size: 15px; padding: 0 6px; border-radius: 8px; }
 #stRoot { position: fixed; inset: 0; z-index: 7; pointer-events: none; }
 #stRoot.st-open { pointer-events: auto; }
 #stRoot .st-mask { position: absolute; inset: 0; background: rgba(0, 0, 0, .45); opacity: 0; transition: opacity .2s; }
@@ -292,7 +289,7 @@ body.replay-mode #toast { top: calc(100px + env(safe-area-inset-top)); bottom: a
 #fishLayer .fu-btn { position: absolute; margin: 0; padding: 0; border: 0; border-radius: 10px; background: rgba(20, 26, 36, .72); color: #f4f4f4; font-size: 16px; font-weight: 700; line-height: 1; touch-action: none; }
 #fishLayer .fu-btn.fu-main { border-radius: 50%; background: rgba(230, 150, 60, .92); color: #fff; font-size: 18px; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
 /* 頂列容器不排版;↩ 📖 的位置由 fishui.js fuPlace 依安全區與方向設定(邊距 12 px、鈕 44×44) */
-#fishTop { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
+#fishTop { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 3; pointer-events: none; }
 #fishTop .fu-btn { position: absolute; width: 44px; height: 44px; pointer-events: auto; }
 /* 左上 HUD(位置由 fuPlace 設定) */
 #fishHud { position: absolute; box-sizing: border-box; padding: 6px 10px; border-radius: 10px; background: rgba(12, 20, 30, .5); color: #fff; font-size: 13px; pointer-events: none; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
@@ -312,25 +309,43 @@ body.replay-mode #toast { top: calc(100px + env(safe-area-inset-top)); bottom: a
 #fishDex .fu-btn { position: static; margin-top: 10px; padding: 8px 14px; font-size: 14px; }
 #fishDex .fu-dex-titles { margin-top: 10px; font-size: 13px; line-height: 1.6; white-space: pre-line; }
 /* 面板:開始 / 挑戰結算 / 本局清單 / 排行榜(整層吃掉指標事件) */
-#fishSheet { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center; box-sizing: border-box; padding: calc(env(safe-area-inset-top) + 12px) calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 12px) calc(env(safe-area-inset-left) + 12px); background: rgba(4, 10, 16, .6); touch-action: pan-y; }
-#fishSheet .fu-panel { width: 100%; max-width: 358px; max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; box-sizing: border-box; padding: 14px; border-radius: 14px; background: rgba(12, 20, 30, .96); color: #eee; font-size: 14px; }
+#fishSheet { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 2; display: none; align-items: center; justify-content: center; box-sizing: border-box; padding: calc(env(safe-area-inset-top) + 68px) calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 12px) calc(env(safe-area-inset-left) + 12px); background: rgba(4, 10, 16, .6); touch-action: pan-y; }
+/* 面板 = 標題列(固定)+ 內容區(資訊 / 清單各自捲動)+ 按鈕列(固定在底部,永遠可見) */
+#fishSheet .fu-panel { display: flex; flex-direction: column; width: 100%; max-width: 358px; max-height: 100%; min-height: 0; overflow: hidden; box-sizing: border-box; padding: 12px 14px; border-radius: 14px; background: rgba(12, 20, 30, .96); color: #eee; font-size: 14px; }
+#fishSheet .fu-head { flex: 0 0 auto; }
+#fishSheet .fu-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+#fishSheet .fu-info { flex: 0 0 auto; max-height: 45%; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+#fishSheet .fu-listwrap { flex: 0 1 auto; min-height: 56px; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+#fishSheet .fu-foot { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, .12); }
 #fishSheet .fu-h { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
 #fishSheet .fu-sub { font-size: 13px; opacity: .85; margin: 2px 0; }
+#fishSheet .fu-hint-line { margin-top: 4px; font-size: 13px; font-weight: 700; color: #ffe9a8; }
 #fishSheet .fu-big { font-size: 34px; font-weight: 800; color: #ffd24a; margin: 4px 0; }
 #fishSheet .fu-hit { color: #ffd24a; font-weight: 700; margin: 3px 0; }
 #fishSheet .fu-sec { margin-top: 12px; font-size: 13px; font-weight: 700; opacity: .9; }
 #fishSheet .fu-note { font-size: 12px; opacity: .75; margin: 6px 0; }
 #fishSheet .fu-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-#fishSheet .fu-chip { position: static; margin: 0; padding: 8px 12px; font-size: 14px; background: rgba(60, 70, 84, .9); }
+#fishSheet .fu-chip { position: static; margin: 0; min-height: 44px; box-sizing: border-box; padding: 8px 12px; font-size: 14px; background: rgba(60, 70, 84, .9); }
 #fishSheet .fu-chip.on { background: rgba(230, 150, 60, .95); color: #fff; }
 #fishSheet .fu-chip.lock { opacity: .55; }
-#fishSheet .fu-go { position: static; margin: 0; padding: 10px 22px; font-size: 16px; background: rgba(230, 150, 60, .95); color: #fff; }
-#fishSheet .fu-list { max-height: 40vh; overflow-y: auto; touch-action: pan-y; margin-top: 6px; }
+#fishSheet .fu-go { position: static; margin: 0; min-height: 44px; box-sizing: border-box; padding: 10px 22px; font-size: 16px; background: rgba(230, 150, 60, .95); color: #fff; }
+#fishSheet .fu-list { margin-top: 6px; padding-right: 8px; }
 #fishSheet .fu-lrow { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(255, 255, 255, .12); font-size: 13px; }
 #fishSheet .fu-lrow canvas { width: 40px; height: 22px; flex-shrink: 0; }
 #fishSheet .fu-lname { font-weight: 700; }
 #fishSheet .fu-lcm { opacity: .85; }
 #fishSheet .fu-lpts { margin-left: auto; color: #ffd24a; font-weight: 700; }
+/* 橫版:左側 ↩ 📖 欄在面板左邊(留 68 px),面板內分左欄(資訊)與右欄(清單),按鈕列仍在底部 */
+@media (orientation: landscape) {
+  #fishSheet { padding: calc(env(safe-area-inset-top) + 12px) calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 12px) calc(env(safe-area-inset-left) + 68px); }
+  #fishSheet .fu-panel { max-width: 760px; padding: 10px 14px; }
+  #fishSheet .fu-body { flex-direction: row; gap: 14px; }
+  #fishSheet .fu-info { flex: 0 0 40%; max-height: none; }
+  #fishSheet .fu-listwrap { flex: 1 1 0; min-height: 40px; }
+  #fishSheet .fu-h { font-size: 16px; margin-bottom: 2px; }
+  #fishSheet .fu-big { font-size: 28px; margin: 2px 0; }
+  #fishSheet .fu-sec { margin-top: 6px; }
+}
 
 /* ===== 自訂音樂(mymusic.js,PLAN_AUDIO §9.3 / AU6) ===== */
 #mmFab { position: fixed; right: 12px; bottom: 12px; z-index: 40; min-height: 44px; padding: 8px 14px; border-radius: 22px; border: 1px solid #3a4658; background: #1c2430; color: #e8edf2; font: inherit; font-size: 14px; }
@@ -367,9 +382,7 @@ body.replay-mode #toast { top: calc(100px + env(safe-area-inset-top)); bottom: a
 #toolbar .tgh { flex: 0 0 auto; writing-mode: vertical-rl; font-size: 11px; letter-spacing: 2px; opacity: .8; padding: 4px 2px; border-left: 2px solid #f0b45a; cursor: pointer; user-select: none; -webkit-user-select: none; }
 #toolbar button.tg-off { display: none; }
 #btnToolHelp, #btnTplLabels { display: none; }
-body.camp-mode #btnToolHelp { display: inline-block; }
-body.camp-mode.tpl-labels #btnTplLabels { display: inline-block; }
-#toolHelp { position: fixed; top: calc(44px + env(safe-area-inset-top)); right: 10px; width: min(340px, calc(100vw - 20px)); max-height: calc(100vh - 150px); overflow-y: auto; overscroll-behavior: contain; z-index: 3; padding: 10px; border-radius: 10px; background: rgba(20, 26, 36, .94); box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
+#toolHelp { position: fixed; top: calc(40px + env(safe-area-inset-top)); right: calc(var(--side-w) + 6px); width: min(340px, calc(100vw - var(--side-w) - 16px)); max-height: calc(100vh - 150px); overflow-y: auto; overscroll-behavior: contain; z-index: 3; padding: 10px; border-radius: 10px; background: rgba(20, 26, 36, .94); box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
 #toolHelp[hidden] { display: none; }
 #toolHelp .thd { display: flex; align-items: center; justify-content: space-between; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, .15); }
 #toolHelp .thd .close { background: none; border: none; padding: 2px 6px; }
@@ -387,13 +400,8 @@ body.camp-mode.tpl-labels #btnTplLabels { display: inline-block; }
 #topbar #btnShop, #topbar #btnDemo, #topbar #btnPano, #topbar #btnClear, #topbar #selSeason { display: none; }
 #title { white-space: nowrap; }
 @media (max-width: 480px) {
-  #title { display: inline-block; font-size: 0; letter-spacing: 0; }
-  #title::before { content: '城主'; font-size: 14px; letter-spacing: 2px; font-weight: bold; }
-  #btnAttack, #btnReport, #btnFish, #btnSandbox { font-size: 0; }
+  #btnAttack { font-size: 0; }
   #btnAttack::before { content: '⚔'; font-size: 14px; }
-  #btnReport::before { content: '📜'; font-size: 14px; }
-  #btnFish::before { content: '🎣'; font-size: 14px; }
-  #btnSandbox::before { content: '⚔'; font-size: 14px; }
   #topbar button { white-space: nowrap; }
 }
 @media (max-width: 900px) {
@@ -403,19 +411,16 @@ body.camp-mode.tpl-labels #btnTplLabels { display: inline-block; }
 }
 
 /* 經營模式分類標籤列(ui.js buildCatBar):位於工具列上方,橫向可捲動 */
-#catbar { position: fixed; left: 0; right: 0; z-index: 2; display: flex; gap: 6px; padding: 4px 10px; overflow-x: auto; overscroll-behavior-x: contain; background: rgba(20, 26, 36, .85); backdrop-filter: blur(4px); }
+#catbar { position: fixed; left: 0; right: 0; z-index: 2; display: flex; gap: 4px; padding: 2px 6px; overflow-x: auto; overscroll-behavior-x: contain; background: rgba(20, 26, 36, .85); backdrop-filter: blur(4px); }
 #catbar[hidden] { display: none; }
-#catbar button { flex: 0 0 auto; min-height: 28px; font-size: 12px; padding: 3px 10px; white-space: nowrap; }
+#catbar button { flex: 0 0 auto; min-height: 22px; height: 22px; font-size: 11px; line-height: 1; padding: 0 8px; white-space: nowrap; }
 #catbar button small { font-size: 11px; opacity: .7; }
 #catbar button.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; font-weight: bold; }
 #catbar button.on small { opacity: .85; }
 body.sandbox #catbar, body.atk-mode #catbar, body.replay-mode #catbar { display: none !important; }
-body.has-catbar #toast { bottom: calc(122px + env(safe-area-inset-bottom)); }
-body.has-catbar.pending #toast { bottom: calc(186px + env(safe-area-inset-bottom)); }
-body.has-catbar.pending.psel #toast { bottom: calc(228px + env(safe-area-inset-bottom)); }
 
 /* 戰鬥布置:陣地容量點(mapedit.js mapeditUpdateCap) */
-#campCap { position: fixed; left: 50%; transform: translateX(-50%); z-index: 2; padding: 3px 12px; border-radius: 999px; background: rgba(20, 26, 36, .85); font-size: 12px; white-space: nowrap; pointer-events: none; font-variant-numeric: tabular-nums; }
+#campCap { position: fixed; left: 50%; top: calc(var(--top-h) + env(safe-area-inset-top) + 4px); transform: translateX(-50%); z-index: 2; padding: 3px 12px; border-radius: 999px; background: rgba(20, 26, 36, .85); font-size: 12px; white-space: nowrap; pointer-events: none; font-variant-numeric: tabular-nums; }
 #campCap[hidden] { display: none; }
 #campCap.over { color: #ff6b5e; font-weight: bold; }
 body.sandbox #campCap, body.atk-mode #campCap, body.replay-mode #campCap { display: none !important; }
@@ -500,40 +505,6 @@ body.atk-mode #toast { top: calc(162px + env(safe-area-inset-top)); bottom: auto
 #atkPanel .arule p { margin: 3px 0; font-size: 12px; opacity: 1; }
 #atkPanel .sact .abig { min-height: 52px; font-size: 17px; font-weight: 700; }
 
-/* ===== 收合鈕、精簡介面、全螢幕說明(ui.js initFoldUI / settingsui.js) ===== */
-/* 收合鈕為 fixed 定位,位置只隨直向/橫向切換,展開或收合都不移動 */
-.fold-btn { position: fixed; z-index: 3; width: 36px; height: 36px; min-width: 36px; min-height: 36px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; background: rgba(47, 59, 77, .72); border-color: rgba(69, 86, 110, .8); opacity: .85; touch-action: manipulation; }
-.fold-btn:active { background: rgba(69, 86, 110, .9); }
-#topbar { padding-right: 52px; }
-#toolbar { padding-right: 52px; }
-@media (orientation: portrait) {
-  #tpFold { top: calc(6px + env(safe-area-inset-top)); right: 8px; }
-  #tbFold { bottom: calc(8px + env(safe-area-inset-bottom)); right: 8px; }
-  #fsTip { top: calc(84px + env(safe-area-inset-top)); }
-}
-@media (orientation: landscape) {
-  #tpFold { top: calc(6px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); }
-  #tbFold { bottom: calc(8px + env(safe-area-inset-bottom)); right: calc(8px + env(safe-area-inset-right)); }
-  #fsTip { top: calc(84px + env(safe-area-inset-top)); }
-}
-/* 戰鬥、回放、沙盤、戰鬥布置時不顯示收合鈕與提示條,避免遮住戰鬥 HUD */
-body.atk-mode #tpFold, body.atk-mode #tbFold, body.replay-mode #tpFold, body.replay-mode #tbFold,
-body.sandbox #tpFold, body.sandbox #tbFold, body.camp-mode #tpFold, body.camp-mode #tbFold,
-body.atk-mode #fsTip, body.replay-mode #fsTip, body.sandbox #fsTip, body.camp-mode #fsTip { display: none !important; }
-/* 頂列收合:只留 ⚙ 設定鈕(位置固定在右上,收合鈕左側) */
-body.tp-fold:not(.camp-mode):not(.atk-mode):not(.replay-mode):not(.sandbox) #topbar { left: auto; right: 52px; padding: 6px 0; background: none; backdrop-filter: none; }
-body.tp-fold:not(.camp-mode):not(.atk-mode):not(.replay-mode):not(.sandbox) #topbar > *:not(#btnMenu) { display: none; }
-body.tb-fold:not(.camp-mode):not(.atk-mode):not(.replay-mode):not(.sandbox) #toolbar,
-body.tb-fold:not(.camp-mode):not(.atk-mode):not(.replay-mode):not(.sandbox) #catbar { display: none; }
-body.tb-fold #pendBar { bottom: calc(12px + env(safe-area-inset-bottom)); right: 52px; }
-/* 精簡介面:按鈕約縮小為 80%,留足 36px 點擊區 */
-body.ui-compact #topbar { gap: 4px; }
-body.ui-compact #topbar button, body.ui-compact #topbar select { min-height: 36px; padding: 3px 5px; font-size: 12px; }
-body.ui-compact #toolbar { gap: 4px; padding-top: 6px; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
-body.ui-compact #toolbar button { min-width: 46px; min-height: 36px; padding: 3px 4px; font-size: 11px; }
-body.ui-compact #toolbar button .ic { font-size: 18px; }
-body.ui-compact #catbar { padding: 3px 8px; gap: 4px; }
-body.ui-compact #catbar button { min-height: 36px; font-size: 11px; padding: 2px 8px; }
 /* 全螢幕說明與一次性提示條 */
 #stRoot .st-howto p { font-size: 13px; line-height: 1.6; margin: 6px 0; opacity: .9; }
 #stRoot .st-howto ol { margin: 4px 0 4px 20px; padding: 0; font-size: 13px; line-height: 1.6; }
@@ -543,36 +514,157 @@ body.ui-compact #catbar button { min-height: 36px; font-size: 11px; padding: 2px
 #fsTip .ftx { flex: 1; min-width: 0; }
 #fsTip button { min-height: 36px; min-width: 36px; padding: 4px 8px; font-size: 12px; }
 
-/* ===== 角落操作群(A'):左下 經營/戰鬥布置、其正上方 ⚔ 戰鬥(+選單)、右下 🌤 季節時段。位置固定,不隨模式移動(mapedit.js cornerBuild) ===== */
-/* 左側 84px 為角落群保留區:工具列與待購/物件列都從 84px 起排 */
-#toolbar { padding-left: 84px; }
-#catbar { padding-left: 84px; padding-right: 52px; }
+/* ===== 角落操作群:左下 經營/戰鬥布置、其正上方 ⚔ 戰鬥(+選單)。貼左緣、貼底部列上緣;位置由 --stack 與安全區固定(mapedit.js cornerBuild) ===== */
 #modeBtn, #btnAttack.corner-atk, #seasonBtn { position: fixed; z-index: 3; margin: 0; }
-#modeBtn { left: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); width: 64px; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px; font-size: 12px; border-radius: 10px; }
-#modeBtn .ic { font-size: 18px; line-height: 1; }
-#modeBtn .nm { font-size: 12px; white-space: nowrap; }
+#modeBtn { left: 6px; bottom: calc(var(--stack) + env(safe-area-inset-bottom) + 6px); width: 56px; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 2px; font-size: 11px; border-radius: 10px; }
+#modeBtn .ic { font-size: 16px; line-height: 1; }
+#modeBtn .nm { font-size: 10px; white-space: nowrap; }
 #modeBtn.camp { background: #8b1a1a; border-color: #d9534f; color: #fff; font-weight: bold; }
 #modeBtn .vdot { top: -4px; right: -4px; }
-#btnAttack.corner-atk { left: 8px; bottom: calc(72px + env(safe-area-inset-bottom)); width: 64px; height: 44px; padding: 4px; font-size: 13px; font-weight: bold; border-radius: 10px; background: #7a2a2a; border-color: #c96a5f; }
+#btnAttack.corner-atk { left: 6px; bottom: calc(var(--stack) + env(safe-area-inset-bottom) + 56px); width: 56px; height: 36px; min-height: 36px; padding: 2px; font-size: 12px; font-weight: bold; border-radius: 10px; background: #7a2a2a; border-color: #c96a5f; }
 #btnAttack.corner-atk::before { content: none; }
-#seasonBtn { right: 8px; bottom: calc(52px + env(safe-area-inset-bottom)); width: 36px; height: 36px; min-width: 36px; padding: 0; border-radius: 50%; font-size: 16px; line-height: 1; display: flex; align-items: center; justify-content: center; background: rgba(47, 59, 77, .72); border-color: rgba(69, 86, 110, .8); }
+/* 🌤 季節與時段已收進右側邊欄(sideBar),原鈕保留 DOM 與 id 供 mapedit.js 使用 */
+#seasonBtn { display: none !important; }
 .corner[hidden], #fightMenu[hidden], #seasonPop[hidden], #objBar[hidden] { display: none !important; }
-#fightMenu { position: fixed; z-index: 4; left: 78px; bottom: calc(72px + env(safe-area-inset-bottom)); width: min(220px, calc(100vw - 92px)); display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 10px; background: rgba(20, 26, 36, .94); border: 1px solid #c96a5f; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
+#fightMenu { position: fixed; z-index: 4; left: 66px; bottom: calc(var(--stack) + 6px + env(safe-area-inset-bottom)); width: min(220px, calc(100vw - 80px)); display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 10px; background: rgba(20, 26, 36, .94); border: 1px solid #c96a5f; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
 #fightMenu button { display: block; width: 100%; min-height: 44px; text-align: left; font-size: 14px; }
 #fightMenu .fm-friend { display: flex; flex-wrap: wrap; gap: 4px; }
 #fightMenu .fm-friend input { flex: 1 1 100%; min-height: 40px; padding: 4px 8px; border-radius: 6px; border: 1px solid #45566e; background: #1c2430; color: inherit; font: inherit; }
 #fightMenu .fm-friend button { flex: 1 1 0; width: auto; min-height: 40px; text-align: center; }
-#seasonPop { position: fixed; z-index: 4; right: 8px; bottom: calc(96px + env(safe-area-inset-bottom)); padding: 6px; border-radius: 10px; background: rgba(20, 26, 36, .45); border: 1px solid rgba(255, 255, 255, .2); }
+#seasonPop { position: fixed; z-index: 4; right: calc(var(--side-w) + 4px); top: calc(var(--top-h) + env(safe-area-inset-top) + 8px); padding: 6px; border-radius: 10px; background: rgba(20, 26, 36, .9); border: 1px solid rgba(255, 255, 255, .2); }
 #seasonPop .sp-row { display: flex; gap: 4px; }
 #seasonPop .sp-row + .sp-row { margin-top: 4px; }
 #seasonPop button { min-width: 44px; min-height: 40px; padding: 4px 6px; font-size: 13px; background: rgba(47, 59, 77, .7); }
 #seasonPop button.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; font-weight: bold; }
 /* 經營布置瀏覽模式點選已蓋建築的操作列(ui.js updateObjBar):左側避開角落群,右側避開 🌤 與收合鈕 */
-#objBar { position: fixed; left: 84px; right: 52px; max-width: 480px; margin: 0 auto; z-index: 3; padding: 6px 8px; border-radius: 10px; background: rgba(20, 26, 36, .92); border: 1px solid #5fa8f0; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
+#objBar { position: fixed; left: 70px; right: 6px; max-width: 480px; margin: 0 auto; z-index: 3; padding: 6px 8px; border-radius: 10px; background: rgba(20, 26, 36, .92); border: 1px solid #5fa8f0; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
 #objBar .prow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 #objBar .pname { flex: 1 1 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #objBar button { min-height: 40px; padding: 4px 8px; font-size: 12px; }
 #objBar button.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; }
 #objBar button.del { background: #6b2b2b; border-color: #c96a5f; }
-body.tb-fold #objBar { right: 52px; }
 #pendBar .prow.sel { flex-wrap: wrap; }
+#pendBar .psave { min-height: 36px; font-size: 13px; padding: 2px 8px; white-space: nowrap; }
+
+/* 單一物件草稿列(ui.js draft,JS 設 bottom 於底部列上方):直版為底部一條(高約 80px,不進中央區);橫版為左側直欄(寬 ≤25% 螢幕寬) */
+#topbar #btnLayoutSave { display: none; }
+#draftBar { position: fixed; left: 70px; right: 6px; max-width: 480px; margin: 0 auto; z-index: 3; padding: 5px 8px; border-radius: 10px; background: rgba(20, 26, 36, .92); border: 1px solid #5fc98a; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
+#draftBar[hidden] { display: none !important; }
+#draftBar .drow { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#draftBar .drow.top { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#draftBar .dname { font-weight: bold; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#draftBar .dmsg { font-size: 12px; opacity: .85; overflow: hidden; text-overflow: ellipsis; }
+#draftBar .dmsg.bad { color: #ff8a7e; font-weight: bold; opacity: 1; }
+#draftBar .btns { margin-top: 3px; }
+#draftBar .btns button { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 4px 6px; font-size: 13px; white-space: nowrap; }
+#draftBar .btns button:disabled { opacity: .35; }
+#draftBar .btns .pok { background: #2e7d4f; border-color: #5fc98a; }
+#draftBar .btns .pno { background: #6b2b2b; border-color: #c96a5f; }
+@media (orientation: landscape) {
+  #draftBar { left: 66px; right: auto; max-width: none; width: min(136px, calc(25vw - 74px)); padding: 6px; }
+  #draftBar .drow.top { flex-direction: column; align-items: flex-start; gap: 0; white-space: normal; }
+  #draftBar .dname { max-width: 100%; }
+  #draftBar .btns { flex-direction: column; margin-top: 6px; }
+  #draftBar .btns button { flex: 0 0 auto; width: 100%; min-height: 44px; white-space: normal; line-height: 1.2; }
+}
+
+/* 布置結算對話框(ui.js renderSettle):中央區以下、寬 ≤360px;內容列表可捲動,標題與按鈕列固定可見(橫版亦同) */
+#settleDlg { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--stack) + 8px + env(safe-area-inset-bottom)); z-index: 5; width: min(360px, calc(100vw - 24px)); max-height: calc(100vh - 24px - env(safe-area-inset-top) - var(--top-h) - var(--stack)); display: flex; flex-direction: column; padding: 10px 12px; border-radius: 12px; background: rgba(20, 26, 36, .97); border: 1px solid #f0b45a; box-shadow: 0 6px 24px rgba(0, 0, 0, .5); font-size: 13px; }
+#settleDlg[hidden] { display: none !important; }
+#settleDlg .sd-head { display: flex; justify-content: space-between; align-items: baseline; flex-shrink: 0; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, .15); }
+#settleDlg .sd-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 4px 0; }
+#settleDlg .sd-row { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
+#settleDlg .sd-sum { flex-shrink: 0; border-top: 1px solid rgba(255, 255, 255, .15); padding-top: 4px; }
+#settleDlg .sd-msg { flex-shrink: 0; margin-top: 6px; font-size: 12px; opacity: .9; }
+#settleDlg .sd-msg.lack, #settleDlg .lack { color: #ff6b5e; font-weight: bold; }
+#settleDlg .sd-foot { display: flex; gap: 8px; flex-shrink: 0; margin-top: 8px; }
+#settleDlg .sd-foot button { flex: 1 1 0; min-height: 44px; font-size: 14px; }
+#settleDlg .sd-foot .pok { background: #2e7d4f; border-color: #5fc98a; }
+#settleDlg .sd-foot button:disabled { opacity: .4; }
+
+/* ===== 介面模式(ui.js uiSetMode):正常 / 精簡 / 拍照。頂列一條、右側邊欄、底部一條、左下兩鈕;直橫向各一套固定位置,切換不移位 ===== */
+/* --stack:底部疊放高度(不含安全區);有分類列 +24px;精簡模式分類收進 ☰ 彈出列 */
+:root { --top-h: 34px; --stack: 50px; --side-w: 46px; }
+body.has-catbar { --stack: 74px; }
+body.ui-compact { --stack: 40px; --side-w: 80px; }
+@media (orientation: landscape) {
+  :root { --side-w: 92px; }
+  body.ui-compact { --side-w: 112px; }
+}
+
+/* 頂列:標題與說明字只在寬螢幕顯示;資源貼左、圖示鈕靠右 */
+#title { display: none; }
+#info { display: none; min-width: 0; flex: 0 1 auto; max-width: 40%; }
+#topbar > button, #topbar > select { flex: 0 0 auto; min-width: 30px; height: 30px; min-height: 30px; padding: 0 5px; font-size: 15px; line-height: 1; border-radius: 8px; }
+#topbar .lbl { display: none; }
+#topbar #btnToolHelp, #topbar #btnTplLabels { display: none !important; }
+#topbar #btnMenu { flex: 0 0 auto; }
+/* 一次性提示條移到底部列上方,避開右側邊欄與 ⋯ 鈕 */
+#fsTip { top: auto; bottom: calc(var(--stack) + 10px + env(safe-area-inset-bottom)); }
+@media (min-width: 700px) {
+  #title { display: inline; margin-right: 4px; }
+  #info { display: inline; flex: 1 1 auto; }
+  #resbar .res small { display: inline; }
+}
+
+/* 右側邊欄:貼右緣、頂列下方 8px 起;正常模式 6 顆(直版單欄、橫版雙欄),最多延伸到螢幕垂直中點以上 */
+#sideBar { position: fixed; z-index: 3; top: calc(var(--top-h) + env(safe-area-inset-top) + 8px); right: max(4px, env(safe-area-inset-right)); display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+#sideBar [hidden] { display: none !important; }
+#sideBar .side-list { display: flex; flex-direction: column; gap: 4px; }
+#sideBar .side-btn { flex: 0 0 auto; width: 40px; height: 40px; min-height: 40px; margin: 0; padding: 2px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border-radius: 10px; background: rgba(47, 59, 77, .78); border: 1px solid rgba(69, 86, 110, .8); color: #e8edf2; font-size: 10px; line-height: 1; box-shadow: 0 2px 6px rgba(0, 0, 0, .3); }
+#sideBar .side-btn .ic { font-size: 17px; line-height: 1; }
+#sideBar .side-btn .lb { font-size: 10px; line-height: 1.1; white-space: nowrap; }
+#sideBar .side-btn.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; font-weight: bold; }
+#sideBar .side-more { display: none; width: 30px; height: 30px; min-width: 30px; min-height: 30px; margin: 0; padding: 0; border-radius: 50%; font-size: 16px; line-height: 1; background: rgba(47, 59, 77, .78); border-color: rgba(69, 86, 110, .8); }
+@media (orientation: landscape) {
+  #sideBar .side-list { display: grid; grid-template-columns: 40px 40px; }
+}
+body:not(.ui-compact) #sideBar [data-top="1"] { display: none !important; }
+body.camp-mode #sideBar [data-scope="estate"] { display: none !important; }
+body:not(.camp-mode) #sideBar [data-scope="camp"] { display: none !important; }
+body.atk-mode #sideBar, body.replay-mode #sideBar, body.sandbox #sideBar, body.photo-mode #sideBar { display: none !important; }
+
+/* 精簡模式:頂列只留資源與 ⚙;邊欄收成 ⋯,點開才以小格展開(點外面或再點即收) */
+body.ui-compact #topbar > button:not(#btnMenu) { display: none !important; }
+body.ui-compact #topbar { gap: 6px; }
+body.ui-compact #resbar { font-size: 10px; gap: 6px; }
+body.ui-compact #btnMenu.st-menu-btn { min-width: 26px; min-height: 26px; height: 26px; font-size: 13px; padding: 0 4px; }
+body.ui-compact #sideBar { top: calc(var(--top-h) + env(safe-area-inset-top) + 4px); right: max(3px, env(safe-area-inset-right)); align-items: flex-end; }
+body.ui-compact #sideBar .side-more { display: flex; align-items: center; justify-content: center; }
+body.ui-compact #sideBar .side-list { display: none; flex-direction: row; flex-wrap: wrap; width: max-content; max-width: 70vw; gap: 3px; margin-top: 4px; padding: 4px; border-radius: 10px; background: rgba(20, 26, 36, .9); border: 1px solid rgba(69, 86, 110, .8); }
+body.ui-compact #sideBar.open .side-list { display: flex; }
+body.ui-compact #sideBar .side-btn { width: 30px; height: 30px; min-height: 30px; padding: 0; border-radius: 8px; }
+body.ui-compact #sideBar .side-btn .lb { display: none; }
+body.ui-compact #sideBar .side-btn .ic { font-size: 15px; }
+@media (orientation: landscape) {
+  body.ui-compact #sideBar .side-list { width: max-content; }
+}
+
+/* 底部列(精簡):只留工具圖示;☰ 鈕開啟分類彈出列(#catbar.pop) */
+body.ui-compact #toolbar { gap: 3px; padding: 3px 3px calc(3px + env(safe-area-inset-bottom)); }
+body.ui-compact #toolbar button { min-width: 34px; height: 34px; min-height: 34px; padding: 0 3px; font-size: 10px; gap: 0; }
+body.ui-compact #toolbar button > span:not(.ic) { display: none; }
+body.ui-compact #toolbar button .ic { font-size: 17px; }
+#toolbar button.catmenu { min-width: 34px; font-size: 16px; }
+body.ui-compact #catbar.pop { left: 6px; right: auto; width: max-content; max-width: 60vw; max-height: min(50vh, 320px); flex-direction: column; align-items: stretch; overflow-y: auto; overflow-x: hidden; padding: 6px; border-radius: 10px; background: rgba(20, 26, 36, .94); border: 1px solid #f0b45a; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
+body.ui-compact #catbar.pop button { min-height: 32px; height: auto; font-size: 13px; padding: 4px 10px; text-align: left; }
+body.ui-compact #modeBtn { width: 44px; height: 34px; bottom: calc(var(--stack) + env(safe-area-inset-bottom) + 6px); }
+body.ui-compact #modeBtn .nm { font-size: 9px; }
+body.ui-compact #btnAttack.corner-atk { width: 44px; height: 30px; min-height: 30px; bottom: calc(var(--stack) + env(safe-area-inset-bottom) + 44px); font-size: 11px; }
+
+/* 拍照模式:除還原鈕與 toast 外,所有介面與浮層一律隱藏;畫布照常繪製,可平移縮放 */
+body.photo-mode > *:not(#game):not(#photoBack):not(#toast) { display: none !important; }
+#photoBack { display: none; position: fixed; z-index: 40; top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); width: 36px; height: 36px; min-width: 36px; min-height: 36px; margin: 0; padding: 0; align-items: center; justify-content: center; border-radius: 50%; font-size: 11px; line-height: 1; background: rgba(47, 59, 77, 1); border-color: rgba(69, 86, 110, 1); opacity: .4; touch-action: manipulation; }
+#photoBack:hover, #photoBack:active { opacity: 1; }
+body.photo-mode #photoBack { display: flex; }
+
+/* 點擊目標:視覺小於 44px 的鈕以透明 ::after 外擴 5px,實際命中區約 40px 以上 */
+#topbar > button, #sideBar .side-btn, #sideMore, #toolbar button { position: relative; }
+#topbar > button::after, #sideBar .side-btn::after, #sideMore::after, #toolbar button::after, #modeBtn::after, #btnAttack.corner-atk::after, #photoBack::after { content: ''; position: absolute; inset: -5px; }
+
+/* 中央淨空:頂列、底部列、左下鈕與邊欄都貼邊;浮層與提示只在使用者操作時出現 */
+
+/* 精簡模式頂列不顯示標題與操作說明;底部列與分類列隱藏橫向捲軸(可橫滑仍保留) */
+body.ui-compact #title, body.ui-compact #info { display: none !important; }
+#toolbar, #catbar { scrollbar-width: none; }
+#toolbar::-webkit-scrollbar, #catbar::-webkit-scrollbar { display: none; }

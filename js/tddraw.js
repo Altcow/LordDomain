@@ -177,7 +177,7 @@ function drawOverlayDiag(ctx, d, time) {
 // 掛點由 render.js draw() 呼叫;battle === null(一般模式)時 drawBattleDiag 不碰 ctx。
 // 注意:td.js tdSpawnSquad 目前以 team:1 生成我軍;規格為我方 team 0,見回報。
 const TD_TEAM_COL = { 0: '#b8322c', 1: '#3e6fb0' };
-const TD_LOD_ZOOM = 0.8;           // view.zoom 低於此值改畫色點
+const TD_LOD_ZOOM = 0.35;          // view.zoom 低於此值改畫色點
 const TD_SKIN = '#f0d0a0';
 
 // 小縮放色點半徑(world 單位):直徑 2r × view.zoom = CSS px,至少 3px(dpr 由 transform 一併換算)

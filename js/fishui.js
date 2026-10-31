@@ -248,38 +248,54 @@ function fuRenderDex() {
 }
 
 function fuToggleDex() {
-  if (!fuDex) return;
+  if (!fuDex || fuSheetKind) return;
   if (fuDex.style.display === 'block') { fuDex.style.display = 'none'; return; }
   fuRenderDex();
   fuDex.style.display = 'block';
 }
 
-// ---- 面板(覆蓋在場景上,整個 #fishSheet 吃掉指標事件)----
+// ---- 面板(覆蓋在場景上,整個 #fishSheet 吃掉指標事件;頂列 ↩ 📖 的 z-index 較高,面板開啟時仍可按)----
+// 結構:標題列(固定)/ 內容區(資訊與清單各自捲動)/ 按鈕列(固定在底部)。重要按鈕永遠在面板可視區內,不需捲動。
 function fuSheetClose() {
   if (!fuSheet) return;
   fuSheet.style.display = 'none';
   fuSheetKind = '';
+  fuSetDis(fuDexB, false);
 }
 
 function fuSheetOpen(kind) {
   if (!fuSheet) return;
+  if (fuDex) fuDex.style.display = 'none';
   fuSheetKind = kind;
+  fuSetDis(fuDexB, true);
   fuClear(fuSheetBody);
-  if (kind === 'start') fuBuildStart();
-  else if (kind === 'result') fuBuildResult();
-  else if (kind === 'list') fuBuildList();
-  else if (kind === 'board') fuBuildBoard();
+  var p = fuParts();
+  if (kind === 'start') fuBuildStart(p);
+  else if (kind === 'result') fuBuildResult(p);
+  else if (kind === 'list') fuBuildList(p);
+  else if (kind === 'board') fuBuildBoard(p);
   fuSheet.style.display = 'flex';
+}
+
+function fuParts() {
+  var b = fuSheetBody, p = {};
+  p.head = fuEl(b, 'div', 'fu-head');
+  p.body = fuEl(b, 'div', 'fu-body');
+  p.info = fuEl(p.body, 'div', 'fu-info');
+  p.list = fuEl(p.body, 'div', 'fu-listwrap');
+  p.foot = fuEl(b, 'div', 'fu-foot');
+  return p;
 }
 
 function fuChipRow(parent) {
   return fuEl(parent, 'div', 'fu-chips');
 }
 
-function fuBuildStart() {
-  var b = fuSheetBody, row, i, key, ok, sk, lim;
-  fuEl(b, 'div', 'fu-h', '釣魚');
-  fuEl(b, 'div', 'fu-sub', '本機最高 ' + (fs.save.pb || 0) + ' 分' + (fuTitleNow() ? ' · 稱號:' + fuTitleNow() : ''));
+function fuBuildStart(p) {
+  var b = p.info, row, i, key, ok, sk, lim;
+  fuEl(p.head, 'div', 'fu-h', '釣魚');
+  fuEl(p.head, 'div', 'fu-sub', '本機最高 ' + (fs.save.pb || 0) + ' 分' + (fuTitleNow() ? ' · 稱號:' + fuTitleNow() : ''));
+  p.list.style.display = 'none';
   fuEl(b, 'div', 'fu-sec', '模式');
   row = fuChipRow(b);
   fuBtn(row, '悠閒釣', 'fu-chip' + (fuSel.mode === 'leisure' ? ' on' : ''), function () { fuSel.mode = 'leisure'; fuSheetOpen('start'); });
@@ -310,7 +326,7 @@ function fuBuildStart() {
     })(key, !ok));
   }
   if (fuSel.note) fuEl(b, 'div', 'fu-note', fuSel.note);
-  row = fuChipRow(b);
+  row = p.foot;
   fuBtn(row, '開始', 'fu-go', function () {
     if (fishSkinOk(fuSel.skin)) fishSkinSet(fuSel.skin);
     fishStart(fuSel.mode, fuSel.limit);
@@ -318,13 +334,14 @@ function fuBuildStart() {
     fuSheetClose();
   });
   fuBtn(row, '排行榜', 'fu-chip', function () { fuBoardFrom = 'start'; fuSheetOpen('board'); });
-  fuBtn(row, '離開', 'fu-chip', function () { fishExit(); });
+  fuBtn(row, '離開', 'fu-chip', function () { fuLeave(); });
 }
 
-function fuBuildResult() {
-  var b = fuSheetBody, sm = fs.summary, row, i, c, r, n;
+function fuBuildResult(p) {
+  var b = p.info, sm = fs.summary, row, i, c, r, n;
   if (!sm) return;
-  fuEl(b, 'div', 'fu-h', '挑戰結束');
+  fuEl(p.head, 'div', 'fu-h', '挑戰結束');
+  fuEl(p.head, 'div', 'fu-hint-line', '按【離開】回到領地');
   fuEl(b, 'div', 'fu-big', sm.score + ' 分');
   fuEl(b, 'div', 'fu-sub', '尾數 ' + sm.count + ' · 最高連擊 ' + sm.bestCombo + ' · 時限 ' + sm.limit + ' 秒');
   if (sm.newRecord) fuEl(b, 'div', 'fu-hit', '🏆 破個人紀錄');
@@ -333,8 +350,8 @@ function fuBuildResult() {
   for (i = 0; i < sm.newTitles.length; i++) fuEl(b, 'div', 'fu-hit', '🎖 解鎖稱號:' + sm.newTitles[i]);
   fuEl(b, 'div', 'fu-hit', sm.gold > 0 ? '+' + sm.gold + ' 🪙' : '未達 20 分,沒有金幣');
   if (sm.catches.length) {
-    fuEl(b, 'div', 'fu-sec', '釣到的魚');
-    r = fuEl(b, 'div', 'fu-list');
+    fuEl(p.list, 'div', 'fu-sec', '釣到的魚(' + sm.catches.length + ' 尾,可捲動)');
+    r = fuEl(p.list, 'div', 'fu-list');
     for (i = sm.catches.length - 1; i >= 0; i--) {
       c = sm.catches[i];
       n = fuEl(r, 'div', 'fu-lrow');
@@ -343,8 +360,10 @@ function fuBuildResult() {
       fuEl(n, 'span', 'fu-lcm', c.cm + ' cm');
       fuEl(n, 'span', 'fu-lpts', '+' + c.pts);
     }
+  } else {
+    p.list.style.display = 'none';
   }
-  row = fuChipRow(b);
+  row = p.foot;
   fuBtn(row, '再來一局', 'fu-go', function () {
     fishReset();
     fuSel.mode = 'challenge';
@@ -354,14 +373,15 @@ function fuBuildResult() {
     fuSheetOpen('start');
   });
   fuBtn(row, '排行榜', 'fu-chip', function () { fuBoardFrom = 'result'; fuSheetOpen('board'); });
-  fuBtn(row, '離開', 'fu-chip', function () { fishExit(); });
+  fuBtn(row, '離開', 'fu-chip', function () { fuLeave(); });
 }
 
-function fuBuildList() {
-  var b = fuSheetBody, s = fs.sess, r, i, c, n;
-  fuEl(b, 'div', 'fu-h', '本局釣獲(' + s.catches.length + ' 尾)');
-  if (!s.catches.length) fuEl(b, 'div', 'fu-note', '還沒有釣到魚');
-  r = fuEl(b, 'div', 'fu-list');
+function fuBuildList(p) {
+  var s = fs.sess, r, i, c, n, row;
+  fuEl(p.head, 'div', 'fu-h', '本局釣獲(' + s.catches.length + ' 尾)');
+  p.info.style.display = 'none';
+  if (!s.catches.length) fuEl(p.list, 'div', 'fu-note', '還沒有釣到魚');
+  r = fuEl(p.list, 'div', 'fu-list');
   for (i = s.catches.length - 1; i >= 0; i--) {
     c = s.catches[i];
     n = fuEl(r, 'div', 'fu-lrow');
@@ -370,21 +390,24 @@ function fuBuildList() {
     fuEl(n, 'span', 'fu-lcm', c.cm + ' cm');
     fuEl(n, 'span', 'fu-lpts', '+' + c.pts);
   }
-  fuBtn(b, '關閉', 'fu-chip', function () { fuSheetClose(); });
+  row = p.foot;
+  fuBtn(row, '關閉', 'fu-chip', function () { fuSheetClose(); });
 }
 
-function fuBuildBoard() {
-  var b = fuSheetBody, bd = fs.save.board, i, n, row;
-  fuEl(b, 'div', 'fu-h', '排行榜(挑戰前 ' + FISH_BOARD_N + ' 名)');
-  if (!bd.length) fuEl(b, 'div', 'fu-note', '尚無紀錄');
-  row = fuEl(b, 'div', 'fu-list');
+function fuBuildBoard(p) {
+  var bd = fs.save.board, i, n, r, row;
+  fuEl(p.head, 'div', 'fu-h', '排行榜(挑戰前 ' + FISH_BOARD_N + ' 名)');
+  p.info.style.display = 'none';
+  if (!bd.length) fuEl(p.list, 'div', 'fu-note', '尚無紀錄');
+  r = fuEl(p.list, 'div', 'fu-list');
   for (i = 0; i < bd.length; i++) {
-    n = fuEl(row, 'div', 'fu-lrow');
+    n = fuEl(r, 'div', 'fu-lrow');
     fuEl(n, 'span', 'fu-lname', (i + 1) + '.  ' + bd[i].score + ' 分');
     fuEl(n, 'span', 'fu-lcm', fuDate(bd[i].ts) + ' · ' + bd[i].dur + ' 秒');
     fuEl(n, 'span', 'fu-lpts', bd[i].title || '');
   }
-  fuBtn(b, '返回', 'fu-chip', function () { fuSheetOpen(fuBoardFrom || 'start'); });
+  row = p.foot;
+  fuBtn(row, '返回', 'fu-chip', function () { fuSheetOpen(fuBoardFrom || 'start'); });
 }
 
 function fuBuild() {
@@ -409,7 +432,7 @@ function fuBuild() {
   // 頂列:只有按鈕吃指標事件;位置由 fuPlace 依安全區與方向決定
   top = document.createElement('div');
   top.id = 'fishTop';
-  fuExitB = fuBtn(top, '↩', 'fu-exit', function () { fishExit(); });
+  fuExitB = fuBtn(top, '↩', 'fu-exit', function () { fuLeave(); });
   fuDexB = fuBtn(top, '📖', 'fu-dexbtn', function () { fuToggleDex(); });
   layer.appendChild(top);
   fuTop = top;
@@ -595,11 +618,53 @@ function fishEnter(src) {
   fuDrag = null;
   fuLast = performance.now();
   document.addEventListener('visibilitychange', fuOnVis);
+  document.addEventListener('keydown', fuOnKey);
+  window.addEventListener('popstate', fuOnPop);
+  fuHistOn = false;
+  fuHistSkip = false;
+  try { history.pushState({ fishScene: 1 }, ''); fuHistOn = true; } catch (e) {}
   fuBindResize(true);
   fuSheetOpen('start');
   fuResize();
   fuRaf = requestAnimationFrame(fuFrame);
   return true;
+}
+
+// 返回 / Esc:先關掉開啟中的子面板(圖鑑、清單、排行榜);沒有子面板時離開釣魚場景。
+var fuHistOn = false, fuHistSkip = false;
+function fuIsSub() {
+  return (fuDex && fuDex.style.display === 'block') || fuSheetKind === 'list' || fuSheetKind === 'board';
+}
+function fuCloseSub() {
+  if (fuDex && fuDex.style.display === 'block') { fuDex.style.display = 'none'; return; }
+  if (fuSheetKind === 'board') fuSheetOpen(fuBoardFrom || 'start');
+  else fuSheetClose();
+}
+function fuOnKey(e) {
+  if (!fuLayer || (e.key !== 'Escape' && e.key !== 'Esc')) return;
+  if (fuIsSub()) fuCloseSub(); else fuLeave();
+}
+// 手機返回鍵(瀏覽器 popstate):子面板開著就只關子面板並補回歷史紀錄;否則離開。
+function fuOnPop() {
+  if (!fuLayer) return;
+  if (fuHistSkip) { fuHistSkip = false; return; }
+  fuHistOn = false;
+  if (fuIsSub()) {
+    fuCloseSub();
+    try { history.pushState({ fishScene: 1 }, ''); fuHistOn = true; } catch (e) {}
+  } else {
+    fishExit();
+  }
+}
+// 離開按鈕 / ↩ 一律直接離開(關掉所有子面板),並移除為返回鍵而推入的歷史紀錄。
+function fuLeave() {
+  if (!fuLayer) return false;
+  if (fuHistOn) {
+    fuHistOn = false;
+    fuHistSkip = true;
+    try { history.back(); } catch (e) { fuHistSkip = false; }
+  }
+  return fishExit();
 }
 
 // 離開釣魚場景:限時挑戰中途離開會直接結算;存檔、取消動畫、移除覆蓋層、回到經營模式。不動經營存檔以外的資料。
@@ -613,6 +678,8 @@ function fishExit() {
   fuPaused = false;
   fuDrag = null;
   document.removeEventListener('visibilitychange', fuOnVis);
+  document.removeEventListener('keydown', fuOnKey);
+  window.removeEventListener('popstate', fuOnPop);
   fuBindResize(false);
   fuLayer.parentNode.removeChild(fuLayer);
   fuLayer = null; fuStage = null; fuCv = null; fuCtx = null; fuMain = null; fuDex = null; fuDexRows = [];
@@ -637,7 +704,7 @@ function fuMountButton() {
   btn = document.createElement('button');
   btn.id = 'btnFish';
   btn.title = '釣魚';
-  btn.textContent = '🎣 釣魚';
+  btn.textContent = '🎣';
   btn.addEventListener('click', function () { fishEnter('top'); });
   top.insertBefore(btn, document.getElementById('btnClear'));
   fuTopTimer = setInterval(fuSyncTop, 300);

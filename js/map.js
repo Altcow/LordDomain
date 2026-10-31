@@ -44,10 +44,14 @@ function footprint(type, rot) {
   return d.swap && rot % 2 === 1 ? [d.h, d.w] : [d.w, d.h];
 }
 
+// 移動中的已蓋建築(ui.js draft):仍留在 world.objects(存檔保留原位),但不占 occ、不進 objDiag(不繪製)
+let objHold = null;
+
 function rebuildOcc() {
   world.occ.fill(0);
   world.objDiag = [];
   world.objects.forEach((o, n) => {
+    if (o === objHold) return;
     const [w, h] = footprint(o.type, o.rot);
     for (let yy = o.y; yy < o.y + h; yy++)
       for (let xx = o.x; xx < o.x + w; xx++) world.occ[idx(xx, yy)] = n + 1;

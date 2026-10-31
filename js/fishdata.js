@@ -133,8 +133,12 @@ const FISH_SINKS = {
   deep:    { name:'重墜', y:FISH_LAYER.floor }
 };
 
-// 彩頭:計分基礎分(稀有度)、雜物 / 奇物固定分、稱號門檻、船皮膚、挑戰時限選項、排行榜筆數、金幣換算(分數 / 20)
-const FISH_RAR_PTS = { common: 10, uncommon: 25, rare: 60, legendary: 150 };
+// 彩頭:計分(PLAN_FISHING「計分帶」):每層一條互不重疊的基礎分帶(連擊前),層內依稀有度與尺寸浮動;連擊倍率 1.0~1.3(見 fishing.js fishScoreOf)。
+// 分數帶表與不重疊驗證見 PLAN_FISHING.md 與 tools/test_fish.js。雜物 / 奇物固定分、稱號門檻、船皮膚、挑戰時限選項、排行榜筆數、金幣換算(分數 / 20)。
+const FISH_BAND = { 1: [4, 8], 2: [11, 20], 3: [26, 40] };
+const FISH_RAR_Q = { common: 0, uncommon: 1 / 3, rare: 2 / 3, legendary: 1 };
+const FISH_COMBO_STEP = 0.03;
+const FISH_COMBO_CAP = 10;
 const FISH_JUNK_PTS = -5;
 const FISH_ODD_PTS = 40;
 const FISH_TITLES = [

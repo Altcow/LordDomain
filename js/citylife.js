@@ -112,14 +112,18 @@ function lifeRoadSig() {
     const n = world.occ[i];
     const o = n ? world.objects[n - 1] : null;
     let t = world.terrain[i] | (world.height[i] << 2);
-    if (o) t = t * 131 + o.type.length * 7 + o.type.charCodeAt(0) * 3 + (o.rot | 0) + 1;
+    if (o) {
+      let th = 0;
+      for (let c = 0; c < o.type.length; c++) th = (th * 31 + o.type.charCodeAt(c)) | 0;
+      t = t * 131 + th + (o.rot | 0) + 1;
+    }
     h ^= (t + i * 0x9e37) | 0;
     h = Math.imul(h, 0x01000193);
   }
   return h >>> 0;
 }
 
-// 建築的門格:優先面(house rot2=+x、rot3=+y;hospital/research=+y)有道路才用,否則其他面;
+// 建築的門格:優先面(house 正面 rot0 南=+y、rot1 西=−x、rot2 北=−y、rot3 東=+x;hospital/research=+y)有道路才用,否則其他面;
 // 同高度道路格中取離建築中心最近者。找不到 = 沒有門路,不是目的地。
 function lifeFindDoor(o, ok) {
   const fp = footprint(o.type, o.rot), w = fp[0], h = fp[1];
@@ -127,7 +131,7 @@ function lifeFindDoor(o, ok) {
   const faces = [[1, 0], [0, 1], [-1, 0], [0, -1]];
   let order = [0, 1, 2, 3];
   let pref = -1;
-  if (o.type === 'house') pref = (o.rot & 3) === 2 ? 0 : ((o.rot & 3) === 3 ? 1 : -1);
+  if (o.type === 'house') pref = ((o.rot & 3) + 1) & 3;
   else if (o.type === 'hospital' || o.type === 'research') pref = 1;
   if (pref >= 0) order = [pref].concat(order.filter(k => k !== pref));
   const bx = o.x + w / 2, by = o.y + h / 2;
@@ -152,15 +156,23 @@ function lifeFindDoor(o, ok) {
   return null;
 }
 
+// 可穿越的門類 3×1(中格可走,兩側為柱/牆不可走);通行軸由 rot 決定(0/2 南北、1/3 東西)
+const LIFE_PASS_TYPES = { gate: 1, paifang: 1, toll_gate: 1, gate_courtyard: 1 };
+
 // 道路圖:可走格 + 4 鄰接(同高;高差 1 且任一格有階梯/斜坡才相連)+ 入口 + 門格 + 閒逛停點 + 固定巡邏路線
 function lifeRebuild() {
   const N = MAP_W * MAP_H;
-  const ok = new Uint8Array(N), nb = new Int16Array(N * 4), stairs = new Uint8Array(N), gm = new Uint8Array(N);
+  const ok = new Uint8Array(N), nb = new Int16Array(N * 4), stairs = new Uint8Array(N), gm = new Uint8Array(N), gt = new Uint8Array(N);
   nb.fill(-1);
   let k, i, o, fp;
   for (k = 0; k < world.objects.length; k++) {
     o = world.objects[k];
-    if (o.type === 'gate') { fp = footprint(o.type, o.rot); gm[idx(o.x + (fp[0] >> 1), o.y + (fp[1] >> 1))] = 1; }
+    if (LIFE_PASS_TYPES[o.type]) {
+      fp = footprint(o.type, o.rot);
+      const mi = idx(o.x + (fp[0] >> 1), o.y + (fp[1] >> 1));
+      gm[mi] = 1;
+      if (o.type === 'gate') gt[mi] = 1;
+    }
   }
   for (i = 0; i < N; i++) {
     const n = world.occ[i];
@@ -193,7 +205,7 @@ function lifeRebuild() {
     else if (y === 0) ent.push({ cell: i, ox: 0, oy: -1 });
     else if (y === MAP_H - 1) ent.push({ cell: i, ox: 0, oy: 1 });
   }
-  if (!ent.length) for (i = 0; i < N; i++) if (gm[i] && ok[i]) ent.push({ cell: i, ox: 0, oy: 0 });
+  if (!ent.length) for (i = 0; i < N; i++) if (gt[i] && ok[i]) ent.push({ cell: i, ox: 0, oy: 0 });
   if (!ent.length) {
     let rx = MAP_W / 2, ry = MAP_H / 2;
     for (k = 0; k < world.objects.length; k++) {

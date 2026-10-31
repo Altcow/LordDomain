@@ -336,7 +336,7 @@ function cornerBuild() {
 
   document.addEventListener('pointerdown', e => {
     if (!menu.hidden && !e.target.closest('#fightMenu, #btnAttack')) cornerFightClose();
-    if (!pop.hidden && !e.target.closest('#seasonPop, #seasonBtn')) cornerSeasonClose();
+    if (!pop.hidden && !e.target.closest('#seasonPop, #seasonBtn, #sideBar')) cornerSeasonClose();
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { cornerFightClose(); cornerSeasonClose(); }
@@ -452,7 +452,7 @@ function onFightMenuClick(e) {
 }
 
 // 🌤 季節與時段浮層:半透明、貼右下角、非全螢幕遮罩;季節沿用 stApplySeason(ui 的 selSeason change),時段沿用 ART_TOD 設定
-const CORNER_SEASONS = [['spring', '春'], ['summer', '夏'], ['autumn', '秋'], ['winter', '冬']];
+const CORNER_SEASONS = [['auto', '自動'], ['spring', '春'], ['summer', '夏'], ['autumn', '秋'], ['winter', '冬']];
 const CORNER_TODS = [['auto', '自動'], ['dawn', '早'], ['noon', '日'], ['dusk', '昏'], ['night', '夜']];
 
 function cornerSeasonRender() {
@@ -472,7 +472,8 @@ function cornerSeasonRender() {
     });
     return row;
   };
-  pop.appendChild(rowOf(CORNER_SEASONS, typeof currentSeason === 'string' ? currentSeason : '', 'season'));
+  const seasonCur = (typeof settingsGet === 'function' && settingsGet().seasonMode === 'auto') ? 'auto' : (typeof currentSeason === 'string' ? currentSeason : '');
+  pop.appendChild(rowOf(CORNER_SEASONS, seasonCur, 'season'));
   pop.appendChild(rowOf(CORNER_TODS, tod, 'tod'));
 }
 
@@ -481,7 +482,10 @@ function onSeasonPopClick(e) {
   if (!b) return;
   const s = b.getAttribute('data-season');
   const t = b.getAttribute('data-tod');
-  if (s !== null) {
+  if (s === 'auto') {
+    if (typeof settingsSet === 'function') settingsSet('seasonMode', 'auto');
+    if (typeof stApplyAutoSeason === 'function') stApplyAutoSeason();
+  } else if (s !== null) {
     if (typeof settingsSet === 'function') settingsSet('seasonMode', 'manual');
     if (typeof stApplySeason === 'function') stApplySeason(s);
   } else if (t !== null) {

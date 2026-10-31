@@ -29,6 +29,7 @@ var PU_CSS = '' +
   '#petLayer .pu-charm.on{color:#c4121a;font-weight:700}' +
   '#petLayer .pu-note,#petLayer .pu-hint{font-size:12px;opacity:.85}' +
   '#petLayer .pu-link{background:transparent;border-style:dashed}' +
+  '#petLayer .pu-shellwarn{font-size:13px;font-weight:700;color:#c4121a;background:#ffe9e4;border:1.5px solid #c4121a;border-radius:10px;padding:4px 6px}' +
   '#petLayer .pu-chiprow{display:flex;align-items:flex-start;gap:6px;overflow-x:auto;padding-bottom:6px}' +
   '#petLayer .pu-chip2{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;width:84px;padding:4px;border:1.5px solid #c9b48a;border-radius:10px;background:#fffaf0}' +
   '#petLayer .pu-chip2.pu-on{border-color:#c4121a;background:#ffe9e4;color:#3b2314}' +
@@ -51,14 +52,14 @@ var PU_CSS = '' +
   '#petLayer .pu-plate{position:absolute;align-items:center;justify-content:center;box-sizing:border-box;border-radius:8px;background:rgba(59,35,20,.88);color:#fff7e0;font-size:13px;font-weight:700;pointer-events:none}' +
   '#petLayer .pu-flash{position:absolute;box-sizing:border-box;padding:6px 10px;border-radius:10px;background:rgba(251,243,220,.96);border:1.5px solid #3b2314;font-size:13px;text-align:center;pointer-events:none}' +
   '#petLayer .pu-wrap{position:absolute;left:0;top:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;background:rgba(20,12,8,.45);padding:12px;box-sizing:border-box}' +
-  '#petLayer .pu-cardbox{width:100%;max-width:360px;max-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box;padding:14px;border-radius:14px;background:#fbf3dc;border:2px solid #3b2314}' +
+  '#petLayer .pu-cardbox{width:100%;max-width:360px;max-height:100%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;padding:14px;border-radius:14px;background:#fbf3dc;border:2px solid #3b2314}' +
   '#petLayer .pu-ctitle{font-size:20px;font-weight:800;margin-bottom:6px;font-family:"Noto Serif TC","PMingLiU",serif}' +
   '#petLayer .pu-cline{margin:4px 0;font-size:14px}' +
-  '#petLayer .pu-crow{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;justify-content:flex-end}' +
-  '#petLayer .pu-cbtn{min-width:44px}' +
+  '#petLayer .pu-cbody{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y}' +
+  '#petLayer .pu-crow{flex:0 0 auto;display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;justify-content:flex-end}' +
+  '#petLayer .pu-cbtn{min-width:44px;min-height:44px}' +
   '#petLayer .pu-gift{display:flex;align-items:center;gap:8px;width:100%;justify-content:flex-start}' +
-  '#btnPet[hidden]{display:none}' +
-  '@media (max-width: 480px){#btnPet{font-size:0}#btnPet::before{content:"🐾";font-size:14px}}';
+  '#btnPet[hidden]{display:none}';
 
 var puLayer = null, puCv = null, puCtx = null, puView = null, puPanelEl = null, puBackEl = null, puGearEl = null, puBalEl = null,
   puTabEls = [], puDockEl = null, puCardEl = null, puModalEl = null, puMsgEl = null, puStickEl = null, puPlateEl = null,
@@ -330,12 +331,13 @@ function puFlashHide() {
 }
 
 function puCardShow(title, lines, btns) {
-  var box, row, i;
+  var box, body, row, i;
   if (!puCardEl) return;
   puClear(puCardEl);
   box = puEl(puCardEl, 'div', 'pu-cardbox', '');
-  puEl(box, 'div', 'pu-ctitle', title);
-  for (i = 0; i < lines.length; i++) puEl(box, 'div', 'pu-cline', lines[i]);
+  body = puEl(box, 'div', 'pu-cbody', '');
+  puEl(body, 'div', 'pu-ctitle', title);
+  for (i = 0; i < lines.length; i++) puEl(body, 'div', 'pu-cline', lines[i]);
   row = puEl(box, 'div', 'pu-crow', '');
   for (i = 0; i < btns.length; i++) puBtn(row, btns[i].t, 'pu-flow pu-cbtn', btns[i].f);
   puCardEl.style.display = '';
@@ -348,36 +350,38 @@ function puCardHide() {
 }
 
 function puModal(kind) {
-  var box, s, i, j, p, row, btn, cvObj, el, lin, sum, canBuy;
+  var box, body, s, i, j, p, row, btn, cvObj, el, lin, sum, canBuy;
   if (!puModalEl) return;
   s = petEnsure();
   puClear(puModalEl);
   box = puEl(puModalEl, 'div', 'pu-cardbox', '');
+  body = puEl(box, 'div', 'pu-cbody', '');
   if (kind === 'bands') {
-    puEl(box, 'div', 'pu-ctitle', '雲階籤譜');
+    puEl(body, 'div', 'pu-ctitle', '雲階籤譜');
     for (i = 0; i < PET_BANDS.length; i++) {
       lin = '段 ' + PET_BANDS[i].name + '(' + PET_BANDS[i].from + '~' + PET_BANDS[i].to + ' 層):';
       sum = PET_BANDS[i].w.reduce(function (a, c) { return a + c; }, 0) || 100;
       for (j = 0; j < PET_ROLL.length; j++) {
         if (PET_BANDS[i].w[j] > 0) lin += ' ' + ['+3', '+2', '+1', '0', '−1', '−2', '歸零'][j] + ' ' + PET_BANDS[i].w[j] + '%';
       }
-      puEl(box, 'div', 'pu-cline', lin + (sum === 100 ? '' : '(合計 ' + sum + ')'));
+      puEl(body, 'div', 'pu-cline', lin + (sum === 100 ? '' : '(合計 ' + sum + ')'));
     }
-    puEl(box, 'div', 'pu-cline', '否極泰來:連續 3 次結果不往上,下一次必定往上。');
-    puEl(box, 'div', 'pu-cline', '平安符:墜回 0 層時得到 1 張;下次抽到歸零時燒掉,改為 −2。');
-    puEl(box, 'div', 'pu-cline', '登頂(20 層)後回到 0 層,並得到天門寶匣。');
+    puEl(body, 'div', 'pu-cline', '否極泰來:連續 3 次結果不往上,下一次必定往上。');
+    puEl(body, 'div', 'pu-cline', '平安符:墜回 0 層時得到 1 張;下次抽到歸零時燒掉,改為 −2。');
+    puEl(body, 'div', 'pu-cline', '登頂(20 層)後回到 0 層,並得到天門寶匣。');
     row = puEl(box, 'div', 'pu-crow', '');
     puBtn(row, '關閉', 'pu-flow pu-cbtn', puModalHide);
   } else if (kind === 'exchange') {
-    puEl(box, 'div', 'pu-ctitle', '靈貝');
-    puEl(box, 'div', 'pu-cline', '釣魚得分會自動換成靈貝(1 分 = 1 🐚)。上次同步:+' + puLastGain);
-    puEl(box, 'div', 'pu-cline', '目前靈貝 🐚 ' + s.shell + ' · 金幣 🪙 ' + puCoin());
+    puEl(body, 'div', 'pu-ctitle', '靈貝');
+    puEl(body, 'div', 'pu-cline', '釣魚得分會自動換成靈貝(1 分 = 1 🐚)。上次同步:+' + puLastGain);
+    puEl(body, 'div', 'pu-cline', '目前靈貝 🐚 ' + s.shell + ' · 金幣 🪙 ' + puCoin());
     row = puEl(box, 'div', 'pu-crow', '');
     canBuy = puCoin() >= PET_COIN_RATE * PET_COIN_LOT;
     btn = puBtn(row, '用金幣兌換:' + (PET_COIN_RATE * PET_COIN_LOT) + ' 🪙 → ' + PET_COIN_LOT + ' 🐚', 'pu-flow pu-cbtn' + (canBuy ? '' : ' pu-dis'), function () {
       if (!petExchangeCoin()) { puMsg('金幣不足'); return; }
       puMsg('兌換成功 +' + PET_COIN_LOT + ' 🐚');
       puSyncDock(true);
+      puRenderPanel();
       puModal('exchange');
     });
     row = puEl(box, 'div', 'pu-crow', '');
@@ -387,12 +391,12 @@ function puModal(kind) {
     });
     puBtn(row, '關閉', 'pu-flow pu-cbtn', puModalHide);
   } else if (kind === 'gift') {
-    puEl(box, 'div', 'pu-ctitle', '開園禮');
-    puEl(box, 'div', 'pu-cline', '選一個你喜歡的五行。送你該系靈級餌的全部材料與 300 🐚,並把它設為祈願五行。');
+    puEl(body, 'div', 'pu-ctitle', '開園禮');
+    puEl(body, 'div', 'pu-cline', '選一個你喜歡的五行。送你該系靈級餌的全部材料與 300 🐚,並把它設為祈願五行。');
     for (i = 0; i < PET_EL_LIST.length; i++) {
       el = PET_EL_LIST[i];
       p = puLingOf(el);
-      btn = puBtn(box, '', 'pu-flow pu-gift', (function (e) {
+      btn = puBtn(body, '', 'pu-flow pu-gift', (function (e) {
         return function () { puPickGift(e); };
       })(el));
       cvObj = puCanvas(btn, 56, 56, '');
@@ -555,6 +559,16 @@ function puRenderClimb(s) {
   puEl(P, 'div', 'pu-hint', '祈願五行:掉落的材料約六成是該五行。結果由籤決定,選擇只影響掉落。');
   puEl(P, 'div', 'pu-note', s.bad >= 3 ? '否極泰來:下一次必定往上!' : '每次攀登花 ' + PET_CLIMB_COST + ' 🐚。連續 3 次不往上,下一次必定往上。');
   puBtn(P, 'ⓘ 籤譜(公開機率)', 'pu-flow pu-link', function () { puModal('bands'); });
+  if (s.shell < PET_CLIMB_COST) {
+    row = puEl(P, 'div', 'pu-row pu-shellwarn', '');
+    puEl(row, 'span', '', '🐚 靈貝不足!靈貝來源:釣魚 1 分 = 1 貝;或點餘額用金幣兌換');
+    puBtn(row, '去釣魚 🎣', 'pu-flow', function () {
+      petClose();
+      if (typeof fishEnter === 'function') fishEnter('top');
+    });
+  } else {
+    puEl(P, 'div', 'pu-hint', '靈貝來源:釣魚 1 分 = 1 貝;或點餘額用金幣兌換');
+  }
 }
 
 function puBaitOwned(s) {
@@ -871,6 +885,7 @@ function puRenderDetail(s, P) {
     if (!s.pets[p.id]) return;
     puFx.hopT = puT;
     puFx.heartT = puT;
+    puPetPoke(puFx);
     puSfx('pet_pat');
   });
   puEl(P, 'div', 'pu-bname', (owned ? p.name : '？？？') + ' · ' + PET_RARITY[p.rare].name + (owned ? ' · ' + puStars(s.pets[p.id].star) : ''));
@@ -941,6 +956,7 @@ function puFinishAnim() {
 
 function puOnCanvasDown() {
   if (puAnim) puAnim.speed = 60;
+  else if (puTab === 'summon' && puFx && puFx.sumOn && !puFx.sumSil) puPetPoke(puFx);
 }
 
 // ---------------- 雲階(攀登) ----------------
@@ -1181,7 +1197,7 @@ function puBuildThrow(r) {
       f.balpha = 1 - k;
       f.sumOn = true; f.sumA = 1; f.sumSil = false; f.sumFace = 'happy';
       f.sumS = 2.2 * (0.2 + 0.8 * k);
-      f.sumHop = 10 * Math.sin(k * Math.PI);
+      if (f.actN !== 'cheer') { f.actN = 'cheer'; f.actT0 = puT; f.actSay = ''; }
     } });
     return tl;
   }
@@ -1200,6 +1216,7 @@ function puBuildThrow(r) {
     f.beam = 0; f.ring = 0;
     f.sumOn = true; f.sumA = 1; f.sumSil = false; f.sumFace = 'smug'; f.sumS = 2.2 * Math.max(0.01, k);
     f.sumX = 195; f.sumY = 478;
+    if (f.actN !== 'bow') { f.actN = 'bow'; f.actT0 = puT; f.actSay = ''; }
   } });
   tl.push({ t: tc + 0.75, d: 0.5, draw: function (k) { f.bopen = 0; f.bash = k; f.balpha = 1 - k; } });
   tl.push({ t: tc + 1.05, d: 1.2, snd: 'pet_fail', draw: function (k) { f.fxA = k; f.sink = 6 * k; } });
@@ -1283,7 +1300,7 @@ function puDrawSummon(ctx, f) {
   if (f.sumOn) {
     ctx.save();
     ctx.globalAlpha = f.sumA;
-    pdPet(ctx, f.sumId, f.sumX, f.sumY - f.sumHop, f.sumS, { silhouette: f.sumSil, face: f.sumFace });
+    pdPet(ctx, f.sumId, f.sumX, f.sumY - f.sumHop, f.sumS, { silhouette: f.sumSil, face: f.sumFace === 'normal' ? undefined : f.sumFace, anim: puPetAnim(f), say: puPetSay(f) });
     ctx.restore();
   }
   if (f.absorb > 0) {
@@ -1370,6 +1387,19 @@ function puDrawSummon(ctx, f) {
   }
 }
 
+// 仙獸互動動作:預設 idle 循環;點擊輪流 greet / punch / nod / happy-hop 並配一句泡泡
+var PU_POKE = [['greet', '你好呀!'], ['punch', '喝!'], ['nod', '嗯嗯!'], ['happy-hop', '好開心!']];
+function puPetPoke(f) {
+  var p = PU_POKE[(f.actI = ((f.actI || 0) + 1)) % PU_POKE.length];
+  f.actN = p[0]; f.actT0 = puT; f.actSay = p[1];
+}
+function puPetAnim(f) {
+  var a = f && f.actN && typeof _PD_ACT !== 'undefined' ? _PD_ACT[f.actN] : null;
+  if (a && puT - f.actT0 < a.dur) return { name: f.actN, t: puT - f.actT0 };
+  return { name: 'idle', t: puT, loop: true };
+}
+function puPetSay(f) { return f && f.actSay && f.actN && puT - f.actT0 < 1.2 ? f.actSay : ''; }
+
 function puDrawDex() {
   var i, c, t = puT, d;
   for (i = 0; i < puDexCvs.length; i++) {
@@ -1385,10 +1415,8 @@ function puDrawDex() {
     puDetCtx.clearRect(0, 0, 200, 200);
     pdPet(puDetCtx, puDetId, 100, 180, 2.2, {
       silhouette: !(petEnsure().pets[puDetId]),
-      breath: 1 + 0.03 * Math.sin(t * Math.PI),
-      hop: puFx && puFx.hopT !== undefined && t - puFx.hopT < 0.6 ? 10 * Math.sin((t - puFx.hopT) / 0.6 * Math.PI) : 0,
-      face: puFx && puFx.heartT !== undefined && t - puFx.heartT < 1 ? 'happy' : 'normal',
-      blink: (t % 4) < 0.12
+      anim: puPetAnim(puFx),
+      say: puPetSay(puFx)
     });
     if (puFx && puFx.heartT !== undefined && t - puFx.heartT < 1) {
       puDetCtx.fillStyle = '#ff5d7a';
@@ -1534,7 +1562,7 @@ function puMountButton() {
   btn = document.createElement('button');
   btn.id = 'btnPet';
   btn.title = '仙獸苑';
-  btn.textContent = '🐾 仙獸';
+  btn.textContent = '🐾';
   btn.addEventListener('click', function () { petOpen(); });
   kids = top.children || [];
   for (i = 0; fb && i < kids.length; i++) if (kids[i] === fb) idx = i;
@@ -1549,11 +1577,6 @@ function puMountButton() {
   if (typeof AUDIO_DEFS !== 'undefined' && typeof AUDIO_SYNTH !== 'undefined' && typeof PET_AUDIO_DEFS !== 'undefined') {
     Object.assign(AUDIO_DEFS, PET_AUDIO_DEFS);
     Object.assign(AUDIO_SYNTH, PET_AUDIO_SYNTH);
-  }
-  try {
-    if (typeof settingsAddRow === 'function') settingsAddRow('🐾 仙獸苑', petOpen, '休閒');
-  } catch (e) {
-    console.warn('[pet] settingsAddRow failed', e);
   }
   puMountButton();
 })();

@@ -215,33 +215,6 @@ function stExtraNodes(group) {
   });
 }
 
-function stQuickSec() {
-  const grid = stEl('div', 'st-quick');
-  const items = [['範本', 'btnDemo'], ['全景', 'btnPano'], ['商店', 'btnShop']];
-  items.forEach(function (it) {
-    const b = stEl('button', '', it[0]);
-    b.addEventListener('click', function () {
-      stClosePanel();
-      const target = document.getElementById(it[1]);
-      if (target) target.click();
-    });
-    grid.appendChild(b);
-  });
-  const cfg = settingsGet();
-  const seasonNow = cfg.seasonMode === 'auto' ? 'auto' : (typeof currentSeason === 'string' ? currentSeason : 'spring');
-  const season = stRow('季節', stSeg([['auto', '自動'], ['spring', '春'], ['summer', '夏'], ['autumn', '秋'], ['winter', '冬']], seasonNow, function (v) {
-    if (v === 'auto') {
-      settingsSet('seasonMode', 'auto');
-      stApplyAutoSeason();
-    } else {
-      settingsSet('seasonMode', 'manual');
-      stApplySeason(v);
-    }
-    stRender();
-  }));
-  return stSec('快捷', [grid, season]);
-}
-
 function stSoundSec() {
   const cfg = settingsGet();
   const nodes = [
@@ -262,12 +235,6 @@ function stSoundSec() {
 
 function stDisplaySec() {
   const nodes = [];
-  if (typeof artSetTod === 'function') {
-    nodes.push(stRow('時段', stSeg([['auto', '自動'], ['dawn', '晨'], ['noon', '午'], ['dusk', '昏'], ['night', '夜']], stReadTodLock(), function (v) {
-      artSetTod(v);
-      stRender();
-    })));
-  }
   if (typeof artSetOn === 'function') {
     const artOn = typeof ART_ON !== 'undefined' ? !!ART_ON : true;
     nodes.push(stRow('新美術與光暈', stSwitch(artOn, function (v) {
@@ -288,9 +255,11 @@ function stDisplaySec() {
       stRender();
     })));
   }
-  if (typeof uiSetCompact === 'function') {
-    nodes.push(stRow('精簡介面', stSwitch(typeof uiGetCompact === 'function' && uiGetCompact(), function (v) {
-      uiSetCompact(v);
+  if (typeof uiSetMode === 'function') {
+    const curMode = typeof uiGetMode === 'function' ? uiGetMode() : 'normal';
+    nodes.push(stRow('介面模式', stSeg([['normal', '正常'], ['compact', '精簡'], ['photo', '拍照']], curMode, function (v) {
+      if (v === 'photo') stClosePanel();
+      uiSetMode(v);
       stRender();
     })));
   }
@@ -417,9 +386,8 @@ function stRender() {
   if (!stBodyEl) return;
   stBodyEl.innerHTML = '';
   const battle = stInBattle();
-  if (!battle) stBodyEl.appendChild(stQuickSec());
   stBodyEl.appendChild(stSoundSec());
-  const builtin = ['快捷', '聲音', '畫面', '關於', '危險區'];
+  const builtin = ['聲音', '畫面', '關於', '危險區'];
   stExtraRows.forEach(function (r) {
     if (builtin.indexOf(r.group) >= 0) return;
     builtin.push(r.group);

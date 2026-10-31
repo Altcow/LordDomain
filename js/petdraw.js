@@ -17,7 +17,7 @@ var _PD_SKY = {
 };
 var _PD_METHODS = ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo', 'arc', 'ellipse', 'quadraticCurveTo', 'bezierCurveTo',
   'fill', 'stroke', 'fillRect', 'strokeRect', 'clearRect', 'rect', 'translate', 'rotate', 'scale', 'setTransform', 'fillText', 'strokeText',
-  'createLinearGradient', 'createRadialGradient', 'drawImage', 'clip'];
+  'createLinearGradient', 'createRadialGradient', 'drawImage', 'clip', 'transform'];
 var _pdGC = {};
 
 // ---------------- 基礎工具 ----------------
@@ -54,7 +54,9 @@ function _pdCached(key, ctx, make) { if (!_pdGC[key]) _pdGC[key] = make(ctx); re
 function _pdHas(list, k) { return !!list && list.indexOf(k) >= 0; }
 
 // ---------------- 圖元(g = { ctx, sil, ink };sil = 剪影模式,所有顏色換成剪影色) ----------------
-function _pdCol(g, c) { if (!g.sil) return c; return c === '#ffffff' ? c : _PD_SIL; }
+function _pdCol(g, c) { return g.sil ? _PD_SIL : c; }
+// 剪影模式的眼睛白點(不經 _pdCol,直接填白)
+function _pdSilDot(g, x, y, r) { var c = g.ctx; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fillStyle = '#ffffff'; c.fill(); }
 function _pdStroke(g, w, col) {
   var c = g.ctx;
   c.strokeStyle = g.sil ? _PD_SIL : (col || g.ink);
@@ -97,6 +99,7 @@ function _pdDot(g, x, y, r, col) { _pdEll(g, x, y, r, r, 0, col, 0); }
 function _pdTxt(g, txt, x, y, font, col, align) {
   var c = g.ctx;
   c.font = font; c.fillStyle = col; c.textAlign = align || 'center'; c.textBaseline = 'middle';
+  if (g.mirror) { c.save(); c.translate(x, y); c.scale(-1, 1); c.fillText(txt, 0, 0); c.restore(); return; }
   c.fillText(txt, x, y);
 }
 function _pdShadow(g, rx) { _pdEll(g, 0, 0, rx, rx * 0.26, 0, 'rgba(60,40,20,0.22)', 0); }
@@ -123,7 +126,7 @@ function _pdBubble(g, x, y, txt) {
 function _pdFace(g, hx, hy, r, face, blink) {
   var er = r * 0.2, sp = r * 0.42, ey = hy - r * 0.05, mx = hx, my = hy + r * 0.42;
   if (g.sil) {
-    _pdDot(g, hx - sp, ey, 1.6, '#ffffff'); _pdDot(g, hx + sp, ey, 1.6, '#ffffff');
+    _pdSilDot(g, hx - sp, ey, 1.6); _pdSilDot(g, hx + sp, ey, 1.6);
     return;
   }
   _pdEll(g, hx - sp * 1.5, hy + r * 0.3, er, er * 0.55, 0, 'rgba(242,96,60,0.35)', 0);
@@ -468,7 +471,1008 @@ var _PD_TPL = {
   turtle: { draw: _pdTplTurtle, head: { x: 24, y: -24, r: 9 } }
 };
 
-// 仙獸主函式。opt = { silhouette, blink, hop(數值或 true = 10px), face: 'normal'|'happy'|'smug', breath(y 向縮放倍率) }
+// ================= 仙獸 v2:每隻獨立造型 =================
+// 一律面向右(頭在右、尾在左),錨點 = 腳底中心,s = 1 約 64×64。只用路徑填色 + 深棕描邊;
+// 剪影模式由同一套路徑自動產生(_pdCol 全部換成剪影色,裝飾性物件以 g.sil 略過)。
+var _PD_IRIS = { wood: '#2fae4a', fire: '#ff7a1a', earth: '#d9900f', metal: '#d4a52a', water: '#2b86e0', all: '#ff4f7a' };
+var _PD_CHEEK = 'rgba(242,96,60,0.35)';
+// 平滑路徑:開放 = 依中點做二次曲線(通過各段中點);封閉 = 以各點為控制點的圓滑外框
+function _pdCurvePath(c, pts, closed) {
+  var n = pts.length, i, p, q;
+  if (closed) {
+    c.moveTo((pts[n - 1][0] + pts[0][0]) / 2, (pts[n - 1][1] + pts[0][1]) / 2);
+    for (i = 0; i < n; i++) {
+      p = pts[i]; q = pts[(i + 1) % n];
+      c.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2);
+    }
+    c.closePath();
+    return;
+  }
+  c.moveTo(pts[0][0], pts[0][1]);
+  if (n === 2) { c.lineTo(pts[1][0], pts[1][1]); return; }
+  for (i = 1; i < n - 2; i++) {
+    p = pts[i]; q = pts[i + 1];
+    c.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2);
+  }
+  c.quadraticCurveTo(pts[n - 2][0], pts[n - 2][1], pts[n - 1][0], pts[n - 1][1]);
+}
+function _pdShapePath(c, sh) {
+  if (sh.p) _pdCurvePath(c, sh.p, true);
+  else c.ellipse(sh[0], sh[1], Math.max(0.01, sh[2]), Math.max(0.01, sh[3]), sh[4] || 0, 0, Math.PI * 2);
+}
+function _pdBlob(g, pts, fill, edge) {
+  var c = g.ctx;
+  c.beginPath(); _pdCurvePath(c, pts, true);
+  if (fill) { c.fillStyle = _pdCol(g, fill); c.fill(); }
+  if (edge) _pdStroke(g, edge === true ? 1.6 : edge);
+}
+// 多個形狀合併成一塊(先全部描粗邊、再全部填色 → 只留外輪廓)
+function _pdUnion(g, shapes, fill, edge) {
+  var c = g.ctx, i, w = edge === undefined ? 1.6 : edge;
+  if (w) for (i = 0; i < shapes.length; i++) { c.beginPath(); _pdShapePath(c, shapes[i]); _pdStroke(g, w * 2); }
+  for (i = 0; i < shapes.length; i++) { c.beginPath(); _pdShapePath(c, shapes[i]); c.fillStyle = _pdCol(g, fill); c.fill(); }
+}
+// 粗管(脖子、腿、尾、蛇身):先描深棕粗線再疊本色
+function _pdTube(g, pts, w, col, edge) {
+  var c = g.ctx, e = edge === undefined ? 1.6 : edge;
+  c.beginPath(); _pdCurvePath(c, pts, false);
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  if (e) { c.strokeStyle = g.sil ? _PD_SIL : g.ink; c.lineWidth = w + e * 2; c.stroke(); }
+  c.strokeStyle = _pdCol(g, col); c.lineWidth = w; c.stroke();
+}
+// 腿:從 (x0,y0) 到地面 x1,可加蹄
+function _pdLeg(g, x0, y0, x1, w, col, hoof) {
+  _pdTube(g, [[x0, y0], [x1, -w * 0.5 - 0.6]], w, col);
+  if (hoof) _pdEll(g, x1, -w * 0.32, w * 0.55 + 0.4, w * 0.34, 0, hoof, 1.2);
+}
+function _pdFlameR(g, x, y, h, col, rot) {
+  var c = g.ctx;
+  c.save(); c.translate(x, y); c.rotate(rot || 0);
+  _pdFlame(g, 0, 0, h, col);
+  c.restore();
+}
+// 雙層火焰(外橘內黃)
+function _pdFire(g, x, y, h, rot) {
+  _pdFlameR(g, x, y, h, '#ff9a2e', rot);
+  if (!g.sil) _pdFlameR(g, x, y + h * 0.12, h * 0.55, '#ffd23a', rot);
+}
+// 羽毛 / 尾巴葉形:由 p0(根)到 p1(尖),最寬 w 在 70% 處
+function _pdFeather(g, p0, p1, w, col, edge) {
+  var dx = p1[0] - p0[0], dy = p1[1] - p0[1], ln = Math.sqrt(dx * dx + dy * dy) || 1, nx = -dy / ln, ny = dx / ln;
+  function at(t, k) { return [p0[0] + dx * t + nx * k, p0[1] + dy * t + ny * k]; }
+  var pts = [at(0, w * 0.18), at(0.35, w * 0.42), at(0.72, w * 0.55), at(1.04, 0), at(0.72, -w * 0.55), at(0.35, -w * 0.42), at(0, -w * 0.18)];
+  _pdBlob(g, pts, col, edge === undefined ? 1.3 : edge);
+  return pts;
+}
+function _pdSpark(g, x, y, r, col) {
+  var k = r * 0.28;
+  _pdPoly(g, [[x, y - r], [x + k, y - k], [x + r, y], [x + k, y + k], [x, y + r], [x - k, y + k], [x - r, y], [x - k, y - k]], col, 0);
+  _pdDot(g, x, y, r * 0.22, '#ffffff');
+}
+// 統一表情語言。o = { x, y(雙眼中心), sp(半眼距), er(眼半徑), far(右眼縮放,側臉用), mx, my, mouth: smile|w|open|none, mk(嘴大小), ring(眼白圈), brow }
+// g.fdx:轉頭時臉部特徵的水平位移(由頭部部件設定)
+function _pdFaceV(g, o) {
+  var fd = g.fdx || 0, x = o.x + fd, y = o.y, sp = o.sp, er = o.er, i, ex, r, c = g.ctx;
+  if (g.sil) { _pdSilDot(g, x - sp, y, 1.5); _pdSilDot(g, x + sp, y, 1.5); return; }
+  if (o.cheek !== false) {
+    var cx = o.cx || sp * 1.35, cy = y + er * 1.75;
+    _pdEll(g, x - cx, cy, er * 0.95, er * 0.55, 0, _PD_CHEEK, 0);
+    _pdEll(g, x + cx * (o.far || 1), cy, er * 0.85 * (o.far || 1), er * 0.5, 0, _PD_CHEEK, 0);
+  }
+  for (i = -1; i <= 1; i += 2) {
+    ex = x + i * sp; r = er * (i > 0 ? (o.far || 1) : 1);
+    if (o.ring && (g.face === 'normal' || g.face === 'sad') && !g.blink) _pdEll(g, ex, y, r * 1.45, r * 1.6, 0, '#ffffff', 0);
+    if (o.brow && g.face !== 'happy') _pdLine(g, [[ex - r * 0.8, y - r * 1.85 + i * r * 0.18], [ex + r * 0.8, y - r * 1.85 - i * r * 0.18]], _PD_EYE, 1.3);
+    if (g.face === 'happy') {
+      _pdArc(g, ex, y + r * 0.55, r * 1.05, Math.PI * 1.15, Math.PI * 1.85, _PD_EYE, 1.5);
+    } else if (g.face === 'closed') {
+      _pdArc(g, ex, y - r * 0.5, r * 1.05, Math.PI * 0.15, Math.PI * 0.85, _PD_EYE, 1.5);
+    } else if (g.blink || g.face === 'smug') {
+      _pdLine(g, [[ex - r * 1.1, y], [ex + r * 1.1, y]], _PD_EYE, 1.6);
+    } else {
+      _pdEll(g, ex, y, r, r * 1.2, 0, _PD_EYE, 0);
+      if (g.iris) {
+        _pdEll(g, ex, y + r * 0.3, r * 0.72, r * 0.72, 0, g.iris, 0);
+        _pdEll(g, ex, y + r * 0.22, r * 0.36, r * 0.42, 0, _PD_EYE, 0);
+      }
+      _pdDot(g, ex - r * 0.3, y - r * 0.45, r * 0.42, '#ffffff');
+      _pdDot(g, ex + r * 0.38, y + r * 0.45, r * 0.18, '#ffffff');
+      if (g.face === 'sad') _pdLine(g, [[ex - r * 1.1, y - r * 1.5 - i * r * 0.3], [ex + r * 1.1, y - r * 1.5 + i * r * 0.3]], _PD_EYE, 1.2);
+    }
+  }
+  var m = o.mouth || 'smile', mx = o.mx + fd, my = o.my, k = o.mk || er * 0.7;
+  if (m === 'none' || o.mx === undefined) return;
+  if (g.face === 'smug') {
+    _pdEll(g, mx + k * 0.5, my + k * 0.65, k * 0.55, k * 0.65, 0, '#ff8a9a', 0.8);
+    _pdLine(g, [[mx - k, my], [mx + k, my + k * 0.15]], _PD_INK, 1.2);
+  } else if (g.face === 'sad') {
+    _pdArc(g, mx, my + k * 0.9, k * 0.8, Math.PI * 1.2, Math.PI * 1.8, _PD_INK, 1.2);
+  } else if (g.face === 'happy' || m === 'open') {
+    c.beginPath(); c.arc(mx, my - k * 0.2, k, 0, Math.PI); c.closePath();
+    c.fillStyle = '#b8323a'; c.fill(); _pdStroke(g, 1.0);
+    _pdEll(g, mx, my + k * 0.42, k * 0.55, k * 0.28, 0, '#ff8a9a', 0);
+  } else if (m === 'w') {
+    _pdArc(g, mx - k * 0.5, my, k * 0.5, Math.PI * 0.1, Math.PI * 0.9, _PD_INK, 1.2);
+    _pdArc(g, mx + k * 0.5, my, k * 0.5, Math.PI * 0.1, Math.PI * 0.9, _PD_INK, 1.2);
+  } else {
+    _pdArc(g, mx, my - k * 0.6, k, Math.PI * 0.2, Math.PI * 0.8, _PD_INK, 1.2);
+  }
+}
+// 三層明暗的身體 / 頭(暗面描邊底 → 中間調往左上縮 → 左上高光),光源固定左上
+function _pdBodyE(g, x, y, rx, ry, rot, col, edge) {
+  _pdEll(g, x, y, rx, ry, rot, g.sil ? col : _pdTone(col, 0.84), edge === undefined ? 1.6 : edge);
+  if (g.sil) return;
+  _pdEll(g, x - rx * 0.08, y - ry * 0.13, rx * 0.9, ry * 0.84, rot, col, 0);
+  _pdHi(g, x - rx * 0.42, y - ry * 0.5, rx * 0.3, ry * 0.2);
+}
+
+// ================= 關節骨架 + 關鍵幀動作 =================
+// 每隻同一套關節命名(對應 pose 欄位):
+//   root(x 重心平移、y 離地、rot 繞腳底傾斜、sx/sy 擠壓伸展) → hip(=骨盆,lean 繞髖樞軸前傾 / 後仰)→ torso
+//   neck/head(head 點頭旋轉、hdx/hdy 頸部前伸、hs 透視縮放、yaw 轉頭)、earL / earR(或角)、tail(旋轉 + curl 多節彎曲)、
+//   armN / armF(近 / 遠側前肢、手或翅)、legN / legF(後腿,腳底釘地)、flip(轉身 0→1,寬度以 cos 過渡)。
+// 每隻的 rig:hip = 髖高(腿頂離地距離)、lean = 前傾幅度係數(高瘦或貼地的身體基底縮小)、arm = paw(前腳兼手,釘地)| hand(懸空手)| wing(翅膀當手)| none(無前肢 → 頭槌替代)。
+var _PD_RIG = {
+  xingxing: { hip: 14, arm: 'hand' }, lushu: { hip: 22, arm: 'paw' }, jiuwei: { hip: 15, arm: 'paw' }, huoshu: { hip: 5, arm: 'hand' },
+  bifang: { hip: 19, arm: 'wing' }, huoqilin: { hip: 22, arm: 'paw' }, dangkang: { hip: 12, arm: 'paw' }, pixiu: { hip: 18, arm: 'paw' },
+  huanglong: { hip: 6, arm: 'hand', lean: 0.45 }, jiao: { hip: 16, arm: 'paw' }, tiangou: { hip: 15, arm: 'paw' }, baize: { hip: 18, arm: 'paw' },
+  xuangui: { hip: 6, arm: 'paw', lean: 0.6 }, kui: { hip: 16, arm: 'none', lean: 0.8 }, xuanwu: { hip: 6, arm: 'paw', lean: 0.6 }, fenghuang: { hip: 17, arm: 'wing' }
+};
+// 動作:dur 秒;keys = [時間, 姿勢(省略欄位 = 靜止值), 抵達此鍵的緩動];第一鍵與最後一鍵皆為靜止姿勢 → 可循環、可回 idle。
+// 緩動:io = easeInOut、out = easeOut(甩出)、in = easeIn(落下)、back = 過衝回彈。idle 權重 = 疊加的待機層比例。
+var _PD_ACT = {
+  idle: { dur: 2.6, idle: 1, keys: [[0, {}], [2.6, {}]] },
+  greet: { dur: 1.5, idle: 0.3, keys: [
+    [0, {}],
+    [0.25, { sx: 1.04, sy: 0.93, lean: -0.07, head: -0.1, armN: 0.15, earL: 0.15, earR: -0.15 }, 'io'],            // 預備:微蹲後仰
+    [0.55, { x: 2, sx: 0.98, sy: 1.04, lean: 0.24, head: 0.16, hdx: 2, armN: 1.9, tail: 0.4, earL: -0.25, earR: 0.25, face: 'happy' }, 'back'], // 彎腰前傾、前肢甩出
+    [0.78, { x: 2, lean: 0.2, head: 0.1, hdx: 1.5, armN: 1.3, tail: 0.2, face: 'happy' }, 'io'],                 // 揮下
+    [0.98, { x: 1.6, lean: 0.21, head: 0.14, hdx: 1.5, armN: 2.0, tail: 0.45, face: 'happy' }, 'io'],            // 揮上
+    [1.22, { x: -0.6, lean: -0.05, head: -0.06, armN: -0.12, tail: -0.1 }, 'back'],                             // 收回過衝
+    [1.5, {}, 'io']] },
+  punch: { dur: 1.3, idle: 0.2, keys: [
+    [0, {}],
+    [0.36, { x: -2.2, rot: -0.05, sx: 1.04, sy: 0.95, lean: -0.2, head: -0.12, armN: -0.6, armF: -0.3, tail: -0.35, earL: 0.2, earR: -0.2 }, 'io'], // 蓄力後仰
+    [0.5, { x: 4, rot: 0.06, sx: 1.07, sy: 0.95, lean: 0.32, head: 0.06, hdx: 4, armN: 1.65, armF: 0.4, tail: 0.55, earL: -0.35, earR: 0.35 }, 'out'], // 扭轉前傾打出
+    [0.64, { x: 3.4, rot: 0.05, lean: 0.27, head: 0.04, hdx: 3.4, armN: 1.5, armF: 0.3, tail: 0.45 }, 'io'],
+    [0.98, { x: -1, rot: -0.02, lean: -0.06, head: -0.05, armN: -0.15, tail: -0.15 }, 'back'],                 // 回位過衝
+    [1.3, {}, 'io']] },
+  nod: { dur: 1.0, idle: 0.5, keys: [
+    [0, {}],
+    [0.2, { head: -0.13, hdy: -0.6 }, 'io'],
+    [0.4, { head: 0.36, lean: 0.05, hdx: 1, earL: 0.15, earR: -0.15, face: 'happy' }, 'out'],
+    [0.56, { head: 0.04, face: 'happy' }, 'io'],
+    [0.72, { head: 0.3, lean: 0.04, hdx: 0.8, face: 'happy' }, 'out'],
+    [1.0, {}, 'back']] },
+  bow: { dur: 1.8, idle: 0.2, keys: [
+    [0, {}],
+    [0.25, { lean: -0.06, sy: 1.02, head: -0.05 }, 'io'],
+    [0.8, { x: 1.5, sy: 0.97, lean: 0.46, head: 0.35, hdx: 1.5, armN: 0.2, armF: 0.1, tail: 0.3, earL: 0.3, earR: -0.3, face: 'closed' }, 'io'],
+    [1.2, { x: 1.5, sy: 0.97, lean: 0.46, head: 0.35, hdx: 1.5, armN: 0.2, armF: 0.1, tail: 0.3, earL: 0.3, earR: -0.3, face: 'closed' }, 'io'],
+    [1.5, { lean: -0.06, head: -0.06, tail: -0.05 }, 'back'],
+    [1.8, {}, 'io']] },
+  'happy-hop': { dur: 1.2, idle: 0.2, keys: [
+    [0, {}],
+    [0.22, { sx: 1.13, sy: 0.82, lean: 0.06, head: 0.1, earL: 0.2, earR: -0.2, tail: -0.2 }, 'io'],            // 下蹲蓄力
+    [0.45, { y: 14, sx: 0.91, sy: 1.13, lean: -0.08, head: -0.12, armN: 0.8, armF: 0.6, tail: 0.55, earL: -0.4, earR: 0.4, face: 'happy' }, 'out'], // 離地伸展
+    [0.62, { y: 16, sx: 0.98, sy: 1.04, lean: -0.04, head: -0.06, armN: 0.6, armF: 0.4, tail: 0.4, face: 'happy' }, 'out'],
+    [0.82, { sx: 1.16, sy: 0.8, lean: 0.07, head: 0.12, earL: 0.35, earR: -0.35, tail: -0.3, face: 'happy' }, 'in'], // 落地擠壓
+    [0.98, { sx: 0.97, sy: 1.05, head: -0.04, face: 'happy' }, 'back'],
+    [1.2, {}, 'io']] },
+  cheer: { dur: 1.6, idle: 0.2, keys: [
+    [0, {}],
+    [0.2, { sx: 1.06, sy: 0.9, lean: 0.04 }, 'io'],
+    [0.4, { y: 6, sx: 0.95, sy: 1.08, lean: -0.12, head: -0.2, armN: 2.2, armF: 2.0, tail: 0.6, earL: -0.3, earR: 0.3, face: 'happy' }, 'out'],
+    [0.6, { sx: 1.05, sy: 0.92, lean: -0.04, armN: 1.6, armF: 1.4, tail: 0.2, face: 'happy' }, 'in'],
+    [0.8, { y: 6, sx: 0.95, sy: 1.08, lean: -0.12, head: -0.2, armN: 2.2, armF: 2.0, tail: 0.6, earL: -0.3, earR: 0.3, face: 'happy' }, 'out'],
+    [1.0, { sx: 1.05, sy: 0.92, armN: 1.2, armF: 1.0, face: 'happy' }, 'in'],
+    [1.3, { sx: 0.98, sy: 1.02, face: 'happy' }, 'back'],
+    [1.6, {}, 'io']] },
+  sad: { dur: 2.4, idle: 0.3, keys: [
+    [0, {}],
+    [0.6, { sx: 1.03, sy: 0.94, lean: 0.12, head: 0.35, hdy: 3, earL: 0.5, earR: -0.5, tail: -0.55, face: 'sad' }, 'io'], // 垂頭縮肩
+    [1.8, { sx: 1.03, sy: 0.93, rot: -0.02, lean: 0.14, head: 0.38, hdy: 3.2, earL: 0.55, earR: -0.55, tail: -0.6, face: 'sad' }, 'io'],
+    [2.4, {}, 'io']] },
+  sleep: { dur: 4.0, idle: 0.6, keys: [
+    [0, {}],
+    [0.8, { sx: 1.08, sy: 0.82, lean: 0.08, head: 0.4, hdy: 4, earL: 0.5, earR: -0.5, tail: -0.3, face: 'closed' }, 'io'],
+    [3.2, { sx: 1.08, sy: 0.82, lean: 0.08, head: 0.42, hdy: 4, earL: 0.5, earR: -0.5, tail: -0.3, face: 'closed' }, 'io'],
+    [4.0, {}, 'back']] },
+  'tap-react': { dur: 0.8, idle: 0.2, keys: [
+    [0, {}],
+    [0.08, { x: -4, rot: -0.14, sx: 1.08, sy: 0.9, head: -0.2, earL: -0.5, earR: 0.5, tail: 0.3, face: 'smug' }, 'out'], // 被戳偏移
+    [0.3, { x: 1.5, rot: 0.07, sx: 0.97, sy: 1.05, head: 0.08, tail: -0.2, face: 'happy' }, 'back'],                     // 彈回過衝
+    [0.5, { x: -0.5, rot: -0.03, head: -0.03, face: 'happy' }, 'io'],
+    [0.8, {}, 'io']] },
+  turn: { dur: 2.0, idle: 0.4, keys: [
+    [0, {}],
+    [0.4, { flip: 0.5, y: 5, sx: 0.95, sy: 1.05, head: -0.1 }, 'in'],                                     // 轉身瞬間小跳,掩蓋寬度翻面
+    [0.8, { flip: 1 }, 'out'],
+    [1.2, { flip: 1 }, 'io'],
+    [1.6, { flip: 0.5, y: 5, sx: 0.95, sy: 1.05, head: -0.1 }, 'in'],
+    [2.0, {}, 'out']] }
+};
+var _PD_ACT_LIST = ['idle', 'greet', 'punch', 'nod', 'bow', 'happy-hop', 'cheer', 'sad', 'sleep', 'tap-react', 'turn'];
+var _PD_POSE0 = { x: 0, y: 0, rot: 0, sx: 1, sy: 1, lean: 0, head: 0, hdx: 0, hdy: 0, hs: 1, yaw: 0, tail: 0, curl: 0, earL: 0, earR: 0, armN: 0, armF: 0, wing: 0, flip: 0 };
+var _PD_CH = ['x', 'y', 'rot', 'sx', 'sy', 'lean', 'head', 'hdx', 'hdy', 'hs', 'yaw', 'tail', 'curl', 'earL', 'earR', 'armN', 'armF', 'wing', 'flip'];
+function _pdStrHash(s) { var h = 7; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100003; return h; }
+function _pdEase(kind, u) {
+  u = _pdClamp(u, 0, 1);
+  if (kind === 'out') return 1 - (1 - u) * (1 - u) * (1 - u);
+  if (kind === 'in') return u * u * u;
+  if (kind === 'back') { var v = u - 1; return 1 + 2.70158 * v * v * v + 1.70158 * v * v; }
+  return u * u * (3 - 2 * u);
+}
+// 關鍵幀取樣:回傳 { p: 各關節值, face }
+function _pdKeyAt(act, t) {
+  var ks = act.keys, i = 0, out = {}, k, a, b, e, face;
+  while (i < ks.length - 2 && t >= ks[i + 1][0]) i++;
+  a = ks[i]; b = ks[i + 1] || a;
+  e = b === a ? 0 : _pdEase(b[2], (t - a[0]) / Math.max(0.001, b[0] - a[0]));
+  for (k = 0; k < _PD_CH.length; k++) {
+    var ch = _PD_CH[k], va = a[1][ch] !== undefined ? a[1][ch] : _PD_POSE0[ch], vb = b[1][ch] !== undefined ? b[1][ch] : _PD_POSE0[ch];
+    out[ch] = va + (vb - va) * e;
+  }
+  face = (e < 0.5 ? a[1].face : b[1].face) || null;
+  return { p: out, face: face };
+}
+// 待機層:呼吸 squash&stretch、重心左右轉移、扭動(頭延遲 0.13 秒、尾再延遲)、耳尾次級運動、轉頭、眨眼。相位以 id 雜湊錯開。
+function _pdIdle(id, t, sleepy) {
+  var ph = _pdH(_pdStrHash(id)) * Math.PI * 2, w = Math.PI * 2 / 2.6, s0 = Math.sin(w * t + ph), amp = 0.085;
+  var b = Math.sin((sleepy ? 0.6 : 1) * Math.PI * t + ph), br = sleepy ? 0.045 : 0.03;
+  var yaw = Math.sin(w * 0.43 * t + ph * 1.3);
+  return {
+    root: s0 * amp,
+    shift: Math.sin(w * 0.5 * t + ph) * 1.2,
+    head: (Math.sin(w * (t - 0.13) + ph) - s0) * amp * 1.6 + Math.sin(w * 0.5 * t + ph * 1.7) * 0.03,
+    tail: Math.sin(w * (t - 0.3) + ph) * amp * 2.2 + Math.sin(w * 2.1 * t + ph) * 0.07,
+    curl: Math.sin(w * (t - 0.45) + ph) * 0.18,
+    ear: Math.sin(w * 1.7 * t + ph + 1.3) * 0.09,
+    wing: Math.sin(w * 1.4 * t + ph) * 0.1,
+    yaw: yaw,
+    bx: 1 - b * br * 0.5,
+    by: 1 + b * br,
+    blink: ((t + ph * 0.7) % 3.7) < 0.13
+  };
+}
+// 組合:動作關鍵幀 + 待機層 → 部件用的 A
+function _pdPoseOf(id, name, t, loop) {
+  var rig = _PD_RIG[id] || { hip: 16, arm: 'paw' }, act = _PD_ACT[name] || _PD_ACT.idle, tt = t, P, K, I, wI, d;
+  if (loop || act === _PD_ACT.idle) tt = ((t % act.dur) + act.dur) % act.dur;
+  K = _pdKeyAt(act, _pdClamp(tt, 0, act.dur));
+  P = K.p;
+  I = _pdIdle(id, t, name === 'sleep');
+  wI = act.idle;
+  P.rot += I.root * wI; P.x += I.shift * wI; P.head += I.head * wI; P.tail += I.tail; P.curl += I.curl;
+  P.earL += I.ear; P.earR -= I.ear * 0.8; P.wing += I.wing * wI; P.yaw += I.yaw * wI;
+  P.sx *= I.bx; P.sy *= I.by;
+  if (rig.lean) P.lean *= rig.lean;
+  if (rig.arm === 'none') { P.hdx += P.armN * 2.2; P.earL -= P.armN * 0.25; P.earR += P.armN * 0.25; P.armN = 0; P.armF = 0; }
+  if (rig.arm === 'wing') P.wing += P.armN * 0.7;
+  P.hs *= 1 + Math.max(0, P.lean) * 0.18;                                           // 前傾時頭部透視放大(近大遠小)
+  d = Math.cos(Math.PI * _pdClamp(P.flip, 0, 1));
+  return {
+    x: P.x, y: P.y, root: P.rot, sx: P.sx, sy: P.sy, lean: P.lean, hip: Math.max(3, rig.hip),
+    head: P.head, hdx: P.hdx, hdy: P.hdy, hs: P.hs, hsx: 1 - 0.07 * Math.abs(P.yaw), fdx: P.yaw * 1.2,
+    tail: P.tail, curl: P.curl, ear: P.earL, ear2: P.earR, armN: P.armN, armF: P.armF, wing: P.wing,
+    par: P.rot * 18 + P.x * 0.3, dir: Math.abs(d) < 0.4 ? (d < 0 ? -0.4 : 0.4) : d,
+    face: K.face, blink: I.blink, zz: K.face === 'closed' && name === 'sleep'
+  };
+}
+// 部件變換。種類:legF / legN(後腿,腳底釘地)、armF / armN(前腳兼手:釘地 + 繞肩擺)、handF / handN(懸空手)、
+//   head、tail、ear(earL)、ear2(earR)、wing、far(背景側視差)。(px,py) = 樞軸。
+function _pdPart(g, kind, px, py, fn) {
+  var A = g.A, c = g.ctx, r = 0, sx = 1, sy = 1, dx = 0, dy = 0, fd = g.fdx, pin = kind.charAt(0) === 'l' || kind.charAt(1) === 'r', far;
+  if (!A) { fn(); return; }
+  c.save();
+  if (pin) {
+    // 抵消前傾(繞髖)、全身傾斜與重心平移,再斜切讓腿頂跟著身體走、腳底留在原地;遠近側反向視差
+    far = kind.charAt(kind.length - 1) === 'F';
+    c.translate(0, -A.hip); c.rotate(-A.lean); c.translate(0, A.hip);
+    c.rotate(-A.root);
+    c.translate(-A.x / A.sx, 0);
+    c.transform(1, 0, -(Math.sin(A.root) + A.x / (A.hip * A.sx)), 1, 0, 0);
+    c.translate(far ? A.par : -A.par * 0.6, 0);
+    if (kind.charAt(0) === 'a') { c.translate(px, py); c.rotate(-(far ? A.armF : A.armN)); c.translate(-px, -py); }
+    fn();
+    c.restore();
+    return;
+  }
+  if (kind === 'head') { r = A.head; dx = A.hdx; dy = A.hdy; sx = A.hs * A.hsx; sy = A.hs; g.fdx = (fd || 0) + A.fdx; }
+  else if (kind === 'tail') r = A.tail;
+  else if (kind === 'ear') r = A.ear;
+  else if (kind === 'ear2') r = A.ear2;
+  else if (kind === 'wing') r = A.wing;
+  else if (kind === 'handN') r = -A.armN;
+  else if (kind === 'handF') r = -A.armF;
+  else if (kind === 'far') dx = A.par;
+  c.translate(px + dx, py + dy);
+  if (r) c.rotate(r);
+  if (sx !== 1 || sy !== 1) c.scale(sx, sy);
+  c.translate(-px, -py);
+  fn();
+  c.restore();
+  g.fdx = fd;
+}
+// 多節尾巴:沿點列逐節累加彎曲角(curl),靜止時原樣
+function _pdTP(g, pts) {
+  if (!g.A || !g.A.curl) return pts;
+  var out = [pts[0]], acc = 0, n = pts.length, i, vx, vy, ca, sa;
+  for (i = 1; i < n; i++) {
+    acc += g.A.curl / (n - 1);
+    vx = pts[i][0] - pts[i - 1][0]; vy = pts[i][1] - pts[i - 1][1];
+    ca = Math.cos(acc); sa = Math.sin(acc);
+    out.push([out[i - 1][0] + vx * ca - vy * sa, out[i - 1][1] + vx * sa + vy * ca]);
+  }
+  return out;
+}
+
+// ---- 木:狌狌(猿,正面站立、白大耳、心形臉、捲尾、抱竹筍)----
+function _pdBXingxing(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], c2 = '#fffaf0';
+  _pdPart(g, 'tail', 7, -12, function () { _pdTube(g, _pdTP(g, [[7, -12], [20, -10], [27, -22], [22, -33], [15, -30], [18, -24]]), 3.4, c0); });
+  _pdPart(g, 'legN', 0, 0, function () {
+    _pdEll(g, -6, -2.6, 5, 3, 0, c1, 1.4);
+    _pdEll(g, 6, -2.6, 5, 3, 0, c1, 1.4);
+  });
+  _pdBodyE(g, 0, -15, 10, 11, 0, c0);
+  if (!g.sil) _pdEll(g, 0, -13, 6.5, 7.5, 0, c1, 0);
+  _pdBlob(g, [[-5.5, -7], [5.5, -7], [3, -19], [0, -29], [-3, -19]], '#8fd16b', 1.3);
+  if (!g.sil) {
+    _pdLine(g, [[-4, -11], [0, -14], [4, -11]], '#4f9a3a', 1.1);
+    _pdLine(g, [[-3, -17], [0, -20], [3, -17]], '#4f9a3a', 1.1);
+  }
+  _pdPart(g, 'handF', -9, -22, function () {
+    _pdTube(g, [[-9, -22], [-8, -15], [-3.5, -13]], 4.2, c0);
+    _pdEll(g, -3.5, -13, 2.6, 2.4, 0, c1, 1.0);
+  });
+  _pdPart(g, 'handN', 9, -22, function () {
+    _pdTube(g, [[9, -22], [8, -15], [3.5, -13]], 4.2, c0);
+    _pdEll(g, 3.5, -13, 2.6, 2.4, 0, c1, 1.0);
+  });
+  _pdPart(g, 'head', 0, -26, function () {
+    [-1, 1].forEach(function (s) {
+      _pdPart(g, s < 0 ? 'ear' : 'ear2', s * 11, -38, function () {
+        _pdEll(g, s * 16, -38, 8, 8.5, 0, c2, 1.6);
+        if (!g.sil) _pdEll(g, s * 16, -38, 4.4, 5, 0, '#ffb8ae', 0);
+      });
+    });
+    _pdPoly(g, [[-5, -48], [-3, -57], [0, -51], [3, -58], [5, -48]], c0, 1.4);
+    _pdBodyE(g, 0, -38, 14.5, 13.5, 0, c0);
+    if (!g.sil) _pdUnion(g, [[-5 + (g.fdx || 0), -39, 6.5, 6.5], [5 + (g.fdx || 0), -39, 6.5, 6.5], [(g.fdx || 0), -32.5, 8.5, 6]], c1, 0.6);
+    _pdFaceV(g, { x: 0, y: -39, sp: 5, er: 2.6, mx: 0, my: -31.5, mouth: 'smile', cx: 7.8 });
+  });
+}
+// ---- 木:鹿蜀(小馬駒,白頭、虎紋、紅鬃紅尾,張嘴唱歌)----
+function _pdBLushu(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], c2 = L.c[2], far = _pdTone(c0, 0.8), hoof = '#6b3f22', head = '#fffaf0';
+  _pdPart(g, 'tail', -17, -28, function () {
+    _pdBlob(g, [[-17, -29], [-30, -35], [-37, -22], [-33, -7], [-28, -15], [-24, -24]], c2, 1.6);
+    if (!g.sil) _pdLine(g, [[-23, -28], [-30, -26], [-32, -15]], _pdTone(c2, 1.3), 1.4);
+  });
+  _pdPart(g, 'legF', 0, 0, function () { _pdLeg(g, -11, -22, -12, 4.4, far, _pdTone(hoof, 0.8)); });
+  _pdPart(g, 'armF', 5, -22, function () { _pdLeg(g, 5, -22, 6, 4.4, far, _pdTone(hoof, 0.8)); });
+  _pdPart(g, 'legN', 0, 0, function () { _pdLeg(g, -16, -22, -17, 4.6, c0, hoof); });
+  _pdPart(g, 'armN', 10, -22, function () { _pdLeg(g, 10, -22, 11, 4.6, c0, hoof); });
+  _pdPart(g, 'head', 5, -28, function () {
+    [[2.5, -33, 3.6], [4, -39, 3.9], [7, -45, 3.9], [10, -50, 3.4]].forEach(function (p) { _pdEll(g, p[0], p[1], p[2], p[2], 0, c2, 1.4); });
+    _pdTube(g, [[4, -26], [10, -37], [13, -43]], 8.5, c0);
+  });
+  _pdBodyE(g, -3, -25, 16, 10, 0, c0);
+  if (!g.sil) {
+    _pdEll(g, -2, -19.2, 11, 3.6, 0, c1, 0);
+    [-13, -7, -1].forEach(function (x) { _pdLine(g, [[x + 1, -34], [x - 1, -28], [x + 1, -22.5]], '#7a4a1e', 2); });
+  }
+  _pdPart(g, 'head', 5, -28, function () {
+    if (!g.sil) _pdLine(g, [[7, -31], [10, -33]], '#7a4a1e', 1.8);
+    _pdPart(g, 'ear2', 10, -54, function () { _pdPoly(g, [[8.5, -52], [8, -64], [14, -55]], _pdTone(head, 0.82), 1.4); });
+    _pdPart(g, 'ear', 18, -54, function () {
+      _pdPoly(g, [[15, -55], [19, -65], [21.5, -53]], head, 1.4);
+      if (!g.sil) _pdEll(g, 18.6, -57, 1.4, 3, 0.3, '#ffb8ae', 0);
+    });
+    _pdPoly(g, [[9, -53], [10.5, -60], [13, -55], [15.5, -60.5], [16.5, -54]], c2, 1.3);
+    _pdUnion(g, [[15, -46, 11, 10.5], [23.5, -39.5, 8.2, 6.4, 0.35]], head);
+    if (!g.sil) {
+      _pdEll(g, 17, -40, 7, 3, 0.2, '#f1e8da', 0);
+      _pdHi(g, 10, -51, 3.4, 1.9);
+      _pdDot(g, 29, -40.5, 1, _PD_INK);
+    }
+    _pdFaceV(g, { x: 17, y: -47, sp: 4, er: 2.5, far: 0.82, mx: 25.5, my: -35.5, mouth: 'open', mk: 2, cx: 5 });
+    if (!g.sil) {
+      _pdTxt(g, '♪', 32, -53, 'bold 10px sans-serif', c2);
+      _pdTxt(g, '♫', 27, -63, 'bold 8px sans-serif', '#4caf50');
+    }
+  });
+}
+// ---- 木:九尾狐(坐姿奶油白狐,九尾扇形展開、尾尖青綠、額心花鈿)----
+function _pdBJiuwei(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], c2 = L.c[2], c = g.ctx, i, a, len, pts;
+  for (i = 0; i < 9; i++) {
+    a = Math.PI * (0.8 + i * 0.082) + (g.A ? g.A.tail * (0.45 + i * 0.09) : 0);
+    len = 29 + (i % 2) * 3;
+    pts = [[0, -2], [len * 0.35, -5], [len * 0.62, -6.4], [len * 0.88, -4.2], [len + 1.5, 1.5], [len * 0.88, 5.4], [len * 0.62, 6.6], [len * 0.35, 4.8], [0, 2]];
+    c.save(); c.translate(-5, -20); c.rotate(a);
+    _pdBlob(g, pts, i % 2 ? c0 : _pdTone(c0, 0.9), 0);
+    if (!g.sil) _pdBlob(g, [[len * 0.72, -5.8], [len * 0.9, -4], [len + 2, 1.5], [len * 0.9, 5.2], [len * 0.72, 6.4], [len * 0.66, 0.4]], c2, 0);
+    _pdBlob(g, pts, null, 1.3);
+    c.restore();
+  }
+  _pdBodyE(g, -3, -9, 9, 8, 0, c0);
+  _pdBlob(g, [[-6, -3], [-8, -16], [-2, -29], [7, -29], [11, -16], [9, -3]], c0, 1.6);
+  if (!g.sil) {
+    _pdHi(g, -4, -22, 2.4, 3.6);
+    _pdUnion(g, [[4, -24, 4.5, 3.6], [2.6, -20.5, 3, 2.6], [5.6, -20, 3, 2.6]], c1, 0.5);
+  }
+  _pdPart(g, 'armF', 2, -15, function () { _pdLeg(g, 2, -15, 2, 4.2, _pdTone(c0, 0.92), null); _pdEll(g, 2, -1.8, 3, 2, 0, c1, 1.1); });
+  _pdPart(g, 'armN', 7.5, -15, function () { _pdLeg(g, 7.5, -15, 8, 4.2, c0, null); _pdEll(g, 8, -1.8, 3, 2, 0, c1, 1.1); });
+  _pdPart(g, 'head', 3, -29, function () {
+    _pdPart(g, 'ear', -5, -47, function () {
+      _pdPoly(g, [[-9, -44], [-10, -61], [1, -50]], c0, 1.6);
+      if (!g.sil) _pdPoly(g, [[-7.5, -46], [-8.5, -57], [-1.5, -50]], '#ffc0a8', 0);
+    });
+    _pdPart(g, 'ear2', 11, -48, function () {
+      _pdPoly(g, [[6, -50], [15, -61], [16, -43]], c0, 1.6);
+      if (!g.sil) _pdPoly(g, [[8, -50], [14, -57.5], [14.5, -46]], '#ffc0a8', 0);
+    });
+    _pdBlob(g, [[-12, -43], [-8, -51], [4, -53], [14, -48], [18, -36], [11, -35], [4, -28], [-4, -35], [-12, -35]], c0, 1.6);
+    if (!g.sil) {
+      var fd = g.fdx || 0;
+      _pdEll(g, 7 + fd, -36, 7, 3.6, 0.2, '#f4e2cc', 0);
+      _pdHi(g, -4, -47, 3.6, 2);
+      _pdEll(g, 3.5 + fd, -34.5, 5, 3.6, 0, c1, 0);
+      _pdEll(g, 3.5 + fd, -36.8, 1.7, 1.2, 0, _PD_INK, 0);
+      for (i = 0; i < 3; i++) {
+        a = -Math.PI / 2 + (i - 1) * 0.9;
+        _pdEll(g, 3 + fd + Math.cos(a) * 1.8, -47.5 + Math.sin(a) * 1.8, 1.3, 2, a + Math.PI / 2, c2, 0);
+      }
+    }
+    _pdFaceV(g, { x: 3, y: -41.5, sp: 5.3, er: 2.5, mx: 3.5, my: -33.5, mouth: 'w', mk: 1.5, cx: 8 });
+  });
+}
+// ---- 火:火鼠(飯糰形紅鼠,大圓耳、背上火苗、細尾火球)----
+function _pdBHuoshu(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], c2 = L.c[2], pink = '#ffb0a0';
+  _pdPart(g, 'tail', -15, -8, function () {
+    var tp = _pdTP(g, [[-15, -8], [-27, -5], [-33, -15], [-29, -25]]), e = tp[3];
+    _pdTube(g, tp, 2.2, _pdTone(c0, 0.85));
+    _pdFire(g, e[0], e[1] - 5, 10, 0.2);
+  });
+  _pdFlameR(g, -16, -21, 7.5, c2, -0.75);
+  _pdFlameR(g, -10, -26, 9, c2, -0.45);
+  _pdFlameR(g, -3, -28.5, 8, c2, -0.2);
+  _pdPart(g, 'far', 0, 0, function () {
+    _pdPart(g, 'ear2', 12, -26, function () { _pdEll(g, 13, -31, 7, 7, 0, _pdTone(c0, 0.82), 1.6); });
+  });
+  _pdPart(g, 'legN', 0, 0, function () {
+    _pdEll(g, -8, -1.8, 4.5, 2.4, 0, pink, 1.2);
+    _pdEll(g, 10, -1.8, 4.5, 2.4, 0, pink, 1.2);
+  });
+  _pdBlob(g, [[-19, -8], [-16, -24], [-2, -29], [12, -24], [22, -13], [26, -6], [14, -1], [-14, -1]], g.sil ? c0 : _pdTone(c0, 0.84), 1.6);
+  if (!g.sil) {
+    _pdBlob(g, [[-18, -9], [-15, -25], [-2, -29], [11, -24], [20, -14], [22, -8], [12, -4], [-13, -4]], c0, 0);
+    _pdHi(g, -9, -21, 5, 2.4);
+    _pdEll(g, 8, -6.5, 11, 4.6, 0, c1, 0);
+  }
+  _pdPart(g, 'ear', 5, -25, function () {
+    _pdEll(g, 5, -31, 7.6, 7.6, 0, c0, 1.6);
+    if (!g.sil) _pdEll(g, 5, -31, 4.3, 4.3, 0, pink, 0);
+  });
+  _pdPart(g, 'handN', 12, -7, function () { _pdEll(g, 15, -4, 2.6, 2, 0.4, pink, 1.0); });
+  _pdPart(g, 'head', 14, -12, function () {
+    _pdEll(g, 25, -7.5, 2.2, 1.9, 0, '#ff8a9a', 1.0);
+    if (!g.sil) {
+      _pdLine(g, [[21, -9.5], [29.5, -12.5]], _PD_INK, 0.8);
+      _pdLine(g, [[21, -7.5], [30, -7]], _PD_INK, 0.8);
+    }
+    _pdFaceV(g, { x: 14.5, y: -15, sp: 3.6, er: 2.4, far: 0.85, mx: 20.5, my: -5.5, mouth: 'w', mk: 1.3, cx: 4.4 });
+  });
+}
+// ---- 火:畢方(青鶴,單腳、紅紋、白長喙、丹頂,腳邊有火)----
+function _pdBBifang(g, L) {
+  var c0 = L.c[0], c2 = L.c[2], leg = '#e2583a', dk = _pdTone(c0, 0.7);
+  _pdPart(g, 'tail', -12, -27, function () {
+    [[[-12, -24], [-27, -10]], [[-12, -27], [-32, -20]], [[-12, -30], [-32, -32]]].forEach(function (p) {
+      var dx = p[1][0] - p[0][0], dy = p[1][1] - p[0][1];
+      _pdFeather(g, p[0], p[1], 7, dk);
+      if (!g.sil) _pdFeather(g, [p[0][0] + dx * 0.72, p[0][1] + dy * 0.72], p[1], 4.6, c2, 0);
+    });
+  });
+  _pdPart(g, 'legN', 0, 0, function () {
+    if (!g.sil) { _pdFire(g, -10, -2.5, 10, -0.15); _pdFire(g, -16, -1.5, 6, -0.3); }
+    _pdTube(g, [[0, -19], [2.5, -10], [0, -2]], 2.4, leg, 1.2);
+    _pdTube(g, [[-4.5, -0.6], [0, -1.8], [5, -0.6]], 1.8, leg, 1.0);
+  });
+  _pdBodyE(g, -3, -27, 15, 10.5, -0.2, c0);
+  if (!g.sil) _pdEll(g, 6.5, -26, 5.5, 6.5, 0, '#ffffff', 0);
+  _pdPart(g, 'wing', -6, -30, function () {
+    _pdBlob(g, [[-17, -27], [-6, -35], [5, -31], [-1, -23], [-13, -20]], _pdTone(c0, 0.86), 1.2);
+    if (!g.sil) {
+      [[-12, -27], [-6, -29], [-1, -27.5], [-8, -24]].forEach(function (p) {
+        _pdLine(g, [[p[0] - 2, p[1] - 2], [p[0], p[1]], [p[0] - 2, p[1] + 2]], c2, 1.6);
+      });
+    }
+  });
+  _pdPart(g, 'head', 5, -31, function () {
+    _pdTube(g, [[5, -31], [3, -40], [8, -46]], 6, c0);
+    _pdEll(g, 7, -61, 4.2, 3.2, -0.2, c2, 1.2);
+    _pdBodyE(g, 10, -51, 10, 9.5, 0, c0);
+    _pdPoly(g, [[18, -54], [30, -50.5], [18, -47]], '#f7f2e6', 1.2);
+    if (!g.sil) _pdLine(g, [[2, -47], [6, -45]], c2, 1.5);
+    _pdFaceV(g, { x: 11, y: -51.5, sp: 3.6, er: 2.4, far: 0.8, mouth: 'none', cx: 4.2 });
+  });
+}
+// ---- 火:火麒麟(紅鱗麒麟,金獨角、火焰鬃與尾、金蹄、抬前腳)----
+function _pdBHuoqilin(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], gold = '#ffc94a', far = _pdTone(c0, 0.8), i;
+  _pdPart(g, 'tail', -17, -28, function () {
+    var tp = _pdTP(g, [[-17, -28], [-25, -32], [-28, -40]]), e = tp[2];
+    _pdTube(g, tp, 4, c0);
+    _pdFire(g, e[0] - 1, e[1] - 4, 12, -0.3);
+  });
+  _pdPart(g, 'legF', 0, 0, function () { _pdLeg(g, -10, -22, -11, 4.4, far, _pdTone(gold, 0.85)); });
+  _pdPart(g, 'armF', 5, -22, function () { _pdLeg(g, 5, -22, 6, 4.4, far, _pdTone(gold, 0.85)); });
+  _pdPart(g, 'legN', 0, 0, function () { _pdLeg(g, -15, -22, -16, 4.6, c0, gold); });
+  _pdPart(g, 'armN', 10, -22, function () {
+    _pdTube(g, [[10, -22], [16, -15], [13.5, -9.5]], 4.6, c0);
+    _pdEll(g, 13.2, -8, 3, 2, 0.3, gold, 1.2);
+  });
+  _pdPart(g, 'head', 5, -28, function () {
+    [[1, -33, 9, -1.0], [3, -40, 10, -0.85], [6, -47, 10, -0.65], [10, -53, 8, -0.4]].forEach(function (f) { _pdFire(g, f[0], f[1], f[2], f[3]); });
+  });
+  _pdBodyE(g, -3, -26, 16, 10, 0, c0);
+  _pdPart(g, 'head', 5, -28, function () { _pdTube(g, [[5, -28], [11, -40], [13, -45]], 9, c0); });
+  if (!g.sil) {
+    _pdEll(g, -3, -19.8, 12, 3.8, 0, c1, 0);
+    for (i = 0; i < 7; i++) _pdArc(g, -13 + (i % 4) * 6 + (i >= 4 ? 3 : 0), -29 + (i >= 4 ? 5 : 0), 2.5, 0, Math.PI, '#ffd36b', 1.3);
+  }
+  _pdPart(g, 'head', 5, -28, function () {
+    _pdPart(g, 'ear', 8, -47, function () { _pdPoly(g, [[8, -49], [1, -53], [9, -45]], far, 1.4); });
+    _pdBlob(g, [[11, -52], [9, -59], [6, -66], [12, -60], [16, -53]], gold, 1.4);
+    _pdUnion(g, [[15, -46, 9.5, 8.5], [23, -42, 7.5, 5.5, 0.25]], c0);
+    if (!g.sil) {
+      _pdEll(g, 17, -41, 7, 2.6, 0.25, _pdTone(c0, 0.86), 0);
+      _pdHi(g, 11, -50, 3.2, 1.8);
+      _pdDot(g, 28, -42.5, 0.9, _PD_INK);
+      _pdLine(g, [[13, -51.5], [18, -52.5]], gold, 1.6);
+    }
+    _pdTube(g, [[26, -39], [30.5, -36], [28.5, -32]], 1.5, gold, 0.8);
+    _pdFaceV(g, { x: 17.5, y: -46.5, sp: 3.4, er: 2.3, far: 0.82, mx: 24.5, my: -38.5, mouth: 'smile', mk: 1.5, cx: 4.4 });
+  });
+}
+// ---- 土:當康(粉紅小豬,白獠牙、背黃粱、捲尾,喊「當康!」)----
+function _pdBDangkang(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], far = _pdTone(c0, 0.82), trot = '#c8746a', i;
+  _pdPart(g, 'tail', -19, -22, function () { _pdTube(g, _pdTP(g, [[-19, -22], [-25, -24], [-26, -29], [-22, -30], [-22, -26]]), 2, c0, 1.2); });
+  if (!g.sil) {
+    for (i = 0; i < 3; i++) {
+      var bx = -11 + i * 6;
+      _pdTube(g, [[bx, -27], [bx - 2, -40], [bx + 3, -45]], 1.4, '#a8892a', 0.7);
+      _pdUnion(g, [[bx + 3.5, -44.5, 1.8, 2.4], [bx + 5, -42, 1.8, 2.4], [bx + 6, -39.2, 1.7, 2.2]], '#f5cf5a', 0.7);
+    }
+  }
+  _pdPart(g, 'legF', 0, 0, function () { _pdLeg(g, -8, -12, -8, 6, far, _pdTone(trot, 0.85)); });
+  _pdPart(g, 'armF', 9, -12, function () { _pdLeg(g, 9, -12, 9, 6, far, _pdTone(trot, 0.85)); });
+  _pdPart(g, 'legN', 0, 0, function () { _pdLeg(g, -14, -12, -14, 6.2, c0, trot); });
+  _pdPart(g, 'armN', 4, -12, function () { _pdLeg(g, 4, -12, 4, 6.2, c0, trot); });
+  _pdPart(g, 'head', 8, -20, function () {
+    _pdPart(g, 'ear2', 16, -34, function () { _pdPoly(g, [[12, -33], [18, -43], [21, -31]], far, 1.4); });
+  });
+  _pdBodyE(g, -3, -20, 18, 12.5, 0, c0);
+  if (!g.sil) _pdEll(g, -3, -12, 12, 3.6, 0, c1, 0);
+  _pdPart(g, 'head', 8, -20, function () {
+    _pdBodyE(g, 14, -24, 11.5, 10.5, 0, c0);
+    _pdPart(g, 'ear', 8, -33, function () { _pdPoly(g, [[6, -30], [3, -41], [13, -34]], _pdTone(c0, 0.92), 1.4); });
+    _pdEll(g, 25, -21.5, 4.2, 5.2, 0, '#f59a8a', 1.4);
+    if (!g.sil) { _pdEll(g, 24.6, -23.4, 0.8, 1.2, 0, '#9a4a44', 0); _pdEll(g, 24.6, -19.4, 0.8, 1.2, 0, '#9a4a44', 0); }
+    _pdPoly(g, [[20.5, -15], [22.5, -22.5], [24, -15.5]], '#ffffff', 1.1);
+    _pdFaceV(g, { x: 15.5, y: -27, sp: 3.6, er: 2.4, far: 0.85, mx: 18, my: -17, mouth: 'smile', mk: 1.6, cx: 4.4 });
+  });
+  if (!g.sil) _pdBubble(g, 22, -47, '當康!');
+}
+// ---- 土:貔貅(金獅,捲毛鬃圈、短角、背上小翅、大嘴叼五銖錢)----
+function _pdBPixiu(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], c2 = L.c[2], far = _pdTone(c0, 0.8), wing = '#fff6dc', i, a, sh = [];
+  _pdPart(g, 'tail', -18, -24, function () {
+    var tp = _pdTP(g, [[-18, -24], [-26, -29], [-26, -38]]);
+    _pdTube(g, tp, 3, c0);
+    _pdEll(g, tp[2][0], tp[2][1] - 2, 4, 4.5, 0, c2, 1.4);
+  });
+  _pdPart(g, 'far', 0, 0, function () {
+    _pdPart(g, 'wing', -4, -32, function () { _pdUnion(g, [[-6, -42, 11, 3.6, -1.0], [-2, -43, 10, 3.4, -1.3]], _pdTone(wing, 0.88), 1.2); });
+  });
+  _pdPart(g, 'legF', 0, 0, function () { _pdLeg(g, -9, -18, -9, 6, far, null); });
+  _pdPart(g, 'armF', 5, -18, function () { _pdLeg(g, 5, -18, 5, 6, far, null); });
+  _pdPart(g, 'legN', 0, 0, function () { _pdLeg(g, -14, -18, -14, 6.2, c0, null); _pdEll(g, -14, -2.2, 4, 2.6, 0, c1, 1.2); });
+  _pdPart(g, 'armN', 10, -18, function () { _pdLeg(g, 10, -18, 10, 6.2, c0, null); _pdEll(g, 10, -2.2, 4, 2.6, 0, c1, 1.2); });
+  _pdBodyE(g, -3, -22, 16, 11, 0, c0);
+  if (!g.sil) _pdEll(g, -3, -15.5, 12, 3.6, 0, c1, 0);
+  _pdPart(g, 'wing', -6, -30, function () {
+    _pdFeather(g, [-6, -30], [-24, -40], 7, _pdTone(wing, 0.95), 1.3);
+    _pdFeather(g, [-6, -30], [-19, -47], 7.5, wing, 1.3);
+    _pdFeather(g, [-5, -30], [-10, -50], 7, wing, 1.3);
+    _pdEll(g, -5, -30, 4, 3.4, 0, wing, 1.2);
+  });
+  _pdPart(g, 'head', 8, -28, function () {
+    for (i = 0; i < 12; i++) { a = i * Math.PI / 6; sh.push([10 + Math.cos(a) * 13, -38 + Math.sin(a) * 12.5, 5, 5]); }
+    _pdUnion(g, sh, c2);
+    if (!g.sil) for (i = 0; i < 12; i += 2) { a = i * Math.PI / 6 + 0.3; _pdArc(g, 10 + Math.cos(a) * 14, -38 + Math.sin(a) * 13.5, 2.2, a - 1.2, a + 1.2, _pdTone(c2, 1.4), 1.0); }
+    _pdPart(g, 'ear', 2, -45, function () { _pdEll(g, 2, -47, 3.6, 3.6, 0, c0, 1.3); });
+    _pdPart(g, 'ear2', 18, -45, function () { _pdEll(g, 18, -47, 3.6, 3.6, 0, c0, 1.3); });
+    _pdBodyE(g, 10, -38, 12, 11, 0, c0);
+    _pdPoly(g, [[7.5, -47], [10, -60], [12.5, -47]], '#fff0c8', 1.4);
+    if (!g.sil) { _pdEll(g, 10 + (g.fdx || 0), -32.5, 7.5, 4.6, 0, c1, 0); _pdEll(g, 10 + (g.fdx || 0), -35, 1.8, 1.3, 0, _PD_INK, 0); }
+    _pdFaceV(g, { x: 10, y: -40, sp: 4.6, er: 2.6, mx: 10, my: -32, mouth: 'open', mk: 3.2, cx: 6.5 });
+    _pdEll(g, 10 + (g.fdx || 0), -27.5, 4.6, 4.6, 0, '#f0c040', 1.4);
+    if (!g.sil) { var fx = 10 + (g.fdx || 0); _pdPoly(g, [[fx - 1.4, -28.9], [fx + 1.4, -28.9], [fx + 1.4, -26.1], [fx - 1.4, -26.1]], '#8a5a1d', 0.6); }
+  });
+}
+// ---- 土:黃龍(長身蜿蜒,醒目鹿角、長鬚、腹部橫紋、抱土色寶珠)----
+function _pdBHuanglong(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], c2 = L.c[2], ant = '#b8562a', i;
+  var body = [[-16, -3], [0, -5], [9, -14], [7, -25], [-3, -31], [-5, -39], [1, -44]];
+  [[-14, -7, -1.4], [-4, -9, -1.2], [11, -20, 0.6], [-5, -29, -1.0], [-9, -37, -1.3]].forEach(function (f) { _pdFlameR(g, f[0], f[1], 6, c2, f[2]); });
+  _pdPart(g, 'tail', -14, -3, function () {
+    _pdFlameR(g, -24, -6, 6, c2, -1.9);
+    _pdFlameR(g, -36, -15, 8, c2, -1.2);
+    _pdTube(g, _pdTP(g, [[-14, -3], [-29, -5], [-35, -14]]), 6, c0);
+  });
+  _pdTube(g, body, 11, g.sil ? c0 : _pdTone(c0, 0.86));
+  if (!g.sil) {
+    _pdTube(g, [[-15, -4.2], [-0.6, -6.2], [7.6, -14.4], [5.8, -25], [-3.6, -31.6], [-5.8, -39.4], [0.4, -44.6]], 7, c0, 0);
+    _pdTube(g, [[-27, -6], [-14, -2.5], [0, -4], [8.5, -13], [6.5, -24], [-2.5, -30], [-4.5, -37]], 3.6, c1, 0);
+    for (i = 0; i < body.length - 1; i++) {
+      var mx = (body[i][0] + body[i + 1][0]) / 2, my = (body[i][1] + body[i + 1][1]) / 2;
+      var dx = body[i + 1][0] - body[i][0], dy = body[i + 1][1] - body[i][1], ln = Math.sqrt(dx * dx + dy * dy) || 1;
+      _pdLine(g, [[mx - dy / ln * 1.7, my + dx / ln * 1.7], [mx + dy / ln * 1.7, my - dx / ln * 1.7]], c2, 1.1);
+    }
+    _pdHi(g, -2, -35, 2.4, 1.4);
+  }
+  _pdPart(g, 'legN', 0, 0, function () { _pdTube(g, [[6, -9], [12, -6]], 3.2, c0, 1.2); });
+  _pdPart(g, 'handN', 8, -22, function () {
+    _pdTube(g, [[8, -22], [14, -24]], 3.2, c0, 1.2);
+    _pdEll(g, 18, -24, 5.2, 5.2, 0, '#e08a2a', 1.4);
+    if (!g.sil) { _pdDot(g, 16.5, -25.8, 1.5, '#fff3c0'); _pdArc(g, 18, -24, 7.5, Math.PI * 1.2, Math.PI * 1.75, '#ffd36b', 1.2); }
+    _pdEll(g, 14, -24.5, 1.6, 1.6, 0, c0, 1.0);
+  });
+  _pdPart(g, 'head', 1, -44, function () {
+    _pdFlameR(g, -5, -49, 7, c2, -1.3);
+    _pdFlameR(g, -6, -43, 6, c2, -1.7);
+    _pdPart(g, 'ear', 0, -52, function () {
+      _pdTube(g, [[-1, -52], [-4, -59], [-9, -64]], 2.8, ant);
+      _pdTube(g, [[-3.5, -58], [1, -63]], 2.3, ant);
+    });
+    _pdPart(g, 'ear2', 4, -53, function () {
+      _pdTube(g, [[4, -53], [6, -60], [3.5, -66]], 2.8, ant);
+      _pdTube(g, [[5.5, -59], [11, -62]], 2.3, ant);
+    });
+    _pdUnion(g, [[2, -47, 9, 8], [11, -44, 8, 5.5, 0.15]], c0);
+    if (!g.sil) {
+      _pdEll(g, 7, -42, 8, 2.6, 0.15, _pdTone(c0, 0.88), 0);
+      _pdHi(g, -1, -51, 2.8, 1.5);
+      _pdDot(g, 17, -45.5, 0.9, _PD_INK);
+    }
+    _pdTube(g, [[17, -43], [24, -46], [28, -41]], 1.2, c2, 0.6);
+    _pdTube(g, [[15, -40], [20, -37], [21, -32]], 1.2, c2, 0.6);
+    _pdFaceV(g, { x: 6, y: -48, sp: 3, er: 2.3, far: 0.85, mx: 13, my: -40.5, mouth: 'smile', mk: 1.5, cx: 3.8 });
+  });
+}
+// ---- 金:狡(豹紋小狗,牛角、垂耳、搖尾、鈴鐺項圈)----
+function _pdBJiao(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], c2 = L.c[2], far = _pdTone(c0, 0.8), horn = '#f4ead2';
+  _pdPart(g, 'tail', -15, -22, function () {
+    if (!g.sil) { _pdArc(g, -20, -32, 9, Math.PI * 1.05, Math.PI * 1.35, c2, 1.1); _pdArc(g, -20, -32, 12, Math.PI * 1.08, Math.PI * 1.3, c2, 1.0); }
+    _pdTube(g, _pdTP(g, [[-15, -22], [-21, -30], [-19, -38]]), 4.4, c0);
+  });
+  _pdPart(g, 'legF', 0, 0, function () { _pdLeg(g, -8, -16, -8, 5, far, null); });
+  _pdPart(g, 'armF', 4, -16, function () { _pdLeg(g, 4, -16, 4, 5, far, null); });
+  _pdPart(g, 'legN', 0, 0, function () { _pdLeg(g, -13, -16, -13, 5.2, c0, null); });
+  _pdPart(g, 'armN', 9, -16, function () { _pdLeg(g, 9, -16, 9, 5.2, c0, null); });
+  _pdBodyE(g, -3, -20, 14, 9, 0, c0);
+  if (!g.sil) {
+    _pdEll(g, -2, -14.5, 10, 3.2, 0, c1, 0);
+    [[-11, -22], [-4, -25.5], [3, -21], [-6, -17.5], [-14, -17]].forEach(function (p) {
+      _pdEll(g, p[0], p[1], 2.3, 2, 0, null, 1.1);
+      _pdDot(g, p[0], p[1], 0.9, c2);
+    });
+  }
+  _pdPart(g, 'head', 6, -27, function () {
+    _pdBlob(g, [[7, -42], [0, -45], [-4, -50], [-4, -55], [-1.5, -50.5], [3, -48.5], [8, -47.5]], horn, 1.4);
+    _pdBlob(g, [[14, -47.5], [20, -48.5], [24.5, -51], [26, -56], [26.5, -50], [22, -45], [15, -43.5]], horn, 1.4);
+    if (!g.sil) { _pdLine(g, [[-3.6, -53.5], [-2.4, -50.5]], c2, 1.4); _pdLine(g, [[25.6, -54.5], [25.2, -51.5]], c2, 1.4); }
+    _pdBodyE(g, 11, -36, 12.5, 11.5, 0, c0);
+    _pdEll(g, 20 + (g.fdx || 0) * 0.5, -31, 6.5, 4.8, 0, c1, 1.2);
+    if (!g.sil) {
+      _pdEll(g, 25.5 + (g.fdx || 0) * 0.5, -32.8, 2, 1.5, 0, _PD_INK, 0);
+      _pdEll(g, 8, -43.5, 2.2, 1.9, 0, null, 1.1);
+    }
+    _pdPart(g, 'ear', 3, -42, function () { _pdBlob(g, [[3, -43], [-1.5, -37], [0, -28], [5.5, -33]], c2, 1.4); });
+    _pdFaceV(g, { x: 13, y: -38, sp: 4, er: 2.5, far: 0.85, mx: 20.5, my: -26.8, mouth: 'open', mk: 1.8, cx: 5 });
+  });
+  _pdTube(g, [[3, -26], [10, -24.5]], 2.6, '#d23a2c', 1.0);
+  _pdEll(g, 8.5, -22.6, 2.4, 2.4, 0, '#c9ced6', 1.0);
+}
+// ---- 金:天狗(橘棕狸,白頭、眼斑、環紋大蓬尾、紅項圈金鈴,有精神)----
+function _pdBTiangou(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], head = '#fffaf0', dark = '#6b4426', i;
+  var tail = [[-10, -12, 7.6], [-17, -16, 7.6], [-22, -23, 7.3], [-25, -31, 7], [-24, -39, 6.6], [-20, -46, 6], [-14, -50, 5.2]];
+  _pdPart(g, 'tail', -8, -10, function () {
+    for (i = tail.length - 1; i >= 0; i--) _pdEll(g, tail[i][0], tail[i][1], tail[i][2], tail[i][2], 0, i % 2 ? dark : c0, 1.4);
+  });
+  _pdBodyE(g, -4, -9, 9, 8, 0, c0);
+  _pdBlob(g, [[-7, -3], [-9, -16], [-3, -28], [7, -28], [10, -15], [8, -3]], c0, 1.6);
+  if (!g.sil) _pdEll(g, 3, -15, 4.6, 7.5, 0, c1, 0);
+  _pdPart(g, 'armF', 2, -15, function () { _pdLeg(g, 2, -15, 2, 4.2, _pdTone(c0, 0.92), null); _pdEll(g, 2, -1.8, 3, 2, 0, dark, 1.1); });
+  _pdPart(g, 'armN', 7.5, -15, function () { _pdLeg(g, 7.5, -15, 8, 4.2, c0, null); _pdEll(g, 8, -1.8, 3, 2, 0, dark, 1.1); });
+  _pdTube(g, [[-3, -27.5], [4, -25.5], [10, -27.5]], 3, '#d23a2c', 1.1);
+  _pdEll(g, 4, -23.5, 2.8, 2.8, 0, '#ffc94a', 1.1);
+  if (!g.sil) _pdLine(g, [[2.5, -22.6], [5.5, -22.6]], _PD_INK, 0.8);
+  _pdPart(g, 'head', 4, -29, function () {
+    _pdPart(g, 'ear', -3, -48, function () {
+      _pdPoly(g, [[-6, -45], [-6, -56], [2, -50]], c0, 1.5);
+      if (!g.sil) _pdPoly(g, [[-6, -55.5], [-6, -51], [-3, -52.5]], dark, 0);
+    });
+    _pdPart(g, 'ear2', 12, -48, function () {
+      _pdPoly(g, [[9, -50], [15, -57], [16, -45]], c0, 1.5);
+      if (!g.sil) _pdPoly(g, [[15, -56.5], [13, -52.5], [15.5, -51]], dark, 0);
+    });
+    _pdBodyE(g, 5, -40, 12.5, 11, 0, head);
+    var fd = g.fdx || 0;
+    if (!g.sil) {
+      _pdEll(g, 0.6 + fd, -40.5, 4.6, 4.2, -0.3, dark, 0);
+      _pdEll(g, 9.6 + fd, -40.5, 4.2, 4, 0.3, dark, 0);
+    }
+    _pdEll(g, 13 + fd, -35.5, 5, 3.4, 0, head, 1.2);
+    if (!g.sil) _pdEll(g, 17.6 + fd, -36.6, 1.6, 1.2, 0, _PD_INK, 0);
+    _pdFaceV(g, { x: 5, y: -41, sp: 4.4, er: 2.3, far: 0.92, mx: 13, my: -32.6, mouth: 'smile', mk: 1.4, ring: true, brow: true, cx: 6 });
+  });
+}
+// ---- 金:白澤(雲朵白獸,金色小角、山羊鬍、額上第三眼、藍雲紋、背竹簡)----
+function _pdBBaize(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], c2 = L.c[2], horn = '#f0cf6a', far = _pdTone(c0, 0.86), hoof = '#9ec2e2';
+  _pdPart(g, 'tail', -18, -27, function () { _pdUnion(g, [[-19, -29, 4.5, 4.5], [-24, -34, 4.5, 4.5], [-22, -41, 4, 4]], c0); });
+  _pdPart(g, 'legF', 0, 0, function () { _pdLeg(g, -9, -18, -9, 5, far, _pdTone(hoof, 0.85)); });
+  _pdPart(g, 'armF', 6, -18, function () { _pdLeg(g, 6, -18, 6, 5, far, _pdTone(hoof, 0.85)); });
+  _pdPart(g, 'legN', 0, 0, function () { _pdLeg(g, -14, -18, -14, 5.2, c0, hoof); });
+  _pdPart(g, 'armN', 10, -18, function () { _pdLeg(g, 10, -18, 10, 5.2, c0, hoof); });
+  _pdUnion(g, [[-12, -25, 9, 8], [-2, -28, 10, 9], [7, -25, 8, 8], [-3, -20, 13, 7]], c0);
+  if (!g.sil) {
+    _pdEll(g, -3, -16, 11, 3, 0, '#dfe6f0', 0);
+    _pdHi(g, -9, -30, 4, 2);
+    _pdArc(g, -10, -24, 3, 0, Math.PI * 1.6, c2, 1.4);
+    _pdArc(g, -10, -24, 1.2, Math.PI, Math.PI * 2.6, c2, 1.2);
+    _pdLine(g, [[-7, -21], [0, -21], [3, -24]], c2, 1.4);
+    _pdArc(g, 4, -24, 2.4, Math.PI, Math.PI * 2.5, c2, 1.3);
+    _pdPoly(g, [[-13, -36], [1, -40], [2.5, -35], [-11.5, -31]], '#f4ead2', 1.1);
+    _pdLine(g, [[-8.5, -37.5], [-7, -32.5]], '#a8692f', 0.8);
+    _pdLine(g, [[-4, -38.8], [-2.6, -33.8]], '#a8692f', 0.8);
+    _pdLine(g, [[-6, -38.4], [-4.6, -33.2]], '#d23a2c', 1.4);
+  }
+  _pdPart(g, 'head', 6, -30, function () {
+    _pdUnion(g, [[2, -46, 5, 5], [0.5, -38, 5, 5], [3, -31, 4.5, 4.5], [6, -51, 4.5, 4.5]], far);
+    _pdTube(g, [[8, -48], [5, -55], [0, -57]], 3, horn);
+    _pdTube(g, [[13, -49], [11, -57], [6, -61]], 3, horn);
+    _pdPart(g, 'ear', 6, -41, function () { _pdEll(g, 4, -42, 5.5, 2.6, 0.5, far, 1.3); });
+    _pdBodyE(g, 12, -40, 11, 10, 0, c0);
+    var fd = g.fdx || 0;
+    _pdEll(g, 19 + fd * 0.5, -36, 5.5, 4, 0, c1, 1.1);
+    _pdPoly(g, [[13 + fd * 0.5, -31.5], [19 + fd * 0.5, -31.5], [16 + fd * 0.5, -23]], '#ffffff', 1.2);
+    if (!g.sil) {
+      _pdEll(g, 23.5 + fd * 0.5, -37, 1.5, 1.1, 0, _PD_INK, 0);
+      _pdEll(g, 14 + fd, -46.8, 1.5, 2.6, 0, '#ffffff', 0.9);
+      _pdEll(g, 14 + fd, -46.6, 0.9, 1.6, 0, c2, 0);
+    }
+    _pdFaceV(g, { x: 14, y: -40.5, sp: 3.8, er: 2.4, far: 0.85, mx: 19.5, my: -33.2, mouth: 'smile', mk: 1.4, cx: 4.6 });
+  });
+}
+// ---- 水:旋龜(綠殼小龜,鳥頭橘喙紅冠、紅色蛇尾,叫「卡!」)----
+function _pdBXuangui(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], c2 = L.c[2], hx = [], i, a;
+  _pdPart(g, 'tail', -16, -9, function () {
+    var tp = _pdTP(g, [[-16, -9], [-27, -6], [-34, -14], [-30, -24]]), e = tp[3], hx2 = e[0] - 30, hy2 = e[1] + 24;
+    _pdTube(g, tp, 4, c2);
+    if (!g.sil) { _pdLine(g, [[-25, -8.5], [-24, -4.5]], '#8a1e18', 1.2); }
+    _pdEll(g, -28.5 + hx2, -27 + hy2, 4.6, 3.6, -0.6, c2, 1.4);
+    if (!g.sil) { _pdDot(g, -27.5 + hx2, -28.5 + hy2, 1.1, _PD_EYE); _pdLine(g, [[-25.5 + hx2, -30.5 + hy2], [-23 + hx2, -33 + hy2], [-21.5 + hx2, -33 + hy2]], '#ff5a7a', 0.9); }
+  });
+  _pdPart(g, 'legF', 0, 0, function () { _pdEll(g, -13, -3.4, 4.6, 3.4, 0, _pdTone(c1, 0.85), 1.3); });
+  _pdPart(g, 'armF', 10, -6, function () { _pdEll(g, 10, -3.4, 4.6, 3.4, 0, _pdTone(c1, 0.85), 1.3); });
+  _pdPart(g, 'head', 12, -12, function () { _pdTube(g, [[12, -12], [19, -19], [22, -24]], 6, c1); });
+  _pdBlob(g, [[-21, -7], [-18, -23], [-4, -32], [12, -26], [18, -7]], g.sil ? c0 : _pdTone(c0, 0.84), 1.6);
+  if (!g.sil) {
+    _pdBlob(g, [[-20, -9], [-17, -24], [-5, -32], [10, -27], [15, -10]], c0, 0);
+    _pdHi(g, -10, -24, 5, 2.4);
+    for (i = 0; i < 6; i++) { a = i * Math.PI / 3; hx.push([-2 + Math.cos(a) * 6.5, -17 + Math.sin(a) * 5.5]); }
+    _pdPoly(g, hx, _pdTone(c0, 1.25), 1.0);
+    [[-8.5, -17, -15, -16], [4.5, -17, 11, -16], [-5, -22, -9, -26.5], [1, -22, 4, -27], [-5, -12, -8, -8], [1, -12, 4, -8]].forEach(function (s) {
+      _pdLine(g, [[s[0], s[1]], [s[2], s[3]]], _pdTone(c0, 0.7), 1.1);
+    });
+  }
+  _pdEll(g, -1.5, -7.5, 20, 3.4, 0, _pdTone(c0, 0.78), 1.4);
+  _pdPart(g, 'legN', 0, 0, function () { _pdEll(g, -8, -3.6, 4.6, 3.4, 0, c1, 1.3); });
+  _pdPart(g, 'armN', 13, -6, function () { _pdEll(g, 15, -3.6, 4.6, 3.4, 0, c1, 1.3); });
+  _pdPart(g, 'head', 12, -12, function () {
+    _pdPart(g, 'ear', 24, -32, function () {
+      _pdPoly(g, [[21, -32], [22, -38], [25, -33]], c2, 1.1);
+      _pdPoly(g, [[24, -33], [27, -38.5], [28, -32.5]], c2, 1.1);
+    });
+    _pdBodyE(g, 26, -27, 7.5, 7, 0, c1);
+    _pdPoly(g, [[31, -29.5], [37.5, -26.5], [32, -23.5]], '#ff9a20', 1.2);
+    _pdFaceV(g, { x: 26.5, y: -28.5, sp: 2.8, er: 2.1, far: 0.8, mouth: 'none', cx: 3.6 });
+  });
+  if (!g.sil) _pdBubble(g, 10, -42, '卡!');
+}
+// ---- 水:夔(藍灰小牛,無角、獨腳彈跳、雷紋、頭上雷雲閃電)----
+function _pdBKui(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], c2 = L.c[2], dark = _pdTone(c0, 0.72);
+  if (!g.sil) {
+    _pdPart(g, 'far', 0, 0, function () {
+      _pdPoly(g, [[-22, -53], [-27, -45], [-23.5, -45], [-29, -35], [-19, -48], [-22.5, -48], [-18, -53]], c2, 1.1);
+      _pdUnion(g, [[-27, -57, 5.5, 4.2], [-20, -60, 7, 5.5], [-13, -57, 5.5, 4.2], [-20, -55, 8, 3.5]], '#e4ecf6', 1.0);
+    });
+  }
+  _pdPart(g, 'tail', -13, -22, function () {
+    var tp = _pdTP(g, [[-13, -22], [-16, -24], [-19, -25]]);
+    _pdTube(g, tp, 2, c0, 1.2);
+    _pdEll(g, tp[2][0] - 1.5, tp[2][1] - 0.5, 2.6, 3, 0.4, dark, 1.2);
+  });
+  _pdPart(g, 'legN', 0, 0, function () {
+    if (!g.sil) { _pdLine(g, [[-8, -4], [-12, -6]], dark, 1.2); _pdLine(g, [[10, -4], [14, -6]], dark, 1.2); }
+    _pdTube(g, [[0, -16], [1, -6]], 10, c0);
+    _pdEll(g, 1, -2.8, 6.4, 3, 0, '#3e4f60', 1.4);
+  });
+  _pdBodyE(g, 0, -24, 15, 12, 0, c0);
+  if (!g.sil) {
+    _pdEll(g, 0, -19.5, 9.5, 7, 0, c1, 0);
+    _pdLine(g, [[-4, -17], [4, -17], [4, -22], [-2.5, -22], [-2.5, -19], [1.5, -19]], c2, 1.5);
+  }
+  _pdPart(g, 'head', 0, -31, function () {
+    _pdPart(g, 'ear', -9, -42, function () {
+      _pdEll(g, -15, -43, 6.5, 3, -0.25, c0, 1.4);
+      if (!g.sil) _pdEll(g, -15.5, -43, 3.8, 1.5, -0.25, '#ffb8ae', 0);
+    });
+    _pdPart(g, 'ear2', 9, -42, function () {
+      _pdEll(g, 15, -43, 6.5, 3, 0.25, c0, 1.4);
+      if (!g.sil) _pdEll(g, 15.5, -43, 3.8, 1.5, 0.25, '#ffb8ae', 0);
+    });
+    _pdPoly(g, [[-4, -49], [-1, -55], [1, -50], [4, -54], [5, -49]], dark, 1.2);
+    _pdBodyE(g, 0, -40, 13, 11.5, 0, c0);
+    var fd = g.fdx || 0;
+    _pdEll(g, fd, -33.5, 9, 5.6, 0, c1, 1.2);
+    if (!g.sil) {
+      _pdEll(g, -3.2 + fd, -34.5, 1, 1.4, 0, '#4a5a6a', 0);
+      _pdEll(g, 3.2 + fd, -34.5, 1, 1.4, 0, '#4a5a6a', 0);
+    }
+    _pdFaceV(g, { x: 0, y: -42.5, sp: 5.6, er: 2.5, mx: 0, my: -30.4, mouth: 'smile', mk: 1.6, cx: 8.6 });
+  });
+}
+// ---- 水:玄武(深藍龜,綠蛇盤殼兩圈、蛇頭從殼頂探出與龜頭對看)----
+function _pdBXuanwu(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], c2 = L.c[2], skin = '#7fa6c4', hx = [], i, a, line = '#5a82a8';
+  _pdPart(g, 'legF', 0, 0, function () { _pdEll(g, -14, -3.8, 5, 4.2, 0, _pdTone(skin, 0.82), 1.4); });
+  _pdPart(g, 'armF', 9, -6, function () { _pdEll(g, 9, -3.8, 5, 4.2, 0, _pdTone(skin, 0.82), 1.4); });
+  _pdPart(g, 'tail', -20, -7, function () { _pdPoly(g, [[-20, -9], [-27, -7], [-20, -4.5]], skin, 1.2); });
+  _pdTube(g, [[-21, -13], [-25.5, -19], [-21, -25]], 4.6, _pdTone(c2, 0.78));
+  _pdPart(g, 'head', 13, -12, function () { _pdTube(g, [[13, -12], [20, -17], [24, -21]], 6.5, skin); });
+  _pdBlob(g, [[-23, -7], [-21, -26], [-6, -37], [11, -31], [18, -7]], g.sil ? c0 : _pdTone(c0, 0.84), 1.6);
+  if (!g.sil) {
+    _pdBlob(g, [[-22, -9], [-20, -27], [-7, -37], [9, -32], [15, -10]], c0, 0);
+    _pdHi(g, -12, -27, 5, 2.4);
+    for (i = 0; i < 6; i++) { a = i * Math.PI / 3; hx.push([-3 + Math.cos(a) * 6.5, -22 + Math.sin(a) * 5.5]); }
+    _pdPoly(g, hx, _pdTone(c0, 1.3), 1.0);
+    [[-9.5, -22, -18, -21], [3.5, -22, 12, -21], [-6, -27, -9, -32], [0, -27, 3, -32]].forEach(function (s) {
+      _pdLine(g, [[s[0], s[1]], [s[2], s[3]]], line, 1.2);
+    });
+  }
+  _pdEll(g, -2.5, -7.5, 21, 3.6, 0, c1, 1.4);
+  _pdTube(g, [[-22.5, -12], [-12, -20], [2, -23], [13, -19], [18, -13]], 4, c2);
+  _pdTube(g, [[-20.5, -25], [-12, -33], [0, -36.5], [9, -39], [13, -45], [13.5, -50]], 4, c2);
+  if (!g.sil) {
+    _pdTube(g, [[-15, -17], [-5, -22], [6, -22], [13, -18.5]], 1.2, '#c8f0a8', 0);
+    _pdTube(g, [[-14, -31], [-4, -35.5], [6, -37.5], [11, -42], [12.6, -47]], 1.2, '#c8f0a8', 0);
+  }
+  _pdPart(g, 'legN', 0, 0, function () { _pdEll(g, -15, -3.4, 5, 4, 0, skin, 1.4); });
+  _pdPart(g, 'armN', 11, -6, function () { _pdEll(g, 13, -3.4, 5, 4, 0, skin, 1.4); });
+  _pdPart(g, 'tail', 13.5, -48, function () {
+    _pdEll(g, 16.5, -52, 5.6, 4.4, 0.45, c2, 1.4);
+    if (!g.sil) {
+      _pdDot(g, 18.4, -53.6, 1.4, _PD_EYE); _pdDot(g, 18, -54.1, 0.5, '#ffffff');
+      _pdLine(g, [[20.5, -49], [22, -46], [21, -44.5]], '#ff5a7a', 0.9);
+      _pdLine(g, [[22, -46], [23.5, -45]], '#ff5a7a', 0.9);
+    }
+  });
+  _pdPart(g, 'head', 13, -12, function () {
+    _pdBodyE(g, 26, -25, 8.8, 8, 0, skin);
+    _pdFaceV(g, { x: 26.8, y: -27.2, sp: 3.4, er: 2.5, far: 0.85, mx: 29.5, my: -20.6, mouth: 'smile', mk: 1.3, cx: 4.2 });
+  });
+}
+// ---- 隱:鳳凰(紅金鳳,三根冠羽、五色長尾羽末端有眼紋、雙腳)----
+function _pdBFenghuang(g, L) {
+  var c0 = L.c[0], c1 = L.c[1], fc = ['#4caf50', '#f2603c', '#e3b23c', '#c9ced6', '#3e7fd6'], legC = '#f2a33a';
+  var tails = [[-35, -4], [-38, -18], [-36, -33], [-29, -46], [-18, -56]];
+  _pdPart(g, 'tail', -8, -26, function () {
+    tails.forEach(function (e, i) {
+      var b = [-8, -22 - i * 2], dx = e[0] - b[0], dy = e[1] - b[1], rot = Math.atan2(dy, dx);
+      _pdFeather(g, b, e, 9, fc[i], 1.3);
+      if (!g.sil) {
+        _pdLine(g, [b, [b[0] + dx * 0.7, b[1] + dy * 0.7]], _pdTone(fc[i], 0.75), 0.9);
+        _pdEll(g, b[0] + dx * 0.8, b[1] + dy * 0.8, 3.4, 2.7, rot, '#ffe07a', 0.8);
+        _pdDot(g, b[0] + dx * 0.8, b[1] + dy * 0.8, 1.3, '#2a3a7a');
+      }
+    });
+  });
+  _pdPart(g, 'legN', 0, 0, function () {
+    _pdTube(g, [[-3, -17], [-4, -1.5]], 2.2, legC, 1.2);
+    _pdTube(g, [[3, -17], [4, -1.5]], 2.2, legC, 1.2);
+    _pdTube(g, [[-7.5, -0.6], [-4, -1.6], [-0.5, -0.6]], 1.6, legC, 1.0);
+    _pdTube(g, [[0.5, -0.6], [4, -1.6], [7.5, -0.6]], 1.6, legC, 1.0);
+  });
+  _pdPart(g, 'far', 0, 0, function () {
+    _pdPart(g, 'wing', 0, -33, function () { _pdBlob(g, [[-4, -32], [-12, -49], [-1, -43], [4, -34]], _pdTone(c0, 0.8), 1.2); });
+  });
+  _pdBodyE(g, -1, -26, 13, 11, -0.15, c0);
+  if (!g.sil) _pdEll(g, 6, -25, 6, 7.5, 0, c1, 0);
+  _pdPart(g, 'wing', -2, -27, function () {
+    _pdBlob(g, [[-12, -26], [-17, -38], [-11, -36], [-10, -44], [-4, -37], [-1, -42], [2, -31], [-2, -21]], '#ff7a3a', 1.3);
+    if (!g.sil) _pdLine(g, [[-12, -32], [-6, -33], [-1, -31]], c1, 1.3);
+  });
+  _pdPart(g, 'head', 4, -31, function () {
+    _pdTube(g, [[4, -31], [5, -42], [10, -48]], 6, c0);
+    _pdPart(g, 'ear', 10, -57, function () {
+      [[[8, -57], [4, -63], [-0.5, -64]], [[10, -58], [9.5, -65], [6.5, -68]], [[12, -57], [14.5, -63], [13.5, -67]]].forEach(function (p) {
+        _pdTube(g, p, 1.6, c1, 0.9);
+        _pdEll(g, p[2][0], p[2][1], 2.2, 2.2, 0, '#ff9a2e', 1.0);
+      });
+    });
+    _pdBodyE(g, 11, -51, 7.5, 7, 0, c0);
+    _pdPoly(g, [[17, -53], [23.5, -50.5], [17, -48]], c1, 1.2);
+    _pdFaceV(g, { x: 12, y: -52, sp: 2.8, er: 2.1, far: 0.8, mouth: 'none', cx: 3.4 });
+  });
+}
+var _PD_BODY = {
+  xingxing: _pdBXingxing, lushu: _pdBLushu, jiuwei: _pdBJiuwei, huoshu: _pdBHuoshu, bifang: _pdBBifang, huoqilin: _pdBHuoqilin,
+  dangkang: _pdBDangkang, pixiu: _pdBPixiu, huanglong: _pdBHuanglong, jiao: _pdBJiao, tiangou: _pdBTiangou, baize: _pdBBaize,
+  xuangui: _pdBXuangui, kui: _pdBKui, xuanwu: _pdBXuanwu, fenghuang: _pdBFenghuang
+};
+// 稀有度裝飾(畫在身體後方,不隨扭動):神 = 腳下祥雲;隱 = 再加放射光芒
+function _pdRareBack(g, tier, col) {
+  var c = g.ctx, i, a, light = _pdMix(col, '#ffffff', 0.45);
+  if (tier >= 3) {
+    var rc = ['#f2603c', '#e3b23c', '#4caf50', '#3e7fd6', '#c08ae8', '#ff8ab0'];
+    c.save(); c.globalAlpha = 0.28;
+    for (i = 0; i < 12; i++) {
+      a = i * Math.PI / 6 + 0.13 + (g.t || 0) * 0.2;
+      _pdPoly(g, [[0, -32], [Math.cos(a - 0.1) * 48, -32 + Math.sin(a - 0.1) * 48], [Math.cos(a + 0.1) * 48, -32 + Math.sin(a + 0.1) * 48]], rc[i % 6], 0);
+    }
+    c.restore();
+  }
+  [-23, 21].forEach(function (x) {
+    _pdUnion(g, [[x - 5, -2.6, 4.6, 3], [x + 0.5, -4.2, 5.4, 4.2], [x + 6, -2.6, 4.4, 2.9]], '#ffffff', 1.0);
+    _pdLine(g, [[x - 3, -2.2], [x + 4, -2.2]], light, 1.1);
+  });
+}
+// 稀有度裝飾(畫在身體前方):瑞以上有閃光(動畫時忽大忽小)
+function _pdRareFront(g, tier) {
+  var sp = [[-31, -50, 3.4], [31, -22, 2.6], [-35, -12, 2.4], [29, -62, 3]];
+  for (var i = 0; i < Math.min(sp.length, tier + 1) && tier >= 1; i++) {
+    var k = g.A ? 0.65 + 0.35 * Math.abs(Math.sin((g.t || 0) * 2.2 + i * 1.7)) : 1;
+    _pdSpark(g, sp[i][0], sp[i][1], sp[i][2] * k, '#ffd84a');
+  }
+}
+
+// 對話泡泡(寬度隨字數)
+function _pdSay(g, x, y, txt) {
+  var w = Math.max(12, String(txt).length * 4.6 + 5);
+  _pdPoly(g, [[x - 6, y + 6], [x - 10, y + 13], [x - 1, y + 7]], '#ffffff', 1.0);
+  _pdEll(g, x, y, w, 8.5, 0, '#ffffff', 1.0);
+  _pdTxt(g, txt, x, y, 'bold 8px "Microsoft JhengHei", sans-serif', _PD_INK);
+}
+// 舊介面 opt.t + opt.state 對應到動作名
+var _PD_STATE_ACT = { idle: 'idle', happy: 'cheer', hop: 'happy-hop', sad: 'sad', turn: 'turn' };
+
+// 仙獸主函式。opt = { silhouette, blink, hop(數值或 true = 10px), face: 'normal'|'happy'|'smug'|'sad'|'closed', breath(y 向縮放倍率),
+//   anim: { name: 'idle'|'greet'|'punch'|'nod'|'bow'|'happy-hop'|'cheer'|'sad'|'sleep'|'tap-react'|'turn', t(動作開始後秒數), loop },
+//   t + state(簡寫:t 秒、state idle|happy|hop|sad|turn,皆循環), dir(1 面右 / -1 面左), say(對話泡泡文字) }
+// 未給 anim / t 時為靜止姿勢(圖鑑縮圖用),與舊版相同的繪製結果。
 function pdPet(ctx, id, x, y, s, opt) {
   ctx = _pdSafe(ctx);
   if (!ctx) return;
@@ -476,17 +1480,34 @@ function pdPet(ctx, id, x, y, s, opt) {
   var pet = _pdPetOf(id);
   var look = pet ? pet.look : { tpl: 'quad', c: ['#9aa0a8', '#c8ccd2', '#ffffff'], tail: 'round', ear: null, pat: null, glow: false, extra: [] };
   var sil = !!opt.silhouette || !pet;
-  var g = { ctx: ctx, sil: sil, ink: sil ? _PD_SIL : _PD_INK, face: opt.face || 'normal', blink: !!opt.blink };
+  var body = pet ? _PD_BODY[pet.id] : null;
+  var an = opt.anim, A = null, t = 0;
+  if (body && an && typeof an.t === 'number' && isFinite(an.t)) {
+    t = an.t; A = _pdPoseOf(id, an.name || 'idle', t, !!an.loop);
+  } else if (body && typeof opt.t === 'number' && isFinite(opt.t)) {
+    t = opt.t; A = _pdPoseOf(id, _PD_STATE_ACT[opt.state] || 'idle', t, true);
+  }
+  var face = opt.face || (A && A.face) || 'normal';
+  var g = { ctx: ctx, sil: sil, ink: sil ? _PD_SIL : _PD_INK, face: face, blink: !!opt.blink || !!(A && A.blink && face === 'normal'), A: A, t: t, fdx: 0 };
   var tpl = _PD_TPL[look.tpl] || _PD_TPL.quad;
   var H = { x: tpl.head.x, y: tpl.head.y, r: tpl.head.r };
   var el = pet ? pet.el : null;
-  var lift = opt.hop ? (opt.hop === true ? 10 : opt.hop) : 0;
+  var tier = pet ? ({ ling: 0, rui: 1, shen: 2, yin: 3 }[pet.rare] || 0) : 0;
+  var lift = (opt.hop ? (opt.hop === true ? 10 : opt.hop) : 0) + (A ? A.y : 0);
+  var dir = (opt.dir === -1 ? -1 : 1) * (A ? A.dir : 1);
+  g.iris = tier >= 2 ? (_PD_IRIS[el] || '#ff7a1a') : null;
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(s, s);
-  if (!sil) _pdShadow(g, 19);
+  if (!sil) {
+    // 接地陰影:跟著重心偏移、隨擠壓變寬、跳起時縮小變淡
+    var shR = (body ? 22 : 19) * Math.max(0.45, 1 - lift * 0.03) * (A ? A.sx * (1 + Math.abs(A.root) * 0.8) : 1);
+    _pdEll(g, A ? (A.x + A.root * 14) * dir : 0, 0, shR, shR * 0.26, 0, 'rgba(60,40,20,' + (lift > 0 ? Math.max(0.1, 0.22 - lift * 0.006).toFixed(3) : '0.22') + ')', 0);
+  }
   ctx.translate(0, -lift);
   if (opt.breath) ctx.scale(1, opt.breath);
+  if (dir !== 1) ctx.scale(dir, 1);
+  g.mirror = dir < 0;
   if (look.glow && !sil) {
     var rainbow = look.glow === 'rainbow' || el === 'all' || !PET_EL[el];
     var base = rainbow ? null : PET_EL[el].color;
@@ -498,7 +1519,33 @@ function pdPet(ctx, id, x, y, s, opt) {
       ctx.restore();
     }
   }
-  tpl.draw(g, look, H);
+  if (body) {
+    if (!sil && tier >= 2) _pdRareBack(g, tier, PET_EL[el] ? PET_EL[el].color : '#ff8ab0');
+    if (A) {
+      // root:重心平移 → 擠壓伸展(以腳底為基準)→ 繞腳底傾斜 → hip:繞髖前傾
+      ctx.save();
+      ctx.translate(A.x, 0);
+      ctx.scale(A.sx, A.sy);
+      ctx.rotate(A.root);
+      ctx.translate(0, -A.hip); ctx.rotate(A.lean); ctx.translate(0, A.hip);
+    }
+    body(g, look);
+    if (A) ctx.restore();
+    if (!sil) {
+      _pdRareFront(g, tier);
+      if (A && A.zz) {
+        var zk = (t * 0.8) % 1;
+        _pdTxt(g, 'z', 18 + zk * 6, -50 - zk * 10, 'bold 8px sans-serif', 'rgba(59,35,20,' + (1 - zk).toFixed(2) + ')');
+        _pdTxt(g, 'Z', 26 + zk * 4, -60 - zk * 8, 'bold 11px sans-serif', 'rgba(59,35,20,' + (0.8 - zk * 0.6).toFixed(2) + ')');
+      }
+    }
+  } else {
+    tpl.draw(g, look, H);
+  }
+  if (opt.say && !sil) {
+    if (dir !== 1) { ctx.scale(1 / dir, 1); g.mirror = false; }
+    _pdSay(g, 14, -66, opt.say);
+  }
   ctx.restore();
 }
 
