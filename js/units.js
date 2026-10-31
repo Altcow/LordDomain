@@ -184,10 +184,17 @@ const CAMP_CAPS = {
   banner:    [1, 2, 3, 3, 4],
   fakecamp:  [1, 1, 2, 2, 3]
 };
+// 戰陣等級:prog 載入後由 progCampTier / progCampCp 決定(PLAN_PROGRESSION §2.1);未載入退回 CAMP_LV / CAMP_CP
+function campTierNow() {
+  return typeof prog !== 'undefined' && prog && typeof progCampTier === 'function' ? progCampTier(prog.lv) : CAMP_LV;
+}
+function campCpNow() {
+  return typeof prog !== 'undefined' && prog && typeof progCampCp === 'function' ? progCampCp(prog.lv) : CAMP_CP[CAMP_LV - 1];
+}
 // 目前等級的硬上限;沒有硬上限的 key 回傳 null(舊的 tower / nutai / shitai / support 已改由 CP 管)
 function campCap(key) {
   const a = CAMP_CAPS[key];
-  return a ? a[CAMP_LV - 1] : null;
+  return a ? a[campTierNow() - 1] : null;
 }
 
 // 戰陣物件(§6.1、規格 M0-03 第 3 點);side 'camp' 只在戰鬥陣

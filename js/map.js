@@ -195,17 +195,39 @@ function copyEstateToCamp() {
   return true;
 }
 
-// 解鎖閘門（PLAN_TD_MASTER §3.6）：目前一律 true；日後只改這裡
-function isUnlocked(kind, id) { return true; }
+// 解鎖閘門（PLAN_TD_MASTER §3.6；PLAN_PROGRESSION §2.5）：開放等級由 progUnlockLv 查表；表中沒有的 id 或 prog 未載入一律開放
+function isUnlocked(kind, id) {
+  if (typeof progUnlockLv !== 'function' || typeof prog === 'undefined' || !prog) return true;
+  const lv = progUnlockLv(kind, id);
+  return lv === null || prog.lv >= lv;
+}
 
-// 目前模式可否放置此建築（side、退役、解鎖）；attack/replay/visit/fishing 只看解鎖
+// 城市等級規則（PLAN_PROGRESSION §2.1、§2.6、§8.2）：土地遮罩、解鎖、生產上限只在玩家建造模式生效
+// landBypass > 0 時暫停（範本套用用，見 tplRun）；TPL_ENFORCE_LAND 為 false 時範本套用不受規則限制（僅供測試關閉）
+let landBypass = 0;
+var TPL_ENFORCE_LAND = true;
+function progRulesOn() {
+  return landBypass === 0 && typeof prog !== 'undefined' && !!prog && (game.mode === 'estate' || game.mode === 'battleDesign');
+}
+// 土地遮罩：以地圖中心為準的正方形，邊長 progLandSide(lv)；未載入或 Lv25 = 全開。(x,y,w,h) 是否整個在土地內
+function inLandRect(x, y, w, h) {
+  if (typeof prog === 'undefined' || !prog || typeof progLandSide !== 'function' || prog.lv >= PROG_LV_MAX) return true;
+  const side = progLandSide(prog.lv), x0 = (MAP_W - side) >> 1, y0 = (MAP_H - side) >> 1;
+  return x >= x0 && y >= y0 && x + w <= x0 + side && y + h <= y0 + side;
+}
+function inLand(x, y) { return inLandRect(x, y, 1, 1); }
+// 建造規則下，(x,y,w,h) 是否在土地內（非建造模式恆為真）
+function landFits(x, y, w, h) { return !progRulesOn() || inLandRect(x, y, w, h); }
+
+// 目前模式可否放置此建築（side、退役、等級解鎖）；attack/replay/visit/fishing 不檢查等級與土地
 function sideOk(type) {
-  if (!hasType(type) || !isUnlocked('obj', type)) return false;
+  if (!hasType(type)) return false;
   const d = OBJECTS[type];
   if (game.mode === 'estate' || game.mode === 'battleDesign') {
     if (d.retired) return false;
     const s = sideOf(type);
     if (game.mode === 'estate' ? (s !== 'estate' && s !== 'both') : (s !== 'camp' && s !== 'both')) return false;
+    if (progRulesOn() && !isUnlocked(game.mode === 'estate' ? 'estate' : 'camp', type)) return false;
   }
   return true;
 }
@@ -214,12 +236,25 @@ function countObjects(type) {
   return world.objects.filter(o => o.type === type).length;
 }
 
+// 數量上限：OBJECTS.max 與等級生產上限取小（PLAN_PROGRESSION §2.1）；null = 不限
+function capOf(type) {
+  const d = OBJECTS[type];
+  let m = d.max || null;
+  if (progRulesOn() && typeof progProdCap === 'function') {
+    const pc = progProdCap(type, prog.lv);
+    if (pc !== null && (m === null || pc < m)) m = pc;
+  }
+  return m;
+}
+
 function canPlace(type, x, y, rot) {
   if (!sideOk(type)) return false;
   const d = OBJECTS[type];
-  if (d.max && countObjects(type) >= d.max) return false;
+  const cap = capOf(type);
+  if (cap !== null && countObjects(type) >= cap) return false;
   const [w, h] = footprint(type, rot);
   if (x < 0 || y < 0 || x + w > MAP_W || y + h > MAP_H) return false;
+  if (!landFits(x, y, w, h)) return false;
   const h0 = world.height[idx(x, y)];
   for (let yy = y; yy < y + h; yy++) {
     for (let xx = x; xx < x + w; xx++) {
@@ -260,15 +295,17 @@ function removeObjectAt(x, y, refund) {
 }
 
 function paintTerrain(x, y, t, flowDir) {
+  if (!landFits(x, y, 1, 1)) return false;
   removeObjectAt(x, y, false);
   const i = idx(x, y);
   world.terrain[i] = t;
   world.flow[i] = t === T_RIVER ? flowDir : 0;
+  return true;
 }
 
 function changeHeight(x, y, delta) {
   const i = idx(x, y);
-  if (world.occ[i]) return false;
+  if (!landFits(x, y, 1, 1) || world.occ[i]) return false;
   const nh = Math.max(0, Math.min(MAX_H, world.height[i] + delta));
   if (nh === world.height[i]) return false;
   world.height[i] = nh;
@@ -585,6 +622,20 @@ function tplCells(e) {
   return pts;
 }
 
+// 範本套用：TPL_ENFORCE_LAND 為 false 時暫停城市等級規則（維持舊行為）；true 時照規則略過不放的物件
+// 物件因城市等級未放置（土地外、未開放、超出等級上限）時為 true，供套用結果計數
+function tplLvBlocked(type, x, y, rot) {
+  if (!OBJECTS[type] || !progRulesOn()) return false;
+  const fp = footprint(type, rot), cap = capOf(type);
+  return !sideOk(type) || !landFits(x, y, fp[0], fp[1]) || (cap !== null && countObjects(type) >= cap);
+}
+
+function tplRun(fn) {
+  const b = TPL_ENFORCE_LAND ? 0 : 1;
+  landBypass += b;
+  try { fn(); } finally { landBypass -= b; }
+}
+
 // 回傳 { placed, failed, ox, oy }；找不到範本或範本大於地圖回傳 null（世界不變）
 function applyTemplate(id) {
   const t = TEMPLATES.find(v => v.id === id);
@@ -596,49 +647,68 @@ function applyTemplate(id) {
   const estate = world.board === 'estate';
   const ox = (MAP_W - t.w) >> 1, oy = (MAP_H - t.h) >> 1;
   const keep = Object.assign({}, world.res);
-  let failed = 0;
-  if (t.legacy === 'demo') {
-    loadDemo(ox, oy);
-  } else {
-    if (estate) clearWorld(); else clearBoard();
-    (t.heights || []).forEach(a => fillRect(ox + a[1], oy + a[2], ox + a[1] + a[3] - 1, oy + a[2] + a[4] - 1,
-      (x, y) => { world.height[idx(x, y)] = Math.min(MAX_H, a[0]); }));
-    (t.water || []).forEach(op => {
-      const r = op.rect, hl = op.hole, tt = op.t === 'river' ? T_RIVER : T_LAKE;
-      fillRect(ox + r[0], oy + r[1], ox + r[0] + r[2] - 1, oy + r[1] + r[3] - 1, (x, y) => {
-        const lx = x - ox, ly = y - oy;
-        if (hl && lx >= hl[0] && lx < hl[0] + hl[2] && ly >= hl[1] && ly < hl[1] + hl[3]) return;
-        paintTerrain(x, y, tt, op.flow || 0);
+  let failed = 0, lvSkip = 0;
+  tplRun(() => {
+    if (t.legacy === 'demo') {
+      // demo 由程式產生、不經 put 計數：先以規則暫停算出應放件數，差額即城市等級略過件數
+      let want = 0;
+      if (TPL_ENFORCE_LAND) {
+        landBypass++;
+        try { loadDemo(ox, oy); want = world.objects.length; } finally { landBypass--; }
+      }
+      loadDemo(ox, oy);
+      if (TPL_ENFORCE_LAND) lvSkip = Math.max(0, want - world.objects.length);
+      failed = lvSkip;
+    } else {
+      if (estate) clearWorld(); else clearBoard();
+      (t.heights || []).forEach(a => fillRect(ox + a[1], oy + a[2], ox + a[1] + a[3] - 1, oy + a[2] + a[4] - 1,
+        (x, y) => { world.height[idx(x, y)] = Math.min(MAX_H, a[0]); }));
+      (t.water || []).forEach(op => {
+        const r = op.rect, hl = op.hole, tt = op.t === 'river' ? T_RIVER : T_LAKE;
+        fillRect(ox + r[0], oy + r[1], ox + r[0] + r[2] - 1, oy + r[1] + r[3] - 1, (x, y) => {
+          const lx = x - ox, ly = y - oy;
+          if (hl && lx >= hl[0] && lx < hl[0] + hl[2] && ly >= hl[1] && ly < hl[1] + hl[3]) return;
+          paintTerrain(x, y, tt, op.flow || 0);
+        });
       });
-    });
-    (t.roads || []).forEach(r => fillRect(ox + r[0], oy + r[1], ox + r[0] + r[2] - 1, oy + r[1] + r[3] - 1,
-      (x, y) => paintTerrain(x, y, T_ROAD, 0)));
-    (t.block || []).forEach(a => fillRect(ox + a[1], oy + a[2], ox + a[1] + a[3] - 1, oy + a[2] + a[4] - 1,
-      (x, y) => { world.block[idx(x, y)] = a[0]; }));
-    (t.zone || []).forEach(a => fillRect(ox + a[1], oy + a[2], ox + a[1] + a[3] - 1, oy + a[2] + a[4] - 1,
-      (x, y) => { world.zone[idx(x, y)] = a[0]; }));
-    const mk = t.marks || {};
-    (mk.deploy || []).forEach(d => world.marks.deploy.push(Object.assign({}, d, { r: [ox + d.r[0], oy + d.r[1], d.r[2], d.r[3]] })));
-    (mk.rally || []).forEach(p => world.marks.rally.push(Object.assign({}, p, { x: ox + p.x, y: oy + p.y })));
-    (mk.aiEntry || []).forEach(a => world.marks.aiEntry.push(Object.assign({}, a, { r: [ox + a.r[0], oy + a.r[1], a.r[2], a.r[3]] })));
-    const fails = [];
-    (t.objects || []).forEach(e => {
-      const rot = e.rot || 0;
-      tplCells(e).forEach(p => {
-        const x = ox + p[0], y = oy + p[1];
-        if (!OBJECTS[e.type] || !canPlace(e.type, x, y, rot)) { fails.push(e.type + '@' + p[0] + ',' + p[1]); return; }
-        world.objects.push({ type: e.type, x: x, y: y, rot: rot, facing: rot });
-        const fp = footprint(e.type, rot), n = world.objects.length;
-        for (let yy = y; yy < y + fp[1]; yy++) for (let xx = x; xx < x + fp[0]; xx++) world.occ[idx(xx, yy)] = n;
+      (t.roads || []).forEach(r => fillRect(ox + r[0], oy + r[1], ox + r[0] + r[2] - 1, oy + r[1] + r[3] - 1,
+        (x, y) => paintTerrain(x, y, T_ROAD, 0)));
+      (t.block || []).forEach(a => fillRect(ox + a[1], oy + a[2], ox + a[1] + a[3] - 1, oy + a[2] + a[4] - 1,
+        (x, y) => { world.block[idx(x, y)] = a[0]; }));
+      (t.zone || []).forEach(a => fillRect(ox + a[1], oy + a[2], ox + a[1] + a[3] - 1, oy + a[2] + a[4] - 1,
+        (x, y) => { world.zone[idx(x, y)] = a[0]; }));
+      const mk = t.marks || {};
+      (mk.deploy || []).forEach(d => world.marks.deploy.push(Object.assign({}, d, { r: [ox + d.r[0], oy + d.r[1], d.r[2], d.r[3]] })));
+      (mk.rally || []).forEach(p => world.marks.rally.push(Object.assign({}, p, { x: ox + p.x, y: oy + p.y })));
+      (mk.aiEntry || []).forEach(a => world.marks.aiEntry.push(Object.assign({}, a, { r: [ox + a.r[0], oy + a.r[1], a.r[2], a.r[3]] })));
+      const fails = [];
+      (t.objects || []).forEach(e => {
+        const rot = e.rot || 0;
+        tplCells(e).forEach(p => {
+          const x = ox + p[0], y = oy + p[1];
+          if (!OBJECTS[e.type] || !canPlace(e.type, x, y, rot)) {
+            if (TPL_ENFORCE_LAND && tplLvBlocked(e.type, x, y, rot)) lvSkip++;
+            fails.push(e.type + '@' + p[0] + ',' + p[1]);
+            return;
+          }
+          world.objects.push({ type: e.type, x: x, y: y, rot: rot, facing: rot });
+          const fp = footprint(e.type, rot), n = world.objects.length;
+          for (let yy = y; yy < y + fp[1]; yy++) for (let xx = x; xx < x + fp[0]; xx++) world.occ[idx(xx, yy)] = n;
+        });
       });
-    });
-    rebuildOcc();
-    if (fails.length) console.warn('[template] ' + id + ': ' + fails.length + ' failed', fails.slice(0, 20).join(' '));
-    failed = fails.length;
-  }
+      rebuildOcc();
+      if (fails.length) console.warn('[template] ' + id + ': ' + fails.length + ' failed', fails.slice(0, 20).join(' '));
+      failed = fails.length;
+    }
+  });
   if (estate) world.res = keep;
   if (estate) world.lastTs = Date.now();
-  return { placed: world.objects.length, failed: failed, ox: ox, oy: oy };
+  // 城市等級略過件數以 toast 說明(延後一拍顯示,蓋過呼叫端緊接著的「已套用」提示)
+  if (lvSkip > 0 && typeof showToast === 'function') {
+    const msg = lvSkip + ' 件超出目前城市等級,未放置';
+    if (typeof setTimeout === 'function') setTimeout(() => showToast(msg), 0); else showToast(msg);
+  }
+  return { placed: world.objects.length, failed: failed, skipLv: lvSkip, ox: ox, oy: oy };
 }
 
 // 預設範本（templates.js 的 isDefault）；kind 為 'estate' 或 'camp'，沒有則回 null
@@ -709,8 +779,8 @@ function pendTotal() {
 // canPlace（已建物件、地形、高度、邊界、已建數量上限）＋ 待購數量上限 ＋ 不與其他待購重疊
 function canPlacePending(type, x, y, rot, skip) {
   if (!canPlace(type, x, y, rot)) return false;
-  const d = OBJECTS[type];
-  if (d.max && countObjects(type) + pendCount(type, skip) >= d.max) return false;
+  const cap = capOf(type);
+  if (cap !== null && countObjects(type) + pendCount(type, skip) >= cap) return false;
   const [w, h] = footprint(type, rot);
   for (let yy = y; yy < y + h; yy++)
     for (let xx = x; xx < x + w; xx++) {
@@ -782,6 +852,7 @@ function objFitAt(n, x, y, rot) {
   const d = OBJECTS[o.type];
   const [w, h] = footprint(o.type, rot);
   if (x < 0 || y < 0 || x + w > MAP_W || y + h > MAP_H) return false;
+  if (!landFits(x, y, w, h)) return false;
   const h0 = world.height[idx(x, y)];
   for (let yy = y; yy < y + h; yy++) {
     for (let xx = x; xx < x + w; xx++) {
@@ -816,15 +887,18 @@ function terrainOkUnder(x, y, t) {
 
 // 只改地形、不刪物件（paintTerrain 會無退款刪物件，隱藏模式改用此函式；呼叫前先檢查 terrainOkUnder）
 function paintTerrainKeep(x, y, t, flowDir) {
+  if (!landFits(x, y, 1, 1)) return false;
   const i = idx(x, y);
   world.terrain[i] = t;
   world.flow[i] = t === T_RIVER ? flowDir : 0;
+  return true;
 }
 
 // 整塊升降已建物件 n（0 起）的全部佔格；成功回 ''，失敗回原因字串且不改世界
 function changeHeightBlock(n, delta) {
   const o = world.objects[n];
   const [w, h] = footprint(o.type, o.rot);
+  if (!landFits(o.x, o.y, w, h)) return '超出城市土地範圍';
   const h0 = world.height[idx(o.x, o.y)];
   for (let yy = o.y; yy < o.y + h; yy++)
     for (let xx = o.x; xx < o.x + w; xx++)

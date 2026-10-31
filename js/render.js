@@ -757,6 +757,67 @@ function objVisible(o) {
   return rectVisible(isoX(o.x, o.y + h), isoY(o.x, o.y, 0) - 100, isoX(o.x + w, o.y), isoY(o.x + w, o.y + h, 0) + TH);
 }
 
+// 土地遮罩（PLAN_PROGRESSION §2、PR1-04）：經營 / 沙盤模式下遮罩外畫暗色荒地、遮罩邊界畫虛線。
+// inLand 不存在時整段關閉，輸出與未加此功能時相同。遮罩旗標以 (inLand 函式, 城市等級) 為簽名快取。
+const WASTE_COL = ['#3a3228', '#352d24', '#40372b'];
+const LAND_BORDER_COL = 'rgba(214,176,92,0.85)';
+const LAND_DIM_ALPHA = 0.72;
+var landMask = null;   // { fn, lv, out: Uint8Array（1 = 遮罩外）, edges: [[x, y, k]...]（遮罩內、鄰格在外）}
+
+function landDrawInvalidate() { landMask = null; }
+
+function landMaskOn() {
+  return (game.mode === 'estate' || game.mode === 'battleDesign') && typeof inLand === 'function';
+}
+
+function landMaskGet() {
+  const lv = typeof progLv === 'function' ? progLv() : 0;
+  const m = landMask;
+  if (m && m.fn === inLand && m.lv === lv) return m;
+  const out = new Uint8Array(MAP_W * MAP_H), edges = [];
+  for (let y = 0; y < MAP_H; y++)
+    for (let x = 0; x < MAP_W; x++)
+      if (!inLand(x, y)) out[idx(x, y)] = 1;
+  const nb = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+  for (let y = 0; y < MAP_H; y++)
+    for (let x = 0; x < MAP_W; x++) {
+      if (out[idx(x, y)]) continue;
+      for (let k = 0; k < 4; k++) {
+        const nx = x + nb[k][0], ny = y + nb[k][1];
+        if (inBounds(nx, ny) && out[idx(nx, ny)]) edges.push([x, y, k]);
+      }
+    }
+  landMask = { fn: inLand, lv: lv, out: out, edges: edges };
+  return landMask;
+}
+
+// 荒地地格：沿用高度與懸崖面，頂面改為暗色
+function drawWasteTile(ctx, x, y) {
+  const h = world.height[idx(x, y)];
+  drawCliffs(ctx, x, y, h);
+  poly(ctx, topPts(x, y, h, 0), WASTE_COL[cellHash(x, y) % 3]);
+}
+
+// 遮罩邊界：一次 stroke 畫完；線寬與虛線以螢幕像素換算，縮小時仍約 2px 寬
+function drawLandBorder(ctx, lm) {
+  if (!lm.edges.length) return;
+  const z = view.zoom;
+  ctx.save();
+  ctx.beginPath();
+  lm.edges.forEach(e => {
+    if (!cellVisible(e[0], e[1])) return;
+    const p = topPts(e[0], e[1], world.height[idx(e[0], e[1])], 0);
+    const a = p[e[2]], b = p[(e[2] + 1) % 4];
+    ctx.moveTo(a[0], a[1]);
+    ctx.lineTo(b[0], b[1]);
+  });
+  ctx.setLineDash([5 / z, 4 / z]);
+  ctx.strokeStyle = LAND_BORDER_COL;
+  ctx.lineWidth = Math.max(1.5, 2 / z);
+  ctx.stroke();
+  ctx.restore();
+}
+
 var drawNow = 0;
 function draw(ctx, time) {
   drawNow = time;
@@ -771,6 +832,8 @@ function draw(ctx, time) {
   ctx.setTransform(r * z, 0, 0, r * z, r * (viewport.w / 2 - view.x * z), r * (viewport.h / 2 - view.y * z));
 
   const hid = hide.on && !pano.open; // 隱藏建築（PLAN 12.17）；全景一律畫實際建築
+  const landOn = landMaskOn();
+  const lm = landOn ? landMaskGet() : null;
   if (typeof tdZonePrep === 'function') tdZonePrep(time);
   if (typeof lifeFrame === 'function') lifeFrame(time);
 
@@ -778,7 +841,8 @@ function draw(ctx, time) {
     for (let x = Math.max(0, d - MAP_H + 1); x <= Math.min(d, MAP_W - 1); x++) {
       const y = d - x;
       if (cellVisible(x, y)) {
-        drawTile(ctx, x, y, time);
+        if (landOn && lm.out[idx(x, y)]) drawWasteTile(ctx, x, y);
+        else drawTile(ctx, x, y, time);
         if (hid) drawGhostCell(ctx, x, y);
         if (typeof tdZoneCell === 'function') tdZoneCell(ctx, x, y);
       }
@@ -788,8 +852,11 @@ function draw(ctx, time) {
     if (list) {
       list.slice().sort((a, b) => a.x - b.x).forEach(o => {
         if (!objVisible(o) || (typeof tdObjSkip === 'function' && tdObjSkip(o))) return;
-        if (view.zoom < OBJ_BLOB_ZOOM) drawObjBlob(ctx, o);
-        else drawObject(ctx, o, 1);
+        const dim = landOn && lm.out[idx(o.x, o.y)] === 1; // 遮罩外的既有物件照常畫，只略為壓暗
+        if (view.zoom < OBJ_BLOB_ZOOM) {
+          if (dim) { ctx.save(); ctx.globalAlpha = LAND_DIM_ALPHA; drawObjBlob(ctx, o); ctx.restore(); }
+          else drawObjBlob(ctx, o);
+        } else drawObject(ctx, o, dim ? LAND_DIM_ALPHA : 1);
       });
     }
     const pl = pano.open || hid ? null : pend.diag[d];
@@ -801,6 +868,7 @@ function draw(ctx, time) {
     if (typeof drawBattleDiag === 'function') drawBattleDiag(ctx, d, time);
     if (typeof lifeDrawDiag === 'function') lifeDrawDiag(ctx, d, time);
   }
+  if (landOn) drawLandBorder(ctx, lm);
 
   if (typeof drawWorldOverlay === 'function') drawWorldOverlay(ctx, time);
   if (typeof tdDrawDrop === 'function') tdDrawDrop(ctx, time);

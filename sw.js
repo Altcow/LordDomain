@@ -1,4 +1,4 @@
-const VERSION = 'v13';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v14';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const PRECACHE = [
@@ -8,10 +8,12 @@ const PRECACHE = [
   './css/style.css',
   './js/data.js',
   './js/units.js',
+  './js/progdata.js',
   './js/stratagems.js',
   './js/fishdata.js',
   './js/map.js',
   './js/mapio.js',
+  './js/prog.js',
   './js/tech.js',
   './js/templates.js',
   './js/npc.js',
@@ -42,6 +44,7 @@ const PRECACHE = [
   './js/recorder.js',
   './js/ui.js',
   './js/settingsui.js',
+  './js/progui.js',
   './js/mapedit.js',
   './js/battleui.js',
   './js/fishui.js',

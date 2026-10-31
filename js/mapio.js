@@ -1,6 +1,6 @@
 // mapio.js — 棋盤序列化與驗證(PLAN_TD_MASTER §6.1)
 // 只宣告函式與常數,不執行碰 DOM 或 world 的程式。
-// 執行期才使用的外部全域:MAP_W MAP_H T_LAKE T_RIVER OBJECTS footprint CAMP_CAPS CAMP_CP CAMP_CP_PCT CAMP_LV
+// 執行期才使用的外部全域:MAP_W MAP_H T_LAKE T_RIVER OBJECTS footprint CAMP_CAPS CAMP_CP CAMP_CP_PCT CAMP_LV campTierNow campCpNow
 
 const MIO_LAYERS = ['terrain', 'height', 'flow', 'block', 'zone'];
 const MIO_EXTRA_KEYS = ['dev', 'trig', 'mimic'];
@@ -228,11 +228,11 @@ function campCapCheck(bd) {
   });
   const out = [];
   keys.forEach(key => {
-    const max = CAMP_CAPS[key][CAMP_LV - 1];
+    const max = CAMP_CAPS[key][campTierNow() - 1];
     const n = have[key] || 0;
     if (n > max) out.push({ key: key, have: n, max: max });
   });
-  const cpMax = CAMP_CP[CAMP_LV - 1];
+  const cpMax = campCpNow();
   if (cpSum > cpMax) out.push({ key: 'cp', have: cpSum, max: cpMax });
   const pctMax = Math.floor(cpMax * CAMP_CP_PCT);
   Object.keys(cpBy).forEach(t => {

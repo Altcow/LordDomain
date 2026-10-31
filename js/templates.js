@@ -1,11 +1,58 @@
 // 範本：一鍵套用的預設城鎮。座標為範本座標，套用時置中加偏移（見 PLAN 10.3）
-const DEFAULT_TEMPLATE = 'demo';
+const DEFAULT_TEMPLATE = 'city_lv01';
 const TEMPLATE_KEEP_RES = false;
 
 const TEMPLATES = [
+  // BEGIN city_lv01 (tools/city_lv01_build.js 生成,勿手改)
+  {
+    id: 'city_lv01', name: '🏡 新手小村 (Lv1)',
+    desc: '城主府居中,十字土路環繞府前;北路兩側民房、南路兩側農田,井與樹木點綴。留白寬敞,第一次蓋房的好起點。',
+    w: 20, h: 20, focus: [9, 9], isDefault: true,
+    roads: [
+      [7, 7, 6, 1],
+      [7, 12, 6, 1],
+      [7, 7, 1, 6],
+      [12, 7, 1, 6],
+      [9, 0, 2, 7],
+      [9, 13, 2, 7],
+      [0, 9, 7, 2],
+      [13, 9, 7, 2]
+    ],
+    objects: [
+      { type: 'palace', pts: [[8, 8]] },
+      { type: 'house', pts: [[7, 3]], rot: 3 },
+      { type: 'house', pts: [[11, 3]], rot: 1 },
+      { type: 'field_sprout', pts: [[7, 14], [11, 14]] },
+      { type: 'lumber', pts: [[2, 7]] },
+      { type: 'quarry', pts: [[16, 7]] },
+      { type: 'well', pts: [[7, 17]] },
+      { type: 'tree', pts: [[5, 5], [14, 5], [5, 14], [14, 14]] },
+      { type: 'flower_bed', pts: [[6, 6], [13, 6], [6, 13], [13, 13]] }
+    ]
+  },
+  {
+    id: 'camp_lv01', kind: 'camp', name: '🏕 新手戰陣 (Lv1)',
+    desc: '方寨一座,南門一道;寨內屏牆留東側缺口,敵軍入寨須折一次彎。帥帳居北,箭樓守四角。',
+    w: 20, h: 20, focus: [9, 9], isDefault: true,
+    objects: [
+      { type: 'wall', line: [3, 3, 16, 3, 1] },
+      { type: 'wall', line: [3, 4, 3, 15, 1] },
+      { type: 'wall', line: [16, 4, 16, 15, 1] },
+      { type: 'wall', line: [3, 16, 7, 16, 1] },
+      { type: 'wall', line: [11, 16, 16, 16, 1] },
+      { type: 'wall', line: [4, 11, 11, 11, 1] },
+      { type: 'gate', pts: [[8, 16]] },
+      { type: 'hq', pts: [[8, 4]] },
+      { type: 'tower', pts: [[4, 4], [14, 4], [14, 13]] },
+      { type: 'wagon', pts: [[4, 13]] },
+      { type: 'tent', pts: [[5, 8], [12, 8]] },
+      { type: 'qtower', pts: [[9, 9], [10, 9]] }
+    ]
+  },
+  // END city_lv01
   {
     id: 'demo', name: '城主府小鎮', desc: '原示範場景：高台城主府、兩河合流注入大湖。',
-    w: 40, h: 40, focus: [13, 10], legacy: 'demo', isDefault: true
+    w: 40, h: 40, focus: [13, 10], legacy: 'demo'
   },
   {
     id: 'jun', name: '東漢郡城', desc: '方城四門與護城壕、井字街、郡府高台、武庫倉廩、東西二市與六里，城外關廂、農田與塢堡。',
@@ -2392,8 +2439,8 @@ const TEMPLATES = [
   // END gen_scenes
   {
     id: 'camp_lianying', kind: 'camp', name: '連環營',
-    desc: '新手預設:內城石牆、外柵四角敵樓、四條鹿角切成四個隔間,北南牆各留缺口並設拒馬槍陣與滾木。',
-    w: 56, h: 56, focus: [27, 27], isDefault: true,
+    desc: '內城石牆、外柵四角敵樓、四條鹿角切成四個隔間,北南牆各留缺口並設拒馬槍陣與滾木。',
+    w: 56, h: 56, focus: [27, 27],
     objects: [
       { type: 'lujiao', pts: [[17, 17], [18, 18], [19, 19], [20, 20], [21, 21], [22, 22], [38, 17], [37, 18], [36, 19], [35, 20], [34, 21], [33, 22], [17, 38], [18, 37], [19, 36], [20, 35], [21, 34], [22, 33], [33, 33], [34, 34], [35, 35], [36, 36], [37, 37], [38, 38], [19, 12], [19, 13], [19, 14], [21, 12], [21, 13], [21, 14], [34, 41], [34, 42], [36, 41], [36, 42]] },
       { type: 'gate', pts: [[26, 15], [26, 32]] },

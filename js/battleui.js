@@ -39,13 +39,27 @@ function popBarHtml(used, cap) {
     (full ? ' ・ 人口已滿' : '') + '</span><i><b style="width:' + pct + '%"></b></i></div>';
 }
 
+// 城市等級:出征人口上限(progPopCap);prog 未載入時維持 TD_POP_CAP
+function atkPopCap() {
+  return typeof progPopCap === 'function' && typeof progLv === 'function' ? progPopCap(progLv()) : TD_POP_CAP;
+}
+
+// 兵種是否已依城市等級開放(progUnlockLv('unit') 回 null 視為開放)
+function atkUnitOpen(u) {
+  const L = typeof progUnlockLv === 'function' ? progUnlockLv('unit', u) : null;
+  return L === null || L <= (typeof progLv === 'function' ? progLv() : 1);
+}
+
 // 兵種列(一行、可橫向捲動;每格圖示+名稱+每隊人口);scope 為按鈕所屬面板,點擊由該面板處理 data-pick
-function unitStripHtml(sel) {
+// gated 為 true 時(出征)未開放兵種灰階、標 🔒LvN、不可點,位置不移動
+function unitStripHtml(sel, gated) {
   let h = '<div class="ustrip">';
   deployUnitKeys().forEach(u => {
     const d = UNITS[u];
-    h += '<button data-pick="' + u + '"' + (sel === u ? ' class="on"' : '') + '><span class="uico">' + UNIT_ICON[u] +
-      '</span><span class="uname">' + tdEsc(d.name) + '</span><small>' + unitPopOf(u) + ' 人/隊</small></button>';
+    const lock = gated && !atkUnitOpen(u);
+    const L = lock ? progUnlockLv('unit', u) : 0;
+    h += '<button data-pick="' + u + '"' + (sel === u ? ' class="on"' : '') + (lock ? ' disabled style="filter:grayscale(1);opacity:.45"' : '') + '><span class="uico">' + UNIT_ICON[u] +
+      '</span><span class="uname">' + tdEsc(d.name) + '</span><small>' + (lock ? '🔒 Lv' + L : unitPopOf(u) + ' 人/隊') + '</small></button>';
   });
   return h + '</div>';
 }
@@ -99,7 +113,7 @@ function sandPct(b) {
   return total > 0 ? destroyed / total : 1;
 }
 
-// 掠奪量:本場已摧毀敵方建築價值的 50%(只顯示與寫入結算,不加入 world.res)。
+// 掠奪量:本場已摧毀敵方建築價值的 50%(僅供戰中顯示;實際資源由 atkProgReward → progOnBattle 結算)。
 // 由 bld.alive 狀態逐幀統計,建築不會復活,故不會重複計入。
 function lootOf(b) {
   const out = { coin: 0, wood: 0, stone: 0 };
@@ -414,6 +428,12 @@ function atkStars(n) {
 }
 
 function atkNpc(id) { return NPC_BASES.find(v => v.id === id) || null; }
+// 首領營的升級里程碑(progdata PROG_BOSS_REQ:哪一級要求該營 1★);非首領營回 0
+function atkBossMilestone(id) {
+  let L = 0;
+  if (typeof PROG_BOSS_REQ !== 'undefined') Object.keys(PROG_BOSS_REQ).forEach(k => { if (PROG_BOSS_REQ[k] === id) L = +k; });
+  return L;
+}
 function atkCanOpen() {
   return !atk.on && !battle && !game.backup && (game.mode === 'estate' || game.mode === 'battleDesign');
 }
@@ -528,11 +548,12 @@ function atkMusterHtml() {
   let h = '<div class="shd"><button class="ahd" data-atk="back">‹ 返回</button><b>出征・' + tdEsc(nb ? nb.name : '') +
     '</b><button class="close" data-atk="close">✕</button></div>';
   h += '<small>難度 ' + (nb ? ATK_DIFF[nb.diff] : '—') + ' ・ 最佳 ' + atkStars(best) + '</small>';
-  h += '<div class="apopcap">出征人口上限 <b>' + TD_POP_CAP + '</b></div>';
-  h += '<small>可帶兵種(每隊人口)</small><div class="ulist">';
+  h += '<div class="apopcap">出征人口上限 <b>' + atkPopCap() + '</b></div>';
+  h += '<small>可帶兵種(每隊人口;🔒 為城市等級未開放)</small><div class="ulist">';
   deployUnitKeys().forEach(u => {
-    h += '<div class="urow"><span class="uico">' + UNIT_ICON[u] + '</span><span class="uname">' + tdEsc(UNITS[u].name) +
-      '</span><small>每隊 ' + unitPopOf(u) + ' 人</small></div>';
+    const lock = !atkUnitOpen(u);
+    h += '<div class="urow"' + (lock ? ' style="filter:grayscale(1);opacity:.45"' : '') + '><span class="uico">' + UNIT_ICON[u] + '</span><span class="uname">' + tdEsc(UNITS[u].name) +
+      '</span><small>' + (lock ? '🔒 Lv' + progUnlockLv('unit', u) : '每隊 ' + unitPopOf(u) + ' 人') + '</small></div>';
   });
   h += '</div>';
   h += '<div class="arule"><small>軍令</small>' +
@@ -618,8 +639,11 @@ function atkListHtml() {
     '<small>選擇要攻打的 NPC 據點(難度、最佳星)。整軍後進攻,觀察期不耗兵。</small>';
   NPC_BASES.forEach(nb => {
     const best = world.npcBest ? (world.npcBest[nb.id] | 0) : 0;
+    const ms = atkBossMilestone(nb.id);
+    const pb = typeof progGet === 'function' ? (progGet().bossBest[nb.id] | 0) : 0;
+    const gate = ms ? '<small class="bhint">升 Lv' + (ms + 1) + ' 需本營 1★ ・ 城主最佳 ' + atkStars(pb) + '</small>' : '';
     h += '<div class="arow"><div class="ainfo"><b>' + tdEsc(nb.name) + '</b> <small>難度 ' + ATK_DIFF[nb.diff] +
-      '　最佳 ' + atkStars(best) + '</small><small>' + tdEsc(nb.intro) + '</small></div>' +
+      '　最佳 ' + atkStars(best) + '</small><small>' + tdEsc(nb.intro) + '</small>' + gate + '</div>' +
       '<button data-atk="pick" data-npc="' + tdEsc(nb.id) + '">選擇</button></div>';
   });
   return h;
@@ -653,7 +677,7 @@ function atkLaunch(nb) {
   atk.open = false;
   atk.ended = false;
   atk.flagArm = false;
-  atk.unit = DEFAULT_UNIT;
+  atk.unit = atkUnitOpen(atk.unit) ? atk.unit : DEFAULT_UNIT;
   atk.lastHtml = '';
   atk.sub = ''; atk.subLeft = 0;
   game.phase = 'scout';
@@ -685,7 +709,7 @@ function atkSetSub(text, sec) {
 // 觀察期只可選先鋒卡;進軍期可選仍有隊數且已開放的部
 // 選兵種(觀察期與進軍期皆可,任何時間都可放;不可放兵種忽略)
 function atkPick(u) {
-  if (!UNITS[u] || !tdDeployable(UNITS[u])) return;
+  if (!UNITS[u] || !tdDeployable(UNITS[u]) || !atkUnitOpen(u)) return;
   atk.unit = u;
   atk.flagArm = false;
 }
@@ -697,7 +721,7 @@ function atkStartBattle(x, y) {
   if (!snap) return;
   const bd = boardFromJSON(snapFull(snap));
   if (!bd) return;
-  const b = battleInit({ kind: 'npc', seed: hashStr(snap.snapHash + ':' + Date.now()) >>> 0, map: battleMapOf(snapFull(snap)), refId: atk.npc });
+  const b = battleInit({ kind: 'npc', seed: hashStr(snap.snapHash + ':' + Date.now()) >>> 0, map: battleMapOf(snapFull(snap)), refId: atk.npc, popCap: atkPopCap() });
   const why = tdDeployWhy(b, atk.unit, x, y);
   if (why !== true) {
     showToast(DEPLOY_TOAST[why] || '無法放兵');
@@ -919,7 +943,7 @@ function onCtlClick(e) {
 function atkBattleHtml() {
   const scout = game.phase === 'scout';
   const o = scout ? { drum: 1, flag: 1 } : battle.orders;
-  return unitStripHtml(atk.unit) +
+  return unitStripHtml(atk.unit, true) +
     '<div class="acmd">' +
     '<button data-atk="drum"' + (o.drum >= 1 ? ' disabled' : '') + '>🥁 擂鼓</button>' +
     '<button data-atk="flag"' + (o.flag >= 1 ? ' disabled' : '') + (atk.flagArm ? ' class="on"' : '') + '>🚩 令旗</button>' +
@@ -936,7 +960,7 @@ function atkPaint() {
   atk.panel.classList.add('abar');
   atk.hudClock.textContent = scout ? '斥候 ' + atkFmt(game.scoutLeft) : (battle ? '進軍 ' + atkFmt((battle.limitTick - battle.tick) * SIM_DT) : '');
   atk.hudSub.textContent = atk.subLeft > 0 ? atk.sub : (scout ? '點可部署區放下第一隊即開戰' : '');
-  const ph = popBarHtml(battle ? battle.popUsed : 0, battle ? battle.popCap : TD_POP_CAP);
+  const ph = popBarHtml(battle ? battle.popUsed : 0, battle ? battle.popCap : atkPopCap());
   if (ph !== atk.popHtml) { atk.popHtml = ph; atk.hudPop.innerHTML = ph; }
   atkCtlPaint();
   const html = atkBattleHtml();
@@ -1093,14 +1117,55 @@ function attackFinish(b) {
   st.stars += r.stars | 0;
   st.merit += (r.merits || []).length;
   if (atk.npc) world.npcBest[atk.npc] = Math.max(world.npcBest[atk.npc] | 0, r.stars | 0);
+  const reward = atkProgReward(b, r, nb);
   saveWorld();
   atk.resId = saved ? saved.id : null;
   atk.resOk = !!(made && made.ok && saved && !saved.textOnly);
-  atkShowResult(b, r, nb);
+  atkShowResult(b, r, nb, reward);
+}
+
+// 城市等級結算(PLAN_PROGRESSION §3.3):經驗、資源、材料由 progOnBattle 寫入 prog 與 world.res。
+// world.res 不在 BOARD_KEYS 內(攻擊中棋盤換成敵方,資源仍是己方),故不必等棋盤還原再記。
+// 沙盤、錄影、觀察期撤退都不經過這裡,不計獎勵。
+function atkProgReward(b, r, nb) {
+  if (!nb || typeof progOnBattle !== 'function' || typeof progCanUpgrade !== 'function') return null;
+  const bd = typeof progBossDef === 'function' ? progBossDef(nb.id) : null;
+  const wasUp = progCanUpgrade().ok;
+  const out = progOnBattle({
+    kind: bd ? 'boss' : 'npc', T: bd ? bd.lv : progLv(), stars: r.stars | 0, pct: r.pct || 0, grade: r.grade,
+    diff: Math.max(0, Math.min(PROG_DIFF_MAX, (nb.diff | 0) - 1)), seed: b.seed, pid: 'npc:' + nb.id,
+    id: nb.id, fac: bd ? bd.fac : ''
+  });
+  if ((r.stars | 0) >= 1) atkFtueWin('npcWin1');
+  return { out: out, up: !wasUp && progCanUpgrade().ok };
+}
+
+// 新手教學:首次達成條件時寫入 ftue.done 並刷新泡泡(progFtueShow 只顯示當前級的步驟)
+function atkFtueWin(id) {
+  if (typeof progGet !== 'function' || typeof progSave !== 'function') return;
+  const p = progGet();
+  if (p.ftue.done[id]) return;
+  p.ftue.done[id] = true;
+  progSave();
+  if (typeof progFtueShow === 'function' && typeof progFtueTick === 'function') progFtueShow(progFtueTick());
+}
+
+// 結算獎勵一行:經驗 / 資源 / 材料;可升級時加提示(只是提示,升級在 Lv 晶片)
+function atkRewardHtml(rw) {
+  const o = rw.out;
+  const rs = [], ms = [];
+  for (const k in o.res) if (o.res[k] > 0) rs.push(((RESOURCES[k] || {}).icon || k) + '+' + o.res[k].toLocaleString());
+  for (const id in o.mats) if (o.mats[id] > 0 && PROG_MATS[id]) ms.push(PROG_MATS[id].icon + PROG_MATS[id].name + '×' + o.mats[id]);
+  let h = '<div class="rloot rprog"><b>獲得</b><span>經驗 +' + o.xp + '</span>';
+  if (rs.length) h += '<span>資源 ' + rs.join(' ') + '</span>';
+  if (ms.length) h += '<span>材料 ' + tdEsc(ms.join('、')) + '</span>';
+  h += '</div>';
+  if (rw.up) h += '<div class="rprog"><small>城市可升級了!(點頂列 Lv 晶片升級)</small></div>';
+  return h;
 }
 
 // 結算共用版型:大標題(勝/敗色;星 0 為敗)、星、評語、摧毀/損失/投入/用時、功勞、掠奪量、戰報
-function battleResBody(b, r) {
+function battleResBody(b, r, reward) {
   const g = GRADE_TEXT[r.grade] || { name: '—', text: '' };
   const stars = Math.max(0, Math.min(3, r.stars | 0));
   const won = stars >= 1;
@@ -1112,7 +1177,6 @@ function battleResBody(b, r) {
     const m = MERIT_TEXT[k];
     mh += '<span class="rmer' + (merits.indexOf(k) >= 0 ? ' on' : '') + '"><b>' + m.name + '</b><small>' + tdEsc(m.text) + '</small></span>';
   });
-  const l = r.loot || lootOf(b);
   const lines = atkTextLines(b, r).slice(1);
   let h = '<div class="rhead ' + (won ? 'win' : 'lose') + '">' + tdEsc(g.name) + '</div>';
   h += '<div class="rstars">' + st + '</div>';
@@ -1120,17 +1184,23 @@ function battleResBody(b, r) {
   h += '<div class="rstat"><span>摧毀 ' + Math.floor((r.pct || 0) * 100) + '%</span><span>損失 ' + (r.lost | 0) +
     ' 人</span><span>投入 ' + (r.deployedUnits | 0) + ' 人</span><span>用時 ' + sandClock(r.tick) + '</span></div>';
   h += '<div class="rmers">' + mh + '</div>';
-  h += '<div class="rloot"><b>⚔ 掠奪</b>';
-  for (const k in RESOURCES) h += '<span>' + RESOURCES[k].icon + ' ' + l[k].toLocaleString() + '</span>';
-  h += '</div>';
+  if (reward) {
+    h += atkRewardHtml(reward);
+  } else {
+    // 沙盤:掠奪量只顯示,不結算
+    const l = r.loot || lootOf(b);
+    h += '<div class="rloot"><b>⚔ 掠奪</b>';
+    for (const k in RESOURCES) h += '<span>' + RESOURCES[k].icon + ' ' + l[k].toLocaleString() + '</span>';
+    h += '</div>';
+  }
   h += '<div class="rlog"><b>戰報</b>' + (lines.length ? lines.map(t => '<p>' + tdEsc(t) + '</p>').join('') : '<small>本場無關鍵事件。</small>') + '</div>';
   return h;
 }
 
-function atkShowResult(b, r, nb) {
+function atkShowResult(b, r, nb, reward) {
   atk.panel.classList.remove('abar');
   let h = '<div class="shd"><b>📜 戰果・' + tdEsc(nb ? nb.name : '') + '</b><button class="close" data-atk="home">✕</button></div>';
-  h += battleResBody(b, r);
+  h += battleResBody(b, r, reward);
   if (!atk.resOk) h += '<small class="aerr">本場錄影無法保存(僅存文字戰報)</small>';
   const playable = rpPlayable(replayFind(replayStoreLoad(), atk.resId));
   h += '<div class="sact"><button data-atk="rwatch"' + (playable ? '' : ' disabled') + '>看錄影</button>' +

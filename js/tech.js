@@ -160,6 +160,7 @@ function normTech(v) {
 
 // ── 效果套用輔助（map.js / ui.js 呼叫）──
 function objCost(type) {
+  if (typeof PROG_FREE_BUILD !== 'undefined' && PROG_FREE_BUILD) return {};   // 經營建築免費(PLAN_PROGRESSION §2.6):待購總價與拆除退款皆為 0
   const c = OBJECTS[type].cost, m = techMul('build.cost'), r = {};
   for (const k in c) r[k] = Math.ceil(c[k] * m - 1e-9);
   return r;

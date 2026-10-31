@@ -668,3 +668,53 @@ body.photo-mode #photoBack { display: flex; }
 body.ui-compact #title, body.ui-compact #info { display: none !important; }
 #toolbar, #catbar { scrollbar-width: none; }
 #toolbar::-webkit-scrollbar, #catbar::-webkit-scrollbar { display: none; }
+
+/* ===== 升級介面(progui.js,PLAN_PROGRESSION §2.5 §7):頂列 Lv 晶片、升級抽屜、測試工具、鎖頭角標、解鎖紅點、FTUE 泡泡。只追加 ===== */
+#progChip { flex: 0 0 auto; position: relative; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border-radius: 999px; background: rgba(47, 59, 77, .9); border: 1px solid #45566e; color: #e8edf2; font-size: 12px; line-height: 1; white-space: nowrap; cursor: pointer; font-variant-numeric: tabular-nums; }
+#progChip .pg-lv { font-weight: bold; }
+#progChip .pg-bar { display: block; position: relative; width: 36px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .15); overflow: hidden; }
+#progChip .pg-fill { display: block; position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #f0b45a; }
+#progChip .prog-dot { top: -4px; right: -4px; }
+#progChip [hidden], #progDrawer[hidden], #progDrawer [hidden], #progFtue[hidden] { display: none !important; }
+.prog-dot { position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%; background: #e5484d; border: 1px solid #1c2430; pointer-events: none; }
+.prog-lock { display: inline-block; margin-left: 3px; padding: 0 4px; border-radius: 6px; font-size: 10px; line-height: 14px; background: rgba(20, 26, 36, .85); color: #f0b45a; border: 1px solid rgba(240, 180, 90, .6); white-space: nowrap; }
+body.ui-compact #progChip { height: 22px; padding: 0 6px; font-size: 11px; }
+body.ui-compact #progChip .pg-bar { display: none; }
+body.atk-mode #progChip, body.replay-mode #progChip, body.sandbox #progChip, body.photo-mode #progChip { display: none !important; }
+body.atk-mode #progDrawer, body.replay-mode #progDrawer, body.sandbox #progDrawer, body.photo-mode #progDrawer { display: none !important; }
+body.atk-mode #progFtue, body.replay-mode #progFtue, body.sandbox #progFtue, body.photo-mode #progFtue { display: none !important; }
+#progDrawer { position: fixed; z-index: 4; left: 8px; right: 8px; bottom: calc(var(--stack) + 8px + env(safe-area-inset-bottom)); max-width: 320px; height: 40vh; margin: 0 auto; box-sizing: border-box; display: flex; flex-direction: column; padding: 8px 10px; border-radius: 10px; background: rgba(20, 26, 36, .96); border: 1px solid #45566e; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
+#progDrawer .pg-head { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255, 255, 255, .15); }
+#progDrawer .pg-title { font-size: 15px; }
+#progDrawer .pg-hlv { flex: 1 1 auto; min-width: 0; font-size: 12px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#progDrawer .pg-x { min-width: 36px; min-height: 36px; padding: 0 6px; background: none; border: none; }
+#progDrawer .pg-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; margin-top: 4px; }
+#progDrawer .pg-sec { margin-top: 6px; font-weight: bold; font-size: 12px; opacity: .85; }
+#progDrawer .pg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; min-height: 26px; }
+#progDrawer .pg-row.ok .pg-mk { color: #9fd9a8; }
+#progDrawer .pg-row.no .pg-mk { color: #ff6b5e; }
+#progDrawer .pg-mk { width: 14px; font-weight: bold; }
+#progDrawer .pg-lb { flex: 1 1 auto; min-width: 0; }
+#progDrawer .pg-val { font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
+#progDrawer .pg-nt { flex-basis: 100%; padding-left: 20px; font-size: 11px; opacity: .75; }
+#progDrawer .pg-unlt { font-size: 12px; line-height: 1.6; opacity: .92; }
+#progDrawer .pg-hint { font-size: 12px; opacity: .8; }
+#progDrawer .pg-tt { display: block; width: 100%; min-height: 40px; margin-top: 8px; text-align: left; font-size: 12px; background: rgba(47, 59, 77, .7); }
+#progDrawer .pg-tools { margin-top: 4px; padding: 6px; border-radius: 8px; border: 1px dashed rgba(240, 180, 90, .6); }
+#progDrawer .pg-tnote { font-size: 11px; color: #f0b45a; margin-bottom: 4px; }
+#progDrawer .pg-tb { display: block; width: 100%; min-height: 40px; margin-top: 4px; font-size: 12px; text-align: left; }
+#progDrawer .pg-trow { display: flex; gap: 6px; margin-top: 4px; }
+#progDrawer .pg-trow .pg-sel { flex: 1 1 auto; min-width: 0; min-height: 40px; }
+#progDrawer .pg-trow .pg-tb { display: inline-block; width: auto; flex: 0 0 auto; margin-top: 0; min-width: 64px; text-align: center; }
+#progDrawer .pg-foot { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-height: 48px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, .15); }
+#progDrawer .pg-why { flex: 1 1 auto; min-width: 0; font-size: 12px; line-height: 1.3; max-height: 2.6em; overflow: hidden; }
+#progDrawer .pg-why.pg-bad { color: #ff8a7e; }
+#progDrawer .pg-up { flex: 0 0 auto; width: 72px; min-height: 44px; font-size: 15px; font-weight: bold; background: #2e7d4f; border-color: #5fc98a; }
+#progDrawer .pg-up:disabled { background: #2f3b4d; border-color: #45566e; color: #e8edf2; filter: grayscale(1); opacity: .45; }
+@media (orientation: landscape) {
+  #progDrawer { left: auto; right: calc(var(--side-w) + 6px); top: calc(var(--top-h) + env(safe-area-inset-top) + 8px); bottom: calc(var(--stack) + 8px + env(safe-area-inset-bottom)); width: 320px; max-width: 320px; height: auto; margin: 0; }
+}
+#progFtue { position: fixed; z-index: 3; top: calc(var(--top-h) + env(safe-area-inset-top) + 6px); left: 8px; max-width: min(240px, 60vw); display: flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: 999px; background: rgba(20, 26, 36, .9); border: 1px solid #f0b45a; color: #ffe7b3; font-size: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
+#progFtue .pg-ftx { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#progFtue .pg-fx { min-width: 28px; min-height: 28px; padding: 0 4px; font-size: 12px; background: none; border: none; }
+@media (orientation: landscape) { #progFtue { max-width: 180px; } }

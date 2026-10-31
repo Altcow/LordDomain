@@ -3,13 +3,21 @@ let lastFrameMs = 0;
 let resBarTimer = 0;
 let saveTimer = 0;
 
+// 城市等級存檔與舊存檔遷移(PLAN_PROGRESSION §8.2):必須在 loadWorld / saveWorld 之前
+function progBoot() {
+  progLoad();
+  return progMigrateReset();
+}
+
 function boot() {
   canvas = document.getElementById('game');
   ctx = canvas.getContext('2d');
   resizeCanvas(canvas);
   window.addEventListener('resize', () => resizeCanvas(canvas));
+  const migr = progBoot();
   if (!loadWorld()) applyTemplate(DEFAULT_TEMPLATE);
   initUI(canvas);
+  if (migr.migrated && typeof showToast === 'function') showToast('舊領地已備份,從 1 級重新開始(設定可還原備份)');
   if (typeof initBattleUI === 'function') initBattleUI();
   const before = Object.assign({}, world.res);
   const sec = applyOfflineGains();

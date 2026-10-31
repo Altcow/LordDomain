@@ -242,6 +242,12 @@ function bindEvents(canvas) {
     zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.1 : 1 / 1.1);
   }, { passive: false });
 
+  // 進入釣魚 / 仙獸 / 出征 / 重播前收起城市等級抽屜(progui.js 未載入時略過)
+  document.addEventListener('click', e => {
+    const t = e.target;
+    if (typeof progUiClose !== 'function' || !t || !t.closest) return;
+    if (['#btnFish', '#btnPet', '#btnAttack', '#btnReport'].some(s => t.closest(s))) progUiClose();
+  }, true);
   const shop = document.getElementById('shop');
   shop.addEventListener('pointerdown', e => e.stopPropagation());
   shop.addEventListener('click', onShopClick);
@@ -356,8 +362,9 @@ function buildToolbar() {
     sep.className = 'sep';
     sep.textContent = '｜';
     bar.appendChild(sep);
-    if (ui.buildCat !== '常用' && !buildCatIds(ui.buildCat).length) ui.buildCat = '常用';
-    buildCatIds(ui.buildCat).forEach(id => addToolButton(bar, id, OBJECTS[id].icon, OBJECTS[id].name, OBJECTS[id]));
+    if (ui.buildCat !== '常用' && !buildCatIds(ui.buildCat).length && !buildLockHint(ui.buildCat)) ui.buildCat = '常用';
+    buildCatIds(ui.buildCat).forEach(id => markNewBuild(addToolButton(bar, id, OBJECTS[id].icon, OBJECTS[id].name, OBJECTS[id]), id));
+    addLockHintButton(bar, buildLockHint(ui.buildCat));
   }
   syncToolActive();
   buildCatBar();
@@ -374,6 +381,74 @@ function buildCatIds(catId) {
   const g = BUILD_GROUPS.find(x => x.id === catId);
   return g ? g.items.filter(k => OBJECTS[k] && sideOk(k)) : [];
 }
+
+// 經營建築分類的完整清單(不看等級開放,供鎖頭提示計數);經營側判定同 sideOk
+function buildCatAllIds(catId) {
+  const ok = k => hasType(k) && !OBJECTS[k].retired && (sideOf(k) === 'estate' || sideOf(k) === 'both');
+  if (catId === '常用') return BUILD_FAVS.filter(ok);
+  if (catId === 'misc') {
+    const listed = {};
+    BUILD_GROUPS.forEach(g => g.items.forEach(k => { listed[k] = true; }));
+    return Object.keys(OBJECTS).filter(k => !listed[k] && ok(k));
+  }
+  const g = BUILD_GROUPS.find(x => x.id === catId);
+  return g ? g.items.filter(ok) : [];
+}
+
+// 鎖頭提示:分類內下一個要開放的等級(lv)與該級建築名稱(names);僅經營模式且有未開放者才有,否則 null
+function buildLockHint(catId) {
+  if (game.mode !== 'estate' || typeof progUnlockLv !== 'function' || typeof prog === 'undefined' || !prog) return null;
+  let lv = null, names = [];
+  buildCatAllIds(catId).forEach(k => {
+    const L = progUnlockLv('estate', k);
+    if (L === null || L <= prog.lv) return;
+    if (lv === null || L < lv) { lv = L; names = []; }
+    if (L === lv) names.push(OBJECTS[k].name);
+  });
+  return lv === null ? null : { lv: lv, names: names };
+}
+
+// 灰階「🔒 +n 於 Lv X」提示鈕(無 data-tool,不參與工具選取);點了 toast 列出該級開放的建築
+function addLockHintButton(bar, hint) {
+  if (!hint) return;
+  const b = document.createElement('button');
+  b.className = 'lockhint';
+  b.textContent = '🔒 +' + hint.names.length + ' 於 Lv' + hint.lv;
+  b.title = '城市 ' + hint.lv + ' 級開放';
+  b.style.filter = 'grayscale(1)';
+  b.style.opacity = '0.6';
+  b.addEventListener('click', () => {
+    const more = hint.names.length > 4 ? '…等 ' + hint.names.length + ' 項' : '';
+    showToast('城市 ' + hint.lv + ' 級開放:' + hint.names.slice(0, 4).join('、') + more);
+  });
+  bar.appendChild(b);
+}
+
+// 已開放但本級才開放的建築:加解鎖紅點(progSeenMark);點擊即記為已看過並移除紅點
+function markNewBuild(btn, id) {
+  if (!btn || game.mode !== 'estate' || typeof progSeenMark !== 'function' || !progSeenMark('estate', id)) return btn;
+  const dot = document.createElement('i');
+  dot.className = 'prog-dot';
+  btn.style.position = 'relative';
+  btn.appendChild(dot);
+  btn.addEventListener('click', () => {
+    progSeenMark('estate', id, true);
+    if (dot.parentNode) dot.remove();
+  });
+  return btn;
+}
+
+// 城市等級擋法:未開放回「城市 N 級才開放」,否則 ''(非經營/戰陣布置或未載入 prog 時恆為 '')
+function progLockText(type) {
+  const kind = game.mode === 'battleDesign' ? 'camp' : 'estate';
+  if (!progRulesOn() || isUnlocked(kind, type)) return '';
+  return '城市 ' + progUnlockLv(kind, type) + ' 級才開放';
+}
+
+// 經營布置免費(PLAN_PROGRESSION §2.6)時,費用與退款的顯示文字
+function progFreeBuild() { return typeof PROG_FREE_BUILD !== 'undefined' && !!PROG_FREE_BUILD; }
+function feeText(cost) { return costText(cost) || '免費'; }
+function refundText(r) { return costText(r) || '免費建造,不退款'; }
 
 function buildCatList() {
   const out = [{ id: '常用', name: '常用', n: buildCatIds('常用').length }];
@@ -506,7 +581,7 @@ function toolInfo() {
   if (isCampTool(t)) return CAMP_TOOLS[t].name;
   if (OBJECTS[t]) {
     const d = OBJECTS[t];
-    let s = d.name + '　成本 ' + costText(objCost(t));
+    let s = d.name + '　成本 ' + feeText(objCost(t));
     if (d.prod) s += '　產出 ' + prodText(d.prod);
     if (d.unit && CAMP_POP[d.unit]) s += '　出征容量 +' + CAMP_POP[d.unit];
     return s;
@@ -580,9 +655,13 @@ function updatePreviewAt(sx, sy) {
 }
 
 function placeFailReason(type, x, y, rot) {
-  if (OBJECTS[type].max && countObjects(type) >= OBJECTS[type].max) return OBJECTS[type].name + '最多只能蓋 ' + OBJECTS[type].max + ' 座';
+  const lk = progLockText(type);
+  if (lk) return lk;
+  const cap = capOf(type);
+  if (cap !== null && countObjects(type) >= cap) return OBJECTS[type].name + '最多只能蓋 ' + cap + ' 座';
   const [w, h] = footprint(type, rot);
   if (x < 0 || y < 0 || x + w > MAP_W || y + h > MAP_H) return '超出邊界';
+  if (!landFits(x, y, w, h)) return '超出城市土地範圍';
   const h0 = world.height[idx(x, y)];
   for (let yy = y; yy < y + h; yy++) {
     for (let xx = x; xx < x + w; xx++) {
@@ -597,8 +676,18 @@ function placeFailReason(type, x, y, rot) {
 
 function pendFailReason(type, x, y, rot, skip) {
   const d = OBJECTS[type];
-  if (d.max && countObjects(type) + pendCount(type, skip) >= d.max) return d.name + '最多只能蓋 ' + d.max + ' 座（含待購）';
-  if (canPlace(type, x, y, rot)) return '與待購建築重疊';
+  const lk = progLockText(type);
+  if (lk) return lk;
+  const cap = capOf(type);
+  if (cap !== null && countObjects(type) + pendCount(type, skip) >= cap) return d.name + '最多只能蓋 ' + cap + ' 座（含待購）';
+  const [w, h] = footprint(type, rot);
+  if (x < 0 || y < 0 || x + w > MAP_W || y + h > MAP_H) return '超出邊界';
+  if (!landFits(x, y, w, h)) return '超出城市土地範圍';
+  for (let yy = y; yy < y + h; yy++)
+    for (let xx = x; xx < x + w; xx++) {
+      const n = pend.occ[idx(xx, yy)];
+      if (n && n - 1 !== skip) return '與待購建築重疊';
+    }
   return placeFailReason(type, x, y, rot);
 }
 
@@ -713,7 +802,10 @@ function applyHidden(t, x, y, i, pn) {
       warnOnce(OBJECTS[world.objects[n - 1].type].name + '不能在' + TERRAIN_NAME[target] + '上，此格不可改');
       return false;
     }
-    paintTerrainKeep(x, y, target, ui.rot);
+    if (!paintTerrainKeep(x, y, target, ui.rot)) {
+      warnOnce('超出城市土地範圍');
+      return false;
+    }
     return true;
   }
   if (t === 'raise' || t === 'lower') {
@@ -735,7 +827,10 @@ function applyHidden(t, x, y, i, pn) {
     return false;
   }
   if (world.terrain[i] === T_ROAD) {
-    paintTerrainKeep(x, y, T_GRASS, 0);
+    if (!paintTerrainKeep(x, y, T_GRASS, 0)) {
+      warnOnce('超出城市土地範圍');
+      return false;
+    }
     return true;
   }
   return false;
@@ -842,7 +937,10 @@ function applyOne(x, y) {
     }
     const target = TERRAIN_OF[t];
     if (world.terrain[i] === target && (target !== T_RIVER || world.flow[i] === ui.rot)) return false;
-    paintTerrain(x, y, target, ui.rot);
+    if (!paintTerrain(x, y, target, ui.rot)) {
+      warnOnce('超出城市土地範圍');
+      return false;
+    }
     return true;
   }
   if (t === 'raise' || t === 'lower') {
@@ -855,12 +953,15 @@ function applyOne(x, y) {
     const refund = refundOf(o.type);
     removeObjectAt(x, y, true);
     if (typeof auPlay === 'function') auPlay('remove');
-    if (o.type === LAB_TYPE && world.tech.cur) showToast('已拆除 科研院，退還 ' + costText(refund) + '；研發暫停，重建後繼續');
-    else showToast('已拆除 ' + OBJECTS[o.type].name + '，退還 ' + costText(refund));
+    if (o.type === LAB_TYPE && world.tech.cur) showToast('已拆除 科研院，退還 ' + refundText(refund) + '；研發暫停，重建後繼續');
+    else showToast('已拆除 ' + OBJECTS[o.type].name + '，退還 ' + refundText(refund));
     return true;
   }
   if (world.terrain[i] === T_ROAD) {
-    paintTerrain(x, y, T_GRASS, 0);
+    if (!paintTerrain(x, y, T_GRASS, 0)) {
+      warnOnce('超出城市土地範圍');
+      return false;
+    }
     return true;
   }
   return false;
@@ -1446,7 +1547,7 @@ function updatePendBar() {
     return;
   }
   const total = pendTotal();
-  let html = '<div class="prow"><b>待購 ' + n + ' 件</b><span class="pcost">';
+  let html = '<div class="prow"><b>待購 ' + n + ' 件</b><span class="pcost">' + (costText(total) ? '' : (progFreeBuild() ? '免費' : ''));
   for (const k in RESOURCES) {
     if (!total[k]) continue;
     html += '<span' + ((world.res[k] || 0) < total[k] ? ' class="lack"' : '') + '>' + RESOURCES[k].icon + total[k].toLocaleString() + '</span>';
@@ -1674,13 +1775,13 @@ function objDemolish() {
   const name = OBJECTS[o.type].name;
   const refund = refundOf(o.type);
   const labBusy = o.type === LAB_TYPE && world.tech.cur;
-  if (!confirm('拆除「' + name + '」？退還 ' + costText(refund) + '（依拆除規則，約為造價的一半）。' +
+  if (!confirm('拆除「' + name + '」？' + (costText(refund) ? '退還 ' + costText(refund) + '（依拆除規則，約為造價的一半）。' : '免費建造,不退款。') +
     (labBusy ? '\n科研院研發將暫停，重建後繼續。' : ''))) return;
   removeObjectAt(o.x, o.y, true);
   ui.objSel = null;
   preview.visible = false;
   if (typeof auPlay === 'function') auPlay('remove');
-  showToast('已拆除 ' + name + '，退還 ' + costText(refund));
+  showToast('已拆除 ' + name + '，退還 ' + refundText(refund));
   objPost();
 }
 function updateObjBar() {
@@ -1770,7 +1871,7 @@ function commitPending() {
   if (r.ok) {
     saveWorld();
     if (typeof auPlay === 'function') auPlay('place');
-    showToast('已建造 ' + r.n + ' 件，花費 ' + costText(r.cost));
+    showToast('已建造 ' + r.n + ' 件，花費 ' + feeText(r.cost));
     if (!hadLab && labBuilt()) showToast('科研院落成！切到 ✋ 瀏覽，點一下科研院即可研發');
   } else if (r.why === 'res') {
     beep();

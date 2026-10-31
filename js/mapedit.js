@@ -107,6 +107,7 @@ function campGroupIds(g) {
 
 // 戰鬥布置工具列:由 buildToolbar 呼叫(只在 game.mode === 'battleDesign')
 function buildCampToolbar(bar) {
+  const pg = mapeditProgOn();
   addToolButton(bar, null, '✋', '瀏覽', null);
   CAMP_GROUPS.forEach(g => {
     const off = !!campGroupCollapsed[g.id];
@@ -124,8 +125,57 @@ function buildCampToolbar(bar) {
       if (!btn) return;
       btn.setAttribute('data-grp', g.id);
       if (off) btn.classList.add('tg-off');
+      if (pg && OBJECTS[id] && progSeenMark('camp', id)) mapeditNewDot(btn, id);
     });
   });
+  if (pg) mapeditLockHint(bar);
+  mapeditUpdateCap(campBoard());
+}
+
+// 城市等級未載入時不做任何解鎖相關的顯示(維持舊行為)
+function mapeditProgOn() {
+  return typeof prog !== 'undefined' && !!prog && typeof progUnlockLv === 'function' && typeof progSeenMark === 'function';
+}
+
+// 本級新開放的工具加紅點;點擊後記為已看過並移除紅點
+function mapeditNewDot(btn, id) {
+  const d = document.createElement('i');
+  d.className = 'prog-dot';
+  btn.appendChild(d);
+  btn.addEventListener('click', () => {
+    progSeenMark('camp', id, true);
+    d.remove();
+  });
+}
+
+// 下一個尚未開放的戰陣物件等級與其項目(只算戰陣用、未退役的物件);沒有則回 null
+function mapeditNextLock() {
+  let best = null, ids = [];
+  Object.keys(PROG_UNLOCK_CAMP).forEach(k => {
+    const lv = +k;
+    if (lv <= prog.lv) return;
+    const list = PROG_UNLOCK_CAMP[k].filter(id => OBJECTS[id] && !OBJECTS[id].retired && (sideOf(id) === 'camp' || sideOf(id) === 'both'));
+    if (!list.length) return;
+    if (best === null || lv < best) { best = lv; ids = list; }
+  });
+  return best === null ? null : { lv: best, ids: ids };
+}
+
+// 工具列尾端的灰階鎖頭提示鈕「🔒 +n 於 LvX」;點了以 toast 說明本級會開放什麼
+function mapeditLockHint(bar) {
+  const nx = mapeditNextLock();
+  if (!nx) return;
+  const names = nx.ids.map(id => OBJECTS[id].name).join('、');
+  const b = document.createElement('button');
+  b.className = 'tg-lock';
+  b.title = '下一批解鎖:' + names;
+  b.innerHTML = '<span class="ic">🔒</span> <span>+' + nx.ids.length + ' 於 Lv' + nx.lv + '</span>';
+  b.style.opacity = '0.5';
+  b.style.filter = 'grayscale(1)';
+  b.addEventListener('click', () => {
+    showToast('Lv' + nx.lv + ' 開放:' + names + '(升級後出現在工具列)');
+  });
+  bar.appendChild(b);
 }
 
 function campGroupToggle(id) {
@@ -230,6 +280,34 @@ applyTemplate = function (id) {
   if (r && t && t.labels && game.mode === 'battleDesign') mapeditLabelsShow(t.labels, r.ox, r.oy);
   return r;
 };
+
+// 戰鬥布置的土地遮罩:放置(含多格建築的整個佔格)與地形 / 高度工具在土地外時,統一提示「超出城市土地範圍」,同一次拖曳只提示一次
+const mapeditApplyToolBase = applyToolAt;
+applyToolAt = function (x, y) {
+  if (game.mode === 'battleDesign' && !pend.moving && mapeditOutsideLand(x, y)) {
+    if (!gs.op || !gs.op.landWarn) {
+      if (gs.op) gs.op.landWarn = true;
+      showToast('超出城市土地範圍');
+    }
+    return false;
+  }
+  return mapeditApplyToolBase(x, y);
+};
+
+// 目前工具套在 (x,y) 時是否會超出土地(只看會受遮罩影響的工具:建築、道路 / 草地 / 湖 / 河、堆高 / 挖低)
+function mapeditOutsideLand(x, y) {
+  const t = ui.tool;
+  if (t === null || t === 'erase' || isCampTool(t) || !progRulesOn()) return false;
+  let w = 1, h = 1;
+  if (OBJECTS[t]) {
+    const f = footprint(t, ui.rot);
+    w = f[0];
+    h = f[1];
+  } else if (!(t in TERRAIN_OF) && t !== 'raise' && t !== 'lower') {
+    return false;
+  }
+  return !inLandRect(x, y, w, h);
+}
 
 function initMapEdit() {
   const top = document.getElementById('topbar');
@@ -635,8 +713,9 @@ function mapeditUpdateCap(cb) {
   if (!el) return;
   el.hidden = !(game.mode === 'battleDesign' && cb);
   if (el.hidden) return;
-  const sum = campCpTotal(cb), max = CAMP_CP[CAMP_LV - 1];
-  el.textContent = '陣地 ' + sum + ' / ' + max;
+  const sum = campCpTotal(cb), max = campCpNow();
+  const why = mapeditProgOn() && sum > max ? '(Lv' + prog.lv + ' 上限 ' + max + '，超出 ' + (sum - max) + ')' : '';
+  el.textContent = '陣地 ' + sum + ' / ' + max + why;
   el.classList.toggle('over', sum > max);
   el.style.bottom = (bottomStackPx() + 4) + 'px';
 }
