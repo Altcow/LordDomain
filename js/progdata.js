@@ -43,7 +43,7 @@ function progUpgradeCost(lv) {
 // 升 L+1 之前必須在首領營拿到 ≥1★ 的 NPC id(結構)
 const PROG_BOSS_REQ = { 5: 'huangjin', 8: 'shankou', 12: 'shuizhai', 14: 'jun', 17: 'shanyue', 20: 'hulao', 22: 'chanyu', 24: 'luoyang' };
 // 新手教學條件(結構;只在 Lv1~4)
-const PROG_FTUE_REQ = { 1: 'houses2', 2: 'npcWin1', 3: 'campSet', 4: 'ghostWin1' };
+const PROG_FTUE_REQ = {};  // 緊急修正:教學旗標沒有任何程式碼設定,會讓新玩家卡在 Lv1;暫時移除升級條件(教學改版後再接回)
 
 // ───────── 3. 戰鬥回報(PLACEHOLDER 公式;結構 = 輸入欄位與分流規則)─────────
 // 分流規則(結構,非數值):他城(PvP / ghost / 朋友)→ 資源 + 經驗;野營(NPC)→ 材料 + 經驗 + 少量資源;珍材料只出自野營 / 首領營。
