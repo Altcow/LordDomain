@@ -1,4 +1,4 @@
-const VERSION = 'v17';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v18';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const PRECACHE = [
@@ -8,6 +8,7 @@ const PRECACHE = [
   './css/style.css',
   './js/data.js',
   './js/units.js',
+  './js/unitinfo.js',
   './js/progdata.js',
   './js/stratagems.js',
   './js/fishdata.js',
@@ -17,6 +18,7 @@ const PRECACHE = [
   './js/tech.js',
   './js/templates.js',
   './js/npc.js',
+  './js/playerpool.js',
   './js/path.js',
   './js/hazards.js',
   './js/td.js',
@@ -27,6 +29,7 @@ const PRECACHE = [
   './js/art_deco2.js',
   './js/art_deco3.js',
   './js/art_deco4.js',
+  './js/art_deco5.js',
   './js/render.js',
   './js/tddraw.js',
   './js/fishdraw.js',
@@ -53,6 +56,7 @@ const PRECACHE = [
   './js/petdraw.js',
   './js/petui.js',
   './js/main.js',
+  './js/orient.js',
   './js/pwa.js',
   './icons/icon-180.png',
   './icons/icon-192.png',

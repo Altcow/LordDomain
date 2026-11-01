@@ -117,7 +117,6 @@ function fuMainUp() { fs.holding = false; }
 
 function fuMainDown() {
   if (fs.phase === 'aim') fishCast(fs.angle);
-  else if (fs.phase === 'sink') fs.abort = true;
   else if (fs.phase === 'fight') { fs.pending += 1; fs.holding = true; }
   else if (fs.phase === 'result' && fs.card && fs.card.hold) fs.dismiss = true;
 }
@@ -172,11 +171,11 @@ function fuMove(e) {
 function fuUp() { fuDrag = null; }
 
 function fuSyncUI() {
-  var ph, lab =fs.phase === 'aim' ? '拋' : fs.phase === 'sink' ? '收' : fs.phase === 'fight' ? '拉' : '…';
+  var ph, lab =fs.phase === 'aim' ? '拋' : fs.phase === 'sink' ? '…' : fs.phase === 'fight' ? '拉' : '…';
   if (lab !== fuLabel && fuMain) { fuLabel = lab; fuMain.textContent = lab; }
   // 停用只換灰階樣式,不移動、不改尺寸、不隱藏
   ph = fs.phase;
-  fuSetDis(fuMain, !(ph === 'aim' || ph === 'sink' || ph === 'fight' || (ph === 'result' && fs.card && fs.card.hold)));
+  fuSetDis(fuMain, !(ph === 'aim' || ph === 'fight' || (ph === 'result' && fs.card && fs.card.hold)));
   fuSetDis(fuAngL, ph !== 'aim');
   fuSetDis(fuAngR, ph !== 'aim');
 }
@@ -608,6 +607,7 @@ function fuOnVis() {
 // 進入釣魚場景。src 為入口名稱(目前只有 'top')。只能從經營模式進入。進入後先開「開始」面板。
 function fishEnter(src) {
   if (fuLayer || typeof game === 'undefined' || game.mode !== 'estate') return false;
+  if (typeof featGuard === 'function' && !featGuard('fishing')) return false;
   fishLoad();
   fishReset();
   fuSel = { mode: fs.mode, limit: fs.limit, skin: fs.save.opt.skin, note: '' };

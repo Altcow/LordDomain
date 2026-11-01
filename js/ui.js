@@ -21,12 +21,34 @@ const TERRAIN_TOOLS = {
   erase: { name: '拆除', icon: '🧹', drag: true }
 };
 
-const ui = { tool: null, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco', buildCat: '常用', objSel: null };
+// 頂層分類(底部列最左的選擇器):瀏覽 / 地形 / 一般建築 / 軍事建築。BUILD_TOP:BUILD_GROUPS 群組 id → 建築頂層(misc = 不在任何群組者);
+// 軍事建築 = 軍事與營地(mil);城牆、城門、階梯、斜坡等雖有防禦用途,留在「城牆與道路」(一般建築),不重複放。
+const BUILD_TOP = { live: 'gen', shop: 'gen', farm: 'gen', ind: 'gen', mil: 'mil', garden: 'gen', rite: 'gen', road: 'gen', misc: 'gen' };
+const TOP_LIST = [
+  { id: 'browse', icon: '✋', name: '瀏覽', short: '瀏覽' },
+  { id: 'terrain', icon: '⛰', name: '地形', short: '地形' },
+  { id: 'gen', icon: '🏠', name: '一般建築', short: '一般' },
+  { id: 'mil', icon: '⚔', name: '軍事建築', short: '軍事' }
+];
+// 地形頂層內容(不含拆除:拆除只在建築頂層出現)
+const TERRAIN_MENU = ['road', 'grass', 'lake', 'river', 'raise', 'lower'];
+// 變體群組:群組第一個為代表(選單只顯示代表),其餘變體在選到代表後以小圖示列選擇;變體仍是合法物件 id(舊存檔與範本照常)
+const VARIANT_GROUPS = {
+  tree: ['tree', 'tree_pine', 'tree_willow', 'tree_sakura', 'tree_maple', 'tree_mulberry', 'tree_peach', 'tree_cypress']
+};
+const UI_TOP_KEY = 'lorddomain.ui.top';
+const UI_CAT_KEY = 'lorddomain.ui.cat';
+const UI_VAR_KEY = 'lorddomain.ui.variant';
+
+const ui = { tool: null, editing: false, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco', buildCat: 'all', top: 'gen', variant: {}, objSel: null };
+let topMenuOpen = false;
 
 // 單一物件草稿(虛影):{ type, x, y, rot, orig, ok, reason }。orig 為「移動已蓋建築」時的原建築物件(仍在 world.objects、由 objHold 暫時排除)。
 // 草稿不占 world.occ / pend.occ、不計價、不進存檔;✓ 才轉為待購項(新建)或放回新位置(移動)。
 let draft = null;
 let draftGrab = null;
+let fxHi = null;   // 輕點高亮 / 落地光圈(render.js drawFx)
+let draftFloatKey = '', lastFloatHtml = '';
 let lastDraftHtml = '', lastSettleHtml = '';
 
 const TERRAIN_OF = { road: T_ROAD, grass: T_GRASS, lake: T_LAKE, river: T_RIVER };
@@ -42,14 +64,15 @@ function initUI(canvas) {
   toastEl.id = 'toast';
   document.body.appendChild(toastEl);
   uiInitMode();
+  uiMenuLoad();
   buildToolbar();
   initSideUI();
   setTool(null);
-  document.getElementById('btnRot').textContent = DIR_ARROWS[ui.rot];
   bindEvents(canvas);
   syncSeasonSelect();
   updateResBar();
   if (typeof initMapEdit === 'function') initMapEdit();
+  if (typeof settingsAddRow === 'function') settingsAddRow('📋 範本…', openTemplatesFromSettings, '畫面');
 }
 
 // 介面模式(lorddomain.ui.mode):normal 正常 / compact 精簡 / photo 拍照。
@@ -108,6 +131,10 @@ function uiApplyMode() {
 function uiSetMode(m) {
   m = uiValidMode(m, '');
   if (!m || m === uiMode) return;
+  if (m === 'photo' && ui.editing) {
+    editGuard(() => uiSetMode('photo'));
+    return;
+  }
   if (m === 'photo') {
     uiPrevMode = uiMode;
     uiStorageSet(UI_PREV_KEY, uiPrevMode);
@@ -124,21 +151,18 @@ function uiSetMode(m) {
 // 右側邊欄與頂列收進來的功能。top:true 的項目在正常模式留在頂列(原按鈕),精簡模式改由邊欄展開。
 // target 為既有按鈕 id,點擊時代為 click(原按鈕與其監聽不變);scope 限定經營(estate)或戰鬥布置(camp)
 const UI_SIDE_ITEMS = [
+  { key: 'edit', icon: '🔨', label: '布置', title: '草稿布置(單一草稿,存到版面格)', scope: 'all', special: 'edit' },
   { key: 'hide', icon: '👁', label: '建築', title: '隱藏建築（整地用，H）', top: true, scope: 'all', target: 'btnHide' },
-  { key: 'rot', icon: '↻', label: '旋轉', title: '旋轉 (R)', top: true, scope: 'all', target: 'btnRot' },
-  { key: 'fish', icon: '🎣', label: '釣魚', title: '釣魚', top: true, scope: 'estate', target: 'btnFish' },
-  { key: 'pet', icon: '🐾', label: '仙獸', title: '仙獸苑', top: true, scope: 'estate', target: 'btnPet' },
+  { key: 'fish', icon: '🎣', label: '釣魚', title: '釣魚', top: true, scope: 'estate', target: 'btnFish', gate: 'fishing' },
+  { key: 'pet', icon: '🐲', label: '仙獸', title: '仙獸苑', top: true, scope: 'estate', target: 'btnPet', gate: 'pet' },
   { key: 'sandbox', icon: '⚔', label: '沙盤', title: '沙盤推演', top: true, scope: 'camp', target: 'btnSandbox' },
-  { key: 'report', icon: '📜', label: '戰報', title: '戰報／錄影', top: true, scope: 'all', target: 'btnReport' },
-  { key: 'shop', icon: '🏪', label: '商店', title: '商店', scope: 'estate', target: 'btnShop' },
-  { key: 'demo', icon: '📋', label: '範本', title: '範本', scope: 'estate', target: 'btnDemo' },
-  { key: 'pano', icon: '🖼', label: '全景', title: '全景預覽', scope: 'estate', target: 'btnPano' },
+  { key: 'shop', icon: '🏪', label: '商店', title: '商店', scope: 'estate', target: 'btnShop', gate: 'shop' },
   { key: 'save', icon: '💾', label: '存檔', title: '布置存檔', scope: 'estate', target: 'btnLayoutSave' },
   { key: 'season', icon: '🌤', label: '季節', title: '季節與時段', scope: 'estate', target: 'seasonBtn' },
   { key: 'help', icon: '❓', label: '說明', title: '戰鬥布置工具說明', scope: 'camp', target: 'btnToolHelp' },
   { key: 'labels', icon: '🏷', label: '標籤', title: '顯示或隱藏範本的區域標籤', scope: 'camp', target: 'btnTplLabels' },
   { key: 'mode', icon: '⊞', label: '精簡', title: '切換正常 / 精簡介面', scope: 'all', special: 'mode' },
-  { key: 'photo', icon: '📷', label: '拍照', title: '拍照模式(隱藏介面,只留還原鈕)', scope: 'all', special: 'photo' }
+  { key: 'photo', icon: '📷', label: '拍照', title: '拍照模式(隱藏介面,只留還原鈕)', scope: 'all', special: 'photo', gate: 'photo' }
 ];
 
 function initSideUI() {
@@ -178,6 +202,11 @@ function initSideUI() {
     if (uiCatOpen && !e.target.closest('#catbar, #catMenuBtn')) {
       uiCatOpen = false;
       buildCatBar();
+      buildVarBar();
+    }
+    if (topMenuOpen && !e.target.closest('#topMenu, #topSel')) {
+      topMenuOpen = false;
+      buildTopMenu();
     }
   });
   const back = document.createElement('button');
@@ -195,6 +224,7 @@ function uiSideAct(key) {
   const it = UI_SIDE_ITEMS.find(x => x.key === key);
   if (!it) return;
   if (it.special === 'mode') uiSetMode(uiMode === 'compact' ? 'normal' : 'compact');
+  else if (it.special === 'edit') editSideAct();
   else if (it.special === 'photo') uiSetMode('photo');
   else {
     const t = document.getElementById(it.target);
@@ -206,6 +236,8 @@ function uiSideAct(key) {
 
 // 邊欄按鈕跟隨原按鈕的隱藏與狀態(定時同步;行為仍由原按鈕負責)
 function syncSideBar() {
+  syncFeatureGate();
+  editSyncUi();
   const side = document.getElementById('sideBar');
   if (!side) return;
   side.querySelectorAll('.side-btn').forEach(b => {
@@ -220,19 +252,80 @@ function syncSideBar() {
     } else if (it.key === 'hide') {
       icon = hide.on ? '🙈' : '👁';
       label = hide.on ? '隱藏中' : '建築';
-    } else if (it.key === 'rot') {
-      icon = DIR_ARROWS[ui.rot];
     }
-    b.hidden = it.target ? (!orig || !!orig.hidden) : false;
-    b.classList.toggle('on', !!(orig && orig.classList.contains('on')));
+    let hid = it.target ? (!orig || !!orig.hidden) : false;
+    if (it.gate && !isUnlocked('feature', it.gate)) hid = true;
+    b.hidden = hid;
+    b.classList.toggle('on', it.special === 'edit' ? !!ui.editing : !!(orig && orig.classList.contains('on')));
     b.querySelector('.ic').textContent = icon;
     b.querySelector('.lb').textContent = label;
   });
 }
 
+// 功能開放閘門(progdata PROG_UNLOCK_FEATURE):未開放的頂列鈕與邊欄項目完全不顯示(data-feat-locked,CSS 隱藏)。
+// 本級剛開放時延後 2.2 秒 toast(避開升級提示),並在入口加解鎖紅點(progSeenMark)
+const FEAT_GATE = [
+  { id: 'fishing', name: '釣魚', btn: 'btnFish' },
+  { id: 'pet', name: '仙獸苑', btn: 'btnPet' },
+  { id: 'shop', name: '商店', btn: 'btnShop' },
+  { id: 'photo', name: '拍照', btn: null }
+];
+const featOpenPrev = {};
+let featSynced = false;
+function featNameOf(id) {
+  const f = FEAT_GATE.find(x => x.id === id);
+  return f ? f.name : id;
+}
+// 入口防呆:未開放回 false 並 toast
+function featGuard(id) {
+  if (isUnlocked('feature', id)) return true;
+  showToast('城市 ' + progUnlockLv('feature', id) + ' 級才開放' + featNameOf(id));
+  return false;
+}
+function featDot(f, b) {
+  const want = typeof progSeenMark === 'function' && !!progSeenMark('feature', f.id);
+  if (want && !b.featDotEl) {
+    const d = document.createElement('i');
+    d.className = 'prog-dot';
+    b.appendChild(d);
+    b.featDotEl = d;
+    b.style.position = 'relative';
+  } else if (!want && b.featDotEl) {
+    b.featDotEl.remove();
+    b.featDotEl = null;
+  }
+  if (!b.featSeenBound) {
+    b.featSeenBound = true;
+    b.addEventListener('click', () => { if (typeof progSeenMark === 'function') progSeenMark('feature', f.id, true); });
+  }
+}
+function syncFeatureGate() {
+  FEAT_GATE.forEach(function (f) {
+    const open = isUnlocked('feature', f.id);
+    if (featSynced && open && featOpenPrev[f.id] === false) {
+      const lv = progUnlockLv('feature', f.id);
+      setTimeout(() => showToast('城市 ' + lv + ' 級開放:' + f.name), 2200);
+    }
+    featOpenPrev[f.id] = open;
+    const b = f.btn ? document.getElementById(f.btn) : null;
+    if (!b) return;
+    if (open) b.removeAttribute('data-feat-locked'); else b.setAttribute('data-feat-locked', '1');
+    featDot(f, b);
+  });
+  featSynced = true;
+}
+
 function bindEvents(canvas) {
   canvas.addEventListener('contextmenu', e => e.preventDefault());
   canvas.addEventListener('pointerdown', onPointerDown);
+  // 資訊面板(商店 / 範本 / 科研 / 說明):點畫布空白處收起,不必找 ✕
+  canvas.addEventListener('pointerdown', () => {
+    if (ui.shopOpen) toggleShop(false);
+    if (ui.tplOpen) toggleTplMenu(false);
+    if (ui.techOpen) toggleTechPanel(false);
+    const th = document.getElementById('toolHelp');
+    if (th && !th.hidden && typeof toggleToolHelp === 'function') toggleToolHelp(false);
+  });
   canvas.addEventListener('pointermove', onPointerMove);
   canvas.addEventListener('pointerup', onPointerEnd);
   canvas.addEventListener('pointercancel', onPointerEnd);
@@ -242,11 +335,29 @@ function bindEvents(canvas) {
     zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.1 : 1 / 1.1);
   }, { passive: false });
 
+  // 布置中按下釣魚 / 仙獸 / 出征 / 沙盤:有未存變更先跳 #leaveDlg 三選一,沒有則靜默離開布置(capture 階段攔截)
+  document.addEventListener('click', e => {
+    if (!ui.editing || editBypass) return;
+    const t = e.target;
+    if (!t || !t.closest) return;
+    const el = t.closest('#btnFish, #btnPet, #btnAttack, #btnSandbox');
+    if (!el) return;
+    if (!editDirty()) {
+      editLeave();
+      return;
+    }
+    if (e.preventDefault) e.preventDefault();
+    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    editLeaveDlgOpen(() => {
+      editBypass = true;
+      try { el.click(); } finally { editBypass = false; }
+    });
+  }, true);
   // 進入釣魚 / 仙獸 / 出征 / 重播前收起城市等級抽屜(progui.js 未載入時略過)
   document.addEventListener('click', e => {
     const t = e.target;
     if (typeof progUiClose !== 'function' || !t || !t.closest) return;
-    if (['#btnFish', '#btnPet', '#btnAttack', '#btnReport'].some(s => t.closest(s))) progUiClose();
+    if (['#btnFish', '#btnPet', '#btnAttack'].some(s => t.closest(s))) progUiClose();
   }, true);
   const shop = document.getElementById('shop');
   shop.addEventListener('pointerdown', e => e.stopPropagation());
@@ -259,38 +370,38 @@ function bindEvents(canvas) {
   const pendBar = document.getElementById('pendBar');
   pendBar.addEventListener('pointerdown', e => e.stopPropagation());
   pendBar.addEventListener('click', onPendClick);
-  const objBar = document.createElement('div');
-  objBar.id = 'objBar';
-  objBar.hidden = true;
-  document.body.appendChild(objBar);
-  objBar.addEventListener('pointerdown', e => e.stopPropagation());
-  objBar.addEventListener('click', onObjClick);
+  const draftFloat = document.createElement('div');
+  draftFloat.id = 'draftFloat';
+  draftFloat.hidden = true;
+  document.body.appendChild(draftFloat);
+  draftFloat.addEventListener('pointerdown', e => e.stopPropagation());
+  draftFloat.addEventListener('click', onFloatClick);
   const draftBar = document.createElement('div');
   draftBar.id = 'draftBar';
   draftBar.hidden = true;
   document.body.appendChild(draftBar);
   draftBar.addEventListener('pointerdown', e => e.stopPropagation());
-  draftBar.addEventListener('click', onDraftClick);
   const settle = document.createElement('div');
   settle.id = 'settleDlg';
   settle.hidden = true;
   document.body.appendChild(settle);
   settle.addEventListener('pointerdown', e => e.stopPropagation());
   settle.addEventListener('click', onSettleClick);
+  const leaveDlg = document.createElement('div');
+  leaveDlg.id = 'leaveDlg';
+  leaveDlg.hidden = true;
+  document.body.appendChild(leaveDlg);
+  leaveDlg.addEventListener('pointerdown', e => e.stopPropagation());
+  leaveDlg.addEventListener('click', onLeaveClick);
   const layoutBtn = document.getElementById('btnLayoutSave');
   if (layoutBtn) layoutBtn.addEventListener('click', () => layoutSave());
 
   document.getElementById('btnShop').addEventListener('click', () => toggleShop());
-  document.getElementById('btnRot').addEventListener('click', () => rotate());
   document.getElementById('btnHide').addEventListener('click', () => toggleHide());
   document.getElementById('selSeason').addEventListener('change', e => {
     setSeason(e.target.value);
     saveWorld();
   });
-  document.getElementById('btnDemo').addEventListener('click', () => toggleTplMenu());
-  document.getElementById('btnPano').addEventListener('click', () => openPanorama());
-  document.getElementById('panoClose').addEventListener('click', () => closePanorama());
-  document.getElementById('panoSave').addEventListener('click', () => savePanorama());
   document.getElementById('btnClear').addEventListener('click', () => {
     if (game.mode === 'battleDesign') {
       mapeditClear();
@@ -306,11 +417,11 @@ function bindEvents(canvas) {
   });
   document.addEventListener('keydown', e => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (pano.open) {
-      if (e.key === 'Escape') closePanorama();
+    if (uiIsPhoto()) return;
+    if (e.key === 'Escape' && editLeaveDlgIsOpen()) {
+      editLeaveDlgClose();
       return;
     }
-    if (uiIsPhoto()) return;
     if (e.key === 'Escape' && settleOpen()) {
       closeSettle();
       return;
@@ -354,38 +465,90 @@ function buildToolbar() {
   bar.innerHTML = '';
   if (game.mode === 'battleDesign' && typeof buildCampToolbar === 'function') {
     buildCampToolbar(bar);
+  } else if (game.mode === 'estate') {
+    buildTopToolbar(bar);
   } else {
-    if (uiIsCompact()) addCatMenuBtn(bar);
     addToolButton(bar, null, '✋', '瀏覽', null);
     for (const id in TERRAIN_TOOLS) addToolButton(bar, id, TERRAIN_TOOLS[id].icon, TERRAIN_TOOLS[id].name, null);
-    const sep = document.createElement('span');
-    sep.className = 'sep';
-    sep.textContent = '｜';
-    bar.appendChild(sep);
-    if (ui.buildCat !== '常用' && !buildCatIds(ui.buildCat).length && !buildLockHint(ui.buildCat)) ui.buildCat = '常用';
-    buildCatIds(ui.buildCat).forEach(id => markNewBuild(addToolButton(bar, id, OBJECTS[id].icon, OBJECTS[id].name, OBJECTS[id]), id));
-    addLockHintButton(bar, buildLockHint(ui.buildCat));
   }
   syncToolActive();
   buildCatBar();
+  buildTopMenu();
+  buildVarBar();
 }
 
-// 分類內容:常用 / 各分類(依 BUILD_GROUPS)/ misc(其他 = 不在任何分類的可見建築)。只回傳 sideOk 為真者
-function buildCatIds(catId) {
-  if (catId === '常用') return BUILD_FAVS.filter(k => OBJECTS[k] && sideOk(k));
-  if (catId === 'misc') {
-    const listed = {};
-    BUILD_GROUPS.forEach(g => g.items.forEach(k => { listed[k] = true; }));
-    return Object.keys(OBJECTS).filter(k => !listed[k] && sideOk(k));
+// ---- 頂層分類 / 小分類 / 變體 ----
+function uiMenuLoad() {
+  const t = uiStorageGet(UI_TOP_KEY);
+  if (TOP_LIST.some(x => x.id === t)) ui.top = t;
+  const c = uiStorageGet(UI_CAT_KEY);
+  if (c) ui.buildCat = c;
+  const raw = uiStorageGet(UI_VAR_KEY);
+  if (raw) {
+    try {
+      const v = JSON.parse(raw);
+      if (v && typeof v === 'object') {
+        for (const k in VARIANT_GROUPS) {
+          if (typeof v[k] === 'string' && VARIANT_GROUPS[k].indexOf(v[k]) >= 0) ui.variant[k] = v[k];
+        }
+      }
+    } catch (e) {
+      console.warn('[ui] variant pref parse failed', e);
+    }
   }
-  const g = BUILD_GROUPS.find(x => x.id === catId);
-  return g ? g.items.filter(k => OBJECTS[k] && sideOk(k)) : [];
+}
+function uiMenuSave() {
+  uiStorageSet(UI_TOP_KEY, ui.top);
+  uiStorageSet(UI_CAT_KEY, ui.buildCat);
+  uiStorageSet(UI_VAR_KEY, JSON.stringify(ui.variant));
+}
+function topIsBuild(top) { return top === 'gen' || top === 'mil'; }
+
+// 變體:代表(群組第一個)與其餘變體;t 為 null 時原樣回傳
+function varLeader(t) {
+  if (t === null || t === undefined) return t;
+  for (const k in VARIANT_GROUPS) {
+    if (VARIANT_GROUPS[k].indexOf(t) >= 0) return k;
+  }
+  return t;
+}
+function varIsFollower(t) { return varLeader(t) !== t; }
+// 目前模式已開放的變體(含代表)
+function varList(leader) {
+  const g = VARIANT_GROUPS[leader];
+  return g ? g.filter(k => hasType(k) && sideOk(k)) : [];
+}
+// 選到代表時實際使用的物件 id(經營模式、且記住的變體仍開放);其餘情況為代表本身
+function varResolve(leader) {
+  if (game.mode !== 'estate' || !VARIANT_GROUPS[leader]) return leader;
+  const want = ui.variant[leader];
+  return want && varList(leader).indexOf(want) >= 0 ? want : leader;
 }
 
-// 經營建築分類的完整清單(不看等級開放,供鎖頭提示計數);經營側判定同 sideOk
-function buildCatAllIds(catId) {
-  const ok = k => hasType(k) && !OBJECTS[k].retired && (sideOf(k) === 'estate' || sideOf(k) === 'both');
-  if (catId === '常用') return BUILD_FAVS.filter(ok);
+// 物件所屬建築頂層(未列入任何群組者視為 misc)
+let topOfMap = null;
+function topOfItem(k) {
+  if (!topOfMap) {
+    topOfMap = {};
+    BUILD_GROUPS.forEach(g => g.items.forEach(i => { topOfMap[i] = BUILD_TOP[g.id] || 'gen'; }));
+  }
+  return topOfMap[k] || BUILD_TOP.misc;
+}
+function topOfGroup(gid) { return BUILD_TOP[gid] || 'gen'; }
+
+// 分類內容(sideOk 為真、變體只留代表):
+// all = 該頂層全部(群組合併、不重複)/ 常用 / 各群組 / misc(不在任何群組者)。top 省略時用目前頂層
+function buildCatIds(catId, top) {
+  const ok = k => !!OBJECTS[k] && sideOk(k) && !varIsFollower(k);
+  const t = top || (topIsBuild(ui.top) ? ui.top : null);
+  if (catId === 'all') {
+    const seen = {}, out = [];
+    const add = k => { if (!seen[k] && ok(k)) { seen[k] = true; out.push(k); } };
+    BUILD_GROUPS.forEach(g => { if (topOfGroup(g.id) === t) g.items.forEach(add); });
+    if (BUILD_TOP.misc === t) buildCatIds('misc').forEach(add);
+    return out;
+  }
+  if (catId === '常用') return BUILD_FAVS.filter(k => ok(k) && (!t || topOfItem(k) === t));
   if (catId === 'misc') {
     const listed = {};
     BUILD_GROUPS.forEach(g => g.items.forEach(k => { listed[k] = true; }));
@@ -395,11 +558,153 @@ function buildCatAllIds(catId) {
   return g ? g.items.filter(ok) : [];
 }
 
+// 經營建築分類的完整清單(不看等級開放,供鎖頭提示計數);經營側判定同 sideOk
+function buildCatAllIds(catId, top) {
+  const ok = k => hasType(k) && !OBJECTS[k].retired && (sideOf(k) === 'estate' || sideOf(k) === 'both') && !varIsFollower(k);
+  const t = top || (topIsBuild(ui.top) ? ui.top : null);
+  if (catId === 'all') {
+    const seen = {}, out = [];
+    const add = k => { if (!seen[k] && ok(k)) { seen[k] = true; out.push(k); } };
+    BUILD_GROUPS.forEach(g => { if (topOfGroup(g.id) === t) g.items.forEach(add); });
+    if (BUILD_TOP.misc === t) buildCatAllIds('misc').forEach(add);
+    return out;
+  }
+  if (catId === '常用') return BUILD_FAVS.filter(k => ok(k) && (!t || topOfItem(k) === t));
+  if (catId === 'misc') {
+    const listed = {};
+    BUILD_GROUPS.forEach(g => g.items.forEach(k => { listed[k] = true; }));
+    return Object.keys(OBJECTS).filter(k => !listed[k] && ok(k));
+  }
+  const g = BUILD_GROUPS.find(x => x.id === catId);
+  return g ? g.items.filter(ok) : [];
+}
+
+// 底部列:[頂層選擇器] + 對應內容(瀏覽=提示、地形=地形工具、建築=小分類內容 + 鎖頭提示 + 拆除固定在最右)
+function buildTopToolbar(bar) {
+  const cur = TOP_LIST.find(t => t.id === ui.top) || TOP_LIST[2];
+  ui.top = cur.id;
+  const sel = document.createElement('button');
+  sel.id = 'topSel';
+  sel.className = 'topsel';
+  sel.setAttribute('data-topsel', cur.id);
+  sel.innerHTML = '<span class="ic">' + cur.icon + '</span><span>' + cur.short + ' ▾</span>';
+  sel.title = '分類：' + cur.name;
+  sel.setAttribute('aria-label', sel.title);
+  sel.addEventListener('click', () => {
+    topMenuOpen = !topMenuOpen;
+    buildTopMenu();
+  });
+  bar.appendChild(sel);
+  if (cur.id === 'browse') {
+    const hint = document.createElement('span');
+    hint.className = 'tophint';
+    hint.textContent = '平移縮放；按住建築可移動';
+    bar.appendChild(hint);
+    return;
+  }
+  if (cur.id === 'terrain') {
+    TERRAIN_MENU.forEach(id => addToolButton(bar, id, TERRAIN_TOOLS[id].icon, TERRAIN_TOOLS[id].name, null));
+    return;
+  }
+  if (uiIsCompact()) addCatMenuBtn(bar);
+  if (!buildCatList(cur.id).some(c => c.id === ui.buildCat)) ui.buildCat = 'all';
+  buildCatIds(ui.buildCat, cur.id).forEach(id => markNewBuild(addToolButton(bar, id, OBJECTS[id].icon, OBJECTS[id].name, OBJECTS[id]), id));
+  addLockHintButton(bar, buildLockHint(ui.buildCat));
+  const er = addToolButton(bar, 'erase', TERRAIN_TOOLS.erase.icon, TERRAIN_TOOLS.erase.name, null);
+  er.classList.add('erasefix');
+}
+
+// 工具 t 是否屬於頂層 top 的內容(切換頂層時,不屬於者取消工具)
+function topOwnsTool(t, top) {
+  if (t === null || t === undefined) return true;
+  if (top === 'terrain') return TERRAIN_MENU.indexOf(t) >= 0;
+  if (topIsBuild(top)) return t === 'erase' || (!!OBJECTS[t] && topOfItem(varLeader(t)) === top);
+  return false;
+}
+function topSet(top) {
+  if (!TOP_LIST.some(x => x.id === top)) return;
+  ui.top = top;
+  ui.buildCat = 'all';
+  topMenuOpen = false;
+  uiCatOpen = false;
+  uiMenuSave();
+  if (!topOwnsTool(ui.tool, top)) setTool(null);
+  buildToolbar();
+  updateResBar();
+}
+
+function buildTopMenu() {
+  let box = document.getElementById('topMenu');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'topMenu';
+    document.body.appendChild(box);
+    box.addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (b && b.getAttribute('data-top')) topSet(b.getAttribute('data-top'));
+    });
+  }
+  box.hidden = !(topMenuOpen && game.mode === 'estate');
+  box.textContent = '';
+  TOP_LIST.forEach(t => {
+    const b = document.createElement('button');
+    b.setAttribute('data-top', t.id);
+    if (t.id === ui.top) b.classList.add('on');
+    b.innerHTML = '<span class="ic">' + t.icon + '</span><span>' + t.name + '</span>';
+    box.appendChild(b);
+  });
+}
+
+// 變體列(樹種):選到有變體的代表工具時,在底部列上方列出已開放變體;選哪個就用哪個放置
+function buildVarBar() {
+  let box = document.getElementById('varbar');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'varbar';
+    document.body.appendChild(box);
+    box.addEventListener('click', onVarClick);
+  }
+  const leader = game.mode === 'estate' && ui.tool !== null ? varLeader(ui.tool) : null;
+  const list = leader && VARIANT_GROUPS[leader] ? varList(leader) : [];
+  const show = list.length > 0 && !uiIsPhoto() && !(uiIsCompact() && uiCatOpen);
+  box.hidden = !show;
+  document.body.classList.toggle('has-varbar', show);
+  box.textContent = '';
+  if (!show) return;
+  const lab = document.createElement('span');
+  lab.className = 'vlabel';
+  lab.textContent = '樹種';
+  box.appendChild(lab);
+  list.forEach(id => {
+    const b = document.createElement('button');
+    b.setAttribute('data-var', id);
+    b.title = OBJECTS[id].name + ' ' + costText(objCost(id));
+    if (id === ui.tool) b.classList.add('on');
+    b.innerHTML = '<span class="ic">' + OBJECTS[id].icon + '</span><span>' + OBJECTS[id].name + '</span>';
+    markNewBuild(b, id);
+    box.appendChild(b);
+  });
+  const tb = document.getElementById('toolbar');
+  const cb = document.getElementById('catbar');
+  box.style.bottom = (tb ? tb.offsetHeight : 0) + (cb && !cb.hidden && !cb.classList.contains('pop') ? cb.offsetHeight : 0) + 'px';
+}
+function onVarClick(e) {
+  const b = e.target.closest('button');
+  const id = b && b.getAttribute('data-var');
+  if (!id || !OBJECTS[id]) return;
+  const leader = varLeader(id);
+  ui.variant[leader] = id;
+  uiMenuSave();
+  if (typeof progSeenMark === 'function') progSeenMark('estate', id, true);
+  setTool(id);
+  showToast(OBJECTS[id].name);
+}
+
 // 鎖頭提示:分類內下一個要開放的等級(lv)與該級建築名稱(names);僅經營模式且有未開放者才有,否則 null
-function buildLockHint(catId) {
+function buildLockHint(catId, top) {
   if (game.mode !== 'estate' || typeof progUnlockLv !== 'function' || typeof prog === 'undefined' || !prog) return null;
   let lv = null, names = [];
-  buildCatAllIds(catId).forEach(k => {
+  buildCatAllIds(catId, top).forEach(k => {
     const L = progUnlockLv('estate', k);
     if (L === null || L <= prog.lv) return;
     if (lv === null || L < lv) { lv = L; names = []; }
@@ -450,15 +755,21 @@ function progFreeBuild() { return typeof PROG_FREE_BUILD !== 'undefined' && !!PR
 function feeText(cost) { return costText(cost) || '免費'; }
 function refundText(r) { return costText(r) || '免費建造,不退款'; }
 
-function buildCatList() {
-  const out = [{ id: '常用', name: '常用', n: buildCatIds('常用').length }];
-  BUILD_GROUPS.forEach(g => out.push({ id: g.id, name: g.name, n: buildCatIds(g.id).length }));
-  const misc = buildCatIds('misc').length;
-  if (misc) out.push({ id: 'misc', name: '其他', n: misc });
+// 小分類 chips(僅建築頂層):全部 N 第一顆、常用(該頂層內有已開放者才列)其後、再來該頂層的各群組與其他
+function buildCatList(top) {
+  top = top || ui.top;
+  const out = [{ id: 'all', name: '全部', n: buildCatIds('all', top).length }];
+  const fav = buildCatIds('常用', top).length;
+  if (fav) out.push({ id: '常用', name: '常用', n: fav });
+  BUILD_GROUPS.forEach(g => { if (topOfGroup(g.id) === top) out.push({ id: g.id, name: g.name, n: buildCatIds(g.id).length }); });
+  if (BUILD_TOP.misc === top) {
+    const misc = buildCatIds('misc').length;
+    if (misc) out.push({ id: 'misc', name: '其他', n: misc });
+  }
   return out;
 }
 
-// 工具列上方的分類標籤列(橫向可捲動);戰鬥布置不顯示
+// 工具列上方的小分類標籤列(橫向可捲動);只在經營模式的建築頂層顯示
 function buildCatBar() {
   let box = document.getElementById('catbar');
   if (!box) {
@@ -467,7 +778,7 @@ function buildCatBar() {
     document.body.appendChild(box);
     box.addEventListener('click', onCatClick);
   }
-  const on = game.mode !== 'battleDesign';
+  const on = game.mode === 'estate' && topIsBuild(ui.top);
   const pop = uiIsCompact();
   box.hidden = !(on && (!pop || uiCatOpen));
   box.classList.toggle('pop', pop);
@@ -476,7 +787,7 @@ function buildCatBar() {
   const tb = document.getElementById('toolbar');
   box.style.bottom = (tb ? tb.offsetHeight : 0) + (pop ? 6 : 0) + 'px';
   box.textContent = '';
-  buildCatList().forEach(c => {
+  buildCatList(ui.top).forEach(c => {
     const b = document.createElement('button');
     b.setAttribute('data-cat', c.id);
     if (c.id === ui.buildCat) b.classList.add('on');
@@ -489,9 +800,9 @@ function addCatMenuBtn(bar) {
   const b = document.createElement('button');
   b.id = 'catMenuBtn';
   b.className = 'catmenu';
-  const cur = buildCatList().find(c => c.id === ui.buildCat);
+  const cur = buildCatList(ui.top).find(c => c.id === ui.buildCat);
   b.textContent = '☰';
-  b.title = '建築分類：' + (cur ? cur.name : '常用');
+  b.title = '建築分類：' + (cur ? cur.name : '全部');
   b.setAttribute('aria-label', b.title);
   b.addEventListener('click', () => {
     uiCatOpen = !uiCatOpen;
@@ -505,12 +816,13 @@ function onCatClick(e) {
   if (!b || !b.getAttribute('data-cat')) return;
   ui.buildCat = b.getAttribute('data-cat');
   uiCatOpen = false;
+  uiMenuSave();
   buildToolbar();
   updateResBar();
 }
 
 function syncToolActive() {
-  const key = ui.tool === null ? '' : ui.tool;
+  const key = ui.tool === null ? '' : varLeader(ui.tool);
   document.querySelectorAll('#toolbar button').forEach(b => {
     b.classList.toggle('active', b.getAttribute('data-tool') === key);
   });
@@ -520,7 +832,8 @@ function syncToolActive() {
 function bottomStackPx() {
   const tb = document.getElementById('toolbar');
   const cb = document.getElementById('catbar');
-  return (tb ? tb.offsetHeight : 0) + (cb && !cb.hidden ? cb.offsetHeight : 0);
+  const vb = document.getElementById('varbar');
+  return (tb ? tb.offsetHeight : 0) + (cb && !cb.hidden ? cb.offsetHeight : 0) + (vb && !vb.hidden ? vb.offsetHeight : 0);
 }
 
 function addToolButton(bar, id, icon, name, def) {
@@ -542,8 +855,9 @@ function addToolButton(bar, id, icon, name, def) {
       CAMP_TOOLS[id].act();
       return;
     }
-    setTool(ui.tool === id ? null : id);
-    const hl = ui.tool === id ? toolHelpLine(id) : '';
+    const on = ui.tool !== null && varLeader(ui.tool) === id;
+    setTool(on ? null : varResolve(id));
+    const hl = ui.tool === null ? '' : toolHelpLine(ui.tool);
     if (hl) showToast(hl);
   });
   bar.appendChild(btn);
@@ -559,7 +873,7 @@ function setTool(id) {
   draftDiscard();
   closeSettle();
   ui.tool = id;
-  const key = id === null ? '' : id;
+  const key = id === null ? '' : varLeader(id);
   document.querySelectorAll('#toolbar button').forEach(b => {
     b.classList.toggle('active', b.getAttribute('data-tool') === key);
   });
@@ -569,13 +883,14 @@ function setTool(id) {
   pend.sel = -1;
   pend.moving = false;
   ui.objSel = null;
+  buildVarBar();
   updatePendBar();
 }
 
 function toolInfo() {
   const t = ui.tool;
   if (t === null) return '瀏覽模式：拖曳移動、滾輪／雙指縮放';
-  if (draft) return '草稿：' + OBJECTS[draft.type].name + '　點地圖或拖曳移動，✓ 確定位置（✕ 或 Esc 取消）';
+  if (draft) return '草稿：' + OBJECTS[draft.type].name + '　拖到想要的位置，按 ✓ 放下（✕ 或 Esc 取消）';
   const hl = toolHelpLine(t);
   if (hl) return hl;
   if (isCampTool(t)) return CAMP_TOOLS[t].name;
@@ -599,13 +914,7 @@ function rotate() {
     updatePendBar();
     return;
   }
-  if (objSelIndex() >= 0) {
-    objRotate();
-    updatePendBar();
-    return;
-  }
   ui.rot = (ui.rot + 1) % 4;
-  document.getElementById('btnRot').textContent = DIR_ARROWS[ui.rot];
   preview.rot = ui.rot;
   if (gs.last) updatePreviewAt(gs.last.x, gs.last.y);
 }
@@ -916,6 +1225,7 @@ function applyOne(x, y) {
       return false;
     }
     pendAdd(t, x, y, ui.rot);
+    if (progFreeBuild() && !commitPending()) pendClear();
     updateResBar();
     return false;
   }
@@ -1028,13 +1338,37 @@ function onPointerDown(e) {
     gs.mode = 'pan';
     return;
   }
+  // 彈回動畫中不接受操作,視同平移
+  if (draft && draft.bounce) {
+    gs.mode = 'pan';
+    return;
+  }
   // 草稿:按住草稿本身拖曳移動;草稿外的點按視同點地圖移動草稿,拖曳則平移地圖
   if (draft && (e.pointerType !== 'mouse' || e.button === 0) && draftHit(x, y)) {
     gs.mode = 'draftdrag';
     gs.primary = e.pointerId;
     const c = screenToCell(x, y);
-    draftGrab = { ox: c.x - draft.x, oy: c.y - draft.y };
+    draftGrab = { ox: c.x - draft.x, oy: c.y - draft.y, sx: draft.x, sy: draft.y, srot: draft.rot, edit: !!draft.edit, moved: false };
     return;
+  }
+  // 編輯狀態下點虛影以外的空白處:放開時完成(合法)或彈回(不合法);拖曳則平移地圖
+  if (draft && draft.orig && draft.edit) {
+    gs.mode = 'editout';
+    gs.primary = e.pointerId;
+    return;
+  }
+  // 已蓋建築:按住 HOLD_MS(位移 < HOLD_MOVE_PX)拿起;位移超過門檻改為平移
+  if (!draft && holdEligible() && (e.pointerType !== 'mouse' || e.button === 0)) {
+    const hc = screenToCell(x, y);
+    const hn = hc ? world.occ[idx(hc.x, hc.y)] : 0;
+    if (hn && world.objects[hn - 1]) {
+      gs.mode = 'holdwait';
+      gs.primary = e.pointerId;
+      gs.holdObj = world.objects[hn - 1];
+      clearTimeout(gs.timer);
+      gs.timer = setTimeout(holdFire, HOLD_MS);
+      return;
+    }
   }
   if (e.pointerType === 'mouse') {
     if (e.button === 0 && toolActive() && !draft) {
@@ -1081,8 +1415,21 @@ function onPointerMove(e) {
     else panBy(dx, dy);
   } else if (gs.mode === 'pan') {
     panBy(dx, dy);
+  } else if (gs.mode === 'holdwait' || gs.mode === 'editout') {
+    if (Math.hypot(p.x - p.x0, p.y - p.y0) >= HOLD_MOVE_PX) {
+      clearTimeout(gs.timer);
+      gs.holdObj = null;
+      gs.mode = 'pan';
+      panBy(p.x - p.x0, p.y - p.y0);
+      p.x0 = p.x;
+      p.y0 = p.y;
+    }
   } else if (gs.mode === 'draftdrag') {
-    draftDragTo(p.x, p.y);
+    if (draftGrab && !draftGrab.moved && Math.hypot(p.x - p.x0, p.y - p.y0) >= HOLD_MOVE_PX) {
+      draftGrab.moved = true;
+      draftFloatKey = '';
+    }
+    if (draftGrab && (draftGrab.moved || !(draft && draft.orig))) draftDragTo(p.x, p.y);
   } else if (gs.mode === 'pending') {
     if (Math.hypot(p.x - p.x0, p.y - p.y0) > 8) {
       clearTimeout(gs.timer);
@@ -1102,8 +1449,22 @@ function onPointerEnd(e) {
   audioUnlock();
   const p = gs.ptrs.get(e.pointerId);
   if (!p) return;
-  if (e.type === 'pointerup' && gs.mode === 'pan' && gs.ptrs.size === 1 && ui.tool === null && !hide.on &&
+  const up = e.type === 'pointerup';
+  if (up && (gs.mode === 'pan' || gs.mode === 'holdwait') && gs.ptrs.size === 1 && ui.tool === null && !hide.on &&
       Math.hypot(p.x - p.x0, p.y - p.y0) < 8 && performance.now() - p.t0 < 400 && !uiIsPhoto()) tapObjectAt(p.x, p.y);
+  if (e.pointerId === gs.primary) {
+    if (gs.mode === 'holdwait') {
+      clearTimeout(gs.timer);
+      gs.holdObj = null;
+    } else if (gs.mode === 'editout') {
+      if (up && gs.ptrs.size === 1 && Math.hypot(p.x - p.x0, p.y - p.y0) < HOLD_MOVE_PX) {
+        gs.mode = null;
+        draftFinish();
+      }
+    } else if (gs.mode === 'draftdrag') {
+      draftRelease(up, Math.hypot(p.x - p.x0, p.y - p.y0) < HOLD_MOVE_PX);
+    }
+  }
   gs.ptrs.delete(e.pointerId);
   if (gs.ptrs.size === 0) tdDropUp();
   if (e.type === 'pointerup' && gs.mode === 'pending' && e.pointerId === gs.primary) {
@@ -1120,32 +1481,24 @@ function onPointerEnd(e) {
     endOp();
     gs.mode = null;
     gs.pinch = null;
+    gs.holdObj = null;
     draftGrab = null;
   }
 }
 
-// 瀏覽模式點一下建築（目前只有科研院有反應）
+// 瀏覽模式輕點建築:科研院開科研面板;其他只做輕微高亮(不開任何選單)。居民點擊(lifeTap)優先
 function tapObjectAt(sx, sy) {
   if (typeof lifeTap === 'function' && lifeTap(sx, sy)) return;
   const c = screenToCell(sx, sy);
   if (!c) return;
   const n = world.occ[idx(c.x, c.y)];
-  if (!n) {
-    if (ui.objSel) {
-      ui.objSel = null;
-      updatePendBar();
-    }
-    return;
-  }
+  if (!n) return;
   const o = world.objects[n - 1];
   if (o.type === LAB_TYPE) {
     toggleTechPanel(true);
     return;
   }
-  if (objBarEligible()) {
-    ui.objSel = o;
-    updatePendBar();
-  }
+  fxMark(o, 'tap');
 }
 
 function onShopClick(e) {
@@ -1262,7 +1615,7 @@ function buildTplMenu() {
   const menu = document.getElementById('tplMenu');
   menu.textContent = '';
   const head = document.createElement('b');
-  head.textContent = '範本';
+  head.textContent = ui.editing ? '範本(套用到草稿)' : '範本(載入到草稿)';
   menu.appendChild(head);
   const close = document.createElement('button');
   close.className = 'close';
@@ -1272,9 +1625,9 @@ function buildTplMenu() {
   const restore = document.createElement('button');
   restore.className = 'tpl';
   restore.setAttribute('data-default', '');
-  restore.textContent = '恢復預設';
+  restore.textContent = ui.editing ? '預設範本' : '載入預設到草稿';
   const rs = document.createElement('small');
-  rs.textContent = dflt ? '套用本布置的預設範本：' + dflt.name : '此布置沒有預設範本';
+  rs.textContent = dflt ? (ui.editing ? '套用到草稿:' : '以草稿開啟:') + dflt.name : '此布置沒有預設範本';
   restore.appendChild(rs);
   restore.disabled = !dflt;
   menu.appendChild(restore);
@@ -1310,7 +1663,14 @@ function onTplClick(e) {
   const isDef = b.hasAttribute('data-default');
   const t = isDef ? defaultTemplate(world.board) : TEMPLATES.find(tp => tp.id === b.getAttribute('data-tpl'));
   if (!t) return;
-  if (!confirm('套用範本「' + t.name + '」？目前的布置會被覆蓋,資源與科技不會改變。' + pendWarnText())) return;
+  if (!ui.editing) {
+    // 草稿外:範本一律載入到草稿,不動使用中的版面
+    toggleTplMenu(false);
+    if (typeof draftStartOpen === 'function') draftStartOpen({ type: t.kind || 'estate', tpl: t.id });
+    else showToast('草稿布置尚未載入');
+    return;
+  }
+  if (!confirm('套用範本「' + t.name + '」到草稿？草稿目前的內容會被覆蓋,使用中的版面不受影響。' + pendWarnText())) return;
   draftDiscard();
   pendClear();
   hideReset();
@@ -1540,10 +1900,9 @@ function updatePendBar() {
   updateDraftBar();
   document.body.classList.toggle('pending', n > 0);
   document.body.classList.toggle('psel', n > 0 && pend.sel >= 0);
-  if (!n || draft) {
+  if (!n || draft || progFreeBuild()) {
     bar.hidden = true;
     lastPendHtml = '';
-    updateObjBar();
     return;
   }
   const total = pendTotal();
@@ -1568,26 +1927,27 @@ function updatePendBar() {
   }
   bar.hidden = false;
   bar.style.bottom = (bottomStackPx() + 6) + 'px';
-  updateObjBar();
 }
 
-// 經營布置瀏覽模式點選已蓋建築:底部操作列(旋轉 / 移動 / 拆除 / 完成)。位於待購條上方(若有)
-function objBarEligible() {
-  return game.mode === 'estate' && ui.tool === null && !hide.on && !game.backup;
-}
-function objSelIndex() {
-  return ui.objSel ? world.objects.indexOf(ui.objSel) : -1;
+// ── 已蓋建築:按住拿起 → 拖曳 → 放開(合法=落地、不合法=彈回原位 + toast);不拖曳放開 = 編輯狀態 ──
+// 草稿虛影(新建與移動共用)旁的浮動圖示 #draftFloat:新建 ↻ ✓ ✕;編輯已蓋建築 ↻ 🗑 ✓ ✕
+const HOLD_MS = 450, HOLD_MOVE_PX = 10, BOUNCE_MS = 250;
+const FLOAT_CELL = 42;   // 每顆圖示鈕 42px(含透明 padding 的點擊範圍),2×2 排列
+function holdEligible() {
+  return (game.mode === 'estate' || game.mode === 'battleDesign') && ui.tool === null && !hide.on && !uiIsPhoto() &&
+    (!game.backup || !!game.backup.draft);
 }
 function objFailReason(n, x, y, rot) {
   const o = world.objects[n], d = OBJECTS[o.type];
   const [w, h] = footprint(o.type, rot);
-  if (x < 0 || y < 0 || x + w > MAP_W || y + h > MAP_H) return '超出邊界';
+  if (x < 0 || y < 0 || x + w > MAP_W || y + h > MAP_H) return '超出土地範圍';
+  if (!landFits(x, y, w, h)) return '超出土地範圍';
   const h0 = world.height[idx(x, y)];
   for (let yy = y; yy < y + h; yy++) {
     for (let xx = x; xx < x + w; xx++) {
       const i = idx(xx, yy);
       if (pend.occ[i]) return '與待購建築重疊';
-      if (world.occ[i] && world.occ[i] !== n + 1) return '已有物件';
+      if (world.occ[i] && world.occ[i] !== n + 1) return '此處已有建築';
       if (world.height[i] !== h0) return '高度不一致';
       if (d.on.indexOf(world.terrain[i]) < 0) return '地形不符';
     }
@@ -1600,23 +1960,28 @@ function objPost() {
   updateResBar();
   mapeditRefresh();
 }
-function objRotate() {
-  const n = objSelIndex();
-  if (n < 0) return false;
-  const o = world.objects[n];
-  for (let k = 1; k <= 3; k++) {
-    const r = (o.rot + k) % 4;
-    if (objFitAt(n, o.x, o.y, r)) {
-      o.rot = r;
-      o.facing = r;
-      objPost();
-      return true;
-    }
-  }
-  showToast('此處空間不足，無法旋轉');
-  return false;
+// 輕點高亮 / 落地光圈(render.js drawFx 繪製):kind = 'tap'(0.6 秒)或 'land'(0.35 秒)
+function fxMark(o, kind) {
+  const fp = footprint(o.type, o.rot);
+  fxHi = { x: o.x, y: o.y, w: fp[0], h: fp[1], t0: performance.now(), dur: kind === 'land' ? 350 : 600, kind: kind };
 }
-// ── 草稿(虛影):新建與移動已蓋建築共用。✓ 才生效,✕ 丟棄(移動者回原位) ──
+// 按住滿 HOLD_MS:拿起(原位置暫時移除,以半透明虛影跟手指)
+function holdFire() {
+  const p = gs.ptrs.get(gs.primary);
+  if (gs.mode !== 'holdwait' || !p || gs.ptrs.size !== 1) return;
+  const o = gs.holdObj;
+  gs.holdObj = null;
+  if (!o || world.objects.indexOf(o) < 0 || !holdEligible() || draft) {
+    gs.mode = 'pan';
+    return;
+  }
+  draftFromObj(o);
+  const c = screenToCell(p.x, p.y) || { x: o.x, y: o.y };
+  draftGrab = { ox: c.x - draft.x, oy: c.y - draft.y, sx: draft.x, sy: draft.y, srot: draft.rot, edit: false, moved: false };
+  gs.mode = 'draftdrag';
+  if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(15);
+}
+// ── 草稿(虛影):新建與移動已蓋建築共用 ──
 // 草稿是否可放:新建 = 待購規則(含待購數量上限);移動 = 已蓋建築規則(排除自己的舊佔格,不計數量上限)
 function draftCheck(d) {
   if (d.orig) {
@@ -1646,7 +2011,7 @@ function draftFromObj(o) {
   ui.objSel = null;
   objHold = o;
   rebuildOcc();
-  draft = { type: o.type, x: o.x, y: o.y, rot: o.rot, orig: o, ok: false, reason: '' };
+  draft = { type: o.type, x: o.x, y: o.y, rot: o.rot, orig: o, ok: false, reason: '', edit: false, bounce: null };
   preview.visible = false;
   draftSync();
 }
@@ -1672,7 +2037,7 @@ function draftHit(sx, sy) {
   return c.x >= draft.x && c.x < draft.x + fp[0] && c.y >= draft.y && c.y < draft.y + fp[1];
 }
 function draftRotate() {
-  if (!draft) return false;
+  if (!draft || draft.bounce) return false;
   for (let k = 1; k <= 3; k++) {
     const r = (draft.rot + k) % 4;
     const probe = { type: draft.type, x: draft.x, y: draft.y, rot: r, orig: draft.orig };
@@ -1680,7 +2045,6 @@ function draftRotate() {
     draft.rot = r;
     if (!draft.orig) {
       ui.rot = r;
-      document.getElementById('btnRot').textContent = DIR_ARROWS[ui.rot];
     }
     draftSync();
     return true;
@@ -1702,11 +2066,10 @@ function draftDiscard() {
   return orig;
 }
 function draftCancel() {
-  const orig = draftDiscard();
-  if (orig && world.objects.indexOf(orig) >= 0) ui.objSel = orig;
+  draftDiscard();
   updatePendBar();
 }
-// ✓ 確定位置:新建 → 轉為待購項(工具維持選取);移動 → 放回新位置並存檔
+// ✓ 確定位置:新建 → 免費建造時直接成為正式建築並存檔,否則轉為待購項(工具維持選取);移動 → 放回新位置並存檔(位置與方向都沒變則什麼都不存)
 function draftConfirm() {
   if (!draft) return;
   const why = draftCheck(draft);
@@ -1718,120 +2081,234 @@ function draftConfirm() {
   preview.visible = false;
   if (d.orig) {
     const o = d.orig;
+    if (d.x === o.x && d.y === o.y && d.rot === o.rot) {
+      draftDiscard();
+      fxMark(o, 'tap');
+      return;
+    }
     draft = null;
     objHold = null;
     o.x = d.x;
     o.y = d.y;
     o.rot = d.rot;
     o.facing = d.rot;
-    ui.objSel = o;
+    fxMark(o, 'land');
+    if (typeof auPlay === 'function') auPlay('place');
     objPost();
     showToast('已移動 ' + OBJECTS[o.type].name);
   } else {
     draft = null;
     pendAdd(d.type, d.x, d.y, d.rot);
-    showToast('已加入待購：' + OBJECTS[d.type].name + '（工具仍選取，可繼續放置）');
+    if (progFreeBuild()) {
+      if (!commitPending()) pendClear();
+    } else {
+      showToast('已加入待購：' + OBJECTS[d.type].name + '（工具仍選取，可繼續放置）');
+    }
   }
   updateResBar();
 }
-function onDraftClick(e) {
+// 完成(浮動 ✓ / 點空白處):合法 → 落地;不合法(已蓋建築)→ 彈回原位並離開編輯狀態;新建不合法 → 提示原因
+function draftFinish() {
+  if (!draft || draft.bounce) return;
+  if (draft.orig && !draft.ok) {
+    const o = draft.orig;
+    draftBounce({ sx: o.x, sy: o.y, srot: o.rot, edit: false });
+    return;
+  }
+  draftConfirm();
+}
+// 彈回:虛影以 BOUNCE_MS 動畫回到 g.sx/sy/srot;原因以 toast 顯示;g.edit 為真則回到編輯狀態,否則結束草稿(建築回原位)
+function draftBounce(g) {
+  const d = draft;
+  if (!d || d.bounce) return;
+  if (d.reason) showToast(d.reason);
+  d.bounce = { fx: d.x, fy: d.y, t0: performance.now(), dur: BOUNCE_MS };
+  d.x = g.sx;
+  d.y = g.sy;
+  d.rot = g.srot;
+  d.edit = false;
+  draftSync();
+  setTimeout(() => {
+    if (draft !== d) return;
+    d.bounce = null;
+    if (g.edit) d.edit = true;
+    else draftDiscard();
+    draftFloatKey = '';
+    updatePendBar();
+  }, BOUNCE_MS);
+}
+// 按住虛影的手指放開:新建草稿不動作;已蓋建築 → 沒拖曳 = 編輯狀態;拖曳 → 合法落地 / 不合法彈回
+function draftRelease(up, quiet) {
+  const g = draftGrab;
+  draftGrab = null;
+  draftFloatKey = '';
+  if (!draft || !g || !draft.orig) {
+    updatePendBar();
+    return;
+  }
+  if (!up) {
+    draft.x = g.sx;
+    draft.y = g.sy;
+    draft.rot = g.srot;
+    if (g.edit) {
+      draftSync();
+      draft.edit = true;
+    } else draftDiscard();
+    updatePendBar();
+    return;
+  }
+  const same = draft.x === g.sx && draft.y === g.sy && draft.rot === g.srot;
+  if ((quiet && !g.moved) || same) {
+    draft.edit = true;
+    updatePendBar();
+    return;
+  }
+  if (draft.ok) draftConfirm();
+  else draftBounce(g);
+}
+function draftDemolish() {
+  if (!draft || !draft.orig || draft.bounce) return;
+  const o = draft.orig, name = OBJECTS[o.type].name;
+  const refund = refundOf(o.type);
+  const labBusy = o.type === LAB_TYPE && world.tech.cur;
+  const msg = (costText(refund) ? '退還 ' + costText(refund) + '（依拆除規則，約為造價的一半）。' : '免費建造，不退款。') +
+    (labBusy ? '科研院研發將暫停，重建後繼續。' : '');
+  const doIt = function () {
+    if (draft && draft.orig === o) draftDiscard();
+    if (world.objects.indexOf(o) < 0) return;
+    removeObjectAt(o.x, o.y, true);
+    preview.visible = false;
+    if (typeof auPlay === 'function') auPlay('remove');
+    showToast('已拆除 ' + name + '，退還 ' + refundText(refund));
+    objPost();
+  };
+  if (typeof ldConfirm !== 'function') {
+    if (confirm('是否拆除「' + name + '」？' + msg)) doIt();
+    return;
+  }
+  ldConfirm('是否拆除「' + name + '」？', msg, '是，拆除', doIt);
+  const dlg = document.getElementById('ldConfirm');
+  const nb = dlg && dlg.querySelector('button[data-ld="no"]');
+  if (nb) {
+    nb.textContent = '否';
+    if (nb.focus) nb.focus();
+  }
+}
+function onFloatClick(e) {
   const b = e.target.closest('button');
-  if (!b) return;
+  if (!b || !draft) return;
   audioUnlock();
-  const act = b.getAttribute('data-dact');
-  if (act === 'ok') draftConfirm();
-  else if (act === 'rot') draftRotate();
+  const act = b.getAttribute('data-fact');
+  if (act === 'rot') draftRotate();
+  else if (act === 'del') draftDemolish();
+  else if (act === 'ok') draftFinish();
   else if (act === 'cancel') draftCancel();
   updatePendBar();
 }
+// 底部草稿列:只顯示建築名、費用(免費)或失敗原因 / 提示,不放按鈕(按鈕在虛影旁的 #draftFloat)
 function updateDraftBar() {
   const bar = document.getElementById('draftBar');
   if (!bar) return;
   if (!draft) {
     bar.hidden = true;
     lastDraftHtml = '';
+    draftFloatSync();
     return;
   }
   const d = OBJECTS[draft.type];
   const mv = !!draft.orig;
-  const msg = draft.reason ? '✕ ' + draft.reason : (mv ? '可移動：點地圖或拖曳，✓ 確定位置' : '可放置：點地圖或拖曳移動');
+  const hint = mv ? (draft.edit ? '編輯中：↻ 旋轉　🗑 拆除　✓ 完成　✕ 取消' : '拖到想要的位置，放開即放下') : '拖到想要的位置，按 ✓ 放下';
+  const msg = draft.reason ? '✕ ' + draft.reason : hint;
   const cost = mv ? '' : '　' + (costText(objCost(draft.type)) || '免費');
   const html = '<div class="drow top"><span class="dname">' + d.icon + ' ' + d.name + (mv ? '（移動）' : cost) + '</span>' +
-    '<small class="dmsg' + (draft.reason ? ' bad' : '') + '">' + msg + '</small></div>' +
-    '<div class="drow btns"><button data-dact="ok" class="pok"' + (draft.reason ? ' disabled' : '') + '>✓ 確定位置</button>' +
-    '<button data-dact="rot">↻ 旋轉</button>' +
-    '<button data-dact="cancel" class="pno">✕ 取消</button></div>';
+    '<small class="dmsg' + (draft.reason ? ' bad' : '') + '">' + msg + '</small></div>';
   if (html !== lastDraftHtml) {
     lastDraftHtml = html;
     bar.innerHTML = html;
   }
   bar.hidden = false;
   bar.style.bottom = (bottomStackPx() + 8) + 'px';
+  draftFloatKey = '';
+  draftFloatSync();
 }
-function objDemolish() {
-  const n = objSelIndex();
-  if (n < 0) return;
-  const o = world.objects[n];
-  const name = OBJECTS[o.type].name;
-  const refund = refundOf(o.type);
-  const labBusy = o.type === LAB_TYPE && world.tech.cur;
-  if (!confirm('拆除「' + name + '」？' + (costText(refund) ? '退還 ' + costText(refund) + '（依拆除規則，約為造價的一半）。' : '免費建造,不退款。') +
-    (labBusy ? '\n科研院研發將暫停，重建後繼續。' : ''))) return;
-  removeObjectAt(o.x, o.y, true);
-  ui.objSel = null;
-  preview.visible = false;
-  if (typeof auPlay === 'function') auPlay('remove');
-  showToast('已拆除 ' + name + '，退還 ' + refundText(refund));
-  objPost();
+// ── 浮動圖示 #draftFloat:貼著虛影螢幕包圍盒的右上角,靠邊自動換邊,避開頂列 / 底列 / 側欄 / 左側欄 ──
+function draftFloatVisible() {
+  if (!draft || draft.bounce) return false;
+  if (draft.orig && !draft.edit) return false;
+  if (uiIsPhoto() || (typeof pano !== 'undefined' && pano && pano.open)) return false;
+  if (gs.mode === 'draftdrag' && draftGrab && draftGrab.moved) return false;
+  return true;
 }
-function updateObjBar() {
-  const bar = document.getElementById('objBar');
-  if (!bar) return;
-  let n = objSelIndex();
-  if (ui.objSel && (n < 0 || !objBarEligible() || draft)) {
-    ui.objSel = null;
-    n = -1;
-  }
-  if (n < 0) {
-    bar.hidden = true;
-    lastObjHtml = '';
+function elRect(id) {
+  const e = document.getElementById(id);
+  if (!e || e.hidden || !e.getBoundingClientRect) return null;
+  const r = e.getBoundingClientRect();
+  return r && (r.width > 0 || r.height > 0) ? { l: r.left, t: r.top, r: r.right, b: r.bottom } : null;
+}
+function rectHit(a, b) { return a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t; }
+// 草稿虛影的螢幕包圍盒(含建築本體高度的粗估)
+function draftBox() {
+  const d = draft, fp = footprint(d.type, d.rot);
+  const bh = world.height[idx(d.x, d.y)] * HL;
+  let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+  [[d.x, d.y], [d.x + fp[0], d.y], [d.x + fp[0], d.y + fp[1]], [d.x, d.y + fp[1]]].forEach(c => {
+    const g = gpt(c[0], c[1], bh);
+    const s = worldToScreen(g[0], g[1]);
+    l = Math.min(l, s[0]); r = Math.max(r, s[0]);
+    t = Math.min(t, s[1]); b = Math.max(b, s[1]);
+  });
+  return { l: l, t: t - 40 * view.zoom, r: r, b: b };
+}
+function draftFloatPlace(el) {
+  const vw = viewport.w || window.innerWidth || 0, vh = viewport.h || window.innerHeight || 0;
+  const W = FLOAT_CELL * 2, H = FLOAT_CELL * 2, gap = 4;
+  const bb = draftBox();
+  const key = [Math.round(bb.l), Math.round(bb.t), Math.round(bb.r), Math.round(bb.b), vw, vh].join(',');
+  if (key === draftFloatKey) return;
+  draftFloatKey = key;
+  const obs = [];
+  ['topbar', 'toolbar', 'catbar', 'varbar', 'pendBar', 'draftBar', 'editBar', 'slotPick', 'sideBar', 'modeBtn', 'btnAttack', 'progFtue']
+    .forEach(id => { const r = elRect(id); if (r) obs.push(r); });
+  const tb = elRect('topbar');
+  const minT = tb ? tb.b + 2 : 4;
+  const clampPos = (l, t) => [Math.max(4, Math.min(vw - W - 4, l)), Math.max(minT, Math.min(vh - H - 4, t))];
+  const mid = (bb.t + bb.b) / 2 - H / 2;
+  const cands = [
+    [bb.r + gap, bb.t], [bb.r + gap, mid], [bb.r + gap, bb.b - H],
+    [bb.l - W - gap, bb.t], [bb.l - W - gap, mid], [bb.l - W - gap, bb.b - H],
+    [bb.r - W, bb.t - H - gap], [bb.l, bb.t - H - gap], [bb.r - W, bb.b + gap], [bb.l, bb.b + gap]
+  ];
+  let best = null, bestScore = Infinity;
+  cands.forEach((c, i) => {
+    const p = clampPos(c[0], c[1]);
+    const box = { l: p[0], t: p[1], r: p[0] + W, b: p[1] + H };
+    const score = obs.filter(o => rectHit(box, o)).length * 100 + (rectHit(box, bb) ? 20 : 0) + i;
+    if (score < bestScore) { bestScore = score; best = p; }
+  });
+  el.style.left = Math.round(best[0]) + 'px';
+  el.style.top = Math.round(best[1]) + 'px';
+}
+// 每個 draw 後呼叫(render.js)與草稿狀態改變時呼叫;位置沒變就不重算
+function draftFloatSync() {
+  const el = document.getElementById('draftFloat');
+  if (!el) return;
+  if (!draftFloatVisible()) {
+    if (!el.hidden) el.hidden = true;
+    draftFloatKey = '';
     return;
   }
-  const o = world.objects[n], d = OBJECTS[o.type];
-  const html = '<div class="prow"><span class="pname">' + d.icon + ' ' + d.name + '</span>' +
-    '<button data-oact="rot">↻ 旋轉</button>' +
-    '<button data-oact="move">✥ 移動</button>' +
-    '<button data-oact="del" class="del">🗑 拆除</button>' +
-    '<button data-oact="done">完成</button></div>';
-  if (html !== lastObjHtml) {
-    lastObjHtml = html;
-    bar.innerHTML = html;
+  const edit = !!(draft.orig && draft.edit);
+  const html = '<button data-fact="rot" title="旋轉"><i>↻</i></button>' +
+    (edit ? '<button data-fact="del" title="拆除"><i>🗑</i></button>' : '') +
+    '<button data-fact="ok" class="pok' + (draft.ok ? '' : ' dim') + '" title="完成"><i>✓</i></button>' +
+    '<button data-fact="cancel" class="pno" title="取消"><i>✕</i></button>';
+  if (html !== lastFloatHtml) {
+    lastFloatHtml = html;
+    el.innerHTML = html;
+    draftFloatKey = '';
   }
-  bar.hidden = false;
-  const pb = document.getElementById('pendBar');
-  const up = pb && !pb.hidden ? pb.offsetHeight + 6 : 0;
-  bar.style.bottom = 'calc(' + (bottomStackPx() + 6 + up) + 'px + env(safe-area-inset-bottom))';
-}
-function onObjClick(e) {
-  const b = e.target.closest('button');
-  if (!b) return;
-  audioUnlock();
-  const n = objSelIndex();
-  if (n < 0) return;
-  const act = b.getAttribute('data-oact');
-  const o = world.objects[n];
-  if (act === 'rot') objRotate();
-  else if (act === 'move') {
-    draftFromObj(o);
-    updateResBar();
-    return;
-  }
-  else if (act === 'del') objDemolish();
-  else if (act === 'done') {
-    ui.objSel = null;
-  }
-  preview.visible = false;
-  updateResBar();
+  el.hidden = false;
+  draftFloatPlace(el);
 }
 
 function onPendClick(e) {
@@ -1885,24 +2362,255 @@ function commitPending() {
   return !!r.ok;
 }
 
-// 💾 布置存檔:草稿中不存;待購總費用為 0(或無待購)直接存檔;有費用則開結算對話框
-function layoutSave() {
+// ── 布置草稿骨架(A 批:停用,供 B 批草稿布置重新接線;ui.editing 目前恆為 false,以下函式不會被觸發) ──
+// 經營模式(PLAN_LAYOUT §1)進遊戲就能蓋 / 拆 / 移動 / 整地,不再有「預設瀏覽」。
+// 進入時記下棋盤快照;存檔並離開 = layoutSave 後離開;取消布置 = 還原快照(res / lastTs / tech / deals… 沿用目前值,不動 map.js)。
+// 離開的所有路徑若有未存變更,先跳 #leaveDlg 三選一(存檔 / 放棄 / 繼續布置)。
+let editSnap = null;
+let editBypass = false;
+let editAfterSettle = null;
+let editLeaveCont = null;
+let editUnsaved = false;   // 繼續上次草稿:基準未知,視為有未存變更,直到存到某個格子
+
+
+function editSnapshot() {
+  return {
+    terrain: world.terrain.slice(), height: world.height.slice(), flow: world.flow.slice(),
+    block: world.block.slice(), zone: world.zone.slice(),
+    objects: JSON.stringify(world.objects.map(o => objSave(o, true))),
+    marks: JSON.stringify(world.marks)
+  };
+}
+function editSameArr(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+function editBoardChanged() {
+  if (!editSnap) return false;
+  if (editUnsaved) return true;
+  if (!editSameArr(world.terrain, editSnap.terrain) || !editSameArr(world.height, editSnap.height) || !editSameArr(world.flow, editSnap.flow)) return true;
+  if (editSnap.block && (!editSameArr(world.block, editSnap.block) || !editSameArr(world.zone, editSnap.zone))) return true;
+  if (editSnap.marks !== undefined && JSON.stringify(world.marks) !== editSnap.marks) return true;
+  return JSON.stringify(world.objects.map(o => objSave(o, true))) !== editSnap.objects;
+}
+// 未存變更:待購項、草稿、棋盤與進入布置時的快照不同
+function editDirty() {
+  if (!ui.editing) return false;
+  return !!draft || pend.list.length > 0 || editBoardChanged();
+}
+function editDirtyText() {
+  const parts = [];
+  if (pend.list.length) parts.push('待購 ' + pend.list.length + ' 件');
+  if (draft) parts.push('草稿尚未確定');
+  if (editUnsaved) parts.push('草稿尚未存到版面格');
+  else if (editBoardChanged()) parts.push('地形或建築已修改');
+  return parts.join('、');
+}
+// 草稿是否值得暫存(map.js draftPersist 用):有未存變更才存,沒有變更就清掉暫存
+function editWorthKeeping() {
+  return ui.editing && editBoardChanged();
+}
+
+// 草稿棋盤已載入 world(game.backup.draft 已建立,見 mapedit.js draftBegin)後呼叫;unsaved:繼續上次草稿
+function editEnter(unsaved) {
+  if (ui.editing || !(game.backup && game.backup.draft)) return false;
+  editSnap = editSnapshot();
+  editUnsaved = !!unsaved;
+  ui.editing = true;
+  editAfterSettle = null;
+  editSyncUi();
+  buildToolbar();
+  setTool(null);
+  updateResBar();
+  syncSideBar();
+  showToast('草稿布置(' + (game.backup.draft.type === 'camp' ? '戰鬥' : '經營') + '):改完按 💾 儲存到版面格,使用中的版面不受影響');
+  return true;
+}
+// 直接離開(不檢查、不還原):呼叫端負責先存檔或還原
+function editLeave() {
+  if (!ui.editing) return;
+  ui.editing = false;
+  editUnsaved = false;
+  editAfterSettle = null;
+  closeSettle();
+  editLeaveDlgClose();
+  draftDiscard();
+  if (pend.list.length) pendClear();
+  hideReset();
+  toggleTplMenu(false);
+  editSnap = null;
+  objHold = null;
+  draftStoreClear();
+  if (typeof draftEnvLeave === 'function') draftEnvLeave();
+  setTool(null);
+  ui.objSel = null;
+  editSyncUi();
+  buildToolbar();
+  updateResBar();
+  syncSideBar();
+}
+// 以快照覆寫棋盤欄位,其餘(res、lastTs、tech、deals…)不動;之後存檔使存檔與畫面一致
+function editRestore() {
+  if (!editSnap) return;
+  draftDiscard();
+  if (pend.list.length) pendClear();
+  hideReset();
+  world.terrain.set(editSnap.terrain);
+  world.height.set(editSnap.height);
+  world.flow.set(editSnap.flow);
+  if (editSnap.block) { world.block.set(editSnap.block); world.zone.set(editSnap.zone); }
+  if (editSnap.marks !== undefined) world.marks = normMarks(JSON.parse(editSnap.marks));
+  world.objects = JSON.parse(editSnap.objects).map(o => Object.assign(o, { facing: objFacing(o) }));
+  ui.objSel = null;
+  objHold = null;
+  rebuildOcc();
+  saveWorld();
+  mapeditRefresh();
+}
+function editGuard(cont) {
+  if (!ui.editing) {
+    if (cont) cont();
+    return;
+  }
+  if (!editDirty()) {
+    editLeave();
+    if (cont) cont();
+    return;
+  }
+  editLeaveDlgOpen(cont);
+}
+// 💾 存檔並離開布置;cont 為離開後要接著做的事(離開對話框的路徑用)
+function editSaveAndLeave(cont) {
   if (draft) {
     showToast('請先按 ✓ 確定位置或 ✕ 取消草稿');
     return;
   }
+  if (typeof saveSlotDlgOpen !== 'function') return;
+  saveSlotDlgOpen(() => {
+    editLeave();
+    if (cont) cont();
+  });
+}
+function editCancel() {
+  if (!ui.editing) return;
+  if (editDirty() && !confirm('放棄草稿?尚未存到版面格的內容會丟棄,使用中的版面不受影響。')) return;
+  editLeave();
+  showToast('已放棄草稿');
+}
+// 側欄 🔨 布置:打開「草稿起點選擇」(mapedit.js draftStartOpen)
+function editSideAct() {
+  if (ui.editing) {
+    showToast('已在草稿布置中');
+    return;
+  }
+  if (typeof draftStartOpen === 'function') draftStartOpen();
+  else showToast('草稿布置尚未載入');
+}
+// 設定「範本」列:打開範本選單;選了範本 → 載入到草稿(不直接蓋掉使用中的版面)
+function openTemplatesFromSettings() {
+  if (game.mode !== 'estate' && game.mode !== 'battleDesign') {
+    showToast('目前無法使用範本');
+    return;
+  }
+  toggleTplMenu(true);
+}
+
+function editLeaveDlgIsOpen() {
+  const d = document.getElementById('leaveDlg');
+  return !!d && !d.hidden;
+}
+function editLeaveDlgOpen(cont) {
+  const d = document.getElementById('leaveDlg');
+  if (!d) return;
+  editLeaveCont = cont || null;
+  d.textContent = '';
+  const box = document.createElement('div');
+  box.className = 'ld-box';
+  const head = document.createElement('b');
+  head.className = 'ld-head';
+  head.textContent = '草稿尚有未儲存的變更';
+  const msg = document.createElement('div');
+  msg.className = 'ld-msg';
+  msg.textContent = editDirtyText() || '布置有變更';
+  const foot = document.createElement('div');
+  foot.className = 'ld-foot';
+  [['save', '💾 儲存…', 'pok'], ['drop', '放棄', 'pno'], ['stay', '繼續編輯', '']].forEach(a => {
+    const b = document.createElement('button');
+    b.setAttribute('data-lact', a[0]);
+    if (a[2]) b.className = a[2];
+    b.textContent = a[1];
+    foot.appendChild(b);
+  });
+  box.appendChild(head);
+  box.appendChild(msg);
+  box.appendChild(foot);
+  d.appendChild(box);
+  d.hidden = false;
+}
+function editLeaveDlgClose() {
+  const d = document.getElementById('leaveDlg');
+  if (d) d.hidden = true;
+  editLeaveCont = null;
+}
+function onLeaveClick(e) {
+  const b = e.target.closest('button');
+  if (!b) return;
+  audioUnlock();
+  const act = b.getAttribute('data-lact');
+  const cont = editLeaveCont;
+  if (act === 'stay') {
+    editLeaveDlgClose();
+  } else if (act === 'drop') {
+    editLeaveDlgClose();
+    editRestore();
+    editLeave();
+    showToast('已放棄草稿');
+    if (cont) cont();
+  } else if (act === 'save') {
+    editLeaveDlgClose();
+    editSaveAndLeave(cont);
+  }
+}
+
+// 每 300ms 隨 syncSideBar 呼叫:草稿骨架離開經營即離開;免費建造時沒有待購 / 存檔流程,隱藏 💾 布置存檔鈕
+function editSyncUi() {
+  if (ui.editing && !(game.backup && game.backup.draft)) editLeave();
+  const lb = document.getElementById('btnLayoutSave');
+  if (lb) lb.hidden = progFreeBuild() && !ui.editing;
+  if (typeof draftPersist === 'function') draftPersist();
+  if (typeof editBarSync === 'function') editBarSync();
+}
+
+// 💾 布置存檔:草稿中不存;待購總費用為 0(或無待購)直接存檔;有費用則開結算對話框
+// 回傳 'saved' 已存檔 / 'settle' 已開結算對話框(待確定) / 'blocked' 未存(草稿或放置失敗)
+function layoutSave() {
+  if (ui.editing) {
+    if (draft) {
+      showToast('請先按 ✓ 確定位置或 ✕ 取消草稿');
+      return 'blocked';
+    }
+    if (typeof saveSlotDlgOpen === 'function') saveSlotDlgOpen(null);
+    return 'dialog';
+  }
+  if (draft) {
+    showToast('請先按 ✓ 確定位置或 ✕ 取消草稿');
+    return 'blocked';
+  }
   if (!pend.list.length) {
     saveWorld();
     showToast('布置已儲存');
-    return;
+    return 'saved';
   }
   const total = pendTotal();
   if (!Object.keys(total).some(k => total[k] > 0)) {
-    if (commitPending()) showToast('布置已儲存');
+    const ok = commitPending();
+    if (ok) showToast('布置已儲存');
     updateResBar();
-    return;
+    return ok ? 'saved' : 'blocked';
   }
   openSettle();
+  return 'settle';
 }
 
 function settleOpen() {
@@ -1919,6 +2627,7 @@ function closeSettle() {
   const dlg = document.getElementById('settleDlg');
   if (dlg) dlg.hidden = true;
   lastSettleHtml = '';
+  editAfterSettle = null;
 }
 // 結算內容:每種待購 × 數量與小計、材料與金幣合計、持有與結算後餘額;資源不足列缺口並停用確定
 function renderSettle() {
@@ -1962,9 +2671,14 @@ function onSettleClick(e) {
     closeSettle();
   } else if (act === 'ok') {
     if (!canAfford(pendTotal())) return;
+    const after = editAfterSettle;
     closeSettle();
-    commitPending();
+    const ok = commitPending();
     updateResBar();
+    if (ok && after && ui.editing) {
+      editLeave();
+      after();
+    }
   }
 }
 

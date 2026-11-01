@@ -32,7 +32,9 @@ const world = {
   res: Object.assign({}, START_RES),
   lastTs: Date.now(),
   deals: { day: '', bought: {} },
-  tech: { done: [], cur: null }
+  tech: { done: [], cur: null },
+  layoutSlots: newLayoutSlots(),                 // 版面存檔格(PLAN_LAYOUT §2):{ estate:[s1,s2,s3], camp:[…] },每格 { name, savedAt, board:boardToJSON 格式 } 或 null
+  layoutActive: { estate: null, camp: null }     // 使用中版面所屬的格(0~2),null = 不屬於任何格
 };
 let dealCache = null;
 
@@ -473,9 +475,12 @@ function saveWorld() {
       tech: world.tech,
       record: world.record,
       npcBest: world.npcBest,
-      raid: world.raid
+      raid: world.raid,
+      layoutSlots: world.layoutSlots,
+      layoutActive: world.layoutActive
     }));
   } catch (e) { /* 儲存空間不可用時略過 */ }
+  draftPersist();
 }
 
 function loadWorld() {
@@ -517,6 +522,8 @@ function loadWorldSave() {
     world.record = normRecord(s.record);
     world.npcBest = normNpcBest(s.npcBest);
     world.raid = normRaid(s.raid);
+    world.layoutSlots = normLayoutSlots(s.layoutSlots);
+    world.layoutActive = normLayoutActive(s.layoutActive, world.layoutSlots);
     world.lastTs = s.lastTs || Date.now();
     if (s.season && PALETTES[s.season]) setSeason(s.season);
     rebuildOcc();
@@ -642,7 +649,7 @@ function applyTemplate(id) {
   if (!t || t.w > MAP_W || t.h > MAP_H) return null;
   const kind = t.kind || 'estate';
   // 範本只能套用到同種現役棋盤；備份中（world 是別人的地圖）不套用
-  if (game.backup || kind !== world.board) return null;
+  if ((game.backup && !game.backup.draft) || kind !== world.board) return null;
   if (t.legacy === 'demo' && world.board !== 'estate') return null;
   const estate = world.board === 'estate';
   const ox = (MAP_W - t.w) >> 1, oy = (MAP_H - t.h) >> 1;
@@ -737,6 +744,176 @@ function applyDefaultTemplate(kind) {
   if (world.board !== kind) return null;
   const t = defaultTemplate(kind);
   return t ? applyTemplate(t.id) : null;
+}
+
+// ───── 版面存檔格與草稿(PLAN_LAYOUT §1~§2)─────
+// 草稿進行中時,自己的兩個棋盤收在 game.backup(.draft 非 null),world 載入的是草稿棋盤;
+// estateBoard()/campBoard()/saveWorld 因此一律取到「使用中」的棋盤,草稿不會被寫進主存檔。
+const LAYOUT_SLOTS = 3;
+const DRAFT_KEY = 'lorddomain.draft.v1';
+let draftLastStr = '';
+let draftLastMs = 0;
+
+function newLayoutSlots() {
+  return { estate: [null, null, null], camp: [null, null, null] };
+}
+
+function layoutBoardOk(j) {
+  const N = MAP_W * MAP_H;
+  return !!j && typeof j === 'object' && j.v === 1 && ['terrain', 'height', 'flow', 'block', 'zone'].every(k => Array.isArray(j[k]) && j[k].length === N);
+}
+
+function normLayoutSlots(v) {
+  const out = newLayoutSlots();
+  if (!v || typeof v !== 'object') return out;
+  ['estate', 'camp'].forEach(t => {
+    const a = Array.isArray(v[t]) ? v[t] : [];
+    for (let n = 0; n < LAYOUT_SLOTS; n++) {
+      const s = a[n];
+      if (!s || typeof s !== 'object' || !layoutBoardOk(s.board)) continue;
+      out[t][n] = {
+        name: typeof s.name === 'string' && s.name ? s.name.slice(0, 20) : layoutDefaultName(t, n),
+        savedAt: typeof s.savedAt === 'number' && isFinite(s.savedAt) ? s.savedAt : 0,
+        board: s.board
+      };
+    }
+  });
+  return out;
+}
+
+function normLayoutActive(v, slots) {
+  const out = { estate: null, camp: null };
+  ['estate', 'camp'].forEach(t => {
+    const n = v && typeof v === 'object' ? v[t] : null;
+    if (Number.isInteger(n) && n >= 0 && n < LAYOUT_SLOTS && slots && slots[t][n]) out[t] = n;
+  });
+  return out;
+}
+
+function layoutDefaultName(type, n) { return (type === 'camp' ? '戰鬥 ' : '經營 ') + (n + 1); }
+function layoutTypeName(type) { return type === 'camp' ? '戰鬥' : '經營'; }
+function layoutSlot(type, n) {
+  const a = world.layoutSlots[type];
+  return a && n >= 0 && n < LAYOUT_SLOTS && a[n] ? a[n] : null;
+}
+function layoutObjCount(bj) { return bj && Array.isArray(bj.objects) ? bj.objects.length : 0; }
+// 棋盤是否有內容(任一物件或地形 / 高度 / 河流 / 標記)
+function boardHasContent(bd) {
+  if (!bd) return false;
+  if (bd.objects && bd.objects.length) return true;
+  return ['terrain', 'height', 'flow', 'block', 'zone'].some(k => {
+    const a = bd[k];
+    for (let i = 0; a && i < a.length; i++) if (a[i]) return true;
+    return false;
+  });
+}
+function layoutCopyBoard(bd) { return bd ? boardFromJSON(boardToJSON(bd)) : null; }
+function layoutActiveBoard(type) { return type === 'camp' ? campBoard() : estateBoard(); }
+
+// 戰鬥陣設為使用中前的驗證(validateCamp + 陣地容量 CP);合格回 '',否則回原因
+function layoutCampCheck(bd) {
+  let r = null;
+  try { r = validateCamp(bd); } catch (e) { return '驗證時發生錯誤'; }
+  if (r && r.errors.length) return '戰陣驗證失敗 ' + r.errors.length + ' 項:' + r.errors[0];
+  if (typeof prog !== 'undefined' && prog && typeof progUnlockLv === 'function') {
+    let sum = 0;
+    (bd.objects || []).forEach(o => { const d = OBJECTS[o.type]; sum += (d && d.cb && d.cb.cp) || 0; });
+    const max = campCpNow();
+    if (sum > max) return '陣地容量 ' + sum + ' 超過上限 ' + max;
+  }
+  return '';
+}
+
+// 把使用中版面存回它所屬的格(layoutActive 指向的格);回傳是否有寫入
+function layoutWriteBack(type) {
+  const n = world.layoutActive[type];
+  if (n === null || n === undefined) return false;
+  const bd = layoutActiveBoard(type);
+  if (!bd) return false;
+  const old = layoutSlot(type, n);
+  world.layoutSlots[type][n] = { name: old ? old.name : layoutDefaultName(type, n), savedAt: Date.now(), board: boardToJSON(bd) };
+  return true;
+}
+
+// 以 bd(完整棋盤物件,呼叫端已複製)取代使用中的 type 棋盤;草稿期間寫入 game.backup 收著的那份。備份(進攻等)中回 false
+function layoutInstall(type, bd) {
+  const bk = game.backup;
+  if (bk && !bk.draft) return false;
+  if (bk) {
+    if (bk.board === type) BOARD_KEYS.forEach(k => { bk.active[k] = bd[k]; });
+    else bk.stash = bd;
+    return true;
+  }
+  if (world.board === type) {
+    BOARD_KEYS.forEach(k => { world[k] = bd[k]; });
+    rebuildOcc();
+    pendClear();
+  } else {
+    world.stash = bd;
+  }
+  return true;
+}
+
+// 切換使用中版面到第 n 格:戰鬥格先驗證(不合格不切);通過後先把目前使用中版面寫回原格,再換上該格內容並存檔
+function layoutActivate(type, n) {
+  if (type !== 'estate' && type !== 'camp') return { ok: false, reason: '類型錯誤' };
+  const s = layoutSlot(type, n);
+  if (!s) return { ok: false, reason: '該格是空的' };
+  const bd = boardFromJSON(s.board);
+  if (!bd) return { ok: false, reason: '該格資料損壞' };
+  if (type === 'camp') {
+    const why = layoutCampCheck(bd);
+    if (why) return { ok: false, reason: why };
+  }
+  if (world.layoutActive[type] !== n) layoutWriteBack(type);
+  if (!layoutInstall(type, bd)) return { ok: false, reason: '目前無法切換' };
+  world.layoutActive[type] = n;
+  saveWorld();
+  return { ok: true, reason: '' };
+}
+
+// 把 bd 存進第 n 格(boardJson 為 boardToJSON 格式)
+function layoutSlotWrite(type, n, boardJson) {
+  const old = layoutSlot(type, n);
+  world.layoutSlots[type][n] = { name: old ? old.name : layoutDefaultName(type, n), savedAt: Date.now(), board: boardJson };
+}
+
+// 草稿暫存(單一份,localStorage):{ type, board, from, savedAt };失敗或格式不符回 null
+function draftRead() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || (d.type !== 'estate' && d.type !== 'camp') || !layoutBoardOk(d.board)) return null;
+    return { type: d.type, board: d.board, from: typeof d.from === 'string' ? d.from : 'blank', savedAt: +d.savedAt || 0 };
+  } catch (e) { return null; }
+}
+function draftStoreClear() {
+  draftLastStr = '';
+  try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* 略過 */ }
+}
+function draftWrite(type, boardJson, from) {
+  try {
+    const str = JSON.stringify({ type: type, board: boardJson, from: from, savedAt: Date.now() });
+    localStorage.setItem(DRAFT_KEY, str);
+    draftLastStr = JSON.stringify(boardJson);
+  } catch (e) { /* 儲存空間不可用時略過 */ }
+}
+// 草稿進行中且「有未存變更」才寫入暫存(內容沒變就不重寫);沒有變更則清掉暫存。force 略過節流
+function draftPersist(force) {
+  const bk = game.backup;
+  if (!bk || !bk.draft) return false;
+  const now = Date.now();
+  if (!force && now - draftLastMs < 900) return false;
+  draftLastMs = now;
+  if (typeof editWorthKeeping === 'function' && !editWorthKeeping()) {
+    if (draftLastStr) draftStoreClear();
+    return false;
+  }
+  const j = boardToJSON(liveBoard());
+  if (JSON.stringify(j) === draftLastStr) return false;
+  draftWrite(bk.draft.type, j, bk.draft.from);
+  return true;
 }
 
 // 布置模式（PLAN 12）：待購清單，不存檔、不扣款；按 ✓ 才一次購買

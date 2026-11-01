@@ -515,26 +515,28 @@
   // ---------------- 建築選單條目(OBJECTS) ----------------
   function item(name, icon, w, h, coin, o) {
     o = o || {};
-    return {
+    var r = {
       name: name, icon: icon, w: w, h: h,
       on: o.on || [T_GRASS, T_ROAD],
       cost: { coin: coin }, side: 'estate',
       cb: { block: 'none', hp: null, cat: null }
     };
+    if (o.drag) r.drag = true;
+    return r;
   }
   var WATER = function () { return [T_LAKE, T_RIVER]; };
   var DEF_ITEMS = {
     drill_ground: item('練兵場', '🥋', 4, 4, 180),
     parade_ground: item('校場', '🏟️', 4, 4, 260),
     army_camp: item('軍營', '⛺', 4, 4, 300),
-    deco_lujiao: item('鹿角', '🦌', 1, 1, 30),
+    deco_lujiao: item('鹿角', '🦌', 1, 1, 30, { drag: true }),
     drum_tower: item('鼓台', '🥁', 2, 2, 120),
     beacon: item('烽燧', '🪔', 2, 2, 150),
-    flag_army: item('牙旗', '🚩', 1, 1, 60),
-    flag_great: item('大旗', '🎏', 1, 1, 40),
+    flag_army: item('牙旗', '🚩', 1, 1, 60, { drag: true }),
+    flag_great: item('大旗', '🎏', 1, 1, 40, { drag: true }),
     tent_group: item('營帳群', '🏕️', 4, 4, 200),
     tent_general: item('帥帳', '🎪', 4, 4, 260),
-    training_dummy: item('木樁人', '🪵', 1, 1, 40),
+    training_dummy: item('木樁人', '🪵', 1, 1, 40, { drag: true }),
     war_chariot: item('戰車', '🏇', 1, 3, 220),
     cloud_ladder: item('雲梯', '🪜', 1, 3, 200),
     ram: item('衝車', '🪵', 1, 2, 220),
@@ -542,12 +544,12 @@
     jinglan: item('井闌', '🪣', 2, 2, 200),
     carriage: item('華麗馬車', '🛺', 1, 3, 240),
     cart_empty: item('板車', '🛒', 1, 2, 50),
-    wheelbarrow: item('獨輪車', '🛞', 1, 1, 30),
+    wheelbarrow: item('獨輪車', '🛞', 1, 1, 30, { drag: true }),
     mine_entrance: item('礦坑口', '🕳️', 2, 2, 180),
     minecart: item('礦車', '🚃', 1, 1, 40),
-    ore_iron: item('鐵礦堆', '🔩', 1, 1, 40),
-    ore_copper: item('銅礦堆', '🔶', 1, 1, 40),
-    ore_stone: item('石料堆', '⬜', 1, 1, 30),
+    ore_iron: item('鐵礦堆', '🔩', 1, 1, 40, { drag: true }),
+    ore_copper: item('銅礦堆', '🔶', 1, 1, 40, { drag: true }),
+    ore_stone: item('石料堆', '⬜', 1, 1, 30, { drag: true }),
     sawbench: item('鋸台', '🪚', 1, 1, 40),
     lograft: item('流送木排', '🌲', 1, 2, 60, { on: WATER() }),
     post_station: item('驛站', '🏘️', 3, 2, 220),
@@ -557,10 +559,10 @@
     warship: item('戰船', '🚢', 2, 3, 350, { on: WATER() }),
     ferry: item('渡口', '🛶', 2, 1, 160),
     smithy: item('鐵匠營', '⚒️', 3, 2, 220),
-    deco_weaponrack: item('兵器架', '🗡️', 1, 1, 30),
-    deco_target: item('箭靶', '🎯', 1, 1, 30),
-    deco_jumaa: item('拒馬', '🚧', 1, 1, 20),
-    deco_campfire: item('營火', '🔥', 1, 1, 20),
+    deco_weaponrack: item('兵器架', '🗡️', 1, 1, 30, { drag: true }),
+    deco_target: item('箭靶', '🎯', 1, 1, 30, { drag: true }),
+    deco_jumaa: item('拒馬', '🚧', 1, 1, 20, { drag: true }),
+    deco_campfire: item('營火', '🔥', 1, 1, 20, { drag: true }),
     deco_watchtower: item('望樓(木製)', '🗼', 2, 2, 300),
     deco_oxcart: item('牛車', '🐂', 1, 3, 120),
     deco_lumberyard: item('伐木場(林場)', '🪓', 2, 2, 90),

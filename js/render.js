@@ -647,6 +647,16 @@ function drawGhostCell(ctx, x, y) {
 function drawDraft(ctx) {
   const d = draft;
   if (!d || !OBJECTS[d.type] || !inBounds(d.x, d.y)) return;
+  if (d.bounce) {
+    // 彈回動畫:虛影從放開處(bounce.fx/fy)滑回 d.x/d.y(easeOut),不畫格底
+    const b = d.bounce, p = Math.min(1, (performance.now() - b.t0) / b.dur), k = 1 - (1 - p) * (1 - p);
+    const ox = (1 - k) * (b.fx - d.x), oy = (1 - k) * (b.fy - d.y);
+    ctx.save();
+    ctx.translate(isoX(ox, oy), isoY(ox, oy, 0));
+    drawObject(ctx, { type: d.type, x: d.x, y: d.y, rot: d.rot }, 0.55);
+    ctx.restore();
+    return;
+  }
   const fp = footprint(d.type, d.rot);
   const fill = d.ok ? 'rgba(80,220,120,.30)' : 'rgba(230,70,70,.35)';
   for (let yy = d.y; yy < d.y + fp[1]; yy++)
@@ -658,6 +668,24 @@ function drawDraft(ctx) {
   ctx.save();
   ctx.setLineDash([6, 4]);
   outline(ctx, pts, d.ok ? '#5fe08a' : '#ff5a4a', 2);
+  ctx.restore();
+}
+
+// 輕點高亮(0.6 秒)/ 落地光圈(0.35 秒):ui.js fxHi
+function drawFx(ctx) {
+  const f = typeof fxHi !== 'undefined' ? fxHi : null;
+  if (!f) return;
+  const p = (performance.now() - f.t0) / f.dur;
+  if (p >= 1 || !inBounds(f.x, f.y)) {
+    fxHi = null;
+    return;
+  }
+  const g = f.kind === 'land' ? (1 - p) * 0.35 : 0;
+  const bh = world.height[idx(f.x, f.y)] * HL;
+  const pts = [gpt(f.x - g, f.y - g, bh), gpt(f.x + f.w + g, f.y - g, bh), gpt(f.x + f.w + g, f.y + f.h + g, bh), gpt(f.x - g, f.y + f.h + g, bh)];
+  ctx.save();
+  ctx.globalAlpha = 1 - p;
+  outline(ctx, pts, f.kind === 'land' ? '#ffe9a8' : '#ffffff', f.kind === 'land' ? 3 : 2);
   ctx.restore();
 }
 
@@ -877,10 +905,12 @@ function draw(ctx, time) {
   if (preview.visible) drawPreview(ctx);
   // 草稿只在經營模式顯示;離開經營模式(釣魚、仙獸、戰鬥布置等)即丟棄,移動中的建築回原位
   if (typeof draft !== 'undefined' && draft) {
-    if (game.mode !== 'estate') {
+    if (game.mode !== 'estate' && !(game.mode === 'battleDesign' && draft.orig)) {
       if (typeof draftDiscard === 'function') draftDiscard();
     } else if (!pano.open && !uiIsPhoto()) drawDraft(ctx);
   }
+  if (typeof fxHi !== 'undefined' && fxHi && !pano.open && !uiIsPhoto()) drawFx(ctx);
   ctx.setTransform(r, 0, 0, r, 0, 0);
+  if (typeof draftFloatSync === 'function') draftFloatSync();
   if (typeof drawScreenHud === 'function') drawScreenHud(ctx, time);
 }

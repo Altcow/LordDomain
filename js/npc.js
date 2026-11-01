@@ -7,7 +7,7 @@
 // marks 缺省沿用範本的 marks;gar 為守軍覆寫 { 建築 type: { 兵種: 人數 } }(空物件 = 無守軍,見 PLAN_DEFENSE §C.2)。
 // diff:1 易、2 中、3 難、4 極難、5 極難
 const NPC_BASES = [
-  { id: 'huangjin', name: '黃巾營寨', tpl: 'camp_huangjin', diff: 1, intro: '黃巾賊眾據草寨而守,寨主帳居中,四面寨門大開,營帳環繞。', add: [], remove: [], gar: { hq: { hjlishi: 1, hjzong: 3, hunter: 2, qingqi: 1, chuangnu: 1 } } },
+  { id: 'huangjin', name: '黃巾營寨', tpl: 'camp_huangjin', diff: 1, intro: '黃巾賊眾據草寨而守,寨主帳居中,內牆四面設門、外圍鹿角成柵,營帳環繞;帳一受襲,守軍傾巢而出。', add: [], remove: [], gar: { hq: { hjlishi: 1, hjzong: 3, hunter: 2, qingqi: 1, chuangnu: 1 } } },
   { id: 'shankou', name: '山口隘道', tpl: 'camp_shankou', diff: 2, intro: '山賊扼守谷口,兩側高台居高臨下,谷北帥帳穩坐。', add: [], remove: [] },
   {
     id: 'jun', name: '東漢郡城', tpl: 'jun', diff: 3, intro: '郡城四門內側皆設敵樓與槍陣,郡府居中,護城壕環繞,民房不設守軍。',

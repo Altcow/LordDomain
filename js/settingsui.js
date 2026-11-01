@@ -257,13 +257,20 @@ function stDisplaySec() {
   }
   if (typeof uiSetMode === 'function') {
     const curMode = typeof uiGetMode === 'function' ? uiGetMode() : 'normal';
-    nodes.push(stRow('介面模式', stSeg([['normal', '正常'], ['compact', '精簡'], ['photo', '拍照']], curMode, function (v) {
+    nodes.push(stRow('介面模式', stSeg([['normal', '正常'], ['compact', '精簡']].concat(isUnlocked('feature', 'photo') ? [['photo', '拍照']] : []), curMode, function (v) {
       if (v === 'photo') stClosePanel();
       uiSetMode(v);
       stRender();
     })));
   }
-  return stSec('畫面', nodes);
+  if (typeof orientSet === 'function') {
+    nodes.push(stRow('畫面方向', stSeg([['auto', '自動'], ['portrait', '固定直版'], ['landscape', '固定橫版']], orientGet(), function (v) {
+      orientSet(v);
+      stRender();
+    })));
+    nodes.push(stEl('p', 'st-hint', 'iPhone 請用控制中心的『螢幕方向鎖定』(網頁無法鎖定 iPhone 方向)。'));
+  }
+  return stSec('畫面', nodes.concat(stExtraNodes('畫面')));
 }
 
 // 全螢幕說明:瀏覽器列佔空間時的做法;不支援 requestFullscreen 的瀏覽器(如 iPhone Safari)不顯示按鈕
@@ -346,6 +353,45 @@ function stFsTipMaybe() {
   document.body.appendChild(tip);
 }
 
+// 頂列圖示說明(點開才列出目前已開放的圖示)
+let stIconOpen = false;
+const ST_ICON_LEGEND = [
+  { icon: '🔨', name: '草稿布置(右側欄):另開一份草稿來設計,改完 💾 儲存到版面格,不影響正在用的城;平時直接點下方建築蓋即可(即時生效)' },
+  { icon: '①②③', name: '版面格(左上):經營、戰鬥各 3 格,點一下把整座城 / 整個戰陣換成那一格;「空」= 還沒存,點了可把目前版面存進去' },
+  { icon: '📋', name: '範本(設定→畫面):選了範本會載入到草稿,不會直接蓋掉你正在用的版面' },
+  { icon: '⚔', name: '戰鬥選單(左下;內含 📜 戰報／錄影)' },
+  { icon: '👁', name: '隱藏建築(整地用,H)' },
+  { icon: '↻', name: '旋轉建築:虛影旁的浮動圖示 ↻(電腦可按 R);已蓋建築按住約半秒拿起,拖曳到想要的位置放開即落地,不拖曳放開則出現 ↻ 🗑 ✓ ✕;頂列已無旋轉鈕' },
+  { icon: '🎣', name: '釣魚', feat: 'fishing' },
+  { icon: '🐲', name: '仙獸苑', feat: 'pet' },
+  { icon: '⚙', name: '設定' }
+];
+function stIconSec() {
+  const wrap = stEl('div', 'st-icons');
+  const btn = stEl('button', 'st-link', stIconOpen ? '收起頂列圖示說明 ▴' : '頂列圖示說明 ▾');
+  btn.addEventListener('click', function () { stIconOpen = !stIconOpen; stRender(); });
+  wrap.appendChild(btn);
+  if (stIconOpen) {
+    const list = stEl('ul', 'st-iconlist');
+    ST_ICON_LEGEND.forEach(function (it) {
+      if (it.feat && !isUnlocked('feature', it.feat)) return;
+      list.appendChild(stEl('li', '', it.icon + '  ' + it.name));
+    });
+    wrap.appendChild(list);
+  }
+  return stSec('圖示說明', [wrap]);
+}
+
+// 兵種圖鑑入口(戰鬥中不顯示,與其他畫面設定同規則)
+function stDexSec() {
+  const btn = stEl('button', 'st-link', '兵種圖鑑 ›');
+  btn.addEventListener('click', function () {
+    stClosePanel();
+    if (typeof unitDexOpen === 'function') unitDexOpen();
+  });
+  return stSec('圖鑑', [btn]);
+}
+
 function stAboutSec() {
   const ver = stEl('p', 'st-ver', '版本 ' + (stVerText || '讀取中…'));
   stVerEl = ver;
@@ -395,6 +441,8 @@ function stRender() {
   });
   if (battle) return;
   stBodyEl.appendChild(stDisplaySec());
+  stBodyEl.appendChild(stIconSec());
+  stBodyEl.appendChild(stDexSec());
   stBodyEl.appendChild(stHowtoSec());
   stBodyEl.appendChild(stAboutSec());
   stBodyEl.appendChild(stDangerSec());

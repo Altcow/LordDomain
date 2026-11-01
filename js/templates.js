@@ -27,12 +27,15 @@ const TEMPLATES = [
       { type: 'quarry', pts: [[16, 7]] },
       { type: 'well', pts: [[7, 17]] },
       { type: 'tree', pts: [[5, 5], [14, 5], [5, 14], [14, 14]] },
-      { type: 'flower_bed', pts: [[6, 6], [13, 6], [6, 13], [13, 13]] }
+      { type: 'flower_bed', pts: [[6, 6], [13, 6], [6, 13], [13, 13]] },
+      { type: 'stone_table', pts: [[4, 17]] },
+      { type: 'stone_stool', pts: [[3, 17], [5, 17]] },
+      { type: 'bench_wood', pts: [[3, 11]], rot: 2 }
     ]
   },
   {
     id: 'camp_lv01', kind: 'camp', name: '🏕 新手戰陣 (Lv1)',
-    desc: '方寨一座,南門一道;寨內屏牆留東側缺口,敵軍入寨須折一次彎。帥帳居北,箭樓守四角。',
+    desc: '方寨一座,南門一道;寨內兩道屏牆東西錯開缺口,敵軍入寨須蛇形折兩次彎。帥帳居北,箭樓守四角。',
     w: 20, h: 20, focus: [9, 9], isDefault: true,
     objects: [
       { type: 'wall', line: [3, 3, 16, 3, 1] },
@@ -40,11 +43,12 @@ const TEMPLATES = [
       { type: 'wall', line: [16, 4, 16, 15, 1] },
       { type: 'wall', line: [3, 16, 7, 16, 1] },
       { type: 'wall', line: [11, 16, 16, 16, 1] },
-      { type: 'wall', line: [4, 11, 11, 11, 1] },
+      { type: 'wall', line: [4, 13, 11, 13, 1] },
+      { type: 'wall', line: [7, 10, 15, 10, 1] },
       { type: 'gate', pts: [[8, 16]] },
       { type: 'hq', pts: [[8, 4]] },
       { type: 'tower', pts: [[4, 4], [14, 4], [14, 13]] },
-      { type: 'wagon', pts: [[4, 13]] },
+      { type: 'wagon', pts: [[4, 14]] },
       { type: 'tent', pts: [[5, 8], [12, 8]] },
       { type: 'qtower', pts: [[9, 9], [10, 9]] }
     ]
@@ -2443,7 +2447,7 @@ const TEMPLATES = [
     w: 56, h: 56, focus: [27, 27],
     objects: [
       { type: 'lujiao', pts: [[17, 17], [18, 18], [19, 19], [20, 20], [21, 21], [22, 22], [38, 17], [37, 18], [36, 19], [35, 20], [34, 21], [33, 22], [17, 38], [18, 37], [19, 36], [20, 35], [21, 34], [22, 33], [33, 33], [34, 34], [35, 35], [36, 36], [37, 37], [38, 38], [19, 12], [19, 13], [19, 14], [21, 12], [21, 13], [21, 14], [34, 41], [34, 42], [36, 41], [36, 42]] },
-      { type: 'gate', pts: [[26, 15], [26, 32]] },
+      { type: 'gate', pts: [[26, 15], [29, 32]] },
       { type: 'zhalou', pts: [[26, 40]] },
       { type: 'dilou', pts: [[15, 15], [39, 15], [15, 39], [39, 39]] },
       { type: 'hq', pts: [[26, 26]] },
@@ -2467,10 +2471,16 @@ const TEMPLATES = [
       { type: 'fakecamp', pts: [[30, 11], [23, 43]] },
       { type: 'jianzhuang', pts: [[26, 12], [26, 41]] },
       { type: 'wall', ring: [15, 15, 26, 26], skip: [[15, 15, 2, 2], [39, 15, 2, 2], [15, 39, 2, 2], [39, 39, 2, 2], [26, 15, 3, 1], [26, 40, 3, 1], [19, 15, 3, 1], [34, 40, 3, 1]] },
-      { type: 'wall', ring: [23, 23, 10, 10], skip: [[26, 32, 3, 1]] },
+      { type: 'wall', ring: [23, 23, 10, 10], skip: [[29, 32, 3, 1]] },
       { type: 'lujiao', line: [13, 24, 13, 31, 1] },
       { type: 'lujiao', line: [42, 24, 42, 31, 1] },
-      { type: 'qtower', pts: [[11, 20], [36, 11]] }
+      { type: 'qtower', pts: [[11, 20], [36, 11]] },
+      { type: 'wall', line: [35, 38, 37, 38, 1] },
+      { type: 'wall', line: [24, 21, 31, 21, 1] },
+      { type: 'wall', line: [25, 36, 25, 36, 1] },
+      { type: 'wall', line: [25, 38, 29, 38, 1] },
+      { type: 'wall', line: [28, 36, 35, 36, 1] },
+      { type: 'wall', line: [19, 15, 21, 15, 1] }
     ],
     marks: { rally: [{ id: 'r1', x: 27, y: 22, name: '北營中庭' }, { id: 'r2', x: 27, y: 34, name: '南營中庭' }] },
     labels: [
@@ -2519,7 +2529,11 @@ const TEMPLATES = [
       { type: 'tent', pts: [[22, 4], [31, 4], [15, 14], [39, 14]] },
       { type: 'banner', pts: [[20, 15]] },
       { type: 'fakecamp', pts: [[22, 15]] },
-      { type: 'wall', ring: [22, 18, 12, 13], skip: [[26, 18, 3, 1], [26, 30, 3, 1], [24, 30, 2, 1], [29, 30, 2, 1]] }
+      { type: 'wall', ring: [22, 18, 12, 13], skip: [[26, 18, 3, 1], [26, 30, 3, 1], [24, 30, 2, 1], [29, 30, 2, 1]] },
+      { type: 'wall', line: [26, 35, 28, 35, 1] },
+      { type: 'wall', line: [27, 39, 29, 39, 1] },
+      { type: 'wall', line: [26, 43, 28, 43, 1] },
+      { type: 'wall', line: [27, 47, 29, 47, 1] }
     ],
     marks: { rally: [{ id: 'r1', x: 27, y: 28, name: '關門內' }, { id: 'r2', x: 27, y: 16, name: '關後' }] },
     labels: [
@@ -2682,7 +2696,10 @@ const TEMPLATES = [
       { type: 'wagon', pts: [[13, 24], [41, 30]] },
       { type: 'granary', pts: [[27, 14]] },
       { type: 'fakecamp', pts: [[27, 40]] },
-      { type: 'wall', ring: [19, 19, 18, 18], skip: [[27, 19, 2, 1], [27, 36, 2, 1], [19, 27, 1, 2], [36, 27, 1, 2]] },
+      { type: 'wall', ring: [19, 19, 18, 18], skip: [[27, 19, 3, 1], [27, 36, 3, 1], [19, 27, 1, 3], [36, 27, 1, 3]] },
+      { type: 'gate', pts: [[27, 19], [27, 36]] },
+      { type: 'gate', pts: [[19, 27], [36, 27]], rot: 1 },
+      { type: 'wall', line: [23, 25, 23, 31, 1] },
       { type: 'lujiao', ring: [15, 15, 26, 26], skip: [[25, 15, 6, 1], [25, 40, 6, 1], [15, 25, 1, 6], [40, 25, 1, 6]] }
     ],
     marks: { rally: [{ id: 'r1', x: 27, y: 30, name: '寨心' }] },
@@ -2731,6 +2748,16 @@ const TEMPLATES = [
       { type: 'wagon', pts: [[6, 28], [48, 28], [6, 16], [48, 16], [15, 11], [37, 42], [18, 42]] },
       { type: 'fakecamp', pts: [[47, 22]] },
       { type: 'lujiao', pts: [[24, 46], [25, 46], [30, 46], [31, 46]] },
+      { type: 'wall', line: [12, 9, 25, 9, 1] },
+      { type: 'wall', line: [30, 9, 39, 9, 1] },
+      { type: 'wall', line: [41, 9, 43, 9, 1] },
+      { type: 'wall', line: [26, 11, 28, 11, 1] },
+      { type: 'wall', line: [25, 10, 25, 13, 1] },
+      { type: 'wall', line: [30, 10, 30, 13, 1] },
+      { type: 'wall', line: [26, 20, 28, 20, 1] },
+      { type: 'wall', line: [27, 24, 29, 24, 1] },
+      { type: 'wall', line: [26, 32, 28, 32, 1] },
+      { type: 'wall', line: [27, 38, 29, 38, 1] },
       { type: 'qtower', pts: [[15, 38], [34, 48], [13, 23]] }
     ],
     marks: { rally: [{ id: 'r1', x: 27, y: 38, name: '谷口內' }, { id: 'r2', x: 27, y: 11, name: '谷北' }] },
@@ -2748,7 +2775,7 @@ const TEMPLATES = [
     ]
   },
   {
-    id: 'camp_pass', kind: 'camp', name: '山口隘道陣', desc: '兩側高台夾三格谷道，谷口城門與短牆，帥帳居谷北高台；箭樓、弩台與投石台依山設防。',
+    id: 'camp_pass', kind: 'camp', name: '山口隘道陣', desc: '兩側高台夾三格谷道，谷口城門與短牆，谷內十一道交錯屏牆迫敵蛇行，高台頂以牆封死；帥帳居谷北高台，箭樓、弩台與投石台依山設防。',
     w: 56, h: 56, focus: [27, 24],
     heights: [[2, 12, 1, 31, 5], [2, 12, 6, 14, 40], [2, 29, 6, 14, 40]],
     roads: [[26, 6, 3, 42]],
@@ -2765,7 +2792,22 @@ const TEMPLATES = [
       { type: 'granary', at: [18, 25] },
       { type: 'gate', pts: [[26, 44]] },
       { type: 'wall', rect: [22, 44, 4, 1] },
-      { type: 'wall', rect: [29, 44, 4, 1] }
+      { type: 'wall', rect: [29, 44, 4, 1] },
+      { type: 'wall', line: [12, 7, 25, 7, 1] },
+      { type: 'wall', line: [29, 7, 42, 7, 1] },
+      { type: 'wall', line: [21, 1, 21, 6, 1] },
+      { type: 'wall', line: [34, 1, 34, 6, 1] },
+      { type: 'wall', line: [27, 41, 28, 41, 1] },
+      { type: 'wall', line: [26, 38, 27, 38, 1] },
+      { type: 'wall', line: [27, 35, 28, 35, 1] },
+      { type: 'wall', line: [26, 32, 27, 32, 1] },
+      { type: 'wall', line: [27, 29, 28, 29, 1] },
+      { type: 'wall', line: [26, 26, 27, 26, 1] },
+      { type: 'wall', line: [27, 23, 28, 23, 1] },
+      { type: 'wall', line: [26, 20, 27, 20, 1] },
+      { type: 'wall', line: [27, 17, 28, 17, 1] },
+      { type: 'wall', line: [26, 14, 27, 14, 1] },
+      { type: 'wall', line: [27, 11, 28, 11, 1] }
     ],
     marks: {
       deploy: [{ r: [18, 48, 17, 4], kind: 'front' }, { r: [44, 20, 8, 16], kind: 'flank' }],
@@ -2773,7 +2815,7 @@ const TEMPLATES = [
     }
   },
   {
-    id: 'camp_square', kind: 'camp', name: '方城陣', desc: '平地方城一圈高牆，南東二門，四角箭樓與弩台、投石台守城，帥帳居中，營帳輜重城內外各半。',
+    id: 'camp_square', kind: 'camp', name: '方城陣', desc: '平地方城一圈高牆，南東二門，門內各設屏牆迫敵繞行，四角箭樓與弩台、投石台守城，帥帳居中，營帳輜重城內外各半。',
     w: 56, h: 56, focus: [27, 27],
     objects: [
       { type: 'wall', ring: [19, 19, 18, 18], skip: [[27, 36, 3, 1], [36, 27, 1, 3]] },
@@ -2784,7 +2826,9 @@ const TEMPLATES = [
       { type: 'shitai', at: [30, 21] },
       { type: 'hq', at: [26, 26] },
       { type: 'muster', at: [22, 24] },
-      { type: 'banner', at: [28, 33] },
+      { type: 'banner', at: [28, 31] },
+      { type: 'wall', line: [23, 33, 33, 33, 1] },
+      { type: 'wall', line: [33, 24, 33, 32, 1] },
       { type: 'tent', pts: [[24, 31], [39, 31]] },
       { type: 'wagon', pts: [[31, 24], [39, 36]] },
       { type: 'granary', at: [24, 24] }

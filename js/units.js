@@ -86,9 +86,9 @@ const TERRAIN_BONUS = {
 // camp: 由哪座戰陣營放出(null = 非營放出); look: TROOP_LOOK key(敵軍無對應, 暫 null)
 const UNITS = {
   militia:  { name: '民兵', fac: 'han', cls: 'shield', profile: 'foot', hp: 60, atk: 6, def: 4, range: 1, spd: 1.0, cd: 1.0, pop: 1, squad: 8, value: 12, targetPrefs: ['any'], camp: null, look: 'shield1', habitText: null, cautious: true },
-  hunter:   { name: '獵戶', fac: 'han', cls: 'archer', profile: 'foot', hp: 35, atk: 7, def: 1, range: 4, spd: 1.0, cd: 1.2, pop: 1, squad: 6, value: 12, targetPrefs: ['unit', 'any'], camp: null, look: 'archer1', habitText: null, cautious: true },
+  hunter:   { name: '獵戶', fac: 'han', cls: 'archer', profile: 'foot', hp: 70, atk: 5, def: 2, range: 3, spd: 1.0, cd: 1.2, pop: 1, squad: 6, value: 12, targetPrefs: ['unit', 'any'], camp: null, look: 'archer1', habitText: null, cautious: true },
   daodun:   { name: '刀盾兵', fac: 'han', cls: 'shield', profile: 'foot', hp: 100, atk: 8, def: 7, range: 1, spd: 0.9, cd: 1.0, pop: 1, squad: 8, value: 18, targetPrefs: ['wall', 'any'], camp: 'shield', look: 'shield2', habitText: '先登破牆' },
-  gongbing: { name: '弓兵', fac: 'han', cls: 'archer', profile: 'foot', hp: 50, atk: 10, def: 2, range: 4, spd: 1.0, cd: 1.2, pop: 1, squad: 6, value: 20, targetPrefs: ['defense', 'any'], camp: 'archer', look: 'archer2', habitText: '專射箭樓' },
+  gongbing: { name: '弓兵', fac: 'han', cls: 'archer', profile: 'foot', hp: 30, atk: 10, def: 2, range: 5, spd: 1.0, cd: 1.2, pop: 1, squad: 6, value: 20, targetPrefs: ['defense', 'any'], camp: 'archer', look: 'archer2', habitText: '專射箭樓' },
   qingqi:   { name: '輕騎', fac: 'han', cls: 'cavalry', profile: 'horse', hp: 150, atk: 13, def: 5, range: 1, spd: 2.0, cd: 1.1, pop: 2, squad: 4, value: 36, targetPrefs: ['resource', 'storage', 'any'], camp: 'cavalry', look: 'cavalry2', habitText: '劫掠輜重' },
   tuqi:     { name: '突騎', fac: 'han', cls: 'cavalry', profile: 'horse', hp: 200, atk: 18, def: 7, range: 1, spd: 2.2, cd: 1.0, pop: 3, squad: 3, value: 65, targetPrefs: ['barracks', 'storage', 'any'], charge: 1.5, camp: 'cavalry', look: 'cavalry3', habitText: '直搗營壘' },
   chihou:   { name: '斥候', fac: 'han', cls: 'cavalry', profile: 'horse', hp: 70, atk: 4, def: 2, range: 1, spd: 2.6, cd: 1.2, pop: 1, squad: 2, value: 15, targetPrefs: ['defense', 'any'], scout: 3, trapTaken: 0.5, camp: 'cavalry', look: 'cavalry1', habitText: '探路破陷' },
@@ -106,6 +106,34 @@ const UNITS = {
   toushi:   { name: '投石車', fac: 'both', cls: 'siege', profile: 'heavy', hp: 180, atk: 40, def: 4, range: 7, spd: 0.5, cd: 4.0, pop: 4, squad: 1, value: 70, targetPrefs: ['defense', 'wall', 'any'], minRange: 2, aoe: 1, aoeMax: 3, splash: 0.5, camp: 'siege', look: null, habitText: '拔箭樓' },
   zeishuai: { name: '賊帥', fac: 'npc', cls: 'shield', profile: 'foot', hp: 900, atk: 20, def: 14, range: 1, spd: 0.8, cd: 1.2, pop: 6, squad: 1, value: 150, targetPrefs: ['core', 'any'], aura: { r: 3, atk: 0.15 }, boss: true, char: null, camp: null, look: null, habitText: null }
 };
+
+// 單兵放置制(PLACEHOLDER,日後最後才平衡):每次放兵只放 1 個單位(squad 一律 1),人口 = pop。
+// 放置單位的個體屬性(hp / atk / def)取自本表;UNITS 內的 hp / atk / def 仍是「單一士兵」基準,供守軍、NPC 使用。
+// 換算:以舊單兵屬性 × (新 pop / 舊每兵 pop),使每人口戰力與舊制相當;daodun 另 HP ×1.6、def +50%、atk ×0.6(肉盾)。
+// range / spd / cd 維持不變(取自 UNITS)。
+const UNIT_PLACE_STAT = {
+  militia:  { pop: 1, hp: 60,  atk: 6,    def: 4 },
+  hunter:   { pop: 1, hp: 70,  atk: 5,    def: 2 },   // 獵戶:皮厚、射程短、傷害低(便宜的前排遠程)
+  gongbing: { pop: 2, hp: 60,  atk: 20,   def: 2 },   // 弓兵:射程遠、傷害高、較脆(人口 2)
+  daodun:   { pop: 5, hp: 800, atk: 24,   def: 10.5 },
+  changji:  { pop: 2, hp: 150, atk: 12,   def: 10 },
+  chihou:   { pop: 2, hp: 140, atk: 8,    def: 2 },
+  qingqi:   { pop: 3, hp: 225, atk: 19.5, def: 5 },
+  tuqi:     { pop: 4, hp: 267, atk: 24,   def: 7 },
+  chuangnu: { pop: 6, hp: 240, atk: 56,   def: 3 },
+  toushi:   { pop: 7, hp: 315, atk: 70,   def: 4 },
+  chongche: { pop: 8, hp: 608, atk: 48,   def: 14 }
+};
+(function () {
+  Object.keys(UNIT_PLACE_STAT).forEach(function (k) {
+    if (!UNITS[k]) return;
+    UNITS[k].pop0 = UNITS[k].pop;      // 舊整隊制人口 / 隊人數(僅供舊制 cardPop 與舊測試)
+    UNITS[k].squad0 = UNITS[k].squad;
+    UNITS[k].pop = UNIT_PLACE_STAT[k].pop;
+    UNITS[k].squad = 1;
+    UNITS[k].place = UNIT_PLACE_STAT[k];
+  });
+})();
 
 const CAMP_POP = { shield: 16, archer: 12, cavalry: 16, siege: 6 };
 const LEVY_MAX = 8;
@@ -194,7 +222,14 @@ function campCpNow() {
 // 目前等級的硬上限;沒有硬上限的 key 回傳 null(舊的 tower / nutai / shitai / support 已改由 CP 管)
 function campCap(key) {
   const a = CAMP_CAPS[key];
-  return a ? a[campTierNow() - 1] : null;
+  if (!a) return null;
+  // 牆 / 柵欄(lujiao)/ 門:prog 載入後改讀 progdata 的逐級數量(PLAN_DEFENSE「牆與柵欄分級數量」);未載入退回 CAMP_CAPS
+  if (typeof prog !== 'undefined' && prog && typeof progWallCap === 'function') {
+    if (key === 'wall') return progWallCap(prog.lv);
+    if (key === 'lujiao') return progFenceCap(prog.lv);
+    if (key === 'gate') return progGateCap(prog.lv);
+  }
+  return a[campTierNow() - 1];
 }
 
 // 戰陣物件(§6.1、規格 M0-03 第 3 點);side 'camp' 只在戰鬥陣
@@ -468,7 +503,7 @@ function marchCapacity(estateObjs) {
 function cardPop(card) {
   const def = UNITS[card.u];
   if (!def) return 0;
-  return def.pop * def.squad * (card.n | 0);
+  return (def.pop0 || def.pop) * (def.squad0 || def.squad) * (card.n | 0);
 }
 // 只能用鄉勇容量的兵種(民兵、獵戶)
 const LEVY_UNITS = { militia: true, hunter: true };

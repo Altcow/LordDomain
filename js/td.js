@@ -7,12 +7,12 @@
 // team:0 攻擊方(我方放兵)、team:1 守方(守軍)。建築不是單位,以 b.bld 管理。
 // 模擬路徑禁用 Math.random / Date.now / performance.now / new Date / for-in 遍歷物件。
 
-const SIM_VER = 1;
+const SIM_VER = 2;   // 2:單兵放置制(每次放 1 個單位、UNIT_PLACE_STAT 屬性);1 為舊整隊制,舊錄影無法以新規則重跑
 const SIM_HZ = 10;
 const SIM_DT = 0.1;
 const MAX_UNITS = 400;
 const BATTLE_TICKS = 1800;
-const TD_POP_CAP = 200;         // 出兵人口上限(攻方整場共用;battleInit 參數 popCap 可覆蓋)。人口 = UNITS[u].pop × squad
+const TD_POP_CAP = 200;         // 出兵人口上限(攻方整場共用;battleInit 參數 popCap 可覆蓋)。人口 = UNITS[u].pop(每次放 1 個單位,squad 恆為 1)
 
 const TD_SEP_R = 0.35;          // 分離力半徑(格)
 const TD_SEP_W = 0.6;           // 分離力權重
@@ -94,7 +94,7 @@ function battleInit(init) {
 function tdDeployable(def) {
   return !!def && (def.fac === 'han' || def.fac === 'both');
 }
-// 所有可放兵種中最小的一隊人口(判定「用完」用)
+// 所有可放兵種中最小的單位人口(判定「用完」用)
 function tdMinDeployPop() {
   let m = Infinity;
   Object.keys(UNITS).forEach(function (k) {
@@ -159,7 +159,7 @@ function canDeploy(b, part, x, y) {
   return cells[y * MAP_W + x] === 1;
 }
 
-// 放一隊 u 於 (x, y) 的判定:回傳 true 或原因字串(noUnit | cell | popcap | cap | over)。不改狀態
+// 放 1 個單位 u 於 (x, y) 的判定:回傳 true 或原因字串(noUnit | cell | popcap | cap | over)。不改狀態
 function tdDeployWhy(b, u, x, y) {
   if (b.over) return 'over';
   const def = UNITS[u];
@@ -190,7 +190,7 @@ function tdRunCmd(b, c) {
   else logEvent(b, 'cmdFail', { op: c.op, why: 'op' });
 }
 
-// 放一隊(c.u);c.part 保留於指令但不影響判定,放入單位一律為 'van'(舊錄影相容)
+// 放 1 個單位(c.u);c.part 保留於指令但不影響判定,放入單位一律為 'van'(舊錄影相容)
 function tdDeploy(b, c) {
   const why = tdDeployWhy(b, c.u, c.x, c.y);
   if (why !== true) { logEvent(b, 'deployFail', { why: why, u: c.u, x: c.x, y: c.y }); return; }
@@ -243,16 +243,18 @@ function tdRetreat(b) {
   logEvent(b, 'retreat', {});
 }
 
-// 一隊 = UNITS[u].squad 個個體單位,以放置格為中心、固定偏移排列
+// 單兵放置制:每次放 1 個單位(屬性取 UNIT_PLACE_STAT,u.st),位於放置格中心。名稱沿用 tdSpawnSquad 供舊測試呼叫
 function tdSpawnSquad(b, u, part, cx, cy) {
   const def = UNITS[u];
+  const st = def.place || null;
   const sq = b.nextSquad++;
-  for (let k = 0; k < def.squad; k++) {
-    const x = cx + 0.5 + ((k % 4) - 1.5) * TD_SPREAD;
-    const y = cy + 0.5 + (Math.floor(k / 4) - 0.5) * TD_SPREAD;
+  const hp0 = st ? st.hp : def.hp;
+  for (let k = 0; k < 1; k++) {
+    const x = cx + 0.5;
+    const y = cy + 0.5;
     const nu = {
-      id: b.nextUid++, u: u, team: 0, squad: sq, part: part, cls: def.cls,
-      x: x, y: y, px: x, py: y, hp: def.hp, maxHp: def.hp, cdT: 0,
+      id: b.nextUid++, u: u, team: 0, squad: sq, part: part, cls: def.cls, st: st,
+      x: x, y: y, px: x, py: y, hp: hp0, maxHp: hp0, cdT: 0,
       goal: null, goalCat: null, profile: def.profile, prefIdx: 0, wReal: null,
       think: true, nextThink: 0, tgt: null, nxt: -1, stuck: 0, cstuck: 0, uBan: -1, utgt: null,
       home: null, fx: {}, hasFx: false, charge: false,
@@ -265,6 +267,12 @@ function tdSpawnSquad(b, u, part, cx, cy) {
     b.units.push(nu);
   }
 }
+
+// 個體攻擊 / 防禦:放置單位取 u.st(UNIT_PLACE_STAT),其餘(守軍、測試手建單位)取 UNITS 基準
+function tdAtkOf(u, def) { return u.st ? u.st.atk : def.atk; }
+function tdDefOf(u, def) { return u.st ? u.st.def : def.def; }
+// 單位人口(戰損統計用)
+function tdPopOf(u) { return u.st ? u.st.pop : 1; }
 
 // 效果修正(fx drum 加速/加攻速;fx ambush 加攻;fx flag 不在此)
 function tdSpd(u, def) {
@@ -299,7 +307,7 @@ function tdSpawnDefender(b, r, sq) {
     x: r.x, y: r.y, px: r.x, py: r.y, hp: def.hp, maxHp: def.hp, cdT: 0,
     goal: null, goalCat: null, profile: def.profile, prefIdx: 0,
     think: false, nextThink: 0, tgt: null, nxt: -1, stuck: 0, cstuck: 0, uBan: -1, utgt: null,
-    active: false, hurt: false,
+    active: r.trig === 'hit', hurt: false,   // hit 型守軍由建築受擊釋放,釋放時即啟動全圖追擊(否則會永遠待命)
     home: { x: r.hx, y: r.hy, leash: r.leash, alert: r.alert, trig: r.trig }, fx: {}, hasFx: false, charge: false,
     fRef: null, fGen: -1, fCell: -1, fGoal: null, fEpoch: -1, fRes: null, bk: -1, bkI: -1
   });
@@ -680,7 +688,7 @@ function tdShotKind(u, def) {
 function tdAttack(b, u, def) {
   const tgt = u.tgt;
   const hd = b.map.height[tdCell(u.x, u.y)] - b.map.height[tgt.y * MAP_W + tgt.x];
-  const att = { cls: def.cls, atk: def.atk, vs: def.vs || null };
+  const att = { cls: def.cls, atk: tdAtkOf(u, def), vs: def.vs || null };
   let dmg = hitDamage(att, { cls: null, def: tgt.def }, unitBonus(def, 'plain', hd), null, true);
   if (u.charge) { dmg *= TD_CHARGE_BONUS; u.charge = false; }
   dmg *= tdFxAtk(u);
@@ -697,8 +705,8 @@ function tdAttack(b, u, def) {
 function tdAttackUnit(b, u, def, t) {
   const tdef = UNITS[t.u];
   const hd = b.map.height[tdCell(u.x, u.y)] - b.map.height[tdCell(t.x, t.y)];
-  const att = { cls: def.cls, atk: def.atk, vs: def.vs || null };
-  let dmg = hitDamage(att, { cls: tdef.cls, def: tdef.def }, unitBonus(def, 'plain', hd), unitBonus(tdef, 'plain', 0), false);
+  const att = { cls: def.cls, atk: tdAtkOf(u, def), vs: def.vs || null };
+  let dmg = hitDamage(att, { cls: tdef.cls, def: tdDefOf(t, tdef) }, unitBonus(def, 'plain', hd), unitBonus(tdef, 'plain', 0), false);
   if (u.charge) { dmg *= TD_CHARGE_BONUS; u.charge = false; }
   dmg *= tdFxAtk(u) * tdMarkMul(t);
   t.hp = Math.max(0, t.hp - dmg);
@@ -1060,7 +1068,7 @@ function tdResolveDeaths(b) {
     const u = b.units[k];
     if (u.hp > 0) b.units[w++] = u;
     else if (u.team === 1) b.stats.defLost++;
-    else b.stats.lost++;
+    else b.stats.lost += tdPopOf(u);
   }
   b.units.length = w;
 }
@@ -1326,7 +1334,7 @@ function tdFireBld(b, bl, main) {
     const ht = b.map.height[tdCell(t.x, t.y)];
     const att = { cls: null, atk: cb.atk, vs: cb.vs || null };
     const attB = { atk: heightMul(hb, ht), dmgIn: 1, range: 0, spd: 1 };
-    const tdEff = { cls: tdef.cls, def: tdef.def * (1 - (cb.ap || 0)) };
+    const tdEff = { cls: tdef.cls, def: tdDefOf(t, tdef) * (1 - (cb.ap || 0)) };
     const dmg = hitDamage(att, tdEff, attB, unitBonus(tdef, 'plain', 0), false) * TD_BLD_DMG_SCALE * hits[k].mul * tdMarkMul(t);
     t.hp = Math.max(0, t.hp - dmg);
     t.hurt = true;

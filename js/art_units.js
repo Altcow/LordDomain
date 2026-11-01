@@ -41,7 +41,7 @@
   A.UNIT.hjzong = { id: 'hjzong', name: '黃巾賊眾', tunic: '#a67845', trim: '#6b4a2e', pants: '#5e4630', head: 'yellow', headCol: '#ffd23a', weapon: 'spear', fierce: true };
   A.UNIT.daodun = { id: 'daodun', name: '刀盾兵', tunic: '#d23a2c', trim: '#ffc94a', pants: '#5a3a2a', head: 'helmet', headCol: '#6f7e8c', armor: '#9a7a52', weapon: 'dao', shield: 'rect', shieldCol: '#d23a2c' };
   A.UNIT.gongbing = { id: 'gongbing', name: '弓兵', tunic: '#f0dfb6', trim: '#d23a2c', pants: '#6b4a2e', head: 'bun', headCol: '#d23a2c', weapon: 'bow' };
-  A.UNIT.hunter = { id: 'hunter', name: '獵戶', tunic: '#7f9e4c', trim: '#5a6e2e', pants: '#6b4a2e', head: 'hat', headCol: '#e3b95c', weapon: 'bow' };
+  A.UNIT.hunter = { id: 'hunter', name: '獵戶', tunic: '#6e7a4a', trim: '#8a5a2b', pants: '#4a3a2a', head: 'fur', headCol: '#8a6a4a', weapon: 'bow', cape: '#9a6b3c', draw: drawHunter };
   A.UNIT.zeishuai = { id: 'zeishuai', name: '賊帥(具名)', tunic: '#3a3a44', trim: '#ffd23a', pants: '#2b1d1b', head: 'yellow', headCol: '#ffd23a', weapon: 'ji', fierce: true, beard: true, cape: '#8a2a22', armor: '#5a4a3a' };
   // ---- 環境 NPC(人流)外觀:同一 chibi 模板的參數組合 ----
   var NPC = {
@@ -145,6 +145,17 @@
     A.poly(ctx, [[12, -12], [28, -12], [28, -8], [12, -8]], C.wood[1], 0.7);
     A.poly(ctx, [[26, -15], [30, -10], [26, -5]], C.stone[0], 0.8);
     crew(ctx, s, -9, bob, back, false);
+  }
+
+  // 獵戶:皮帽 + 獸皮披肩(spec.cape)+ 右肩箭袋(箭羽露出);人物本體、短弓與姿勢沿用人物繪製
+  function drawHunter(ctx, s, back, fr) {
+    var bob = fr === 1 ? -1 : 0;
+    chibiRawBase(ctx, s, back, fr);
+    A.poly(ctx, [[3.4, -21 + bob], [7.4, -21 + bob], [9.4, -6 + bob], [5.4, -5 + bob]], '#7a5232', 0.6);
+    A.poly(ctx, [[3.4, -21 + bob], [7.4, -21 + bob], [7.4, -19 + bob], [3.4, -19 + bob]], '#4a3422', 0.4);
+    A.line(ctx, [4.4, -21 + bob], [3.4, -26 + bob], '#e6dcc0', 1);
+    A.line(ctx, [6, -21 + bob], [6.8, -26 + bob], '#e6dcc0', 1);
+    A.line(ctx, [5.2, -21 + bob], [5.6, -27 + bob], '#c8523a', 1);
   }
 
   // 包裝 chibiRaw:spec.draw 存在時改由其繪製(器械用),否則走原本的人物繪製

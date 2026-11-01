@@ -16,7 +16,7 @@ function progInt(v, lo, hi, def) {
 function progBlank() {
   var d = {
     v: 1, lv: 1, xp: 0, mats: {}, legacy: false,
-    ftue: { step: '', off: false, done: {} },
+    ftue: { step: '', base: '', off: false, welcomed: false, done: {}, counts: { npcWin: 0, ghostWin: 0 } },
     seen: {},
     npc: { seq: 0, slots: [] },
     ghost: { seq: 0, slots: [] },
@@ -43,10 +43,20 @@ function progNorm(raw) {
   if (raw.ftue && typeof raw.ftue === 'object') {
     b.ftue.step = typeof raw.ftue.step === 'string' ? raw.ftue.step : '';
     b.ftue.off = raw.ftue.off === true;
+    b.ftue.welcomed = raw.ftue.welcomed === true;
+    b.ftue.base = typeof raw.ftue.base === 'string' ? raw.ftue.base : '';
+    if (raw.ftue.counts && typeof raw.ftue.counts === 'object') {
+      b.ftue.counts.npcWin = progInt(raw.ftue.counts.npcWin, 0, Number.MAX_SAFE_INTEGER, 0);
+      b.ftue.counts.ghostWin = progInt(raw.ftue.counts.ghostWin, 0, Number.MAX_SAFE_INTEGER, 0);
+    }
     if (raw.ftue.done && typeof raw.ftue.done === 'object') {
       for (k in raw.ftue.done) if (raw.ftue.done[k] === true) b.ftue.done[k] = true;
     }
   }
+  // 舊存檔相容:等級已超過某關的等級,該關視為完成;已達 Lv2 以上的存檔不再顯示歡迎泡泡
+  Object.keys(PROG_FTUE_REQ).forEach(function (L) { if (b.lv > +L) b.ftue.done[PROG_FTUE_REQ[L]] = true; });
+  if (b.ftue.done.npcWin2) b.ftue.done.ghostWin1 = true;   // 舊版第 4 關(再贏 1 場野營)已完成者,視為新第 4 關完成
+  if (b.lv > 1) b.ftue.welcomed = true;
   if (raw.seen && typeof raw.seen === 'object') {
     for (k in raw.seen) if (raw.seen[k] === true) b.seen[k] = true;
   }
@@ -161,7 +171,7 @@ function progMigrateReset() {
 }
 
 var PROG_RES_NAME = { coin: '金', wood: '木', stone: '石' };
-var PROG_FTUE_TEXT = { houses2: '蓋好 2 座民房', npcWin1: '野營勝 1 場', campSet: '套用或調整戰陣 1 次', ghostWin1: '他城勝 1 場' };
+var PROG_FTUE_TEXT = { houses2: '① 再蓋 1 座民房', npcWin1: '② 野營勝 1 場', campSet: '③ 調整戰鬥陣 1 次', npcWin2: '④ 再贏 1 場野營', ghostWin1: '④ 打贏 1 場隨機戰鬥' };
 
 function progBossName(id) {
   var found = null;
@@ -209,6 +219,7 @@ function progDoUpgrade() {
   p.xp -= c.xp;
   p.lv += 1;
   progSave();
+  progFtueCheck();
   if (typeof saveWorld === 'function') saveWorld();
   return { ok: true, reason: '', lv: p.lv };
 }
@@ -242,7 +253,7 @@ function progMatsFrom(tier, fac) {
 // 會更新 prog(經驗、材料、friendHits、bossBest)與 world.res(資源),並 progSave();world 的存檔由呼叫端 saveWorld()。
 function progOnBattle(info) {
   var p = progGet(), R = PROG_REWARD, out = { res: { coin: 0, wood: 0, stone: 0 }, xp: 0, mats: {}, bossFirst: false };
-  var kind, T, stars, diff, pct, lvd, mult, rep, base, k, xpv, xpMul = 1, bdef = null, fac, pidKey, seedV,
+  var kind, T, stars, diff, pct, lvd, mult, rep, pm, base, k, xpv, xpMul = 1, bdef = null, fac, pidKey, seedV,
     commons, uncommons, rares, cnt, off, i, id, prevBest, bf, rareOk, pool;
   if (!info || typeof info !== 'object') return out;
   kind = info.kind;
@@ -258,6 +269,8 @@ function progOnBattle(info) {
 
   if (kind === 'ghost' || kind === 'friend') {
     mult = 1;
+    pm = info.practice ? PROG_REWARD.practiceMul : 1;
+    if (kind === 'ghost' && stars >= 1 && !info.practice) p.ftue.counts.ghostWin = (p.ftue.counts.ghostWin || 0) + 1;
     if (kind === 'friend') {
       k = String(info.snapHash || '');
       rep = (p.friendHits[k] || 0) + 1;
@@ -266,8 +279,10 @@ function progOnBattle(info) {
       mult = R.friendRepeat[Math.min(rep, R.friendRepeat.length) - 1];
     }
     base = R.lootBase(T);
-    for (k in base) out.res[k] = Math.floor(base[k] * lvd * pct * R.starLoot(stars) * mult);
+    for (k in base) out.res[k] = Math.floor(base[k] * lvd * pct * R.starLoot(stars) * mult * pm);
+    xpMul = pm;
   } else if (kind === 'npc' || kind === 'boss') {
+    if (stars >= 1) p.ftue.counts.npcWin = (p.ftue.counts.npcWin || 0) + 1;
     base = R.lootBase(T);
     for (k in base) out.res[k] = Math.floor(base[k] * lvd * pct * R.starLoot(stars) * R.npcResRate);
     if (kind === 'boss') bdef = progBossDef(info.id);
@@ -335,6 +350,58 @@ function progMatConvert(fromId, toId) {
   return { ok: true, reason: '' };
 }
 
+// ───── 新手教學偵測(progui 每秒輪詢呼叫;不掛事件)─────
+// 只看當前關卡 PROG_FTUE_REQ[lv]。野營勝場由 battleui 寫入 done.npcWin1(本檔另以 counts.npcWin 備援與第 4 關計數)。
+function progFtueReady() { return typeof world !== 'undefined' && !!world && !!world.res; }
+// 場上民房數(經營棋盤,不含戰陣棋盤)
+function progHouseCount() {
+  var objs = typeof estateObjects === 'function' ? estateObjects() : null, n = 0;
+  if (!objs) return 0;
+  objs.forEach(function (o) { if (o && o.type === 'house') n++; });
+  return n;
+}
+// 戰陣簽名:物件種類、位置、方向排序後的雜湊。戰陣棋盤尚未建立(world.stash 為 null)視為空戰陣;無法呼叫 campBoard 時回 null
+function progCampSig() {
+  var b, list;
+  if (typeof campBoard !== 'function') return null;
+  b = campBoard();
+  list = (b && b.objects ? b.objects : []).map(function (o) { return o.type + '@' + o.x + ',' + o.y + ',' + (o.rot | 0); }).sort();
+  return list.length + ':' + progHash(list.join('|'));
+}
+// 關卡開始時記下的基準值;無法取得回 null(本次先不偵測)
+function progFtueBase(id) {
+  if (id === 'campSet') return progCampSig();
+  if (id === 'npcWin2') return String(progGet().ftue.counts.npcWin);
+  return '';
+}
+function progFtueDone(id) {
+  var p = progGet(), sig;
+  if (id === 'houses2') return progHouseCount() >= PROG_TUT_HOUSES;
+  if (id === 'npcWin1') return p.ftue.counts.npcWin >= 1;
+  if (id === 'ghostWin1') return p.ftue.counts.ghostWin >= 1;
+  if (id === 'campSet') { sig = progCampSig(); return sig !== null && sig !== p.ftue.base; }
+  if (id === 'npcWin2') return p.ftue.counts.npcWin - (+p.ftue.base) >= 1;
+  return false;
+}
+// 偵測當前關卡;第一次看到某關時記下基準。回傳本次新完成的關卡 id 陣列;有變動才寫存檔。
+function progFtueCheck() {
+  var p, cur, base, got = [], changed = false;
+  if (!progFtueReady()) return got;
+  p = progGet();
+  cur = PROG_FTUE_REQ[p.lv];
+  if (!cur || p.ftue.done[cur]) return got;
+  if (p.ftue.step !== cur) {
+    base = progFtueBase(cur);
+    if (base === null) return got;
+    p.ftue.step = cur;
+    p.ftue.base = base;
+    changed = true;
+  }
+  if (progFtueDone(cur)) { p.ftue.done[cur] = true; got.push(cur); changed = true; }
+  if (changed) progSave();
+  return got;
+}
+
 // ───── 測試用(只供介面「測試工具」區使用;正式流程不呼叫)─────
 // 直接設為 n 級:補足該級升級所需的經驗、材料、資源(只加不扣),並滿足首領與教學條件。
 function progDebugSetLv(n) {
@@ -345,13 +412,13 @@ function progDebugSetLv(n) {
     p.xp = c.xp;
     for (id in c.mats) p.mats[id] = Math.max(p.mats[id] || 0, c.mats[id]);
     if (c.boss) p.bossBest[c.boss] = Math.max(p.bossBest[c.boss] || 0, 1);
-    if (c.ftue) p.ftue.done[c.ftue] = true;
     if (typeof world !== 'undefined' && world && world.res) {
       for (k in c.res) world.res[k] = Math.max(world.res[k] || 0, c.res[k]);
     }
   } else {
     p.xp = 0;
   }
+  Object.keys(PROG_FTUE_REQ).forEach(function (k) { if (+k <= L) p.ftue.done[PROG_FTUE_REQ[k]] = true; });
   progSave();
   if (typeof saveWorld === 'function') saveWorld();
   return p.lv;

@@ -1,7 +1,8 @@
 // js/progui.js — 城市等級介面(PLAN_PROGRESSION §2.5、§7):頂列 Lv 晶片、升級抽屜、測試工具、鎖頭角標與解鎖紅點、FTUE 泡泡。
 // 只讀 prog.js / progdata.js 的函式與常數,數字一律不寫在本檔。DOM 全由本檔建立(index.html 只載入本檔)。
 // 外部全域(ui.js、battleui.js 等)一律 typeof 守衛;本檔在載入時建立介面,呼叫端可隨時呼叫 progLockBadge / progSeenMark。
-// 全域名稱:initProgUI progUiTick progUiRefresh progUiOpen progUiClose progLockBadge progSeenMark progFtueTick progFtueShow progFtueHide;其餘內部一律 pui / puiXxx。
+// 新手任務:左上任務提示條(單行、透明)、歡迎泡泡、全畫面任務清單(#questList,分頁可擴充)。
+// 全域名稱:initProgUI progUiTick progUiRefresh progUiOpen progUiClose progLockBadge progSeenMark progFtueTick progFtueShow progFtueHide progQuestOpen;其餘內部一律 pui / puiXxx。
 
 var pui = {
   inited: false, open: false, toolsOpen: false, timer: 0,
@@ -9,8 +10,15 @@ var pui = {
   drawer: null, headLv: null, list: null, req: null, unl: null,
   toolsBtn: null, tools: null, sel: null, legacyBtn: null,
   why: null, upBtn: null,
-  ftue: null, ftueTxt: null, ftueStep: ''
+  ftue: null, ftueTxt: null, ftueProg: null, ftueX: null, ftueStep: '',
+  wel: null, welShown: false, taskShown: false, doneAt: 0, doneSeen: null,
+  quest: null, questOpen: false, qTab: 'tutorial', qTabs: null, qList: null, qProg: null, qMsg: null, qToggle: null, taskBtn: null
 };
+
+// 清單分頁登錄:之後加「日常任務」等,在此登錄並於 puiQuestItems 實作即可;目前只放新手任務
+var PUI_QUEST_TABS = [{ id: 'tutorial', name: '新手任務' }];
+var PUI_STATE_NAME = { done: '已完成', cur: '進行中', todo: '未開始' };
+var PUI_DONE_MS = 5000;   // 全部完成後提示條停留的毫秒數,之後自動收起(prog.ftue.off)
 
 var PUI_FEATURE_NAME = {
   estate: '經營', battleDesign: '戰陣布置', npc: '野營', sandbox: '沙盤', tplEstate: '經營範本', tplCamp: '戰陣範本',
@@ -122,7 +130,7 @@ function puiRenderReq(p, c, lvMax) {
   }
   if (c.ftue) {
     ok = !!p.ftue.done[c.ftue];
-    R.appendChild(puiReq(ok, '教學:' + PROG_FTUE_TEXT[c.ftue], null, null, ok ? '' : '完成教學後可升級'));
+    R.appendChild(puiReq(ok, '教學:' + PROG_FTUE_TEXT[c.ftue], null, null, ok ? '' : '前往:' + ((PROG_TUT_HINTS[c.ftue] || {}).go || '')));
   }
 }
 
@@ -148,6 +156,7 @@ function progUiRefresh() {
   pui.chipLv.textContent = 'Lv ' + lv;
   pui.chipFill.style.width = Math.round(pct * 100) + '%';
   pui.chipDot.hidden = !(lv > 1 && !p.seen['lvup:' + lv]);
+  puiTaskRender();
   if (!pui.open) return;
   pui.headLv.textContent = '目前 Lv ' + lv + ' / ' + PROG_LV_MAX;
   pui.sel.value = String(lv);
@@ -199,6 +208,7 @@ function puiToggleTools() {
 function puiAfterChange() {
   if (typeof landDrawInvalidate === 'function') landDrawInvalidate();
   if (typeof buildToolbar === 'function') buildToolbar();
+  if (typeof syncSideBar === 'function') syncSideBar();
   if (typeof saveWorld === 'function') saveWorld();
   progUiRefresh();
 }
@@ -299,8 +309,10 @@ function puiBuildDrawer() {
   pui.unl = puiEl('div', 'pg-unl');
   pui.toolsBtn = puiBtn('pg-tt', '🧪 測試工具(僅測試用) ▸', function () { puiToggleTools(); });
   toolsWrap = puiBuildTools();
+  pui.taskBtn = puiBtn('pg-tt', '📋 新手任務清單 ▸', function () { progUiClose(); progQuestOpen(); });
   pui.list.appendChild(pui.req);
   pui.list.appendChild(pui.unl);
+  pui.list.appendChild(pui.taskBtn);
   pui.list.appendChild(pui.toolsBtn);
   pui.list.appendChild(toolsWrap);
   pui.why = puiEl('span', 'pg-why', '');
@@ -313,20 +325,170 @@ function puiBuildDrawer() {
   document.body.appendChild(pui.drawer);
 }
 
+// 模式判斷:戰鬥、錄影、拍照、釣魚、仙獸、沙盤與備份中不顯示任務提示
+function puiModeOk() {
+  var b = document.body, m = (typeof game !== 'undefined' && game) ? game.mode : 'estate';
+  if (['attack', 'replay', 'fishing', 'pet'].indexOf(m) >= 0) return false;
+  if (typeof game !== 'undefined' && game && game.backup) return false;
+  if (b && b.classList && (b.classList.contains('photo-mode') || b.classList.contains('atk-mode') ||
+      b.classList.contains('replay-mode') || b.classList.contains('sandbox'))) return false;
+  return true;
+}
+
+// 新手任務各項目(依 PROG_FTUE_REQ 順序):state = done / cur(當前關) / todo
+function puiQuestItems(tabId) {
+  var p = progGet(), out = [], cur = PROG_FTUE_REQ[p.lv];
+  if (tabId !== 'tutorial') return out;
+  Object.keys(PROG_FTUE_REQ).forEach(function (L) {
+    var id = PROG_FTUE_REQ[L], st = 'todo', t = PROG_TUT_HINTS[id] || {};
+    if (p.ftue.done[id]) st = 'done';
+    else if (id === cur) st = 'cur';
+    out.push({ id: id, text: PROG_FTUE_TEXT[id] || id, hint: t.hint || '', go: t.go || '', state: st });
+  });
+  return out;
+}
+
+// 提示條內容(只看進度,不看模式與關閉狀態):kind = none / step / ready / done
+function puiTaskModel() {
+  var p = progGet(), items = puiQuestItems('tutorial'), n = 0, cur = PROG_FTUE_REQ[p.lv];
+  items.forEach(function (it) { if (it.state === 'done') n++; });
+  if (!cur) return { kind: 'none', text: '', n: n, total: items.length };
+  if (n === items.length) return { kind: 'done', text: '🎉 新手任務完成', n: n, total: items.length };
+  if (p.ftue.done[cur]) return { kind: 'ready', text: '✓ 本步完成,點頂列 Lv 升級', n: n, total: items.length };
+  return { kind: 'step', text: PROG_FTUE_TEXT[cur], n: n, total: items.length };
+}
+
+function puiTaskRender() {
+  var p, m, wel, show;
+  if (!pui.ftue || !pui.wel) return;
+  p = progGet();
+  m = puiTaskModel();
+  wel = !p.ftue.welcomed && puiModeOk();
+  pui.welShown = wel;
+  pui.wel.hidden = !wel;
+  show = !wel && !p.ftue.off && m.kind !== 'none' && puiModeOk();
+  pui.taskShown = show;
+  pui.ftue.hidden = !show;
+  if (!show) return;
+  pui.ftueTxt.textContent = m.text;
+  pui.ftueProg.textContent = m.n + '/' + m.total;
+  pui.ftue.setAttribute('title', '點開任務清單');
+  if (pui.questOpen) puiQuestRender();
+}
+
+function puiTaskHide() {
+  var p = progGet();
+  p.ftue.off = true;
+  progSave();
+  puiTaskRender();
+  if (pui.questOpen) puiQuestRender();
+}
+
+function puiTaskToggle() {
+  var p = progGet();
+  p.ftue.off = !p.ftue.off;
+  progSave();
+  puiTaskRender();
+  if (pui.questOpen) puiQuestRender();
+}
+
+function puiWelcomeDone() {
+  var p = progGet();
+  p.ftue.welcomed = true;
+  progSave();
+  puiTaskRender();
+}
+
+function puiQuestOpen() {
+  if (!pui.quest) return;
+  pui.questOpen = true;
+  pui.quest.hidden = false;
+  puiQuestRender();
+}
+
+function puiQuestClose() {
+  pui.questOpen = false;
+  if (pui.quest) pui.quest.hidden = true;
+}
+
+// 清單重畫:分頁列、標題進度、項目(✓/☐、狀態、怎麼做、前往)、頂端訊息、底部切換提示條鈕
+function puiQuestRender() {
+  var p = progGet(), m = puiTaskModel(), items, row, body;
+  pui.qTabs.textContent = '';
+  PUI_QUEST_TABS.forEach(function (t) {
+    pui.qTabs.appendChild(puiBtn('ql-tab' + (t.id === pui.qTab ? ' on' : ''), t.name, function () { pui.qTab = t.id; puiQuestRender(); }));
+  });
+  items = puiQuestItems(pui.qTab);
+  pui.qList.textContent = '';
+  items.forEach(function (it) {
+    row = puiEl('div', 'ql-item ' + it.state);
+    row.appendChild(puiEl('span', 'ql-mk', it.state === 'done' ? '✓' : '☐'));
+    body = puiEl('div', 'ql-body');
+    body.appendChild(puiEl('div', 'ql-t', it.text));
+    body.appendChild(puiEl('div', 'ql-st', PUI_STATE_NAME[it.state]));
+    body.appendChild(puiEl('div', 'ql-hint', it.hint));
+    if (it.state !== 'done') body.appendChild(puiEl('div', 'ql-go', '前往:' + it.go));
+    row.appendChild(body);
+    pui.qList.appendChild(row);
+  });
+  pui.qProg.textContent = m.n + '/' + m.total;
+  pui.qMsg.textContent = m.kind === 'done' ? '🎉 新手任務完成!點頂列 Lv 升級' : (m.kind === 'ready' ? '✓ 本步完成,點頂列 Lv 升級' : '');
+  pui.qMsg.hidden = !pui.qMsg.textContent;
+  pui.qToggle.textContent = p.ftue.off ? '顯示左上提示' : '隱藏左上提示';
+}
+
+// 全畫面任務清單:標題與底部鈕固定,清單區自己捲動;點背景空白處關閉
+function puiQuestBuild() {
+  var q = puiEl('div'), panel = puiEl('div', 'ql-panel'), head = puiEl('div', 'ql-head'), foot = puiEl('div', 'ql-foot');
+  pui.quest = q;
+  q.id = 'questList';
+  q.setAttribute('role', 'dialog');
+  q.hidden = true;
+  head.appendChild(puiEl('b', 'ql-title', '任務清單'));
+  pui.qProg = puiEl('span', 'ql-prog', '');
+  head.appendChild(pui.qProg);
+  head.appendChild(puiBtn('ql-x', '✕', function () { puiQuestClose(); }));
+  pui.qTabs = puiEl('div', 'ql-tabs');
+  pui.qMsg = puiEl('div', 'ql-msg', '');
+  pui.qList = puiEl('div', 'ql-list');
+  pui.qToggle = puiBtn('ql-tg', '', function () { puiTaskToggle(); });
+  foot.appendChild(pui.qToggle);
+  foot.appendChild(puiBtn('ql-close', '關閉', function () { puiQuestClose(); }));
+  panel.appendChild(head);
+  panel.appendChild(pui.qTabs);
+  panel.appendChild(pui.qMsg);
+  panel.appendChild(pui.qList);
+  panel.appendChild(foot);
+  q.appendChild(panel);
+  q.addEventListener('click', function (ev) { if (ev && ev.target === q) puiQuestClose(); });
+  document.body.appendChild(q);
+}
+
+// 左上任務提示條(資源列下方、透明、單行)、歡迎泡泡、任務清單
 function puiBuildFtue() {
   pui.ftue = puiEl('div');
   pui.ftue.id = 'progFtue';
   pui.ftue.setAttribute('role', 'status');
   pui.ftue.hidden = true;
   pui.ftueTxt = puiEl('span', 'pg-ftx', '');
+  pui.ftueProg = puiEl('span', 'pg-tkp', '');
+  pui.ftueX = puiBtn('pg-fx', '✕', function () { puiTaskHide(); });
   pui.ftue.appendChild(pui.ftueTxt);
-  pui.ftue.appendChild(puiBtn('pg-fx', '✕', function () {
-    var p = progGet();
-    p.ftue.off = true;
-    progSave();
-    progFtueHide();
-  }));
+  pui.ftue.appendChild(pui.ftueProg);
+  pui.ftue.appendChild(pui.ftueX);
+  pui.ftue.addEventListener('click', function (ev) {
+    if (ev && ev.target === pui.ftueX) return;
+    puiQuestOpen();
+  });
   document.body.appendChild(pui.ftue);
+  pui.wel = puiEl('div');
+  pui.wel.id = 'progWelcome';
+  pui.wel.setAttribute('role', 'status');
+  pui.wel.hidden = true;
+  pui.wel.appendChild(puiEl('span', 'pg-wtx', '歡迎,城主!先點下方的建築,蓋一座民房;點頂列 Lv 看升級條件。'));
+  pui.wel.appendChild(puiBtn('pg-wok', '知道了', function () { puiWelcomeDone(); }));
+  document.body.appendChild(pui.wel);
+  puiQuestBuild();
 }
 
 // 載入時呼叫一次(本檔末尾);重複呼叫無效
@@ -343,10 +505,38 @@ function initProgUI() {
   progUiRefresh();
 }
 
-// 每秒一次:晶片與(開啟時)抽屜跟著資源與經驗變化。不寫存檔。
+// 每秒一次:偵測新手教學進度(progFtueCheck)、完成時 toast、全部完成後計時收起;晶片與(開啟時)抽屜跟著變化。
 function progUiTick() {
   if (!pui.inited) return;
+  if (typeof progNeedsMigrate === 'function' && progNeedsMigrate()) return;
+  puiFtueWatch();
   progUiRefresh();
+}
+
+// 教學偵測輪詢:第一次呼叫時先記下已完成的關卡(不 toast);之後新完成的關卡 toast 一次
+function puiFtueWatch() {
+  var p, m, id;
+  if (typeof progFtueCheck !== 'function') return;
+  p = progGet();
+  if (!pui.doneSeen) {
+    pui.doneSeen = {};
+    Object.keys(PROG_FTUE_REQ).forEach(function (L) { if (p.ftue.done[PROG_FTUE_REQ[L]]) pui.doneSeen[PROG_FTUE_REQ[L]] = true; });
+  }
+  progFtueCheck();
+  Object.keys(PROG_FTUE_REQ).forEach(function (L) {
+    id = PROG_FTUE_REQ[L];
+    if (p.ftue.done[id] && !pui.doneSeen[id]) {
+      pui.doneSeen[id] = true;
+      puiToast('✓ 完成:' + (PROG_FTUE_TEXT[id] || id));
+    }
+  });
+  m = puiTaskModel();
+  if (m.kind === 'done' && pui.taskShown && !p.ftue.off) {
+    if (!pui.doneAt) pui.doneAt = Date.now();
+    else if (Date.now() - pui.doneAt >= PUI_DONE_MS) { p.ftue.off = true; progSave(); pui.doneAt = 0; puiTaskRender(); }
+  } else {
+    pui.doneAt = 0;
+  }
 }
 
 // 鎖頭角標:未開放回 "🔒LvN",已開放或未知 id 回 ""
@@ -385,22 +575,27 @@ function progFtueTick() {
   return step;
 }
 
-// 顯示教學泡泡(一次一則,新的會取代舊的)。已永久關閉或步驟文字不存在回 false。
+// 顯示當前教學步驟的提示條(提示條永遠顯示當前關卡,stepId 只用來檢查有效)。已關閉或步驟不存在回 false。
 function progFtueShow(stepId) {
-  var p, txt;
+  var p;
   if (!pui.inited) return false;
   p = progGet();
-  txt = PROG_FTUE_TEXT[stepId];
-  if (p.ftue.off || !txt) return false;
+  if (p.ftue.off || !PROG_FTUE_TEXT[stepId]) return false;
   pui.ftueStep = stepId;
-  pui.ftueTxt.textContent = '提示:' + txt;
-  pui.ftue.hidden = false;
+  puiTaskRender();
   return true;
 }
 
 function progFtueHide() {
   pui.ftueStep = '';
   if (pui.ftue) pui.ftue.hidden = true;
+}
+
+// 開啟全畫面任務清單(升級抽屜、結算畫面皆可呼叫;不受提示條是否關閉影響)
+function progQuestOpen() {
+  if (!pui.inited) return false;
+  puiQuestOpen();
+  return true;
 }
 
 if (typeof document !== 'undefined' && document.body) initProgUI();

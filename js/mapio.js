@@ -228,7 +228,7 @@ function campCapCheck(bd) {
   });
   const out = [];
   keys.forEach(key => {
-    const max = CAMP_CAPS[key][campTierNow() - 1];
+    const max = typeof campCap === 'function' ? campCap(key) : CAMP_CAPS[key][campTierNow() - 1];
     const n = have[key] || 0;
     if (n > max) out.push({ key: key, have: n, max: max });
   });
@@ -361,6 +361,11 @@ function scoutVisible(type) {
 }
 
 function mioSimVer() { return typeof SIM_VER !== 'undefined' ? SIM_VER : 1; }
+// 舊版錄影(rep.v 低於目前 SIM_VER:戰鬥規則已更新,重算 checksum 不符)不可重播,只保留文字戰報
+const REPLAY_OLD_TEXT = '舊版錄影(戰鬥規則已更新),無法重播';
+function replayIsOldVer(rep) {
+  return !!rep && typeof rep === 'object' && (rep.v | 0) < mioSimVer();
+}
 function mioHz() { return typeof SIM_HZ !== 'undefined' ? SIM_HZ : 10; }
 function mioDeep(v) { return JSON.parse(JSON.stringify(v)); }
 
@@ -449,7 +454,7 @@ function mioDeployPop(b) {
   (b.events || []).forEach(ev => {
     if (ev.type !== 'deploy' || !ev.data) return;
     const d = UNITS[ev.data.u];
-    n += d && d.squad ? d.squad : 1;
+    n += d && d.pop ? d.pop * (d.squad || 1) : 1;
   });
   return n;
 }

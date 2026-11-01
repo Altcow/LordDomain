@@ -610,7 +610,7 @@ function sfxwDeployKind(u) {
   return 'deployShout';
 }
 
-// 放兵成功時呼叫(一隊只響一聲)。count 為該隊人數(squad),音量隨人數略增且上限 1.25 倍;
+// 放兵成功時呼叫(每放 1 個單位響 1 聲)。音量隨 max(count, 該兵種 pop) 略增(pop 大者稍重)且上限 1.25 倍;count 可傳 1 或省略;
 // gx / gy 為格座標(可省略,省略時不做聲像)。連續放兵最短 90 ms;回傳是否實際發聲
 function sfxwarDeploy(unitId, count, gx, gy) {
   try {
@@ -618,7 +618,8 @@ function sfxwarDeploy(unitId, count, gx, gy) {
     if (!kind) return false;
     const now = sfxwNow();
     if (SFXW.lastDeploy !== undefined && now - SFXW.lastDeploy < 0.09) return false;
-    const gain = Math.min(1.25, 1 + 0.08 * Math.log2(Math.max(1, count | 0)));
+    const dp = typeof UNITS === 'object' && UNITS && UNITS[unitId] ? UNITS[unitId].pop | 0 : 0;
+    const gain = Math.min(1.25, 1 + 0.08 * Math.log2(Math.max(1, count | 0, dp)));
     const sp = sfxwSpatial(gx, gy);
     const ok = sfxwPlay(kind, { gain: gain * sp.gain, pan: sp.has ? sp.pan : null });
     if (ok) SFXW.lastDeploy = now;

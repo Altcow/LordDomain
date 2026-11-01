@@ -1491,6 +1491,7 @@ function petOpen() {
   var s, gained;
   if (puLayer) return true;
   if (typeof game === 'undefined' || game.mode !== 'estate') return false;
+  if (typeof featGuard === 'function' && !featGuard('pet')) return false;
   s = petEnsure();
   gained = petSyncFish();
   puLastGain = gained;
@@ -1562,7 +1563,7 @@ function puMountButton() {
   btn = document.createElement('button');
   btn.id = 'btnPet';
   btn.title = '仙獸苑';
-  btn.textContent = '🐾';
+  btn.textContent = '🐲';
   btn.addEventListener('click', function () { petOpen(); });
   kids = top.children || [];
   for (i = 0; fb && i < kids.length; i++) if (kids[i] === fb) idx = i;

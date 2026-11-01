@@ -292,8 +292,16 @@ function tdUnitSpec(u) {
   return s;
 }
 
+// 體型倍率:放置單位依 pop 放大(pop 1 = 1.0、pop 5 ≈ 1.5、上限 1.6);守軍 / 無 st 者 1.0
+function tdBodyScale(u) {
+  if (!u.st || u.st.pop <= 1) return 1;
+  const s = 1 + 0.125 * (u.st.pop - 1);
+  return s > 1.6 ? 1.6 : s;
+}
+
+// 血條依該單位 HP(u.hp / u.maxHp);大體型者條較寬、較高
 function tdHpBar(ctx, p, u) {
-  const w = 12, top = p[1] - 50, f = Math.max(0, u.hp / u.maxHp);
+  const s = tdBodyScale(u), w = 12 * s, top = p[1] - 50 * s, f = Math.max(0, u.hp / u.maxHp);
   ctx.fillStyle = 'rgba(0,0,0,.55)';
   ctx.fillRect(p[0] - w / 2 - 0.5, top - 0.5, w + 1, 3);
   ctx.fillStyle = f > 0.5 ? '#6ccf5a' : (f > 0.25 ? '#e8c03a' : '#e0402a');
@@ -307,8 +315,11 @@ function tdDrawBody(ctx, u, e, p, time, col) {
   if (spec !== null && typeof ART.chibiPose === 'function') {
     const moving = u.x !== u.px || u.y !== u.py;
     const sx = (u.x - u.px) - (u.y - u.py);
+    const bs = tdBodyScale(u);
+    if (bs !== 1) { ctx.save(); ctx.translate(bx, by); ctx.scale(bs, bs); ctx.translate(-bx, -by); }
     ART.chibiPose(ctx, { spec: spec, x: bx, y: by, f: sx > 0 ? 3 : 0, fr: moving ? (Math.floor(time / (e.climb ? 260 : 200)) & 1) : 0 },
       ART.resBucket(view.zoom * viewport.dpr), artTodKey(), typeof currentSeason === 'string' ? currentSeason : undefined);
+    if (bs !== 1) ctx.restore();
     return;
   }
   drawBox(ctx, e.x - 0.1, e.y - 0.1, 0.2, 0.2, e.hz, 16, col);
@@ -347,7 +358,7 @@ function drawBattleDiag(ctx, d, time) {
     const p = gpt(e.x, e.y, e.hz);
     tdShadow(ctx, e);
     if (lod) {
-      tdLodDot(ctx, p[0], p[1] - 8, u.team, lr);
+      tdLodDot(ctx, p[0], p[1] - 8, u.team, u.st && u.st.pop > 1 ? lr * (1 + 0.5 * (tdBodyScale(u) - 1)) : lr);
     } else {
       tdDrawBody(ctx, u, e, p, time, TD_TEAM_COL[u.team] || TD_TEAM_COL[1]);
     }

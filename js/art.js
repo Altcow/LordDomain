@@ -1057,7 +1057,7 @@ var ART_KEY = 'lorddomain.art.v1';
 var ART_TOD_KEYS = ['dawn', 'noon', 'dusk', 'night'];
 var ART_TYPE_MAP = {
   house: 'house', palace: 'palace', tree: 'tree', bridge: 'bridge',
-  lumber: 'lumberyard', quarry: 'quarry', market: 'stall', gate: 'gatehouse', wall: 'wallseg',
+  lumber: 'lumberyard', quarry: 'quarry', market: 'market', gate: 'gatehouse', wall: 'wallseg',
   research: 'academy', archer: 'archeryrange', shield: 'barracks', cavalry: 'stable', siege: 'siegeyard',
   hospital: 'shop', stone: 'rocks', ramp: 'ramp',
   hq: 'camp_hq', tower: 'camp_tower', nutai: 'camp_nutai', shitai: 'camp_shitai', tent: 'camp_tent',

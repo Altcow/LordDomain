@@ -14,6 +14,10 @@ function progLandSide(lv) { return 20 + Math.floor(1.5 * (lv - 1)); }           
 function progPopCap(lv) { return 40 + Math.round((lv - 1) * 160 / 24); }        // PLACEHOLDER:Lv1 40 → Lv25 200(端點 200 = TD_POP_CAP,固定)
 function progCampCp(lv) { return 24 + Math.round((lv - 1) * 142 / 24); }        // PLACEHOLDER:Lv1 24 → Lv25 166
 function progCampTier(lv) { return lv <= 5 ? 1 : lv <= 10 ? 2 : lv <= 17 ? 3 : lv <= 22 ? 4 : 5; } // 對應既有 CAMP_CAPS 的 5 欄(PLACEHOLDER 分段)
+// 牆與柵欄分級數量(PLAN_DEFENSE「牆與柵欄分級數量」;單一處可調,全部 PLACEHOLDER;越後面越多,Lv1 牆至少 60 以容納 camp_lv01)
+function progWallCap(lv) { return 72 + Math.round((lv - 1) * 228 / 24); }        // PLACEHOLDER:城牆格數 Lv1 72 → Lv25 300(Lv1 需容納 camp_lv01 的外牆 + 兩道內屏牆)
+function progFenceCap(lv) { return lv < 2 ? 0 : 12 + Math.round((lv - 2) * 108 / 23); } // PLACEHOLDER:柵欄=鹿角 lujiao 格數;Lv2 起開放(PROG_UNLOCK_CAMP),Lv2 12 → Lv25 120;未開放回 0
+function progGateCap(lv) { return 2 + Math.round((lv - 1) * 6 / 24); }           // PLACEHOLDER:城門道數 Lv1 2 → Lv25 8
 function progTrapTotal(lv) { return lv < 6 ? 0 : Math.min(20, 4 + (lv - 6)); }  // PLACEHOLDER
 function progProdCap(type, lv) {                                                // PLACEHOLDER:生產建築數量上限
   if (type === 'house') return 4 + 3 * (lv - 1);                                // Lv25 = 76(宛城 66 戶可完整套用)
@@ -43,7 +47,17 @@ function progUpgradeCost(lv) {
 // 升 L+1 之前必須在首領營拿到 ≥1★ 的 NPC id(結構)
 const PROG_BOSS_REQ = { 5: 'huangjin', 8: 'shankou', 12: 'shuizhai', 14: 'jun', 17: 'shanyue', 20: 'hulao', 22: 'chanyu', 24: 'luoyang' };
 // 新手教學條件(結構;只在 Lv1~4)
-const PROG_FTUE_REQ = {};  // 緊急修正:教學旗標沒有任何程式碼設定,會讓新玩家卡在 Lv1;暫時移除升級條件(教學改版後再接回)
+const PROG_FTUE_REQ = { 1: 'houses2', 2: 'npcWin1', 3: 'campSet', 4: 'ghostWin1' };   // 順序即教學步驟;第 4 關 = 打贏 1 場隨機戰鬥(玩家陣地,kind:'ghost');npcWin2 僅供舊存檔相容
+// 教學偵測門檻(結構):場上民房總數需達此值(新手小村初始 2 座,再蓋 1 座)
+const PROG_TUT_HOUSES = 3;
+// 教學提示文字(集中於此,日後改流程只改這裡)。hint 為「怎麼做」
+const PROG_TUT_HINTS = {
+  houses2: { hint: '選建築 → 點地面 → ✓', go: '下方建築列' },
+  npcWin1: { hint: '左下 ⚔ 戰鬥 → 野營副本', go: '左下 ⚔ 戰鬥' },
+  campSet: { hint: '左下切到『戰鬥布置』,放或拆一個物件', go: '左下 戰鬥布置' },
+  npcWin2: { hint: '左下 ⚔ 戰鬥 → 野營副本', go: '左下 ⚔ 戰鬥' },
+  ghostWin1: { hint: '左下 ⚔ 戰鬥 → 隨機戰鬥', go: '左下 ⚔ 戰鬥' }
+};
 
 // ───────── 3. 戰鬥回報(PLACEHOLDER 公式;結構 = 輸入欄位與分流規則)─────────
 // 分流規則(結構,非數值):他城(PvP / ghost / 朋友)→ 資源 + 經驗;野營(NPC)→ 材料 + 經驗 + 少量資源;珍材料只出自野營 / 首領營。
@@ -59,6 +73,7 @@ const PROG_REWARD = {
   dropRareP: 0.2,                                                               // PLACEHOLDER:3★ 難營
   bossFirst: { 1: { xpMul: 2 }, 2: { xpMul: 2 }, 3: { xpMul: 3, rare: 1 } },    // PLACEHOLDER:首領營各星首次
   friendRepeat: [1, 0.6, 0.3, 0.1],                                             // PLACEHOLDER:同一戰帖碼(snapHash)第 n 次的回報倍率
+  practiceMul: 0.5,                                                             // PLACEHOLDER:打自己的陣地(練習)資源與經驗倍率
   matConvert: 3                                                                 // PLACEHOLDER:同品階 3 換 1
 };
 
@@ -138,16 +153,16 @@ const PROG_GHOST_SLOTS = 3; // 他城榜同時顯示幾座(結構)
 // ───────── 6. 等級開放表(結構:不是平衡數字)─────────
 // 經營建築:BUILD_GROUPS 的實際 id(research 不在分組內);共 171 件全覆蓋(tools/prog/prog_check.js 驗證)
 const PROG_UNLOCK_ESTATE = {
-  1: ['house', 'palace', 'lumber', 'quarry', 'tree', 'stone', 'well', 'field_sprout', 'vegetable_plot', 'fence_wood', 'woodpile', 'haystack', 'chicken', 'dog', 'deco_bush', 'flower_bed'],
-  2: ['field_millet', 'plow', 'hoe', 'ox', 'pig', 'duck', 'barrel_water', 'basket', 'grain_sacks', 'tree_willow', 'deco_rocks'],
-  3: ['market', 'wall', 'gate', 'stall_veg', 'stall_fruit', 'handcart', 'wheelbarrow', 'cat', 'tree_pine', 'road_stone'],
-  4: ['stairs', 'ramp', 'shield', 'training_dummy', 'deco_target', 'deco_weaponrack', 'flag_army', 'sheep', 'trough', 'fodder'],
-  5: ['shop_rice', 'shop_wine', 'stall_rice', 'stall_meat', 'stall_wine', 'winejar', 'winejar_big', 'food_table', 'mat', 'broom', 'privy'],
-  6: ['bridge', 'fish_rack', 'fishery', 'dock', 'boat_small', 'lotus', 'reeds', 'deco_pond', 'small_bridge', 'barrel_empty', 'goose'],
-  7: ['research', 'archer', 'bookshelf', 'shop_book', 'stall_book', 'stele', 'lamp_stand', 'deco_bamboo', 'fence_bamboo'],
-  8: ['post_station', 'inn', 'cart_hay', 'cart_goods', 'cart_empty', 'donkey', 'horse', 'stable', 'tree_maple'],
-  9: ['shop_cloth', 'stall_cloth', 'stall_pottery', 'stall_tea', 'shop_tea', 'tea_garden', 'bank', 'shop_pawn'],
-  10: ['cavalry', 'parade_ground', 'drill_ground', 'wall_courtyard', 'gate_courtyard', 'deco_campfire', 'deco_jumaa', 'deco_lujiao'],
+  1: ['house', 'palace', 'lumber', 'quarry', 'tree', 'stone', 'well', 'field_sprout', 'vegetable_plot', 'fence_wood', 'woodpile', 'haystack', 'chicken', 'dog', 'deco_bush', 'flower_bed', 'stone_table', 'stone_stool', 'bench_wood'],
+  2: ['field_millet', 'plow', 'hoe', 'ox', 'pig', 'duck', 'barrel_water', 'basket', 'grain_sacks', 'tree_willow', 'deco_rocks', 'table_wood'],
+  3: ['market', 'wall', 'gate', 'stall_veg', 'stall_fruit', 'handcart', 'wheelbarrow', 'cat', 'tree_pine', 'road_stone', 'table_long'],
+  4: ['stairs', 'ramp', 'shield', 'training_dummy', 'deco_target', 'deco_weaponrack', 'flag_army', 'sheep', 'trough', 'fodder', 'hu_chuang'],
+  5: ['shop_rice', 'shop_wine', 'stall_rice', 'stall_meat', 'stall_wine', 'winejar', 'winejar_big', 'food_table', 'mat', 'broom', 'privy', 'table_set'],
+  6: ['bridge', 'fish_rack', 'fishery', 'dock', 'boat_small', 'lotus', 'reeds', 'deco_pond', 'small_bridge', 'barrel_empty', 'goose', 'chair_bamboo'],
+  7: ['research', 'archer', 'bookshelf', 'shop_book', 'stall_book', 'stele', 'lamp_stand', 'deco_bamboo', 'fence_bamboo', 'screen_fold'],
+  8: ['post_station', 'inn', 'cart_hay', 'cart_goods', 'cart_empty', 'donkey', 'horse', 'stable', 'tree_maple', 'stools_pair'],
+  9: ['shop_cloth', 'stall_cloth', 'stall_pottery', 'stall_tea', 'shop_tea', 'tea_garden', 'bank', 'shop_pawn', 'tea_set'],
+  10: ['cavalry', 'parade_ground', 'drill_ground', 'wall_courtyard', 'gate_courtyard', 'deco_campfire', 'deco_jumaa', 'deco_lujiao', 'low_table_cushion'],
   11: ['field_wheat', 'mulberry_grove', 'orchard', 'herb_garden', 'beehive', 'millstone', 'winnower', 'granary_round', 'sheepfold', 'ranch_fence'],
   12: ['deco_lumberyard', 'sawbench', 'lograft', 'mine_entrance', 'minecart', 'ore_stone', 'ore_iron', 'ore_copper', 'smithy', 'shop_smith'],
   13: ['she_altar', 'incense_burner', 'censer', 'stone_lamp', 'tree_cypress', 'potted_plant'],

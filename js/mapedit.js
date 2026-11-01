@@ -129,7 +129,13 @@ function buildCampToolbar(bar) {
     });
   });
   if (pg) mapeditLockHint(bar);
-  mapeditUpdateCap(campBoard());
+  mapeditUpdateCap(mapeditCampView());
+}
+
+// 草稿中的戰鬥草稿棋盤(world 載入的就是草稿);平常取使用中的戰陣
+function mapeditCampView() {
+  if (game.backup && game.backup.draft) return game.mode === 'battleDesign' ? liveBoard() : null;
+  return campBoard();
 }
 
 // 城市等級未載入時不做任何解鎖相關的顯示(維持舊行為)
@@ -367,6 +373,11 @@ function initMapEdit() {
     if (b) pickCampStart(b.getAttribute('data-cpick'));
   });
 
+  editBarBuild();
+  slotPickBuild();
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && ldAnyOpen()) { ldCloseAll(); saveCtx = null; }
+  });
   updateBoardSwitch();
   mapeditUpdateDot();
 }
@@ -434,8 +445,9 @@ function cornerSync() {
   const off = cornerHidden();
   ['modeBtn', 'seasonBtn'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.hidden = off;
+    if (el) el.hidden = off || (id === 'modeBtn' && !!ui.editing);   // 草稿中不能切經營 / 戰鬥畫面
   });
+  layoutPickSync();
   if (off) {
     cornerFightClose();
     cornerSeasonClose();
@@ -457,7 +469,8 @@ function cornerFightOpen() {
   const menu = document.getElementById('fightMenu');
   if (!menu) return;
   menu.textContent = '';
-  menu.appendChild(cornerMenuBtn('rand', '🎲 隨機戰鬥'));
+  menu.appendChild(cornerMenuBtn('rand', '🎲 隨機戰鬥', '打玩家:資源與經驗'));
+  menu.appendChild(cornerMenuBtn('camp', '🏕 野營副本', '打野營:材料與經驗'));
   menu.appendChild(cornerMenuBtn('friend', '🤝 朋友邀請碼'));
   const row = document.createElement('div');
   row.id = 'fmFriend';
@@ -472,15 +485,19 @@ function cornerFightOpen() {
   row.appendChild(cornerMenuBtn('paste', '貼上'));
   row.appendChild(cornerMenuBtn('send', '送出'));
   menu.appendChild(row);
-  const rb = document.getElementById('btnReport');
-  if (rb && !rb.hidden) menu.appendChild(cornerMenuBtn('report', '📜 戰報／錄影'));
+  if (typeof rptCanOpen === 'function' && rptCanOpen()) menu.appendChild(cornerMenuBtn('report', '📜 戰報／錄影'));
   menu.hidden = false;
 }
 
-function cornerMenuBtn(act, label) {
+function cornerMenuBtn(act, label, sub) {
   const b = document.createElement('button');
   b.setAttribute('data-fm', act);
   b.textContent = label;
+  if (sub) {
+    const s = document.createElement('small');
+    s.textContent = sub;
+    b.appendChild(s);
+  }
   return b;
 }
 
@@ -502,7 +519,12 @@ function onFightMenuClick(e) {
   const act = b.getAttribute('data-fm');
   if (act === 'rand') {
     cornerFightClose();
-    if (typeof atk !== 'undefined' && atk.open && typeof atkClosePanel === 'function') atkClosePanel();
+    if (typeof atk !== 'undefined' && atk.open && atk.view === 'pool' && typeof atkClosePanel === 'function') atkClosePanel();
+    else if (typeof atkOpenPool === 'function') atkOpenPool();
+    else if (typeof atkOpenList === 'function') atkOpenList();
+  } else if (act === 'camp') {
+    cornerFightClose();
+    if (typeof atk !== 'undefined' && atk.open && atk.view === 'list' && typeof atkClosePanel === 'function') atkClosePanel();
     else if (typeof atkOpenList === 'function') atkOpenList();
   } else if (act === 'friend') {
     const row = document.getElementById('fmFriend');
@@ -524,8 +546,7 @@ function onFightMenuClick(e) {
     showToast('朋友對戰即將開放');
   } else if (act === 'report') {
     cornerFightClose();
-    const rb = document.getElementById('btnReport');
-    if (rb) rb.click();
+    if (typeof rptOpen === 'function') rptOpen();
   }
 }
 
@@ -597,6 +618,10 @@ function setBoardMode(to) {
   if (to !== 'estate' && to !== 'camp') return;
   if (to === 'camp' && game.mode === 'battleDesign') return;
   if (to === 'estate' && game.mode === 'estate') return;
+  if (to === 'camp' && typeof ui !== 'undefined' && ui.editing) {
+    editGuard(() => setBoardMode(to));
+    return;
+  }
   if (to === 'camp' && campBoard() === null) {
     document.getElementById('campPick').hidden = false;
     return;
@@ -675,7 +700,7 @@ function mapeditValidate() {
 // 更新切換鈕的紅/綠點;戰陣不存在時隱藏。回傳 validateCamp 結果或 null
 function mapeditUpdateDot() {
   const dot = document.getElementById('campDot');
-  const cb = campBoard();
+  const cb = mapeditCampView();
   let r = null;
   if (cb) {
     try {
@@ -715,8 +740,17 @@ function mapeditUpdateCap(cb) {
   if (el.hidden) return;
   const sum = campCpTotal(cb), max = campCpNow();
   const why = mapeditProgOn() && sum > max ? '(Lv' + prog.lv + ' 上限 ' + max + '，超出 ' + (sum - max) + ')' : '';
-  el.textContent = '陣地 ' + sum + ' / ' + max + why;
-  el.classList.toggle('over', sum > max);
+  let nWall = 0, nFence = 0;
+  ((cb && cb.objects) || []).forEach(o => {
+    if (o.type !== 'wall' && o.type !== 'lujiao') return;
+    const fp = mioFp(o), n = fp[0] * fp[1];
+    if (o.type === 'wall') nWall += n; else nFence += n;
+  });
+  const wMax = campCap('wall'), fMax = campCap('lujiao');
+  const narrow = typeof window !== 'undefined' && window.innerWidth < 480;
+  const wf = narrow ? '牆 ' + nWall + '/' + wMax + ' 柵 ' + nFence + '/' + fMax : '牆 ' + nWall + '/' + wMax + '・柵 ' + nFence + '/' + fMax;
+  el.textContent = '陣地 ' + sum + ' / ' + max + why + (narrow ? ' ' : '  ') + wf;
+  el.classList.toggle('over', sum > max || nWall > wMax || nFence > fMax);
   el.style.bottom = '';   // 位置由 CSS 的 top 決定;同時設 bottom 會把標籤拉成貫穿畫面的長條
 }
 
@@ -798,4 +832,533 @@ function mapeditRally(x, y) {
   while (m.rally.some(p => p.id === 'r' + n)) n++;
   m.rally.push({ id: 'r' + n, x: x, y: y, name: '集結點' + n });
   return true;
+}
+
+// ═════ 草稿布置與版面存檔格(PLAN_LAYOUT §1~§2;資料函式見 map.js,草稿生命週期的 editEnter/editLeave 見 ui.js) ═════
+// 草稿進行中:game.backup = 自己的兩個棋盤(使用中版面),且 game.backup.draft = { type, from, prevMode };world 載入的是草稿棋盤。
+// 因此 saveWorld / 生產 / 教學簽名取到的都是使用中版面,草稿不會被寫進主存檔。
+
+// ── 通用對話框(中央疊層,按鈕以 data-ld 註冊動作;內容一律 textContent) ──
+function ldNew(id, title) {
+  let d = document.getElementById(id);
+  if (!d) {
+    d = document.createElement('div');
+    d.id = id;
+    d.className = 'ldlg';
+    d.hidden = true;
+    document.body.appendChild(d);
+    d.addEventListener('pointerdown', e => e.stopPropagation());
+    d.addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b || b.disabled) return;
+      const f = d._acts && d._acts[b.getAttribute('data-ld')];
+      if (f) f();
+    });
+  }
+  d._acts = {};
+  d.textContent = '';
+  const box = document.createElement('div');
+  box.className = 'ld-box';
+  const head = document.createElement('b');
+  head.className = 'ld-head';
+  head.textContent = title;
+  box.appendChild(head);
+  d.appendChild(box);
+  d.hidden = false;
+  return { d: d, box: box };
+}
+function ldMsg(h, text, cls) {
+  const m = document.createElement('div');
+  m.className = 'ld-msg' + (cls ? ' ' + cls : '');
+  m.textContent = text;
+  h.box.appendChild(m);
+  return m;
+}
+function ldRow(h, cls) {
+  const r = document.createElement('div');
+  r.className = 'ld-row' + (cls ? ' ' + cls : '');
+  h.box.appendChild(r);
+  return r;
+}
+function ldBtn(h, parent, key, label, fn, cls, disabled, sub) {
+  const b = document.createElement('button');
+  b.setAttribute('data-ld', key);
+  if (cls) b.className = cls;
+  b.textContent = label;
+  if (sub) {
+    const s = document.createElement('small');
+    s.textContent = sub;
+    b.appendChild(s);
+  }
+  if (disabled) b.disabled = true;
+  h.d._acts[key] = fn;
+  parent.appendChild(b);
+  return b;
+}
+function ldClose(id) {
+  const d = document.getElementById(id);
+  if (d) { d.hidden = true; d._acts = {}; }
+}
+function ldCloseAll() {
+  ['draftStartDlg', 'saveSlotDlg', 'slotAskDlg', 'ldConfirm'].forEach(ldClose);
+}
+function ldOpen(id) {
+  const d = document.getElementById(id);
+  return !!d && !d.hidden;
+}
+function ldAnyOpen() {
+  return ['draftStartDlg', 'saveSlotDlg', 'slotAskDlg', 'ldConfirm'].some(ldOpen);
+}
+function ldConfirm(title, msg, okLabel, onOk) {
+  const h = ldNew('ldConfirm', title);
+  ldMsg(h, msg);
+  const foot = ldRow(h, 'ld-foot');
+  ldBtn(h, foot, 'ok', okLabel || '確定', () => { ldClose('ldConfirm'); if (onOk) onOk(); }, 'pok');
+  ldBtn(h, foot, 'no', '取消', () => ldClose('ldConfirm'), '');
+}
+
+function layoutTimeText(ts) {
+  if (!ts) return '';
+  const d = new Date(ts), p = n => (n < 10 ? '0' : '') + n;
+  return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function layoutSlotText(type, n) {
+  const s = layoutSlot(type, n);
+  if (!s) return '空';
+  return layoutObjCount(s.board) + ' 件 · ' + layoutTimeText(s.savedAt);
+}
+
+// ── 草稿環境:進入 / 離開 ──
+function draftIsOn() { return !!(game.backup && game.backup.draft); }
+
+function draftEnvApply() {
+  document.body.classList.toggle('camp-mode', game.mode === 'battleDesign');
+  hideReset();
+  toggleTplMenu(false);
+  mapeditLabelsClear();
+  toggleToolHelp(false);
+  ui.objSel = null;
+  objHold = null;
+  mapeditUpdateDot();
+  updateBoardSwitch();
+}
+
+// 離開草稿:收回使用中的棋盤、還原進入前的模式(editLeave 呼叫;沒有草稿環境時什麼都不做)
+function draftEnvLeave() {
+  const bk = game.backup;
+  if (!bk || !bk.draft) return;
+  const prev = bk.draft.prevMode;
+  objHold = null;
+  boardRestore();
+  game.mode = prev === 'battleDesign' ? 'battleDesign' : 'estate';
+  document.body.classList.toggle('camp-mode', game.mode === 'battleDesign');
+  ui.objSel = null;
+  pendClear();
+  hideReset();
+  mapeditLabelsClear();
+  toggleToolHelp(false);
+  buildToolbar();
+  setTool(null);
+  updateBoardSwitch();
+  mapeditUpdateDot();
+  updateResBar();
+  if (typeof lifeReset === 'function') lifeReset();
+  layoutPickSync(true);
+}
+
+// 開始草稿。src:已複製好的棋盤(來自使用中 / 格);tplId:範本;皆無 = 空白。unsaved:繼續上次草稿(視為有未存變更)
+function draftBegin(type, from, src, tplId, unsaved) {
+  if (type !== 'estate' && type !== 'camp') return false;
+  if (ui.editing || game.backup) { showToast('目前無法進入草稿布置'); return false; }
+  if (game.mode !== 'estate' && game.mode !== 'battleDesign') { showToast('目前無法進入草稿布置'); return false; }
+  ldCloseAll();
+  const prevMode = game.mode;
+  draftDiscard();
+  pendClear();
+  hideReset();
+  boardBackup();
+  game.backup.draft = { type: type, from: from, prevMode: prevMode };
+  world.board = type;
+  game.mode = type === 'camp' ? 'battleDesign' : 'estate';
+  let ok = true, tpl = null, r = null;
+  if (src) {
+    BOARD_KEYS.forEach(k => { world[k] = src[k]; });
+    rebuildOcc();
+  } else if (tplId) {
+    tpl = TEMPLATES.find(t => t.id === tplId) || null;
+    r = tpl ? applyTemplate(tplId) : null;
+    ok = !!r;
+  }
+  if (!ok) {
+    draftEnvLeave();
+    showToast('範本無法載入到草稿');
+    return false;
+  }
+  draftEnvApply();
+  editEnter(!!unsaved);
+  if (tpl && r && tpl.focus) centerOnCell(r.ox + tpl.focus[0], r.oy + tpl.focus[1]);
+  mapeditRefresh();
+  return true;
+}
+
+// from:'active' | 'slot:N' | 'tpl:id' | 'blank'
+function draftBeginFrom(type, from) {
+  let src = null;
+  if (from === 'active') {
+    src = layoutCopyBoard(layoutActiveBoard(type));
+    if (!src) { showToast('沒有使用中的' + layoutTypeName(type) + '版面可載入'); return false; }
+  } else if (from.indexOf('slot:') === 0) {
+    const s = layoutSlot(type, +from.slice(5));
+    src = s ? boardFromJSON(s.board) : null;
+    if (!src) { showToast('該格是空的'); return false; }
+  } else if (from.indexOf('tpl:') === 0) {
+    const id = from.slice(4);
+    const t = TEMPLATES.find(v => v.id === id);
+    if (!t) { showToast('找不到範本'); return false; }
+    return draftBegin(t.kind || 'estate', from, null, id, false);
+  }
+  return draftBegin(type, from, src, null, false);
+}
+
+function draftResume(saved) {
+  const src = boardFromJSON(saved.board);
+  if (!src) { draftStoreClear(); showToast('草稿暫存損壞,已清除'); return false; }
+  return draftBegin(saved.type, saved.from, src, null, true);
+}
+
+// 側欄 🔨 / 範本載入入口。opt: { type, tpl }
+function draftStartOpen(opt) {
+  opt = opt || {};
+  if (ui.editing) { showToast('已在草稿布置中'); return; }
+  if (game.backup || (game.mode !== 'estate' && game.mode !== 'battleDesign')) { showToast('目前無法進入草稿布置'); return; }
+  const st = { type: opt.type || (game.mode === 'battleDesign' ? 'camp' : 'estate'), tpl: opt.tpl || null, view: 'main' };
+  const saved = draftRead();
+  if (saved) draftResumeAsk(st, saved);
+  else draftStartNext(st);
+}
+
+function draftStartNext(st) {
+  if (st.tpl) draftBeginFrom(st.type, 'tpl:' + st.tpl);
+  else draftStartRender(st);
+}
+
+function draftResumeAsk(st, saved) {
+  const h = ldNew('draftStartDlg', '發現上次的草稿');
+  ldMsg(h, layoutTypeName(saved.type) + '草稿 · ' + layoutObjCount(saved.board) + ' 件 · ' + layoutTimeText(saved.savedAt) + '。要繼續,還是重新開始?');
+  const foot = ldRow(h, 'ld-foot ld-col');
+  ldBtn(h, foot, 'resume', '繼續上次草稿', () => draftResume(saved), 'pok');
+  ldBtn(h, foot, 'fresh', '重新開始', () => { draftStoreClear(); draftStartNext(st); }, 'pno');
+  ldBtn(h, foot, 'cancel', '取消', () => ldClose('draftStartDlg'), '');
+}
+
+function draftStartRender(st) {
+  const type = st.type;
+  if (st.view === 'tpl') return draftTplRender(st);
+  const h = ldNew('draftStartDlg', '草稿布置:選擇起點');
+  const trow = ldRow(h, 'ld-seg');
+  [['estate', '🏘 經營'], ['camp', '⚔ 戰鬥']].forEach(a => {
+    ldBtn(h, trow, 'type:' + a[0], a[1], () => { st.type = a[0]; draftStartRender(st); }, type === a[0] ? 'on' : '');
+  });
+  ldMsg(h, '草稿只有一份,改的是草稿,不影響使用中的版面。');
+  const act = layoutActiveBoard(type);
+  const col = ldRow(h, 'ld-col');
+  ldBtn(h, col, 'active', '① 目前使用中的版面', () => draftBeginFrom(type, 'active'), '', !act,
+    act ? (layoutObjCount(boardToJSON(act)) + ' 件' + (world.layoutActive[type] !== null ? '(格 ' + (world.layoutActive[type] + 1) + ')' : '')) : '尚未建立');
+  const slots = ldRow(h, 'ld-seg');
+  for (let n = 0; n < LAYOUT_SLOTS; n++) {
+    const s = layoutSlot(type, n);
+    ldBtn(h, slots, 'slot:' + n, '② 格 ' + (n + 1) + (s ? '' : '(空)'), () => draftBeginFrom(type, 'slot:' + n), '', !s, s ? layoutObjCount(s.board) + ' 件' : '');
+  }
+  ldBtn(h, col, 'tpl', type === 'camp' ? '③ 推薦陣地 / 戰陣範本…' : '③ 範本…', () => { st.view = 'tpl'; draftStartRender(st); }, '');
+  ldBtn(h, col, 'blank', '④ 空白', () => draftBegin(type, 'blank', null, null, false), '');
+  const foot = ldRow(h, 'ld-foot');
+  ldBtn(h, foot, 'cancel', '取消', () => ldClose('draftStartDlg'), '');
+}
+
+function draftTplRender(st) {
+  const type = st.type;
+  const h = ldNew('draftStartDlg', (type === 'camp' ? '推薦陣地 / 戰陣範本' : '經營範本') + '(載入到草稿)');
+  const list = TEMPLATES.filter(t => (t.kind || 'estate') === type && !t.hidden);
+  const ordered = list.filter(t => t.isDefault).concat(list.filter(t => !t.isDefault));
+  const col = ldRow(h, 'ld-col ld-scroll');
+  ordered.forEach(t => {
+    ldBtn(h, col, 'tpl:' + t.id, t.name + (t.isDefault ? ' ★預設' : ''), () => draftBeginFrom(type, 'tpl:' + t.id), '', t.w > MAP_W || t.h > MAP_H, (t.desc || '') + ' ' + t.w + '×' + t.h);
+  });
+  const foot = ldRow(h, 'ld-foot');
+  ldBtn(h, foot, 'back', '返回', () => { st.view = 'main'; draftStartRender(st); }, '');
+}
+
+// ── #editBar:草稿進行中固定在左緣的直欄(💾 儲存 / 🗑 清空 / ↩ 放棄 / ✕ 離開) ──
+function editBarBuild() {
+  if (document.getElementById('editBar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'editBar';
+  bar.hidden = true;
+  const tag = document.createElement('span');
+  tag.className = 'eb-tag';
+  bar.appendChild(tag);
+  bar.tagEl = tag;
+  [['save', '💾', '儲存'], ['clear', '🗑', '清空'], ['discard', '↩', '放棄'], ['leave', '✕', '離開']].forEach(a => {
+    const b = document.createElement('button');
+    b.setAttribute('data-eact', a[0]);
+    b.setAttribute('aria-label', a[2]);
+    b.title = a[2];
+    const ic = document.createElement('span');
+    ic.className = 'ic';
+    ic.textContent = a[1];
+    const lb = document.createElement('span');
+    lb.className = 'lb';
+    lb.textContent = a[2];
+    b.appendChild(ic);
+    b.appendChild(lb);
+    bar.appendChild(b);
+  });
+  document.body.appendChild(bar);
+  bar.addEventListener('pointerdown', e => e.stopPropagation());
+  bar.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b) editBarAct(b.getAttribute('data-eact'));
+  });
+}
+function editBarAct(act) {
+  if (!ui.editing) return;
+  if (act === 'save') layoutSave();
+  else if (act === 'clear') draftClearBoard();
+  else if (act === 'discard') editCancel();
+  else if (act === 'leave') {
+    editGuard(null);
+    if (!ui.editing) showToast('已離開草稿布置');
+  }
+}
+function editBarSync() {
+  const bar = document.getElementById('editBar');
+  if (!bar) return;
+  bar.hidden = !ui.editing;
+  if (ui.editing && bar.tagEl && game.backup && game.backup.draft) {
+    const t = '草稿·' + layoutTypeName(game.backup.draft.type);
+    if (bar.tagEl.textContent !== t) bar.tagEl.textContent = t;
+  }
+}
+// 🗑 清空草稿:只清草稿棋盤,不動使用中的版面、資源與科技
+function draftClearBoard() {
+  if (!ui.editing) return false;
+  if (!confirm('清空草稿?草稿目前的內容會被清掉(使用中的版面與已存的格子不受影響)。' + pendWarnText())) return false;
+  draftDiscard();
+  pendClear();
+  hideReset();
+  clearBoard();
+  ui.objSel = null;
+  mapeditRefresh();
+  mapeditUpdateDot();
+  updateResBar();
+  draftPersist(true);
+  showToast('已清空草稿');
+  return true;
+}
+
+// ── 儲存對話框 #saveSlotDlg ──
+let saveCtx = null;
+function saveSlotDlgOpen(after) {
+  if (!ui.editing || !draftIsOn()) return false;
+  saveCtx = { after: after || null, setActive: false, pick: -1 };
+  saveSlotRender();
+  return true;
+}
+function saveSlotRender() {
+  const type = game.backup.draft.type;
+  const h = ldNew('saveSlotDlg', '儲存草稿到版面格');
+  ldMsg(h, '這份草稿是「' + layoutTypeName(type) + '」,只能存到同類型的格子。');
+  if (saveCtx.pick >= 0) {
+    const n = saveCtx.pick, s = layoutSlot(type, n);
+    ldMsg(h, '覆蓋「' + layoutTypeName(type) + ' ' + (n + 1) + '」?格內目前是「' + (s ? s.name : '') + '」(' + layoutSlotText(type, n) + '),覆蓋後無法復原。', 'warn');
+    const foot = ldRow(h, 'ld-foot');
+    ldBtn(h, foot, 'overwrite', '覆蓋', () => saveSlotCommit(n), 'pok');
+    ldBtn(h, foot, 'back', '返回', () => { saveCtx.pick = -1; saveSlotRender(); }, '');
+    return;
+  }
+  ['estate', 'camp'].forEach(t => {
+    const ok = t === type;
+    for (let n = 0; n < LAYOUT_SLOTS; n++) {
+      const row = ldRow(h, ok ? '' : 'dim');
+      const act = world.layoutActive[t] === n;
+      ldBtn(h, row, 'slot:' + t + ':' + n, layoutTypeName(t) + ' ' + (n + 1) + (act ? ' ★使用中' : ''), () => saveSlotPick(n), 'slot' + (layoutSlot(t, n) ? '' : ' empty'), !ok,
+        ok ? layoutSlotText(t, n) : '類型不符');
+    }
+  });
+  const forced = world.layoutActive[type] !== null && saveCtx.pick < 0;
+  const tg = ldRow(h, 'ld-col');
+  ldBtn(h, tg, 'active', (saveCtx.setActive ? '☑' : '☐') + ' 同時設為使用中', () => { saveCtx.setActive = !saveCtx.setActive; saveSlotRender(); }, saveCtx.setActive ? 'on' : '', false,
+    type === 'camp' ? '戰鬥版面會先驗證,不合格不會設為使用中' : (forced ? '存到使用中那一格時一律同步套用' : ''));
+  const foot = ldRow(h, 'ld-foot');
+  ldBtn(h, foot, 'cancel', '取消', () => { saveCtx = null; ldClose('saveSlotDlg'); }, '');
+}
+function saveSlotPick(n) {
+  if (!saveCtx || !draftIsOn()) return;
+  const type = game.backup.draft.type;
+  if (layoutSlot(type, n)) { saveCtx.pick = n; saveSlotRender(); }
+  else saveSlotCommit(n);
+}
+// 實際寫入第 n 格(同類型);回傳 { ok, activated, why }
+function saveSlotCommit(n) {
+  if (!saveCtx || !draftIsOn()) return null;
+  const type = game.backup.draft.type;
+  const want = saveCtx.setActive || world.layoutActive[type] === n;
+  const bj = boardToJSON(liveBoard());
+  let why = '';
+  const copy = want ? layoutCopyBoard(liveBoard()) : null;
+  if (want && type === 'camp') why = layoutCampCheck(copy);
+  const res = { ok: true, activated: false, why: why };
+  const fin = () => {
+    layoutSlotWrite(type, n, bj);
+    let msg = '已儲存到' + layoutTypeName(type) + ' ' + (n + 1);
+    if (want && !why) {
+      if (world.layoutActive[type] !== n) layoutWriteBack(type);
+      layoutInstall(type, copy);
+      world.layoutActive[type] = n;
+      res.activated = true;
+      msg += ',並設為使用中';
+    } else if (want && why) {
+      msg += ',但未設為使用中:' + why;
+    } else if (type === 'camp' && world.layoutActive[type] === null) {
+      msg += '(未設為使用中)';
+    }
+    editSnap = editSnapshot();
+    editUnsaved = false;
+    saveWorld();
+    const after = saveCtx ? saveCtx.after : null;
+    saveCtx = null;
+    ldClose('saveSlotDlg');
+    mapeditUpdateDot();
+    layoutPickSync(true);
+    showToast(msg);
+    if (after) after();
+  };
+  if (want && !why && world.layoutActive[type] === null && world.layoutActive[type] !== n && boardHasContent(layoutActiveBoard(type))) {
+    slotAskOpen(type, ok => { if (ok) fin(); });
+  } else {
+    fin();
+  }
+  return res;
+}
+
+// ── 目前使用中版面不屬於任何格時:問「存到哪一格 / 不存直接切換」 ──
+function slotAskOpen(type, cb) {
+  const h = ldNew('slotAskDlg', '目前的' + layoutTypeName(type) + '版面還沒存到格子');
+  ldMsg(h, '要先把它存到哪一格?(切換後這份版面就會被換掉)');
+  const col = ldRow(h, 'ld-col');
+  for (let n = 0; n < LAYOUT_SLOTS; n++) {
+    const s = layoutSlot(type, n);
+    ldBtn(h, col, 'home:' + n, '存到 ' + layoutTypeName(type) + ' ' + (n + 1) + (s ? '(覆蓋)' : '(空)'), () => {
+      const bd = layoutActiveBoard(type);
+      if (bd) layoutSlotWrite(type, n, boardToJSON(bd));
+      world.layoutActive[type] = n;
+      ldClose('slotAskDlg');
+      cb(true);
+    }, 'slot' + (s ? '' : ' empty'), false, s ? layoutSlotText(type, n) : '');
+  }
+  const foot = ldRow(h, 'ld-foot');
+  ldBtn(h, foot, 'skip', '不存,直接切換', () => { ldClose('slotAskDlg'); cb(true); }, 'pno');
+  ldBtn(h, foot, 'cancel', '取消', () => { ldClose('slotAskDlg'); cb(false); }, '');
+}
+
+// ── 格 1/2/3 選擇器 #slotPick(經營 / 戰鬥布置畫面各一排;固定在左下 ⚔ 鈕上方) ──
+let slotPickSig = '';
+function slotPickType() { return game.mode === 'battleDesign' ? 'camp' : 'estate'; }
+function slotPickBuild() {
+  if (document.getElementById('slotPick')) return;
+  const box = document.createElement('div');
+  box.id = 'slotPick';
+  box.hidden = true;
+  const tag = document.createElement('span');
+  tag.className = 'sp-tag';
+  box.appendChild(tag);
+  box.tagEl = tag;
+  for (let n = 0; n < LAYOUT_SLOTS; n++) {
+    const b = document.createElement('button');
+    b.setAttribute('data-slot', String(n));
+    b.className = 'sp-btn';
+    box.appendChild(b);
+  }
+  document.body.appendChild(box);
+  box.addEventListener('pointerdown', e => e.stopPropagation());
+  box.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b) layoutPickClick(+b.getAttribute('data-slot'));
+  });
+}
+function layoutPickSync(force) {
+  const box = document.getElementById('slotPick');
+  if (!box) return;
+  const off = ui.editing || !!game.backup || cornerHidden() || (game.mode !== 'estate' && game.mode !== 'battleDesign');
+  if (box.hidden !== off) box.hidden = off;
+  if (off) return;
+  const type = slotPickType();
+  const act = world.layoutActive[type];
+  const sig = type + '|' + act + '|' + [0, 1, 2].map(n => (layoutSlot(type, n) ? 1 : 0)).join('');
+  if (sig === slotPickSig && !force) return;
+  slotPickSig = sig;
+  box.tagEl.textContent = type === 'camp' ? '戰鬥格' : '經營格';
+  box.setAttribute('data-type', type);
+  box.querySelectorAll('button').forEach(b => {
+    const n = +b.getAttribute('data-slot'), s = layoutSlot(type, n);
+    b.textContent = s ? String(n + 1) : '空';
+    b.classList.toggle('on', act === n);
+    b.classList.toggle('empty', !s);
+    b.title = layoutTypeName(type) + '格 ' + (n + 1) + (s ? '(' + layoutSlotText(type, n) + ')' : '(空)') + (act === n ? ' 使用中' : '');
+    b.setAttribute('aria-label', b.title);
+  });
+}
+
+function layoutAfterSwitch(type, n) {
+  draftDiscard();
+  pendClear();
+  hideReset();
+  ui.objSel = null;
+  objHold = null;
+  if (typeof lifeReset === 'function') lifeReset();
+  mapeditRefresh();
+  mapeditUpdateDot();
+  updateResBar();
+  layoutPickSync(true);
+  showToast('已切換到' + layoutTypeName(type) + '格 ' + (n + 1));
+}
+
+// 點選擇器第 n 格:使用中 = 提示;空格 = 問是否把目前版面存到該格;有內容 = 切換(必要時先問存到哪一格)
+function layoutPickClick(n) {
+  if (ui.editing || game.backup) return null;
+  if (game.mode !== 'estate' && game.mode !== 'battleDesign') return null;
+  const type = slotPickType();
+  const act = world.layoutActive[type];
+  if (act === n) { showToast('目前使用中:' + layoutTypeName(type) + '格 ' + (n + 1)); return null; }
+  const s = layoutSlot(type, n);
+  if (!s) {
+    ldConfirm('格 ' + (n + 1) + ' 是空的', '要把目前的' + layoutTypeName(type) + '版面存到這一格嗎?(存完這一格就是使用中)', '存到這一格', () => layoutPickFill(type, n));
+    return 'empty';
+  }
+  if (type === 'camp') {
+    const bd = boardFromJSON(s.board);
+    const why = bd ? layoutCampCheck(bd) : '資料損壞';
+    if (why) { showToast('無法設為使用中:' + why); return 'blocked'; }
+  }
+  slotEnsureHome(type, () => {
+    const r = layoutActivate(type, n);
+    if (!r.ok) showToast('無法切換:' + r.reason);
+    else layoutAfterSwitch(type, n);
+  });
+  return 'switch';
+}
+function layoutPickFill(type, n) {
+  if (world.layoutActive[type] !== null) layoutWriteBack(type);
+  const bd = layoutActiveBoard(type);
+  if (!bd) { showToast('目前沒有可存的版面'); return; }
+  layoutSlotWrite(type, n, boardToJSON(bd));
+  world.layoutActive[type] = n;
+  saveWorld();
+  layoutPickSync(true);
+  showToast('已把目前版面存到' + layoutTypeName(type) + '格 ' + (n + 1));
+}
+function slotEnsureHome(type, cont) {
+  const cur = layoutActiveBoard(type);
+  if (world.layoutActive[type] !== null || !boardHasContent(cur)) { cont(); return; }
+  slotAskOpen(type, ok => { if (ok) cont(); });
 }
