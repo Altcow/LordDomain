@@ -108,8 +108,8 @@ const PROG_MATS = {
 // 各級升級指定的材料:[普1, 普2, 良](結構:跟著該等級帶的野營陣營走)
 const PROG_MAT_BAND = {
   1: ['mat_mabu'], 2: ['mat_mabu', 'mat_tieding'], 3: ['mat_mabu', 'mat_zhujian'],
-  4: ['mat_zhujian', 'mat_tieding', 'mat_lvling'], 5: ['mat_mabu', 'mat_zhujian', 'mat_fulu'],
-  6: ['mat_tongyou', 'mat_zhujian', 'mat_fulu'], 7: ['mat_tongyou', 'mat_tieding', 'mat_lvling'],
+  4: ['mat_zhujian', 'mat_tieding'], 5: ['mat_mabu', 'mat_zhujian', 'mat_fulu'],
+  6: ['mat_tongyou', 'mat_zhujian', 'mat_fulu'], 7: ['mat_tongyou', 'mat_tieding'],
   8: ['mat_tongyou', 'mat_shengqi', 'mat_tiemao'], 9: ['mat_shengqi', 'mat_zhujian', 'mat_tengjia'],
   10: ['mat_tieding', 'mat_qingtong', 'mat_yinshou'], 11: ['mat_tongyou', 'mat_qingtong', 'mat_tiemao'],
   12: ['mat_niupi', 'mat_qingtong', 'mat_qiangdi'], 13: ['mat_shengqi', 'mat_niujin', 'mat_tengjia'],
