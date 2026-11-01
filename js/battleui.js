@@ -61,7 +61,7 @@ function unitStripHtml(sel, gated, popLeft) {
     const need = unitPopOf(u);
     const short = !lock && popLeft !== undefined && popLeft !== null && need > popLeft + 1e-9;
     const cls = (sel === u ? ' on' : '') + (short ? ' nopop' : '');
-    h += '<button data-pick="' + u + '"' + (cls ? ' class="' + cls.trim() + '"' : '') + (lock ? ' disabled style="filter:grayscale(1);opacity:.45"' : '') + '><span class="uinfo" data-info="' + u + '">ⓘ</span><span class="uico">' + UNIT_ICON[u] +
+    h += '<button data-pick="' + u + '"' + (cls ? ' class="' + cls.trim() + '"' : '') + (lock ? ' disabled style="filter:grayscale(1);opacity:.45"' : '') + '><span class="uico">' + UNIT_ICON[u] +
       '</span><span class="uname">' + tdEsc(d.name) + '</span>' + (lock ? '<small>🔒 Lv' + L + '</small>' : '') +
       '<b class="upop">×' + need + '</b></button>';
   });
@@ -189,6 +189,10 @@ function initBattleUI() {
   panel.hidden = true;
   document.body.appendChild(panel);
   panel.addEventListener('click', onSandClick);
+  panel.addEventListener('pointerdown', lpDown);
+  panel.addEventListener('pointermove', lpMove);
+  panel.addEventListener('pointerup', lpUp);
+  panel.addEventListener('pointercancel', lpUp);
   sand.panel = panel;
 
   const canvas = document.getElementById('game');
@@ -208,7 +212,7 @@ function sandSyncButton() {
 function sandPlace() {
   const tb = document.getElementById('toolbar');
   const h = document.body.classList.contains('sandbox') || !tb ? 0 : tb.offsetHeight;
-  sand.panel.style.bottom = 'calc(' + (h + 8) + 'px + env(safe-area-inset-bottom))';
+  sand.panel.style.bottom = sand.panel.classList.contains('abar') ? '' : 'calc(' + (h + 8) + 'px + env(safe-area-inset-bottom))';
 }
 
 function sandOpen() {
@@ -266,7 +270,8 @@ function sandRenderBattle() {
   if (key === sand.key) return;
   sand.key = key;
   sand.panel.classList.add('abar');
-  sand.panel.innerHTML = battleBarHtml(b, sand.unit, false, flash);
+  sand.panel.style.bottom = '';
+  barSetHtml(sand.panel, battleBarHtml(b, sand.unit, false, flash));
 }
 
 // 沙盤狀態寫入 atkHud(左上角小字):剩餘時間、摧毀率;立即結束計算中顯示進度
@@ -278,10 +283,10 @@ function sandHud() {
 }
 
 function onSandClick(e) {
-  const info = e.target.closest('[data-info]'), iv = info ? info.getAttribute('data-info') : null;
-  if (iv) { if (typeof unitCardOpen === 'function') unitCardOpen(iv); return; }
+  if (lpSuppress) { lpSuppress = false; return; }
   const b = e.target.closest('button');
   if (!b) return;
+  if (b.getAttribute('data-bdex') !== null) { if (typeof unitDexOpen === 'function') unitDexOpen(); return; }
   const cap =b.getAttribute('data-cap'), pick = b.getAttribute('data-pick');
   const sp = b.getAttribute('data-speed'), act = b.getAttribute('data-sact');
   if (cap !== null) {
@@ -305,6 +310,7 @@ function onSandClick(e) {
 
 // 點地圖(移動小於 8px 才算點擊)放一隊;指令於當下套用(等同下一個 simTick 第 1 步)
 function sandTap(e) {
+  const hd = holdPeek(e);
   const d = sand.dn;
   sand.dn = null;
   if (atk.on || rp.on) return;
@@ -314,6 +320,7 @@ function sandTap(e) {
   const c = screenToCell(e.clientX, e.clientY);
   if (!c) return;
   if (world.occ[idx(c.x, c.y)] > 0) { atkInfo(c.x, c.y); return; }
+  if (hd) { holdFailTip(hd, c); sandRenderBattle(); sandHud(); return; }
   uiFieldTap(battle, sand.unit, c.x, c.y);
   sandRenderBattle();
   sandHud();
@@ -365,6 +372,8 @@ function sandShowResult(b, r) {
 // 每幀由 main.js 呼叫:同步按鈕、處理新事件、偵測結束、更新面板
 function battleUiTick(dt) {
   tipTick(dt);
+  holdTick(dt);
+  lpTick(dt);
   fastStep();
   lootSync();
   sandSyncButton();
@@ -472,8 +481,8 @@ function initAttackUI() {
   const btn = document.createElement('button');
   btn.id = 'btnAttack';
   btn.className = 'corner corner-atk';
-  btn.title = '戰鬥：隨機戰鬥、朋友邀請碼、戰報';
-  btn.textContent = '⚔ 戰鬥';
+  btn.title = '出征：隨機戰鬥、野營副本、戰報';
+  btn.textContent = '⚔ 出征';
   document.body.appendChild(btn);
   btn.addEventListener('click', () => {
     if (typeof cornerToggleFight === 'function') cornerToggleFight();
@@ -485,6 +494,10 @@ function initAttackUI() {
   panel.hidden = true;
   document.body.appendChild(panel);
   panel.addEventListener('click', onAtkClick);
+  panel.addEventListener('pointerdown', lpDown);
+  panel.addEventListener('pointermove', lpMove);
+  panel.addEventListener('pointerup', lpUp);
+  panel.addEventListener('pointercancel', lpUp);
   atk.panel = panel;
 
   const hud = document.createElement('div');
@@ -531,8 +544,13 @@ function initAttackUI() {
 
   const canvas = document.getElementById('game');
   canvas.addEventListener('pointerdown', e => { atk.dn = { id: e.pointerId, x: e.clientX, y: e.clientY }; });
+  canvas.addEventListener('pointerdown', holdDown);
+  canvas.addEventListener('pointermove', holdMove);
+  canvas.addEventListener('touchstart', battleTouchBlock, { passive: false });
+  canvas.addEventListener('touchmove', battleTouchBlock, { passive: false });
   canvas.addEventListener('pointerup', atkTap);
-  canvas.addEventListener('pointercancel', () => { atk.dn = null; });
+  canvas.addEventListener('pointerup', holdEnd);
+  canvas.addEventListener('pointercancel', e => { atk.dn = null; holdEnd(e); });
 
   // 進攻中不得以 H / R 改動棋盤(建築隱藏、旋轉)
   window.addEventListener('keydown', e => {
@@ -552,7 +570,7 @@ function atkPlace() {
   if (!atk.panel) return;
   const tb = document.getElementById('toolbar');
   const h = document.body.classList.contains('atk-mode') || !tb ? 0 : tb.offsetHeight;
-  atk.panel.style.bottom = 'calc(' + (h + 8) + 'px + env(safe-area-inset-bottom))';
+  atk.panel.style.bottom = atk.panel.classList.contains('abar') ? '' : 'calc(' + (h + 8) + 'px + env(safe-area-inset-bottom))';
 }
 
 function atkOpenList() {
@@ -602,14 +620,14 @@ function atkMusterHtml() {
   const nb = atkNpc(atk.npc);
   const best = nb && world.npcBest ? (world.npcBest[nb.id] | 0) : 0;
   let h = '<div class="ahead"><div class="shd"><b>出征・' + tdEsc(nb ? nb.name : '') + '</b><button class="close" data-atk="close">✕</button></div>' +
-    '<div class="abtns"><button class="abig" data-atk="go"' + (nb ? '' : ' disabled') + '>⚔ 出征</button><button data-atk="back">放棄</button></div></div>';
+    '<div class="abtns"><button class="abig" data-atk="go"' + (nb ? '' : ' disabled') + '>⚔ 出征</button><button data-atk="back">放棄</button><button data-bdex="1">兵種說明</button></div></div>';
   h += '<div class="abody">';
   h += '<small>難度 ' + (nb ? ATK_DIFF[nb.diff] : '—') + ' ・ 最佳 ' + atkStars(best) + '</small>';
   h += '<div class="apopcap">出征人口上限 <b>' + atkPopCap() + '</b></div>';
-  h += '<small>可帶兵種(每次放 1 個單位;🔒 為城市等級未開放;點 ⓘ 看兵種說明)</small><div class="ulist">';
+  h += '<small>可帶兵種(每次放 1 個單位;🔒 為城市等級未開放;長按兵種可看說明)</small><div class="ulist">';
   deployUnitKeys().forEach(u => {
     const lock = !atkUnitOpen(u);
-    h += '<div class="urow"' + (lock ? ' style="filter:grayscale(1);opacity:.45"' : '') + '><span class="uinfo" data-info="' + u + '">ⓘ</span><span class="uico">' + UNIT_ICON[u] + '</span><span class="uname">' + tdEsc(UNITS[u].name) +
+    h += '<div class="urow"' + (lock ? ' style="filter:grayscale(1);opacity:.45"' : '') + '><span class="uico">' + UNIT_ICON[u] + '</span><span class="uname">' + tdEsc(UNITS[u].name) +
       '</span><small>' + (lock ? '🔒 Lv' + progUnlockLv('unit', u) : '人口 ' + unitPopOf(u)) + '</small></div>';
   });
   h += '</div></div>';
@@ -617,10 +635,10 @@ function atkMusterHtml() {
 }
 
 function onAtkClick(e) {
-  const info = e.target.closest('[data-info]'), iv = info ? info.getAttribute('data-info') : null;
-  if (iv) { if (typeof unitCardOpen === 'function') unitCardOpen(iv); return; }
+  if (lpSuppress) { lpSuppress = false; return; }
   const b = e.target.closest('button');
   if (!b) return;
+  if (b.getAttribute('data-bdex') !== null) { if (typeof unitDexOpen === 'function') unitDexOpen(); return; }
   const pick =b.getAttribute('data-pick');
   const act = b.getAttribute('data-atk');
   if (pick !== null) {
@@ -893,9 +911,137 @@ function tipUnitAt(cx, cy) {
 
 // 點擊(移動小於 8px)地圖:觀察期點可部署格即開戰;進軍期點建築/單位顯示小標籤,點空地放兵。
 // 小標籤開啟時,任何一次點擊先只關閉小標籤(不放兵、不開新標籤)
+// 重繪兵種列時保留橫向捲動位置(切換兵種不跳回最左)
+function barSetHtml(panel, html) {
+  const old = typeof panel.querySelector === 'function' ? panel.querySelector('.ustrip') : null;
+  const x = old ? old.scrollLeft : 0;
+  panel.innerHTML = html;
+  const ns = typeof panel.querySelector === 'function' ? panel.querySelector('.ustrip') : null;
+  if (ns) ns.scrollLeft = x;
+}
+
+// ---- 兵種長按說明:按住約 450ms(位移 < 10px)在兵種列正上方顯示小氣泡,放開即消失;長按不改選取、不放兵;短按永遠是切換
+const LP_MS = 450, LP_MOVE = 10;
+let lpSt = null, lpSuppress = false, lpEl = null;
+function lpDown(e) {
+  lpSuppress = false;
+  const btn = e.target && typeof e.target.closest === 'function' ? e.target.closest('[data-pick]') : null;
+  if (!btn) { lpSt = null; return; }
+  lpSt = { id: e.pointerId, sx: e.clientX, sy: e.clientY, unit: btn.getAttribute('data-pick'), t: 0, shown: false };
+}
+function lpMove(e) {
+  if (!lpSt || lpSt.id !== e.pointerId) return;
+  if (Math.hypot(e.clientX - lpSt.sx, e.clientY - lpSt.sy) >= LP_MOVE) { lpHide(); lpSt = null; }
+}
+function lpUp(e) {
+  if (!lpSt || lpSt.id !== e.pointerId) return;
+  if (lpSt.shown) { lpSuppress = true; lpHide(); }
+  lpSt = null;
+}
+function lpTick(dt) {
+  if (!lpSt || lpSt.shown) return;
+  lpSt.t += dt * 1000;
+  if (lpSt.t >= LP_MS) { lpSt.shown = true; lpShow(lpSt.unit); }
+}
+function lpHide() { if (lpEl) lpEl.hidden = true; }
+function lpShow(u) {
+  if (!lpEl) {
+    lpEl = document.createElement('div');
+    lpEl.id = 'unitHold';
+    lpEl.hidden = true;
+    document.body.appendChild(lpEl);
+  }
+  const I = typeof unitInfo === 'function' ? unitInfo(u) : null;
+  const d = UNITS[u] || {};
+  const lines = I
+    ? [I.name + ' ・ ' + I.nick, I.role + ' ・ 人口 ' + unitPopOf(u), '兵力 ' + d.hp + '　攻 ' + d.atk + '　防 ' + d.def + '　射程 ' + d.range + '　移速 ' + d.spd, '目標:' + String(I.prefText || '')]
+    : [String(d.name || u)];
+  lpEl.innerHTML = lines.slice(0, 4).map(t => '<div>' + tdEsc(t) + '</div>').join('');
+  const pn = atk.on ? atk.panel : sand.panel;
+  const top = pn && typeof pn.getBoundingClientRect === 'function' ? pn.getBoundingClientRect().top : 0;
+  lpEl.style.bottom = Math.max(0, (window.innerHeight || 0) - top + 6) + 'px';
+  lpEl.hidden = false;
+}
+
+// ---- 按住連續放兵:按下即放 1 個;按住超過 250ms 且位移 < 12px 時每 140ms 在同格再放 1 個(該格不可放 / 已佔位 / 人口滿則跳過,人口滿 toast 一次並停止);
+// 位移 ≥ 12px 為拖曳,沿路經過的每個新可部署格各放 1 個;放開即停。每次放兵都是一個 deploy 命令(確定性,錄影 checksum 不變)
+const HOLD_FIRST_MS = 250, HOLD_EVERY_MS = 140, HOLD_DRAG_PX = 12;
+let holdSt = null;
+function holdLive() {
+  return !!battle && !battle.over && game.mode === 'attack' && game.phase === 'march' && (atk.on || battle.kind === 'sandbox');
+}
+function battleActive() { return atk.on || (!!battle && !battle.over); }
+function battleTouchBlock(e) { if (battleActive()) e.preventDefault(); }
+function holdPeek(e) { return holdSt && holdSt.id === e.pointerId ? holdSt : null; }
+function holdEnd(e) { if (holdSt && holdSt.id === e.pointerId) holdSt = null; }
+function holdRepaint() { if (atk.on) atkPaint(); else { sandRenderBattle(); sandHud(); } }
+// 在 (cx,cy) 放 1 個;回傳 true 或原因字串(與 tdDeployWhy 相同)
+function holdTry(cx, cy) {
+  const u = uiPickedUnit();
+  if (!battle || !u) return 'noUnit';
+  const why = tdDeployWhy(battle, u, cx, cy);
+  if (why === true) uiDeploy(battle, u, cx, cy);
+  return why;
+}
+// 人口滿:toast 一次並停止本次按住
+function holdApply(h, why) {
+  if (why === true) h.fired = true;
+  else if (why === 'popcap' && !h.stopped) { h.stopped = true; showToast(DEPLOY_TOAST.popcap); }
+}
+// 按下即失敗、放開時仍未放成:單位格顯示單位小標籤,否則 toast 原因
+function holdFailTip(h, c) {
+  if (h.fired || h.drag) return;
+  if (!tipUnitAt(c.x, c.y)) showToast(DEPLOY_TOAST[h.why] || '無法放兵');
+}
+function holdDown(e) {
+  holdSt = null;
+  if (!holdLive() || tipIsOpen()) return;
+  const c = screenToCell(e.clientX, e.clientY);
+  if (!c || world.occ[idx(c.x, c.y)] > 0) return;
+  const h = { id: e.pointerId, sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, cx: c.x, cy: c.y, held: 0, acc: 0, drag: false, fired: false, stopped: false, why: null };
+  holdSt = h;
+  const why = holdTry(c.x, c.y);
+  h.why = why;
+  if (why === true) h.fired = true;
+  else if (why === 'popcap') h.stopped = true;
+  holdRepaint();
+}
+function holdMove(e) {
+  const h = holdSt;
+  if (!h || h.id !== e.pointerId || !holdLive()) return;
+  if (!h.drag) {
+    if (Math.hypot(e.clientX - h.sx, e.clientY - h.sy) < HOLD_DRAG_PX) return;
+    h.drag = true;
+  }
+  const dx = e.clientX - h.lx, dy = e.clientY - h.ly;
+  const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 3));
+  for (let k = 1; k <= steps && !h.stopped; k++) {
+    const c = screenToCell(h.lx + dx * k / steps, h.ly + dy * k / steps);
+    if (!c || (c.x === h.cx && c.y === h.cy)) continue;
+    h.cx = c.x; h.cy = c.y;
+    holdApply(h, holdTry(c.x, c.y));
+  }
+  h.lx = e.clientX; h.ly = e.clientY;
+  holdRepaint();
+}
+function holdTick(dt) {
+  const h = holdSt;
+  if (!h || h.drag || h.stopped || !holdLive()) return;
+  h.held += dt * 1000;
+  if (h.held < HOLD_FIRST_MS) return;
+  h.acc += dt * 1000;
+  let n = 0;
+  while (h.acc >= HOLD_EVERY_MS && n < 3 && !h.stopped) {
+    h.acc -= HOLD_EVERY_MS; n++;
+    holdApply(h, holdTry(h.cx, h.cy));
+  }
+  if (n) holdRepaint();
+}
+
 // 點擊(移動小於 8px)地圖:觀察期點可部署格即放第一隊開戰;進軍期點建築顯示小標籤,點空地或已有單位的可部署格放一隊(連續放),
 // 小標籤開啟時,任何一次點擊先只關閉小標籤(不放兵、不開新標籤)
 function atkTap(e) {
+  const hd = holdPeek(e);
   const d = atk.dn;
   atk.dn = null;
   if (!atk.on || !d || d.id !== e.pointerId) return;
@@ -912,6 +1058,7 @@ function atkTap(e) {
   }
   if (game.phase !== 'march' || !battle || battle.over) return;
   if (n >= 0) { atkInfo(c.x, c.y); return; }
+  if (hd) { holdFailTip(hd, c); atkPaint(); return; }
   uiFieldTap(battle, atk.unit, c.x, c.y);
   atkPaint();
 }
@@ -1030,6 +1177,7 @@ function atkPaint() {
   atk.hud.hidden = false;
   atk.panel.hidden = false;
   atk.panel.classList.add('abar');
+  atk.panel.style.bottom = '';
   atk.hudClock.textContent = scout ? '斥候 ' + atkFmt(game.scoutLeft) : (battle ? '進軍 ' + atkFmt((battle.limitTick - battle.tick) * SIM_DT) : '');
   atk.hudSub.textContent = fastHudText() || (atk.subLeft > 0 ? atk.sub : (scout ? '點可部署區放下第一個單位即開戰' : (game.simSpeed === 0 ? '已暫停' : '')));
   const full = !!battle && battle.popUsed + 1e-9 >= battle.popCap;
@@ -1038,7 +1186,7 @@ function atkPaint() {
   const html = atkBattleHtml(flash);
   if (html !== atk.lastHtml) {
     atk.lastHtml = html;
-    atk.panel.innerHTML = html;
+    barSetHtml(atk.panel, html);
   }
   atkCtlPaint();
 }

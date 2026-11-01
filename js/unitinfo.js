@@ -32,11 +32,13 @@ const UI_NICK = {
   core: '直取帥帳', defense: '專打箭樓', resource: '專搶輜重', storage: '專劫糧倉', barracks: '直攻營壘',
   house: '見帳就搶', wall: '專破城牆', trap: '專踩機關', unit: '追獵敵兵', any: '穩步推進'
 };
-const UI_STAT_KEYS = ['hp', 'atk', 'def', 'range', 'spd'];
-const UI_STAT_LABEL = { hp: '兵力', atk: '攻擊', def: '防禦', range: '射程', spd: '移速' };
+const UI_STAT_KEYS = ['hp', 'atk', 'aspd', 'dps', 'def', 'range', 'spd'];
+const UI_STAT_LABEL = { hp: '兵力', atk: '每擊傷害', aspd: '攻速', dps: '平均傷害', def: '防禦', range: '射程', spd: '移速' };
 const UI_STAR_WORD = {
   hp: ['極脆', '脆弱', '中等', '耐打', '極耐打'],
-  atk: ['極弱', '較弱', '中等', '強勁', '極強'],
+  atk: ['極輕', '較輕', '中等', '較重', '極重'],
+  aspd: ['很慢', '慢', '中等', '快', '很快'],
+  dps: ['極低', '偏低', '中等', '偏高', '極高'],
   def: ['極薄', '較薄', '中等', '厚實', '極厚'],
   range: ['近身', '短程', '中程', '遠程', '極遠'],
   spd: ['極慢', '偏慢', '中等', '偏快', '極快']
@@ -52,11 +54,15 @@ const UI_TIP_CLS = {
 const UI_EN_FAC = ['yellow', 'bandit', 'hu', 'pirate', 'both'];
 
 // 單位數值:放置單位優先取 UNIT_PLACE_STAT(個體屬性),否則取 UNITS 基準值
+// atk = 每擊傷害;cd = 攻擊間隔秒(放置與守軍共用 UNITS.cd);aspd = 每秒出手次數;dps = atk ÷ cd(平均傷害)
 function uiStat(id) {
   const d = UNITS[id];
   const p = (typeof UNIT_PLACE_STAT !== 'undefined' && UNIT_PLACE_STAT[id]) || d.place || null;
-  if (!p) return { hp: d.hp, atk: d.atk, def: d.def, range: d.range, spd: d.spd, pop: d.pop, placed: false };
-  return { hp: p.hp, atk: p.atk, def: p.def, range: d.range, spd: d.spd, pop: p.pop, placed: true };
+  const cd = d.cd > 0 ? d.cd : 1;
+  const atk = p ? p.atk : d.atk;
+  const base = { cd: cd, aspd: 1 / cd, dps: atk / cd };
+  if (!p) return Object.assign({ hp: d.hp, atk: d.atk, def: d.def, range: d.range, spd: d.spd, pop: d.pop, placed: false }, base);
+  return Object.assign({ hp: p.hp, atk: p.atk, def: p.def, range: d.range, spd: d.spd, pop: p.pop, placed: true }, base);
 }
 // 同一池(放置 / 非放置)內的相對星等 1~5:以名次百分比換算,同值者並列
 function uiStar(key, id, placed) {
@@ -69,10 +75,24 @@ function uiStar(key, id, placed) {
   return Math.max(1, Math.min(5, 1 + Math.round(pct * 4)));
 }
 function uiRound(v) { return Math.round(v * 10) / 10; }
+function uiStatValue(key, s) {
+  if (key === 'range') return uiRound(s.range) + ' 格';
+  if (key === 'aspd') return '每 ' + uiRound(s.cd) + ' 秒一擊';
+  if (key === 'dps') return uiRound(s.dps) + ' /秒';
+  return String(uiRound(s[key]));
+}
 function uiStatRow(key, id, s) {
   const star = uiStar(key, id, s.placed);
-  const shown = uiRound(s[key]);
-  return { label: UI_STAT_LABEL[key], value: key === 'range' ? shown + ' 格' : String(shown), star: star, word: UI_STAR_WORD[key][star - 1] };
+  return { label: UI_STAT_LABEL[key], value: uiStatValue(key, s), star: star, word: UI_STAR_WORD[key][star - 1] };
+}
+// 出手與每擊的一句白話(由星等推導):力大出手慢 / 出手快每擊輕 等
+function uiStyleText(stats) {
+  const h = stats.atk.star, a = stats.aspd.star;
+  if (h >= 4 && a <= 2) return '力大無窮但出手慢,每一擊很重' + (stats.dps.star >= 4 ? ';平均傷害也在高段。' : stats.dps.star <= 2 ? ';平均傷害偏低。' : ';平均傷害中等。');
+  if (h <= 2 && a >= 4) return '出手快、每一擊輕,靠連綿不絕的攻勢取勝。';
+  if (h >= 4 && a >= 4) return '每擊重又出手快,攻勢凌厲。';
+  if (h <= 2 && a <= 2) return '每擊輕又出手慢,攻擊力偏弱。';
+  return '每擊與出手節奏均衡。';
 }
 
 // 目標偏好白話:首位說明 + 其次(其餘類別);resource+storage 合併為「優先搶資源與倉庫」
@@ -147,8 +167,8 @@ function uiCounter(d) {
   return { strong: strong, weak: weak };
 }
 
-// 使用建議:依特徵挑一句,無特徵則依兵科
-function uiTip(d) {
+// 使用建議:依特徵挑一句,無特徵則依兵科(s 為 uiStat 結果,供重擊慢速判斷)
+function uiTip(d, s) {
   const pref = (d.targetPrefs || [])[0];
   if (d.scout) return '先放一隊斥候探路,找出機關與隱藏建築後再放主力。';
   if (d.minRange) return '近身有死角,請讓盾兵或弓手護在前面。';
@@ -158,6 +178,7 @@ function uiTip(d) {
   if (d.charge) return '從高處往低處放,衝鋒的第一擊最痛。';
   if (d.ignoreTroops) return '不理守軍直衝目標,守軍分散時最有效。';
   if (d.aoe) return '對密集的敵群最有效,少放在單打獨鬥的目標上。';
+  if (s && s.cd >= 2.5 && s.atk >= 20) return '每擊重、出手慢,適合擋在前面吸收攻擊' + (pref === 'wall' ? '並破牆。' : '。');
   return UI_TIP_CLS[d.cls] || '依情況搭配使用。';
 }
 
@@ -170,6 +191,7 @@ function unitInfo(id) {
   const stats = {};
   UI_STAT_KEYS.forEach(k => { stats[k] = uiStatRow(k, id, s); });
   return {
+    style: uiStyleText(stats),
     id: id,
     name: d.name,
     nick: d.habitText || UI_NICK[(d.targetPrefs || [])[0]] || '穩步推進',
@@ -183,7 +205,7 @@ function unitInfo(id) {
     traits: uiTraits(d),
     strong: cw.strong,
     weak: cw.weak,
-    tip: uiTip(d)
+    tip: uiTip(d, s)
   };
 }
 
@@ -279,6 +301,7 @@ function uiCardBuild(id) {
   body.appendChild(top);
 
   const st = uiSection(body, '數值');
+  st.appendChild(uiEl('p', '', I.style));
   UI_STAT_KEYS.forEach(k => {
     const r = I.stats[k];
     const row = uiEl('div', 'uc-stat');

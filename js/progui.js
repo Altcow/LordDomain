@@ -2,7 +2,7 @@
 // 只讀 prog.js / progdata.js 的函式與常數,數字一律不寫在本檔。DOM 全由本檔建立(index.html 只載入本檔)。
 // 外部全域(ui.js、battleui.js 等)一律 typeof 守衛;本檔在載入時建立介面,呼叫端可隨時呼叫 progLockBadge / progSeenMark。
 // 新手任務:左上任務提示條(單行、透明)、歡迎泡泡、全畫面任務清單(#questList,分頁可擴充)。
-// 全域名稱:initProgUI progUiTick progUiRefresh progUiOpen progUiClose progLockBadge progSeenMark progFtueTick progFtueShow progFtueHide progQuestOpen;其餘內部一律 pui / puiXxx。
+// 全域名稱:initProgUI progUiTick progUiRefresh progUiOpen progUiClose progLockBadge progSeenMark progFtueTick progFtueShow progFtueHide progQuestOpen progQuestEntry;其餘內部一律 pui / puiXxx。
 
 var pui = {
   inited: false, open: false, toolsOpen: false, timer: 0,
@@ -12,7 +12,7 @@ var pui = {
   why: null, upBtn: null,
   ftue: null, ftueTxt: null, ftueProg: null, ftueX: null, ftueStep: '',
   wel: null, welShown: false, taskShown: false, doneAt: 0, doneSeen: null,
-  quest: null, questOpen: false, qTab: 'tutorial', qTabs: null, qList: null, qProg: null, qMsg: null, qToggle: null, taskBtn: null
+  quest: null, questOpen: false, qTab: 'tutorial', qTabs: null, qList: null, qProg: null, qMsg: null, taskBtn: null
 };
 
 // 清單分頁登錄:之後加「日常任務」等,在此登錄並於 puiQuestItems 實作即可;目前只放新手任務
@@ -384,14 +384,6 @@ function puiTaskHide() {
   if (pui.questOpen) puiQuestRender();
 }
 
-function puiTaskToggle() {
-  var p = progGet();
-  p.ftue.off = !p.ftue.off;
-  progSave();
-  puiTaskRender();
-  if (pui.questOpen) puiQuestRender();
-}
-
 function puiWelcomeDone() {
   var p = progGet();
   p.ftue.welcomed = true;
@@ -411,9 +403,9 @@ function puiQuestClose() {
   if (pui.quest) pui.quest.hidden = true;
 }
 
-// 清單重畫:分頁列、標題進度、項目(✓/☐、狀態、怎麼做、前往)、頂端訊息、底部切換提示條鈕
+// 清單重畫:分頁列、標題進度、項目(✓/☐、狀態、怎麼做、前往)、頂端訊息
 function puiQuestRender() {
-  var p = progGet(), m = puiTaskModel(), items, row, body;
+  var m = puiTaskModel(), items, row, body;
   pui.qTabs.textContent = '';
   PUI_QUEST_TABS.forEach(function (t) {
     pui.qTabs.appendChild(puiBtn('ql-tab' + (t.id === pui.qTab ? ' on' : ''), t.name, function () { pui.qTab = t.id; puiQuestRender(); }));
@@ -434,7 +426,6 @@ function puiQuestRender() {
   pui.qProg.textContent = m.n + '/' + m.total;
   pui.qMsg.textContent = m.kind === 'done' ? '🎉 新手任務完成!點頂列 Lv 升級' : (m.kind === 'ready' ? '✓ 本步完成,點頂列 Lv 升級' : '');
   pui.qMsg.hidden = !pui.qMsg.textContent;
-  pui.qToggle.textContent = p.ftue.off ? '顯示左上提示' : '隱藏左上提示';
 }
 
 // 全畫面任務清單:標題與底部鈕固定,清單區自己捲動;點背景空白處關閉
@@ -451,8 +442,6 @@ function puiQuestBuild() {
   pui.qTabs = puiEl('div', 'ql-tabs');
   pui.qMsg = puiEl('div', 'ql-msg', '');
   pui.qList = puiEl('div', 'ql-list');
-  pui.qToggle = puiBtn('ql-tg', '', function () { puiTaskToggle(); });
-  foot.appendChild(pui.qToggle);
   foot.appendChild(puiBtn('ql-close', '關閉', function () { puiQuestClose(); }));
   panel.appendChild(head);
   panel.appendChild(pui.qTabs);
@@ -594,6 +583,21 @@ function progFtueHide() {
 // 開啟全畫面任務清單(升級抽屜、結算畫面皆可呼叫;不受提示條是否關閉影響)
 function progQuestOpen() {
   if (!pui.inited) return false;
+  puiQuestOpen();
+  return true;
+}
+
+// 右側邊欄「📋 任務」入口:打開任務清單,並讓左上提示條重新顯示(任務已全部完成則只開清單)
+function progQuestEntry() {
+  var p, m;
+  if (!pui.inited) return false;
+  p = progGet();
+  m = puiTaskModel();
+  if (p.ftue.off && m.kind !== 'done' && m.kind !== 'none') {
+    p.ftue.off = false;
+    progSave();
+    puiTaskRender();
+  }
   puiQuestOpen();
   return true;
 }

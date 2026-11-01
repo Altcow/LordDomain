@@ -17,95 +17,160 @@
   // 細腿(方柱,0.07 見方)
   function leg(m, u, v, z, h, col) { m.box(u - 0.035, v - 0.035, z, 0.07, 0.07, h, col); }
 
-  // 石桌 stone_table:石墩 + 圓石面,面上刻一圈淺紋
+  // 外八細腳:list = [[u, v, du, dv], ...],由座面下 (u,v) 斜向外落到 (u+du, v+dv, 0);按深度先後畫
+  function splay(m, W, D, zTop, list, col, wd) {
+    wd = wd || 2.6;
+    m.custom(0, 0, W, D, 0, function (ctx, mm) {
+      list.map(function (p) { var g = mm.g(p[0], p[1]); return { p: p, k: g[0] + g[1] }; })
+        .sort(function (a, b) { return a.k - b.k; })
+        .forEach(function (o) {
+          var p = o.p, a = mm.pt(p[0], p[1], zTop), b = mm.pt(p[0] + p[2], p[1] + p[3], 0);
+          A.line(ctx, a, b, C.ink, wd + 1.6); A.line(ctx, a, b, col, wd);
+        });
+    });
+  }
+  // 圓頂面上的一圈小點(半徑 r 對應螢幕橢圓 rx = 45.25r、ry = 22.63r)
+  function rimDots(m, u, v, z, r, n, col, dot) {
+    m.custom(u - r - 0.04, v - r - 0.04, 2 * r + 0.08, 2 * r + 0.08, z + 0.2, function (ctx, mm) {
+      var c = mm.pt(u, v, z);
+      for (var i = 0; i < n; i++) {
+        var a = i / n * Math.PI * 2;
+        A.circle(ctx, c[0] + Math.cos(a) * r * 45.25, c[1] + Math.sin(a) * r * 22.63, dot, col, 0.5);
+      }
+    });
+  }
+  var STONE_WARM = '#b9a07c', STONE_WARM_LT = '#e6d8bb', STONE_WARM_DK = '#8d7656';
+
+  // 石桌 stone_table:高石柱 + 寬圓石面(高約為石凳 2 倍),面上刻棋盤、擺黑白棋子
   A.def('stone_table', {
-    w: 1, d: 1, sym: true, hmax: 19, shadow: 'ellipse',
+    w: 1, d: 1, sym: true, hmax: 24, shadow: 'ellipse',
     build: function (m, v) {
       var top = snowOn(v) || C.stone[2];
-      m.cyl(0.5, 0.5, 0, 0.24, 11, C.stone[1], { topCol: C.stone[1], hoops: [3.5, 7, 9.5] });
-      m.cyl(0.5, 0.5, 11, 0.42, 3.5, C.stone[2], { topCol: top });
-      m.custom(0.5 - 0.42, 0.5 - 0.42, 0.84, 0.84, 14.5, function (ctx, mm) {
+      m.cyl(0.5, 0.5, 0, 0.3, 3, C.stone[0], { topCol: C.stone[1] });
+      m.cyl(0.5, 0.5, 3, 0.17, 13, C.stone[1], { topCol: C.stone[1], hoops: [5, 11] });
+      m.cyl(0.5, 0.5, 16, 0.46, 3.6, C.stone[2], { topCol: top });
+      m.custom(0.25, 0.25, 0.5, 0.5, 19.6, function (ctx, mm) {
         if (snowOn(v)) return;
-        var c = mm.pt(0.5, 0.5, 14.5), rx = 0.3 * 45.25, ry = 0.3 * 22.63;
-        ctx.save(); ctx.beginPath(); ctx.ellipse(c[0], c[1], rx, ry, 0, 0, Math.PI * 2);
-        ctx.strokeStyle = C.stone[0]; ctx.lineWidth = 0.8; ctx.globalAlpha = 0.6; ctx.stroke(); ctx.restore();
+        var i, k;
+        for (i = 0; i <= 4; i++) {
+          k = 0.3 + i * 0.1;
+          A.line(ctx, mm.pt(0.3, k, 19.6), mm.pt(0.7, k, 19.6), C.stone[0], 0.7);
+          A.line(ctx, mm.pt(k, 0.3, 19.6), mm.pt(k, 0.7, 19.6), C.stone[0], 0.7);
+        }
+        var b = mm.pt(0.4, 0.4, 19.6), w = mm.pt(0.6, 0.5, 19.6), b2 = mm.pt(0.5, 0.6, 19.6);
+        A.circle(ctx, b[0], b[1], 1.7, C.lacquer, 0.6); A.circle(ctx, b2[0], b2[1], 1.7, C.lacquer, 0.6);
+        A.circle(ctx, w[0], w[1], 1.7, '#fffdf4', 0.7);
       });
     }
   });
 
-  // 石凳 stone_stool:圓鼓形石墩,兩道箍紋
+  // 石凳 stone_stool:矮鼓形石墩(上下寬、腰收),暖砂岩色,頂緣一圈鼓釘;約桌的一半高、無桌面物
   A.def('stone_stool', {
-    w: 1, d: 1, sym: true, hmax: 13, shadow: 'ellipse',
+    w: 1, d: 1, sym: true, hmax: 15, shadow: 'ellipse',
     build: function (m, v) {
-      m.cyl(0.5, 0.5, 0, 0.27, 11, C.stone[1], { topCol: snowOn(v) || C.stone[2], hoops: [3, 7.5] });
+      m.cyl(0.5, 0.5, 0, 0.34, 2.8, STONE_WARM_DK, { topCol: STONE_WARM });
+      m.cyl(0.5, 0.5, 2.8, 0.27, 5.6, STONE_WARM, { topCol: STONE_WARM, hoops: [2.8] });
+      m.cyl(0.5, 0.5, 8.4, 0.38, 3.2, STONE_WARM, { topCol: snowOn(v) || STONE_WARM_LT, hoops: [1.6] });
+      if (!snowOn(v)) m.custom(0.1, 0.1, 0.8, 0.8, 11.8, function (ctx, mm) {
+        var c = mm.pt(0.5, 0.5, 11.6);
+        ctx.save(); ctx.beginPath(); ctx.ellipse(c[0], c[1], 0.27 * 45.25, 0.27 * 22.63, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = STONE_WARM_DK; ctx.lineWidth = 1.3; ctx.stroke(); ctx.restore();
+      });
     }
   });
 
-  // 長木凳 bench_wood:兩端厚板腳 + 長條板面(2×1,沿 u)
+  // 長木凳 bench_wood:矮長凳(座高約 9),窄座面 + 後方一排豎條靠背,外八的腳;與高桌面的長案明顯不同(2×1,沿 u)
   A.def('bench_wood', {
-    w: 2, d: 1, hmax: 16, shadow: 'rect',
+    w: 2, d: 1, hmax: 28, shadow: 'rect',
     build: function (m, v) {
-      var sn = v.season === 'winter';
-      m.box(0.1, 0.1, 0, 0.12, 0.8, 7, C.wood[1]);
-      m.box(1.78, 0.1, 0, 0.12, 0.8, 7, C.wood[1]);
-      m.box(0.02, 0.02, 7, 1.96, 0.94, 2.4, C.wood[2], { top: sn ? C.snow : C.wood[2], topDeco: grain(C.wood[1], 9.4) });
-    }
-  });
-
-  // 木桌 table_wood:四腳方桌 + 小陶罐(對稱)
-  A.def('table_wood', {
-    w: 1, d: 1, sym: true, hmax: 22, shadow: 'ellipse',
-    build: function (m, v) {
-      var sn = v.season === 'winter';
-      [0.12, 0.8].forEach(function (u) { [0.12, 0.8].forEach(function (w) { leg(m, u, w, 0, 12, C.wood[1]); }); });
-      m.box(0.04, 0.04, 12, 0.92, 0.92, 2.4, C.wood[2], { top: sn ? C.snow : C.wood[2], topDeco: grain(C.wood[1], 14.4) });
-      m.cyl(0.5, 0.5, 14.4, 0.1, 4, C.silk, { topCol: '#f0e4c8' });
-    }
-  });
-
-  // 長案 table_long:矮長案,前沿紅漆帶,案上一卷竹簡與硯臺(2×1,沿 u)
-  A.def('table_long', {
-    w: 2, d: 1, hmax: 20, shadow: 'rect',
-    build: function (m, v) {
-      var sn = v.season === 'winter';
-      leg(m, 0.12, 0.12, 0, 7, C.wood[0]); leg(m, 1.82, 0.12, 0, 7, C.wood[0]);
-      leg(m, 0.12, 0.8, 0, 7, C.wood[0]); leg(m, 1.82, 0.8, 0, 7, C.wood[0]);
-      m.box(0.1, 0.84, 4.6, 1.8, 0.06, 2.4, C.hanRed);
-      m.box(0.02, 0.02, 7, 1.96, 0.96, 2.4, C.wood[2], { top: sn ? C.snow : C.wood[2], topDeco: grain(C.wood[1], 9.4) });
-      m.cyl(0.4, 0.5, 9.4, 0.09, 3, C.silk, { topCol: '#f0e4c8' });
-      m.cyl(1.55, 0.5, 9.4, 0.15, 2, C.stone[1], { topCol: C.stone[2] });
-    }
-  });
-
-  // 胡床 hu_chuang:交叉腿折疊椅,左右兩側各一組 X 形腿,紅布坐面
-  function xFrame(m, u) {
-    m.custom(u - 0.035, 0.1, 0.07, 0.8, 0, function (ctx, mm) {
-      var a = mm.pt(u, 0.12, 0), b = mm.pt(u, 0.88, 10), c = mm.pt(u, 0.88, 0), d = mm.pt(u, 0.12, 10);
-      A.line(ctx, a, b, C.ink, 3.2); A.line(ctx, a, b, C.wood[2], 1.6);
-      A.line(ctx, c, d, C.ink, 3.2); A.line(ctx, c, d, C.wood[2], 1.6);
-    });
-  }
-  A.def('hu_chuang', {
-    w: 1, d: 1, hmax: 17, shadow: 'ellipse',
-    build: function (m, v) {
-      xFrame(m, 0.12); xFrame(m, 0.88);
-      m.box(0.06, 0.06, 10, 0.88, 0.88, 1.6, C.hanRed, { top: snowOn(v) || A.tone(C.hanRed, 1.12), topDeco: function (ctx, mm) {
-        [[0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7]].forEach(function (p) { var q = mm.pt(p[0], p[1], 11.6); A.circle(ctx, q[0], q[1], 1.6, C.gold, 0.4); });
+      var sn = v.season === 'winter', i;
+      splay(m, 2, 1, 7, [[0.16, 0.38, -0.07, -0.05], [0.16, 0.84, -0.07, 0.05], [1.84, 0.38, 0.07, -0.05], [1.84, 0.84, 0.07, 0.05]], C.wood[0], 3);
+      // 靠背:兩根後柱 + 上橫梁 + 下橫條 + 一排豎條
+      m.box(0.1, 0.14, 0, 0.09, 0.09, 7, C.wood[0]);
+      m.box(1.81, 0.14, 0, 0.09, 0.09, 7, C.wood[0]);
+      m.box(0.1, 0.14, 9.2, 0.09, 0.09, 14, C.wood[0]);
+      m.box(1.81, 0.14, 9.2, 0.09, 0.09, 14, C.wood[0]);
+      m.box(0.06, 0.12, 21.2, 1.88, 0.13, 2.4, C.wood[1], { top: sn ? C.snow : C.wood[2] });
+      m.box(0.16, 0.13, 10.4, 1.68, 0.09, 1.6, C.wood[1]);
+      for (i = 0; i < 9; i++) m.box(0.25 + i * 0.19, 0.145, 12, 0.07, 0.06, 9.2, C.wood[2]);
+      m.box(0.04, 0.3, 7, 1.92, 0.62, 2.2, C.wood[2], { top: sn ? C.snow : A.tone(C.wood[2], 1.06), topDeco: function (ctx, mm) {
+        if (sn) return;
+        for (var j = 1; j <= 2; j++) { var k = 0.3 + j * 0.205; A.line(ctx, mm.pt(0.1, k, 9.2), mm.pt(1.9, k, 9.2), C.wood[1], 0.6); }
       } });
     }
   });
 
-  // 竹椅 chair_bamboo:竹製方凳式座椅,背板在 v 小的一側,竹節橫紋
-  A.def('chair_bamboo', {
-    w: 1, d: 1, hmax: 26, shadow: 'ellipse',
+  // 木桌 table_wood:高方桌(桌面高約 17),四腳 + 裙板,桌面小陶罐與茶杯(對稱)
+  A.def('table_wood', {
+    w: 1, d: 1, sym: true, hmax: 30, shadow: 'ellipse',
     build: function (m, v) {
       var sn = v.season === 'winter';
-      var joints = function (ctx, f) { [14, 18, 22].forEach(function (z) { A.band(ctx, f, z, z + 1.2, BAMBOO_DK); }); };
-      leg(m, 0.14, 0.12, 0, 9, BAMBOO_DK); leg(m, 0.8, 0.12, 0, 9, BAMBOO_DK);
-      leg(m, 0.14, 0.8, 0, 9, BAMBOO_DK); leg(m, 0.8, 0.8, 0, 9, BAMBOO_DK);
-      m.box(0.1, 0.1, 9, 0.8, 0.8, 1.8, BAMBOO, { top: sn ? C.snow : BAMBOO_LT, topDeco: grain(BAMBOO_DK, 10.8) });
-      m.box(0.12, 0.04, 10.8, 0.76, 0.1, 12, BAMBOO, { deco: { F: joints, B: joints } });
-      m.box(0.1, 0.03, 22.8, 0.8, 0.14, 1.4, BAMBOO_DK, { top: BAMBOO_DK });
+      [0.11, 0.82].forEach(function (u) { [0.11, 0.82].forEach(function (w) { leg(m, u, w, 0, 14.5, C.wood[0]); }); });
+      m.box(0.1, 0.1, 11.5, 0.8, 0.8, 3, C.wood[1]);
+      m.box(0.03, 0.03, 14.5, 0.94, 0.94, 2.6, C.wood[2], { top: sn ? C.snow : C.wood[2], topDeco: grain(C.wood[1], 17.1) });
+      m.cyl(0.36, 0.42, 17.1, 0.1, 4.4, C.silk, { topCol: '#f0e4c8', hoops: [2.2] });
+      m.cyl(0.68, 0.62, 17.1, 0.06, 2.2, C.bronze, { topCol: C.lacquer });
+    }
+  });
+
+  // 長案 table_long:長桌(桌面高約 13,比長凳高),朱漆裙板,案上竹簡與硯臺(2×1,沿 u)
+  A.def('table_long', {
+    w: 2, d: 1, hmax: 26, shadow: 'rect',
+    build: function (m, v) {
+      var sn = v.season === 'winter';
+      leg(m, 0.12, 0.12, 0, 11, C.wood[0]); leg(m, 1.82, 0.12, 0, 11, C.wood[0]);
+      leg(m, 0.12, 0.8, 0, 11, C.wood[0]); leg(m, 1.82, 0.8, 0, 11, C.wood[0]);
+      m.box(0.1, 0.78, 8, 1.8, 0.1, 3.4, C.hanRed);
+      m.box(0.02, 0.02, 11, 1.96, 0.96, 2.6, C.wood[2], { top: sn ? C.snow : C.wood[2], topDeco: grain(C.wood[1], 13.6) });
+      m.cyl(0.4, 0.5, 13.6, 0.09, 3, C.silk, { topCol: '#f0e4c8' });
+      m.cyl(0.62, 0.5, 13.6, 0.09, 3, C.silk, { topCol: '#f0e4c8' });
+      m.cyl(1.55, 0.5, 13.6, 0.15, 2, C.stone[1], { topCol: C.stone[2] });
+    }
+  });
+
+  // 胡床 hu_chuang:X 形交叉腿的折疊小凳,座面是繃緊的藍布(兩側木框、白色束帶)
+  function xFrame(m, v0) {
+    m.custom(0.1, v0 - 0.04, 0.8, 0.08, 0, function (ctx, mm) {
+      var a = mm.pt(0.14, v0, 0), b = mm.pt(0.86, v0, 10.4), c = mm.pt(0.86, v0, 0), d = mm.pt(0.14, v0, 10.4), k = mm.pt(0.5, v0, 5.2);
+      A.line(ctx, a, b, C.ink, 4.6); A.line(ctx, a, b, C.wood[2], 3);
+      A.line(ctx, c, d, C.ink, 4.6); A.line(ctx, c, d, C.wood[1], 3);
+      A.circle(ctx, k[0], k[1], 1.7, C.gold, 0.8);
+    });
+  }
+  A.def('hu_chuang', {
+    w: 1, d: 1, hmax: 16, shadow: 'ellipse',
+    build: function (m, v) {
+      var sn = v.season === 'winter', cloth = '#3e6fb0';
+      xFrame(m, 0.14); xFrame(m, 0.86);
+      m.box(0.06, 0.06, 10.4, 0.1, 0.88, 1.6, C.wood[1]);
+      m.box(0.84, 0.06, 10.4, 0.1, 0.88, 1.6, C.wood[1]);
+      m.box(0.16, 0.08, 10.8, 0.68, 0.84, 1.1, cloth, { top: sn ? C.snow : '#5a8ad0', topDeco: function (ctx, mm) {
+        if (sn) return;
+        [0.34, 0.5, 0.66].forEach(function (k) { A.line(ctx, mm.pt(0.18, k, 11.9), mm.pt(0.82, k, 11.9), '#f4f0e0', 0.9); });
+      } });
+    }
+  });
+
+  // 竹椅 chair_bamboo:暖黃竹椅,矮座面 + 兩根高後柱撐起的靠背(上橫梁 + 豎條)+ 兩側扶手
+  A.def('chair_bamboo', {
+    w: 1, d: 1, hmax: 32, shadow: 'ellipse',
+    build: function (m, v) {
+      var sn = v.season === 'winter', BY = '#d9b04b', BDK = '#9c7425', BLT = '#f3dc8e', i;
+      leg(m, 0.14, 0.82, 0, 9, BDK); leg(m, 0.82, 0.82, 0, 9, BDK);
+      leg(m, 0.14, 0.16, 0, 9, BDK); leg(m, 0.82, 0.16, 0, 9, BDK);
+      m.box(0.1, 0.12, 9, 0.8, 0.8, 1.8, BY, { top: sn ? C.snow : BLT, topDeco: function (ctx, mm) {
+        if (sn) return;
+        for (var j = 1; j <= 5; j++) A.line(ctx, mm.pt(0.14, 0.12 + j * 0.13, 10.8), mm.pt(0.86, 0.12 + j * 0.13, 10.8), BDK, 0.5);
+      } });
+      // 後柱(座面以上)、靠背橫梁與豎條
+      m.box(0.11, 0.11, 10.8, 0.08, 0.08, 18, BDK); m.box(0.81, 0.11, 10.8, 0.08, 0.08, 18, BDK);
+      m.box(0.09, 0.09, 26, 0.82, 0.12, 2.6, BY, { top: sn ? C.snow : BLT });
+      m.box(0.15, 0.11, 17, 0.7, 0.07, 1.6, BY);
+      for (i = 0; i < 3; i++) m.box(0.3 + i * 0.2, 0.12, 18.6, 0.05, 0.05, 7.4, BY);
+      // 扶手:前短柱 + 側橫條
+      m.box(0.12, 0.8, 10.8, 0.06, 0.06, 7.2, BDK); m.box(0.82, 0.8, 10.8, 0.06, 0.06, 7.2, BDK);
+      m.box(0.1, 0.14, 18, 0.1, 0.72, 1.6, BY, { top: sn ? C.snow : BLT });
+      m.box(0.8, 0.14, 18, 0.1, 0.72, 1.6, BY, { top: sn ? C.snow : BLT });
     }
   });
 
@@ -143,40 +208,49 @@
     }
   });
 
-  // 案几與坐墊 low_table_cushion:矮案在後、圓墊在前;案上一杯
+  // 案几與坐墊 low_table_cushion:低矮翹頭案在後(約高 10)、前方一塊鮮紅厚方坐墊(四角金流蘇、中央金釦);案上一杯
   A.def('low_table_cushion', {
-    w: 1, d: 1, hmax: 16, shadow: 'ellipse',
+    w: 1, d: 1, hmax: 16, shadow: 'rect',
     build: function (m, v) {
       var sn = v.season === 'winter';
-      leg(m, 0.18, 0.16, 0, 6, C.wood[1]); leg(m, 0.78, 0.16, 0, 6, C.wood[1]);
-      leg(m, 0.18, 0.56, 0, 6, C.wood[1]); leg(m, 0.78, 0.56, 0, 6, C.wood[1]);
-      m.box(0.12, 0.1, 6, 0.76, 0.56, 1.8, C.wood[2], { top: sn ? C.snow : C.wood[2], topDeco: grain(C.wood[1], 7.8) });
-      m.cyl(0.5, 0.3, 7.8, 0.07, 2.4, C.silk, { topCol: '#f0e4c8' });
-      m.cyl(0.5, 0.82, 0, 0.2, 3.6, C.hanRed, { topCol: A.tone(C.hanRed, 1.12), hoops: [1.4] });
+      leg(m, 0.16, 0.1, 0, 8, C.wood[0]); leg(m, 0.84, 0.1, 0, 8, C.wood[0]);
+      leg(m, 0.16, 0.36, 0, 8, C.wood[0]); leg(m, 0.84, 0.36, 0, 8, C.wood[0]);
+      m.box(0.08, 0.04, 8, 0.84, 0.42, 1.8, C.wood[1], { top: sn ? C.snow : C.wood[2] });
+      m.box(0.06, 0.04, 9.8, 0.1, 0.42, 2.4, C.wood[0]); m.box(0.84, 0.04, 9.8, 0.1, 0.42, 2.4, C.wood[0]);
+      m.cyl(0.5, 0.25, 9.8, 0.07, 2.4, C.silk, { topCol: '#f0e4c8' });
+      m.box(0.14, 0.52, 0, 0.72, 0.44, 4, C.hanRed, { top: sn ? C.snow : A.tone(C.hanRed, 1.16), topDeco: function (ctx, mm) {
+        var q = mm.pt(0.5, 0.74, 4);
+        A.circle(ctx, q[0], q[1], 2.2, C.gold, 0.7);
+        if (sn) return;
+        [[0.17, 0.55], [0.83, 0.55], [0.17, 0.93], [0.83, 0.93]].forEach(function (p) { var t = mm.pt(p[0], p[1], 4); A.circle(ctx, t[0], t[1], 1.3, C.gold, 0.5); });
+        A.line(ctx, mm.pt(0.22, 0.6, 4), mm.pt(0.78, 0.6, 4), C.gold, 0.5); A.line(ctx, mm.pt(0.22, 0.88, 4), mm.pt(0.78, 0.88, 4), C.gold, 0.5);
+      }, deco: { F: function (ctx, f) { A.band(ctx, f, 1.4, 2.1, C.gold); } } });
     }
   });
 
-  // 涼亭桌椅組 table_set:圓木桌居中,四面各一凳(2×2,對稱)
+  // 涼亭桌椅組 table_set:圓木桌居中,四面各一矮墩凳(2×2,對稱)
   A.def('table_set', {
-    w: 2, d: 2, sym: true, hmax: 24, shadow: 'ellipse',
+    w: 2, d: 2, sym: true, hmax: 26, shadow: 'ellipse',
     build: function (m, v) {
       var sn = v.season === 'winter', topCol = sn ? C.snow : C.wood[2];
       [[0.3, 1], [1.7, 1], [1, 0.3], [1, 1.7]].forEach(function (p) {
-        m.cyl(p[0], p[1], 0, 0.17, 7, C.wood[1], { topCol: topCol, hoops: [3] });
+        m.cyl(p[0], p[1], 0, 0.17, 6, C.wood[1], { topCol: sn ? C.snow : A.tone(C.wood[2], 1.1), hoops: [3] });
       });
-      m.cyl(1, 1, 0, 0.13, 11, C.wood[1], { topCol: C.wood[1] });
-      m.cyl(1, 1, 11, 0.42, 2.5, C.wood[2], { topCol: topCol });
-      m.cyl(1.1, 0.92, 13.5, 0.08, 3.2, C.bronze, { topCol: C.lacquer });
+      m.cyl(1, 1, 0, 0.13, 14, C.wood[1], { topCol: C.wood[1] });
+      m.cyl(1, 1, 14, 0.46, 2.6, C.wood[2], { topCol: topCol });
+      m.cyl(1.12, 0.9, 16.6, 0.08, 3.2, C.bronze, { topCol: C.lacquer });
     }
   });
 
-  // 庭院矮凳組 stools_pair:兩只圓凳並排沿 u(非對稱,隨朝向轉)
+  // 庭院矮凳組 stools_pair:三只大小不一的蕈形圓墩(粗柱 + 寬圓座面),高低錯落(非對稱,隨朝向轉)
   A.def('stools_pair', {
-    w: 1, d: 1, hmax: 13, shadow: 'ellipse',
+    w: 1, d: 1, hmax: 15, shadow: 'ellipse',
     build: function (m, v) {
-      var top = snowOn(v) || A.tone(C.wood[2], 1.04);
-      m.cyl(0.3, 0.5, 0, 0.21, 9, C.wood[1], { topCol: top, hoops: [3, 6] });
-      m.cyl(0.72, 0.5, 0, 0.21, 9, C.wood[1], { topCol: top, hoops: [3, 6] });
+      var sn = v.season === 'winter';
+      [[0.28, 0.3, 0.26, 10, C.wood[2]], [0.74, 0.4, 0.22, 8, '#e8c070'], [0.46, 0.76, 0.19, 6.2, C.wood[2]]].forEach(function (s) {
+        m.cyl(s[0], s[1], 0, s[2] * 0.52, s[3] - 3, C.wood[0], { topCol: C.wood[0] });
+        m.cyl(s[0], s[1], s[3] - 3, s[2], 3, C.wood[1], { topCol: sn ? C.snow : s[4], hoops: [1.5] });
+      });
     }
   });
 

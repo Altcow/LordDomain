@@ -52,6 +52,7 @@ button:active { background: #45566e; }
 #tplMenu .tpl small { display: block; font-size: 11px; opacity: .75; margin-top: 2px; }
 #tplMenu .close { position: sticky; top: 0; float: right; z-index: 1; background: rgba(20, 26, 36, .9); border: none; padding: 2px 6px; }
 #tplMenu button:disabled { opacity: .4; }
+#tplMenu .tpl.locked, .ld-box button.locked { filter: grayscale(1); }
 @media (max-width: 480px) { #tplMenu { top: calc(40px + env(safe-area-inset-top)); } }
 #pendBar { position: fixed; left: 70px; right: 6px; bottom: calc(var(--stack) + 8px + env(safe-area-inset-bottom)); max-width: 480px; margin: 0 auto; z-index: 3; padding: 6px 8px; border-radius: 10px; background: rgba(20, 26, 36, .92); border: 1px solid #f0b45a; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
 #pendBar[hidden] { display: none; }
@@ -508,17 +509,18 @@ body.atk-mode #toast { top: calc(162px + env(safe-area-inset-top)); bottom: auto
 
 /* ===== 角落操作群:左下 經營/戰鬥布置、其正上方 ⚔ 戰鬥(+選單)。貼左緣、貼底部列上緣;位置由 --stack 與安全區固定(mapedit.js cornerBuild) ===== */
 #modeBtn, #btnAttack.corner-atk, #seasonBtn { position: fixed; z-index: 3; margin: 0; }
-#modeBtn { left: 6px; bottom: calc(var(--stack) + env(safe-area-inset-bottom) + 6px); width: 56px; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 2px; font-size: 11px; border-radius: 10px; }
+#modeBtn { left: 6px; bottom: calc(var(--stack) + env(safe-area-inset-bottom) + 6px); width: 64px; height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 2px; font-size: 11px; border-radius: 10px; white-space: nowrap; }
 #modeBtn .ic { font-size: 16px; line-height: 1; }
-#modeBtn .nm { font-size: 10px; white-space: nowrap; }
+#modeBtn .nm { font-size: 12px; line-height: 1.1; white-space: nowrap; }
+#modeBtn .sub { font-size: 9px; line-height: 1; opacity: .8; white-space: nowrap; }
 #modeBtn.camp { background: #8b1a1a; border-color: #d9534f; color: #fff; font-weight: bold; }
 #modeBtn .vdot { top: -4px; right: -4px; }
-#btnAttack.corner-atk { left: 6px; bottom: calc(var(--stack) + env(safe-area-inset-bottom) + 56px); width: 56px; height: 36px; min-height: 36px; padding: 2px; font-size: 12px; font-weight: bold; border-radius: 10px; background: #7a2a2a; border-color: #c96a5f; }
+#btnAttack.corner-atk { left: 6px; bottom: calc(var(--stack) + env(safe-area-inset-bottom) + 62px); width: 64px; height: 36px; min-height: 36px; padding: 2px; font-size: 12px; font-weight: bold; border-radius: 10px; background: #7a2a2a; border-color: #c96a5f; }
 #btnAttack.corner-atk::before { content: none; }
 /* 🌤 季節與時段已收進右側邊欄(sideBar),原鈕保留 DOM 與 id 供 mapedit.js 使用 */
 #seasonBtn { display: none !important; }
 .corner[hidden], #fightMenu[hidden], #seasonPop[hidden] { display: none !important; }
-#fightMenu { position: fixed; z-index: 4; left: 66px; bottom: calc(var(--stack) + 6px + env(safe-area-inset-bottom)); width: min(220px, calc(100vw - 80px)); display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 10px; background: rgba(20, 26, 36, .94); border: 1px solid #c96a5f; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
+#fightMenu { position: fixed; z-index: 4; left: 74px; bottom: calc(var(--stack) + 6px + env(safe-area-inset-bottom)); width: min(220px, calc(100vw - 88px)); display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 10px; background: rgba(20, 26, 36, .94); border: 1px solid #c96a5f; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
 #fightMenu button { display: block; width: 100%; min-height: 44px; text-align: left; font-size: 14px; }
 #fightMenu .fm-friend { display: flex; flex-wrap: wrap; gap: 4px; }
 #fightMenu .fm-friend input { flex: 1 1 100%; min-height: 40px; padding: 4px 8px; border-radius: 6px; border: 1px solid #45566e; background: #1c2430; color: inherit; font: inherit; }
@@ -592,17 +594,23 @@ body.ui-compact { --stack: 40px; --side-w: 80px; }
   #resbar .res small { display: inline; }
 }
 
-/* 右側邊欄:貼右緣、頂列下方 8px 起;正常模式 6 顆(直版單欄、橫版雙欄),最多延伸到螢幕垂直中點以上 */
-#sideBar { position: fixed; z-index: 3; top: calc(var(--top-h) + env(safe-area-inset-top) + 8px); right: max(4px, env(safe-area-inset-right)); display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+/* 右側邊欄:緊貼右緣(只留 safe-area)、頂列下方起;正常模式最多 6 顆,統一 44px 寬、左側圓角的貼邊分頁;直版單欄、橫版雙欄,整欄不超過畫面垂直中線 */
+#sideBar { position: fixed; z-index: 3; top: calc(var(--top-h) + env(safe-area-inset-top) + 6px); right: env(safe-area-inset-right, 0px); display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 #sideBar [hidden] { display: none !important; }
 #sideBar .side-list { display: flex; flex-direction: column; gap: 4px; }
-#sideBar .side-btn { flex: 0 0 auto; width: 40px; height: 40px; min-height: 40px; margin: 0; padding: 2px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border-radius: 10px; background: rgba(47, 59, 77, .78); border: 1px solid rgba(69, 86, 110, .8); color: #e8edf2; font-size: 10px; line-height: 1; box-shadow: 0 2px 6px rgba(0, 0, 0, .3); }
+#sideBar .side-btn { flex: 0 0 auto; width: 44px; height: 44px; min-width: 44px; min-height: 44px; margin: 0; padding: 2px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border-radius: 10px 0 0 10px; background: rgba(47, 59, 77, .78); border: 1px solid rgba(69, 86, 110, .8); border-right: none; color: #e8edf2; font-size: 10px; line-height: 1; box-shadow: -1px 2px 6px rgba(0, 0, 0, .3); }
 #sideBar .side-btn .ic { font-size: 17px; line-height: 1; }
 #sideBar .side-btn .lb { font-size: 10px; line-height: 1.1; white-space: nowrap; }
 #sideBar .side-btn.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; font-weight: bold; }
 #sideBar .side-more { display: none; width: 30px; height: 30px; min-width: 30px; min-height: 30px; margin: 0; padding: 0; border-radius: 50%; font-size: 16px; line-height: 1; background: rgba(47, 59, 77, .78); border-color: rgba(69, 86, 110, .8); }
 @media (orientation: landscape) {
-  #sideBar .side-list { display: grid; grid-template-columns: 40px 40px; }
+  #sideBar .side-list { display: grid; grid-template-columns: 44px 44px; }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  #sideBar { gap: 3px; }
+  #sideBar .side-list { gap: 3px; }
+  #sideBar .side-btn { height: 38px; min-height: 38px; }
+  #sideBar .side-btn .ic { font-size: 15px; }
 }
 body:not(.ui-compact) #sideBar [data-top="1"] { display: none !important; }
 body.camp-mode #sideBar [data-scope="estate"] { display: none !important; }
@@ -614,11 +622,11 @@ body.ui-compact #topbar > button:not(#btnMenu) { display: none !important; }
 body.ui-compact #topbar { gap: 6px; }
 body.ui-compact #resbar { font-size: 10px; gap: 6px; }
 body.ui-compact #btnMenu.st-menu-btn { min-width: 26px; min-height: 26px; height: 26px; font-size: 13px; padding: 0 4px; }
-body.ui-compact #sideBar { top: calc(var(--top-h) + env(safe-area-inset-top) + 4px); right: max(3px, env(safe-area-inset-right)); align-items: flex-end; }
+body.ui-compact #sideBar { top: calc(var(--top-h) + env(safe-area-inset-top) + 4px); right: env(safe-area-inset-right, 0px); align-items: flex-end; }
 body.ui-compact #sideBar .side-more { display: flex; align-items: center; justify-content: center; }
 body.ui-compact #sideBar .side-list { display: none; flex-direction: row; flex-wrap: wrap; width: max-content; max-width: 70vw; gap: 3px; margin-top: 4px; padding: 4px; border-radius: 10px; background: rgba(20, 26, 36, .9); border: 1px solid rgba(69, 86, 110, .8); }
 body.ui-compact #sideBar.open .side-list { display: flex; }
-body.ui-compact #sideBar .side-btn { width: 30px; height: 30px; min-height: 30px; padding: 0; border-radius: 8px; }
+body.ui-compact #sideBar .side-btn { width: 30px; height: 30px; min-width: 30px; min-height: 30px; padding: 0; border-radius: 8px; border-right: 1px solid rgba(69, 86, 110, .8); }
 body.ui-compact #sideBar .side-btn .lb { display: none; }
 body.ui-compact #sideBar .side-btn .ic { font-size: 15px; }
 @media (orientation: landscape) {
@@ -635,6 +643,7 @@ body.ui-compact #catbar.pop { left: 6px; right: auto; width: max-content; max-wi
 body.ui-compact #catbar.pop button { min-height: 32px; height: auto; font-size: 13px; padding: 4px 10px; text-align: left; }
 body.ui-compact #modeBtn { width: 44px; height: 34px; bottom: calc(var(--stack) + env(safe-area-inset-bottom) + 6px); }
 body.ui-compact #modeBtn .nm { font-size: 9px; }
+body.ui-compact #modeBtn .sub { display: none; }
 body.ui-compact #btnAttack.corner-atk { width: 44px; height: 30px; min-height: 30px; bottom: calc(var(--stack) + env(safe-area-inset-bottom) + 44px); font-size: 11px; }
 
 /* 拍照模式:除還原鈕與 toast 外,所有介面與浮層一律隱藏;畫布照常繪製,可平移縮放 */
@@ -757,7 +766,7 @@ body.atk-mode #progWelcome, body.replay-mode #progWelcome, body.sandbox #progWel
 #questList .ql-hint, #questList .ql-go { font-size: 12px; line-height: 1.5; }
 #questList .ql-go { color: #f0b45a; }
 #questList .ql-foot { flex: 0 0 auto; display: flex; gap: 8px; padding-top: 8px; margin-top: 6px; border-top: 1px solid rgba(255, 255, 255, .15); }
-#questList .ql-tg, #questList .ql-close { flex: 1 1 0; min-height: 44px; font-size: 13px; color: inherit; background: rgba(47, 59, 77, .85); border: 1px solid #45566e; border-radius: 8px; }
+#questList .ql-close { flex: 1 1 0; min-height: 44px; font-size: 13px; color: inherit; background: rgba(47, 59, 77, .85); border: 1px solid #45566e; border-radius: 8px; }
 #questList .ql-close { background: #2e7d4f; border-color: #5fc98a; }
 @media (orientation: landscape) { #questList .ql-panel { max-width: 460px; } }
 
@@ -847,17 +856,20 @@ body.atk-mode #toast, body.sandbox #toast { top: auto; bottom: calc(92px + env(s
 #editBar button[data-eact="discard"] { background: #6b2b2b; border-color: #c96a5f; }
 body.camp-mode #editBar .eb-tag { background: #d9534f; color: #fff; }
 body.sandbox #editBar, body.atk-mode #editBar, body.replay-mode #editBar { display: none !important; }
-/* #slotPick:格 1/2/3 選擇器,固定在左上緣、頂列下方的直排(避開 progFtue 提示列與中央區);狀態改變只換字與顏色,不移位 */
-#slotPick { position: fixed; z-index: 2; left: max(6px, env(safe-area-inset-left)); top: calc(var(--top-h) + env(safe-area-inset-top) + 36px); width: 40px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-#slotPick[hidden] { display: none !important; }
-#slotPick .sp-tag { font-size: 10px; line-height: 1; padding: 3px 4px; border-radius: 6px; background: rgba(20, 26, 36, .85); white-space: nowrap; }
-#slotPick .sp-btn { width: 36px; height: 36px; min-width: 36px; min-height: 36px; margin: 0; padding: 0; border-radius: 50%; font-size: 14px; font-weight: bold; line-height: 1; background: rgba(47, 59, 77, .9); border: 1px solid rgba(69, 86, 110, .9); color: #e8edf2; }
-#slotPick .sp-btn.empty { opacity: .55; color: #9aa6b4; font-size: 12px; font-weight: normal; }
-#slotPick .sp-btn.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; opacity: 1; }
-#slotPick[data-type="camp"] .sp-btn.on { background: #d9534f; border-color: #ff8a7e; color: #fff; }
-#slotPick .sp-btn { position: relative; }
-#slotPick .sp-btn::after { content: ''; position: absolute; inset: -4px; }
-body.photo-mode #slotPick, body.sandbox #slotPick, body.atk-mode #slotPick, body.replay-mode #slotPick { display: none !important; }
+/* #slotPop:版面選擇小面板(右側邊欄第一個鈕開關),貼在邊欄左邊、與第一顆鈕同高;寬 112px 不蓋中央區;不自動關閉 */
+#slotPop { position: fixed; z-index: 3; top: calc(var(--top-h) + env(safe-area-inset-top) + 6px); right: calc(44px + env(safe-area-inset-right, 0px) + 4px); width: 112px; box-sizing: border-box; display: flex; flex-direction: column; gap: 3px; padding: 4px; border-radius: 10px; background: rgba(20, 26, 36, .88); border: 1px solid rgba(69, 86, 110, .9); box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
+#slotPop[hidden] { display: none !important; }
+#slotPop .sp-note { font-size: 10px; line-height: 1.3; padding: 2px 3px; color: #ffcf8a; }
+#slotPop .sp-btn { width: 100%; min-height: 40px; margin: 0; padding: 3px 6px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; border-radius: 8px; font-size: 12px; line-height: 1.2; text-align: left; background: rgba(47, 59, 77, .9); border: 1px solid rgba(69, 86, 110, .9); color: #e8edf2; overflow: hidden; }
+#slotPop .sp-a { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; }
+#slotPop .sp-b { font-size: 10px; opacity: .8; white-space: nowrap; }
+#slotPop .sp-btn.empty { opacity: .55; color: #9aa6b4; }
+#slotPop .sp-btn.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; opacity: 1; }
+#slotPop[data-type="camp"] .sp-btn.on { background: #d9534f; border-color: #ff8a7e; color: #fff; }
+#slotPop.locked .sp-btn { filter: grayscale(1); opacity: .4; }
+@media (orientation: landscape) { #slotPop { right: calc(91px + env(safe-area-inset-right, 0px) + 4px); } }
+body.ui-compact #slotPop { top: calc(var(--top-h) + env(safe-area-inset-top) + 4px); right: calc(30px + env(safe-area-inset-right, 0px) + 6px); }
+body.photo-mode #slotPop, body.sandbox #slotPop, body.atk-mode #slotPop, body.replay-mode #slotPop { display: none !important; }
 
 /* 出征清單 / 沙盤設定:主要按鈕在頂部 sticky 列,明細在下方捲動 */
 #sandPanel .ahead { position: sticky; top: 0; z-index: 1; margin: -8px -10px 0; padding: 8px 10px 6px; background: rgba(20, 26, 36, .98); }
@@ -942,15 +954,7 @@ body.has-varbar.has-catbar { --stack: 102px; }
 body.ui-compact.has-varbar { --stack: 68px; }
 body.sandbox #varbar, body.atk-mode #varbar, body.replay-mode #varbar, body.photo-mode #varbar, body.photo-mode #topMenu { display: none !important; }
 
-/* 畫面方向(orient.js):設定列說明、方向不符提示層 #orientGuard(蓋住全畫面,攔截輸入) */
 #stRoot .st-hint { font-size: 12px; line-height: 1.5; margin: 0 0 8px; opacity: .8; }
-#orientGuard { display: none; position: fixed; inset: 0; z-index: 100; align-items: center; justify-content: center; box-sizing: border-box; padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px); background: rgba(8, 12, 18, .88); color: #e8edf2; text-align: center; touch-action: none; user-select: none; -webkit-user-select: none; }
-#orientGuard.og-show { display: flex; }
-#orientGuard .og-box { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 320px; width: 100%; }
-#orientGuard .og-icon { font-size: 56px; line-height: 1; }
-#orientGuard .og-tx { margin: 0; font-size: 18px; font-weight: bold; }
-#orientGuard .og-sub { margin: 0; font-size: 13px; line-height: 1.5; opacity: .8; }
-#orientGuard .og-auto { min-height: 44px; min-width: 120px; margin-top: 8px; padding: 0 18px; border-radius: 10px; border: 1px solid #5a6b82; background: #2f3b4d; color: #e8edf2; font: inherit; font-size: 15px; }
 #fightMenu button small { display: block; margin-top: 2px; font-size: 11px; opacity: .7; font-weight: 400; }
 #atkPanel .apool { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; }
 #atkPanel .apool b { font-size: 18px; }
@@ -968,3 +972,39 @@ body.photo-mode #draftFloat { display: none !important; }
 /* 拆除確認框:按鈕固定在對話框底部 */
 #ldConfirm .ld-box { display: flex; flex-direction: column; }
 #ldConfirm .ld-foot { margin-top: auto; padding-top: 10px; }
+
+#riverDir[hidden] { display: none !important; }
+
+/* 戰鬥底部兵種列:滿版貼螢幕最下緣(含安全區),頂邊細線與圓角只在上方;卡片固定 64px 可橫向捲動;人口區固定在最左 */
+#atkPanel.abar, #sandPanel.abar { left: 0; right: 0; bottom: 0; max-width: none; margin: 0; border-radius: 10px 10px 0 0; border-top: 1px solid rgba(240, 180, 90, .45); background: rgba(20, 26, 36, .94); box-shadow: none; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
+#atkPanel.abar .ustrip button, #sandPanel.abar .ustrip button { flex: 0 0 64px; width: 64px; min-width: 64px; }
+#atkPanel.abar .ustrip, #sandPanel.abar .ustrip { min-width: 0; }
+
+/* 草稿起點 / 儲存對話框:內容區可捲動,按鈕列(ld-foot)與選項列(ld-opt)固定在對話框底部;分區標題與提示 */
+#draftStartDlg .ld-box, #saveSlotDlg .ld-box, #slotAskDlg .ld-box { display: flex; flex-direction: column; }
+#draftStartDlg .ld-body, #saveSlotDlg .ld-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+#draftStartDlg .ld-head, #saveSlotDlg .ld-head, #slotAskDlg .ld-head { flex: 0 0 auto; }
+#draftStartDlg .ld-foot, #saveSlotDlg .ld-foot, #slotAskDlg .ld-foot, #saveSlotDlg .ld-opt { flex: 0 0 auto; }
+#draftStartDlg .ld-foot, #saveSlotDlg .ld-foot { margin-top: auto; padding-top: 8px; }
+#saveSlotDlg .ld-body .ld-row > button { flex: 1 1 auto; }
+.ld-type { align-items: center; margin-top: 0; }
+.ld-type .ld-lab { flex: 0 0 auto; font-size: 13px; opacity: .85; }
+.ld-sub { margin: 10px 0 0; font-size: 12px; opacity: .8; }
+.ld-opt { flex-direction: column; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, .18); }
+.ld-opt .ld-note { margin: 4px 0 0; font-size: 12px; opacity: .8; }
+.ld-box button.empty { color: #9aa6b4; }
+@media (max-height: 500px) { .ld-box button { min-height: 38px; padding-top: 3px; padding-bottom: 3px; } .ld-box { padding: 8px 12px; } .ld-msg { margin: 2px 0 4px; } }
+
+/* 戰鬥畫面:關閉長按選取 / 放大鏡 / 呼叫選單(地圖畫布與戰鬥元素);輸入框不受影響;地圖 touch-action none */
+#game, #atkPanel, #atkCtl, #atkHud, #atkPause, #tdTip, #tdSelRing, #sandPanel, #toast { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+#game { touch-action: none; }
+#atkPanel button, #atkCtl button, #sandPanel button { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+/* 橫版側欄不再把底部兵種列縮成 300px */
+#atkPanel.abar, #sandPanel.abar { width: auto; }
+
+/* 兵種列:整張卡為切換點擊區(寬 64px、整列高);說明鈕固定在人口區旁(不在卡片上);長按說明氣泡 #unitHold 置於兵種列正上方、不改選取 */
+#atkPanel.abar .ustrip button, #sandPanel.abar .ustrip button { flex: 0 0 64px; width: 64px; min-width: 64px; height: 48px; min-height: 48px; }
+#atkPanel.abar .bdex, #sandPanel.abar .bdex { flex: 0 0 52px; min-width: 52px; min-height: 48px; padding: 2px 4px; font-size: 13px; font-weight: 700; border-radius: 8px; }
+#unitHold { position: fixed; left: 50%; transform: translateX(-50%); z-index: 6; width: max-content; max-width: 70vw; box-sizing: border-box; padding: 6px 10px; border-radius: 10px; background: rgba(20, 26, 36, .92); color: #e8edf2; font-size: 12px; line-height: 1.4; text-align: left; pointer-events: none; user-select: none; -webkit-user-select: none; }
+#unitHold[hidden] { display: none; }
+#unitHold div + div { opacity: .85; font-size: 11px; }

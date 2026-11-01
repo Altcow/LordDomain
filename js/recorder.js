@@ -413,6 +413,7 @@ function recRenderPanel() {
 
 function recOpen() {
   if (!REC.ui) return;
+  if (typeof featGuard === 'function' && !featGuard('recorder')) return;
   if (typeof AU === 'object' && AU && AU.unlock) AU.unlock();
   if (!REC.mime) { showToast('此瀏覽器不支援錄影'); return; }
   recRenderPanel();
@@ -497,6 +498,11 @@ function recBuild() {
   };
 }
 
+// 設定列顯示條件:錄影功能已開放(PROG_UNLOCK_FEATURE 的 recorder,預設 Lv10)
+function recShowEntry() {
+  return typeof isUnlocked !== 'function' || isUnlocked('feature', 'recorder');
+}
+
 function recInit() {
   const R = REC;
   if (R.inited) return;
@@ -505,7 +511,7 @@ function recInit() {
   R.mime = recSupport();
   recBuild();
   if (R.mime && typeof settingsAddRow === 'function') {
-    try { settingsAddRow('🎬 拍攝錄影', recOpen, '拍攝'); } catch (e) { console.warn('[rec] settingsAddRow failed', e); }
+    try { settingsAddRow('🎬 拍攝錄影', recOpen, '拍攝', recShowEntry); } catch (e) { console.warn('[rec] settingsAddRow failed', e); }
   }
   if (typeof draw === 'function') {
     const baseDraw = draw;

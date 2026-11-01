@@ -1,7 +1,8 @@
 // playerpool.js — 玩家陣地池(PLAN_LAYOUT §3.5):🎲 隨機戰鬥從這裡抽一個「玩家陣地」來打。
 // 池 = 自己的戰鬥版面存檔格(world.layoutSlots.camp,通過 validateCamp 才入池,打自己只算練習)
 //    + 預製「玩家風格」戰陣(camp_lv01 / camp_lianying / camp_square / camp_pass)
-//    + poolProviders 掛勾(日後由戰陣模塊庫生成他城;每個 provider 為 function(playerLv) 回傳條目陣列,現在不實作)。
+//    + poolProviders 掛勾(每個 provider 為 function(playerLv) 回傳條目陣列);內建 poolModProvider:戰陣模塊庫(js/progmod.js,玩家等級 ±2)。
+// 抽選權重(POOL_WEIGHTS):模塊庫 60% / 預製 25% / 自己 15%(某一類沒有條目時,其餘類別按比例重分)。
 // 條目:{ id, kind:'self'|'prefab'|'gen', name(陣地名), lvHint(適合城市等級下限), tpl|slot, practice }
 // 外部全域(執行期才使用):world TEMPLATES OBJECTS hashStr boardFromJSON boardToJSON validateCamp tplCells npcBuildBoard scoutVisible progLv
 
@@ -18,8 +19,11 @@ const POOL_PREFABS = [
   { id: 'camp_pass', tpl: 'camp_pass', name: '山口隘道陣', lvHint: 7 }
 ];
 
-// 日後由戰陣模塊庫生成他城的掛勾:push(function (lv) { return [條目…]; }),條目需自帶 loadJson(回傳 boardJSON)
+// 條目來源掛勾:push(function (lv) { return [條目…]; }),條目需自帶 loadJson(回傳 boardJSON);kind 為 'gen'
 const poolProviders = [];
+
+// 抽選權重(各類別的相對機率,集中在此;某類沒有條目時略過):gen = 戰陣模塊庫、prefab = 預製玩家風格戰陣、self = 自己的存檔格陣地
+const POOL_WEIGHTS = { gen: 60, prefab: 25, self: 15 };
 
 const POOL_LV_AHEAD = 2;       // 只抽 lvHint ≤ 玩家等級 + 2 的陣地
 const POOL_PRACTICE_MUL = 0.5; // 打自己的陣地:資源與經驗倍率
@@ -90,6 +94,23 @@ function poolNameOf(entry, seed) {
   return POOL_NAMES[hashStr(entry.id + ':' + (seed >>> 0)) % POOL_NAMES.length];
 }
 
+// 加權抽取:先依 POOL_WEIGHTS 決定類別(只計有條目的類別),再在類別內均勻抽;同 seed 決定性
+function poolPick(list, sd) {
+  const by = {};
+  list.forEach(e => { (by[e.kind] = by[e.kind] || []).push(e); });
+  const kinds = Object.keys(by).filter(k => by[k].length);
+  let total = 0;
+  kinds.forEach(k => { total += (POOL_WEIGHTS[k] != null ? POOL_WEIGHTS[k] : 10); });
+  let u = (hashStr('poolcls:' + sd) % 100000) / 100000 * total, kind = kinds[kinds.length - 1];
+  for (let i = 0; i < kinds.length; i++) {
+    const w = POOL_WEIGHTS[kinds[i]] != null ? POOL_WEIGHTS[kinds[i]] : 10;
+    if (u < w) { kind = kinds[i]; break; }
+    u -= w;
+  }
+  const arr = by[kind];
+  return arr[hashStr('pool:' + sd) % arr.length];
+}
+
 // 抽一個:seed 決定性;skipId 為「換一個」時排除的目前條目(池只剩 1 個時才允許重複)
 // 回傳抽中描述:{ id, entry, lord(假玩家名), name(陣地名), lvHint, T, diff, practice, seed, stats }
 function poolDraw(seed, lv, skipId) {
@@ -97,7 +118,7 @@ function poolDraw(seed, lv, skipId) {
   let list = poolEligible(L);
   if (skipId && list.length > 1) list = list.filter(e => e.id !== skipId);
   const sd = seed >>> 0;
-  const e = list[hashStr('pool:' + sd) % list.length];
+  const e = poolPick(list, sd);
   return poolDescribe(e, sd, L);
 }
 
@@ -170,3 +191,19 @@ function poolLoadIntoWorld(e) {
   }
   return null;
 }
+
+// ---- 戰陣模塊庫提供者(js/progmod.js;沒載入該檔時回傳空陣列)----
+// 玩家等級 ±2 的模塊(progModList 已依等級過濾),每筆當作一位「玩家」的陣地;假玩家名依 poolNameOf 的名字池;lvHint = 模塊等級
+function poolModProvider(lv) {
+  if (typeof progModList !== 'function' || typeof PROGMOD_ARCH === 'undefined') return [];
+  return progModList(lv).map(m => {
+    const a = progModArch(m.arch);
+    let types = null;
+    return {
+      id: 'mod:' + m.id, kind: 'gen', mod: m.id, name: a ? a.name : m.id, lvHint: m.lv, practice: false,
+      types: () => types || (types = progModBuild(m).objects.map(o => o.type)),
+      loadJson: () => progModBoard(m)
+    };
+  });
+}
+poolProviders.push(poolModProvider);

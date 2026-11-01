@@ -195,17 +195,17 @@ function stVolBlock(label, bus) {
 }
 
 // 外部模組(如 mymusic.js)登記一列;group 省略為「聲音」。同 group 同 label 不重複登記
-function settingsAddRow(label, onclick, group) {
+function settingsAddRow(label, onclick, group, show) {
   if (typeof onclick !== 'function') return false;
   const g = group || '聲音';
   if (stExtraRows.some(function (r) { return r.label === label && r.group === g; })) return true;
-  stExtraRows.push({ label: label, onclick: onclick, group: g });
+  stExtraRows.push({ label: label, onclick: onclick, group: g, show: show });
   if (stIsOpen) stRender();
   return true;
 }
 
 function stExtraNodes(group) {
-  return stExtraRows.filter(function (r) { return r.group === group; }).map(function (r) {
+  return stExtraRows.filter(function (r) { return r.group === group && (typeof r.show !== 'function' || r.show()); }).map(function (r) {
     const b = stEl('button', 'st-link', r.label);
     b.addEventListener('click', function () {
       stClosePanel();
@@ -262,13 +262,6 @@ function stDisplaySec() {
       uiSetMode(v);
       stRender();
     })));
-  }
-  if (typeof orientSet === 'function') {
-    nodes.push(stRow('畫面方向', stSeg([['auto', '自動'], ['portrait', '固定直版'], ['landscape', '固定橫版']], orientGet(), function (v) {
-      orientSet(v);
-      stRender();
-    })));
-    nodes.push(stEl('p', 'st-hint', 'iPhone 請用控制中心的『螢幕方向鎖定』(網頁無法鎖定 iPhone 方向)。'));
   }
   return stSec('畫面', nodes.concat(stExtraNodes('畫面')));
 }
@@ -357,7 +350,8 @@ function stFsTipMaybe() {
 let stIconOpen = false;
 const ST_ICON_LEGEND = [
   { icon: '🔨', name: '草稿布置(右側欄):另開一份草稿來設計,改完 💾 儲存到版面格,不影響正在用的城;平時直接點下方建築蓋即可(即時生效)' },
-  { icon: '①②③', name: '版面格(左上):經營、戰鬥各 3 格,點一下把整座城 / 整個戰陣換成那一格;「空」= 還沒存,點了可把目前版面存進去' },
+  { icon: '🏘', name: '經營 / 戰鬥(右側欄第一個):打開 3 格版面小面板,點一格把整座城 / 整個戰陣換成那一格;「空」= 還沒存,點了可把目前版面存進去;面板不會自動關閉,再點一次該鈕才收起' },
+  { icon: '📋', name: '任務(右側欄):打開全畫面任務清單,並讓左上任務提示條重新顯示(提示條上的 ✕ 可再收起)' },
   { icon: '📋', name: '範本(設定→畫面):選了範本會載入到草稿,不會直接蓋掉你正在用的版面' },
   { icon: '⚔', name: '戰鬥選單(左下;內含 📜 戰報／錄影)' },
   { icon: '👁', name: '隱藏建築(整地用,H)' },
@@ -436,8 +430,10 @@ function stRender() {
   const builtin = ['聲音', '畫面', '關於', '危險區'];
   stExtraRows.forEach(function (r) {
     if (builtin.indexOf(r.group) >= 0) return;
+    const nodes = stExtraNodes(r.group);
+    if (!nodes.length) return;
     builtin.push(r.group);
-    stBodyEl.appendChild(stSec(r.group, stExtraNodes(r.group)));
+    stBodyEl.appendChild(stSec(r.group, nodes));
   });
   if (battle) return;
   stBodyEl.appendChild(stDisplaySec());

@@ -51,7 +51,12 @@ const TD_COMBAT = {
   counterUp: 0.5, counterDown: 0.5,
   hStep: 0.15, hRange: 1, mulMin: 0.4, mulMax: 2.0,
   bldMul: { shield: 1.2, archer: 1.2, cavalry: 0.5, siege: 3.0 },
-  meleeReach: 1.5, sight: 6, cellCap: 2
+  meleeReach: 1.5, sight: 6, cellCap: 2,
+  // 仰攻 / 俯射(PLACEHOLDER;PLAN_DEFENSE「城牆 + 1 層高」):有效目標高度 > 攻方高度 → 傷害 × upMul^差值(差值最多 upMax 層、下限 upMin);
+  // 攻方較高 → 傷害 × downMul^差值(最多 downMax 層)。有效目標高度 = 目標格地形高度 + wallRise[type](牆 1、閘樓 1、鹿角 0、城門 0)。
+  // 這是獨立於 hitDamage 的乘數(不受 mulMin / mulMax 夾限),取代舊的 heightMul(±15% / 層)用於單位 / 建築的命中傷害
+  upMul: 0.75, upMax: 3, upMin: 0.42, downMul: 1.1, downMax: 2,
+  wallRise: { wall: 1, zhalou: 1, lujiao: 0, gate: 0 }
 };
 
 const TARGET_CLASSES = ['core', 'defense', 'resource', 'storage', 'barracks', 'house', 'wall', 'trap', 'unit', 'any'];
@@ -85,14 +90,14 @@ const TERRAIN_BONUS = {
 // fac: han 我軍 | both 雙方 | yellow 黃巾 | bandit 山賊 | hu 胡 | pirate 水賊 | npc 具名/通用
 // camp: 由哪座戰陣營放出(null = 非營放出); look: TROOP_LOOK key(敵軍無對應, 暫 null)
 const UNITS = {
-  militia:  { name: '民兵', fac: 'han', cls: 'shield', profile: 'foot', hp: 60, atk: 6, def: 4, range: 1, spd: 1.0, cd: 1.0, pop: 1, squad: 8, value: 12, targetPrefs: ['any'], camp: null, look: 'shield1', habitText: null, cautious: true },
+  militia:  { name: '民兵', fac: 'han', cls: 'shield', profile: 'foot', hp: 60, atk: 4.8, def: 4, range: 1, spd: 1.0, cd: 0.8, pop: 1, squad: 8, value: 12, targetPrefs: ['any'], camp: null, look: 'shield1', habitText: null, cautious: true },
   hunter:   { name: '獵戶', fac: 'han', cls: 'archer', profile: 'foot', hp: 70, atk: 5, def: 2, range: 3, spd: 1.0, cd: 1.2, pop: 1, squad: 6, value: 12, targetPrefs: ['unit', 'any'], camp: null, look: 'archer1', habitText: null, cautious: true },
-  daodun:   { name: '刀盾兵', fac: 'han', cls: 'shield', profile: 'foot', hp: 100, atk: 8, def: 7, range: 1, spd: 0.9, cd: 1.0, pop: 1, squad: 8, value: 18, targetPrefs: ['wall', 'any'], camp: 'shield', look: 'shield2', habitText: '先登破牆' },
-  gongbing: { name: '弓兵', fac: 'han', cls: 'archer', profile: 'foot', hp: 30, atk: 10, def: 2, range: 5, spd: 1.0, cd: 1.2, pop: 1, squad: 6, value: 20, targetPrefs: ['defense', 'any'], camp: 'archer', look: 'archer2', habitText: '專射箭樓' },
+  daodun:   { name: '刀盾兵', fac: 'han', cls: 'shield', profile: 'foot', hp: 100, atk: 20, def: 7, range: 1, spd: 0.9, cd: 4.5, pop: 1, squad: 8, value: 18, targetPrefs: ['wall', 'any'], camp: 'shield', look: 'shield2', habitText: '先登破牆' },
+  gongbing: { name: '弓兵', fac: 'han', cls: 'archer', profile: 'foot', hp: 30, atk: 15, def: 2, range: 5, spd: 1.0, cd: 1.8, pop: 1, squad: 6, value: 20, targetPrefs: ['defense', 'any'], camp: 'archer', look: 'archer2', habitText: '專射箭樓' },
   qingqi:   { name: '輕騎', fac: 'han', cls: 'cavalry', profile: 'horse', hp: 150, atk: 13, def: 5, range: 1, spd: 2.0, cd: 1.1, pop: 2, squad: 4, value: 36, targetPrefs: ['resource', 'storage', 'any'], camp: 'cavalry', look: 'cavalry2', habitText: '劫掠輜重' },
   tuqi:     { name: '突騎', fac: 'han', cls: 'cavalry', profile: 'horse', hp: 200, atk: 18, def: 7, range: 1, spd: 2.2, cd: 1.0, pop: 3, squad: 3, value: 65, targetPrefs: ['barracks', 'storage', 'any'], charge: 1.5, camp: 'cavalry', look: 'cavalry3', habitText: '直搗營壘' },
-  chihou:   { name: '斥候', fac: 'han', cls: 'cavalry', profile: 'horse', hp: 70, atk: 4, def: 2, range: 1, spd: 2.6, cd: 1.2, pop: 1, squad: 2, value: 15, targetPrefs: ['defense', 'any'], scout: 3, trapTaken: 0.5, camp: 'cavalry', look: 'cavalry1', habitText: '探路破陷' },
-  changji:  { name: '長戟兵', fac: 'han', cls: 'shield', profile: 'foot', hp: 150, atk: 12, def: 10, range: 1.5, spd: 0.9, cd: 1.0, pop: 2, squad: 4, value: 40, targetPrefs: ['wall', 'defense', 'any'], camp: 'shield', look: 'shield3', habitText: null },
+  chihou:   { name: '斥候', fac: 'han', cls: 'cavalry', profile: 'horse', hp: 70, atk: 3.3, def: 2, range: 1, spd: 2.6, cd: 1.0, pop: 1, squad: 2, value: 15, targetPrefs: ['defense', 'any'], scout: 3, trapTaken: 0.5, camp: 'cavalry', look: 'cavalry1', habitText: '探路破陷' },
+  changji:  { name: '長戟兵', fac: 'han', cls: 'shield', profile: 'foot', hp: 150, atk: 19.2, def: 10, range: 1.5, spd: 0.9, cd: 1.6, pop: 2, squad: 4, value: 40, targetPrefs: ['wall', 'defense', 'any'], camp: 'shield', look: 'shield3', habitText: null },
   chuangnu: { name: '床弩', fac: 'han', cls: 'siege', profile: 'heavy', hp: 120, atk: 28, def: 3, range: 5, spd: 0.5, cd: 3.0, pop: 3, squad: 1, value: 60, targetPrefs: ['defense', 'wall', 'any'], minRange: 2, aoe: 0.8, aoeMax: 3, splash: 0.5, camp: 'siege', look: 'siege2', habitText: '拔塔破門' },
 
   hjzong:   { name: '黃巾賊眾', fac: 'yellow', cls: 'shield', profile: 'foot', hp: 55, atk: 6, def: 3, range: 1, spd: 1.0, cd: 1.0, pop: 1, squad: 10, value: 11, targetPrefs: ['house', 'storage', 'any'], camp: null, look: null, habitText: '見營帳就搶', cautious: true },
@@ -102,27 +107,30 @@ const UNITS = {
   huqi:     { name: '胡騎', fac: 'hu', cls: 'cavalry', profile: 'horse', hp: 140, atk: 12, def: 5, range: 1, spd: 2.2, cd: 1.1, pop: 2, squad: 4, value: 33, targetPrefs: ['resource', 'storage', 'barracks', 'any'], camp: null, look: null, habitText: '掠糧車、燒營' },
   hushe:    { name: '胡騎射手', fac: 'hu', cls: 'cavalry', profile: 'horse', hp: 120, atk: 10, def: 3, range: 3, spd: 2.0, cd: 1.3, pop: 2, squad: 4, value: 30, targetPrefs: ['unit', 'house', 'any'], camp: null, look: null, habitText: '騎射獵兵' },
   shuizei:  { name: '水賊', fac: 'pirate', cls: 'shield', profile: 'foot', hp: 70, atk: 7, def: 4, range: 1, spd: 1.0, cd: 1.0, pop: 1, squad: 8, value: 14, targetPrefs: ['resource', 'house', 'storage', 'any'], swim: true, camp: null, look: null, habitText: '從水路摸上岸' },
-  chongche: { name: '衝車', fac: 'both', cls: 'siege', profile: 'heavy', hp: 380, atk: 30, def: 14, range: 1, spd: 0.5, cd: 2.5, pop: 5, squad: 1, value: 60, targetPrefs: ['wall', 'core'], ignoreTroops: true, bldOther: 0.4, camp: 'siege', look: null, habitText: '只撞城門' },
-  toushi:   { name: '投石車', fac: 'both', cls: 'siege', profile: 'heavy', hp: 180, atk: 40, def: 4, range: 7, spd: 0.5, cd: 4.0, pop: 4, squad: 1, value: 70, targetPrefs: ['defense', 'wall', 'any'], minRange: 2, aoe: 1, aoeMax: 3, splash: 0.5, camp: 'siege', look: null, habitText: '拔箭樓' },
+  chongche: { name: '衝車', fac: 'both', cls: 'siege', profile: 'heavy', hp: 380, atk: 36, def: 14, range: 1, spd: 0.5, cd: 3.0, pop: 5, squad: 1, value: 60, targetPrefs: ['wall', 'core'], ignoreTroops: true, bldOther: 0.4, camp: 'siege', look: null, habitText: '只撞城門' },
+  toushi:   { name: '投石車', fac: 'both', cls: 'siege', profile: 'heavy', hp: 180, atk: 35, def: 4, range: 7, spd: 0.5, cd: 3.5, pop: 4, squad: 1, value: 70, targetPrefs: ['defense', 'wall', 'any'], minRange: 2, aoe: 1, aoeMax: 3, splash: 0.5, camp: 'siege', look: null, habitText: '拔箭樓' },
   zeishuai: { name: '賊帥', fac: 'npc', cls: 'shield', profile: 'foot', hp: 900, atk: 20, def: 14, range: 1, spd: 0.8, cd: 1.2, pop: 6, squad: 1, value: 150, targetPrefs: ['core', 'any'], aura: { r: 3, atk: 0.15 }, boss: true, char: null, camp: null, look: null, habitText: null }
 };
 
 // 單兵放置制(PLACEHOLDER,日後最後才平衡):每次放兵只放 1 個單位(squad 一律 1),人口 = pop。
 // 放置單位的個體屬性(hp / atk / def)取自本表;UNITS 內的 hp / atk / def 仍是「單一士兵」基準,供守軍、NPC 使用。
-// 換算:以舊單兵屬性 × (新 pop / 舊每兵 pop),使每人口戰力與舊制相當;daodun 另 HP ×1.6、def +50%、atk ×0.6(肉盾)。
-// range / spd / cd 維持不變(取自 UNITS)。
+// 個性(2026 改):每擊傷害 atk 與攻擊間隔 cd 分開設計。刀盾兵等重擊兵種 atk 高、cd 長(力大出手慢),
+// 弓兵 / 長戟 / 投石車等中重擊、cd 中長;民兵 / 獵戶 / 斥候 每擊輕、出手快。平均 DPS = atk ÷ cd 大致維持舊制。
+// 放置單位的攻擊間隔 cd 取自 UNITS[u].cd(td.js tdAttack / tdAttackUnit 讀 def.cd),守軍與 NPC 同一 cd;
+// 故 cd 只在 UNITS 維護,本表不另設 cd 欄位。range / spd 同樣取自 UNITS。
+// UNITS 的 atk 為守軍 / NPC 的單兵基準:刀盾兵守軍基準 = 放置每擊 ÷ 3(同比例,cd 4.5);其餘改 cd 者 atk = 舊 atk ÷ 舊 cd × 新 cd,守軍 DPS 不變。
 const UNIT_PLACE_STAT = {
-  militia:  { pop: 1, hp: 60,  atk: 6,    def: 4 },
+  militia:  { pop: 1, hp: 60,  atk: 5,    def: 4 },
   hunter:   { pop: 1, hp: 70,  atk: 5,    def: 2 },   // 獵戶:皮厚、射程短、傷害低(便宜的前排遠程)
-  gongbing: { pop: 2, hp: 60,  atk: 20,   def: 2 },   // 弓兵:射程遠、傷害高、較脆(人口 2)
-  daodun:   { pop: 5, hp: 800, atk: 24,   def: 10.5 },
-  changji:  { pop: 2, hp: 150, atk: 12,   def: 10 },
-  chihou:   { pop: 2, hp: 140, atk: 8,    def: 2 },
+  gongbing: { pop: 2, hp: 60,  atk: 30,   def: 2 },   // 弓兵:射程遠、每擊中重、出手較慢、較脆(人口 2)
+  daodun:   { pop: 5, hp: 800, atk: 60,   def: 10.5 },
+  changji:  { pop: 2, hp: 150, atk: 22,   def: 10 },
+  chihou:   { pop: 2, hp: 140, atk: 7,    def: 2 },
   qingqi:   { pop: 3, hp: 225, atk: 19.5, def: 5 },
   tuqi:     { pop: 4, hp: 267, atk: 24,   def: 7 },
   chuangnu: { pop: 6, hp: 240, atk: 56,   def: 3 },
   toushi:   { pop: 7, hp: 315, atk: 70,   def: 4 },
-  chongche: { pop: 8, hp: 608, atk: 48,   def: 14 }
+  chongche: { pop: 8, hp: 608, atk: 58,   def: 14 }
 };
 (function () {
   Object.keys(UNIT_PLACE_STAT).forEach(function (k) {
@@ -271,7 +279,8 @@ Object.assign(OBJECTS, CAMP_OBJECTS);
 
 // 把 BUILD_COMBAT 轉成 OBJECTS[type].cb;未列的欄位為 null
 const CB_KEYS = ['hp', 'def', 'cat', 'block', 'scoreW', 'atk', 'cd', 'range', 'minRange', 'mode', 'aoe', 'aoeMax', 'splash', 'pierce', 'vs', 'garrison', 'trigger', 'leash', 'trig', 'alert', 'mat', 'scout', 'looksAs', 'multi', 'burn', 'slow', 'ap', 'aura', 'alarm', 'reveal', 'cp'];
-const BLOCK_OF = { tree: 'obstacle', stone: 'obstacle', stairs: 'none', bridge: 'none', wall: 'wall', gate: 'wall', lujiao: 'wall', zhalou: 'wall', jianzhuang: 'none' };
+// 樹 / 石只是裝飾,不阻擋行走與路徑(戰陣與實戰皆然);變種樹種(tree_pine 等,art_deco4)無 cb,mapio.js mioKind 一律視為 none
+const BLOCK_OF = { tree: 'none', stone: 'none', stairs: 'none', bridge: 'none', wall: 'wall', gate: 'wall', lujiao: 'wall', zhalou: 'wall', jianzhuang: 'none' };
 Object.keys(BUILD_COMBAT).forEach(function (type) {
   const src = BUILD_COMBAT[type], cb = {};
   CB_KEYS.forEach(function (k) { cb[k] = src[k] !== undefined ? src[k] : null; });
@@ -290,6 +299,20 @@ function counterMul(aCls, tCls) {
 function heightMul(attackerH, targetH) {
   var d = Math.max(-2, Math.min(2, attackerH - targetH));
   return 1 + TD_COMBAT.hStep * d;
+}
+// 仰攻 / 俯射乘數(TD_COMBAT.upMul 等):attackerH 攻方格地形高度;targetEffH 有效目標高度(目標格地形高度 + 牆高 wallRise)
+function hitHeightMul(attackerH, targetEffH) {
+  var d = targetEffH - attackerH, m = 1, k;
+  if (d > 0) {
+    for (k = Math.min(d, TD_COMBAT.upMax); k > 0; k--) m *= TD_COMBAT.upMul;
+    return Math.max(TD_COMBAT.upMin, m);
+  }
+  for (k = Math.min(-d, TD_COMBAT.downMax); k > 0; k--) m *= TD_COMBAT.downMul;
+  return m;
+}
+// 目標建築的牆高加成(+1 層等):只看建築 type;非牆類為 0
+function wallRise(type) {
+  return TD_COMBAT.wallRise[type] || 0;
 }
 // 回傳 { atk, dmgIn, range, spd }:atk / dmgIn / spd 為倍率(1 = 無加成),range 為格數加成(上限 hRange)
 function unitBonus(unit, terrainTag, heightDelta) {
@@ -314,6 +337,7 @@ function hitDamage(att, tgt, attBonus, tgtBonus, isBld) {
   mul = Math.max(TD_COMBAT.mulMin, Math.min(TD_COMBAT.mulMax, mul));
   return att.atk * att.atk / (att.atk + tgt.def) * mul;
 }
+const PICK_WALL_RANK = { gate: 0, zhalou: 0, lujiao: 1, wall: 2 };
 // 選目標(§2.3)。candidates: [{ id, kind:'bld'|'unit', tc, cls, hp, dist, distB, via, blocking }]
 // opts: { engagedBy, sight }。回傳 { goal, hit } 或 null
 function pickTarget(unit, candidates, opts) {
@@ -329,6 +353,9 @@ function pickTarget(unit, candidates, opts) {
   function better(x, b) {
     return !b || effDist(x) < effDist(b) || (effDist(x) === effDist(b) && x.id < b.id);
   }
+  // 牆類候選(x.wt = 牆的 type)的偏好順序:城門 / 閘樓 → 鹿角 → 城牆(同階再比距離);無 wt 視為城牆
+  function wRank(x) { return x.wt != null && PICK_WALL_RANK[x.wt] !== undefined ? PICK_WALL_RANK[x.wt] : 2; }
+  function betterW(x, b) { return !b || wRank(x) < wRank(b) || (wRank(x) === wRank(b) && better(x, b)); }
   function matches(p, x) {
     if (p === 'any') return x.kind === 'bld' && x.tc !== 'wall' && x.tc !== 'trap';
     if (p === 'wall') return x.kind === 'bld' && x.tc === 'wall' && !!x.blocking;
@@ -350,7 +377,7 @@ function pickTarget(unit, candidates, opts) {
     best = null;
     for (j = 0; j < candidates.length; j++) {
       c = candidates[j];
-      if (usable(c) && matches(prefs[i], c) && better(c, best)) best = c;
+      if (usable(c) && matches(prefs[i], c) && (prefs[i] === 'wall' ? betterW(c, best) : better(c, best))) best = c;
     }
     if (best) return result(best);
   }
@@ -364,7 +391,7 @@ function pickTarget(unit, candidates, opts) {
     best = null;
     for (j = 0; j < candidates.length; j++) {
       c = candidates[j];
-      if (usable(c) && tiers[i](c) && better(c, best)) best = c;
+      if (usable(c) && tiers[i](c) && (c.tc === 'wall' ? betterW(c, best) : better(c, best))) best = c;
     }
     if (best) return result(best);
   }

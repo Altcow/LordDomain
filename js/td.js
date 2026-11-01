@@ -7,7 +7,7 @@
 // team:0 攻擊方(我方放兵)、team:1 守方(守軍)。建築不是單位,以 b.bld 管理。
 // 模擬路徑禁用 Math.random / Date.now / performance.now / new Date / for-in 遍歷物件。
 
-const SIM_VER = 2;   // 2:單兵放置制(每次放 1 個單位、UNIT_PLACE_STAT 屬性);1 為舊整隊制,舊錄影無法以新規則重跑
+const SIM_VER = 3;   // 3:牆線代價(城門最便宜,path.js PATH_WALL_COST)+ 仰攻 / 俯射乘數(units.js hitHeightMul、牆 +1 層)+ 樹石不阻擋 + 崖腳死點修正;2:單兵放置制(每次放 1 個單位、UNIT_PLACE_STAT 屬性);1 為舊整隊制,舊錄影無法以新規則重跑
 const SIM_HZ = 10;
 const SIM_DT = 0.1;
 const MAX_UNITS = 400;
@@ -685,11 +685,12 @@ function tdShotKind(u, def) {
 }
 
 // 命中:hitDamage(B §7.2);建築無 cls(counter 為 1)、isBld = true
+// 高度乘數 hitHeightMul 獨立於 hitDamage 的夾限之外:有效目標高度 = 底座格高度 + 牆高(wallRise:城牆 / 閘樓 +1,城門 / 鹿角 0)
 function tdAttack(b, u, def) {
   const tgt = u.tgt;
-  const hd = b.map.height[tdCell(u.x, u.y)] - b.map.height[tgt.y * MAP_W + tgt.x];
+  const ha = b.map.height[tdCell(u.x, u.y)], ht = b.map.height[tgt.y * MAP_W + tgt.x] + wallRise(tgt.type);
   const att = { cls: def.cls, atk: tdAtkOf(u, def), vs: def.vs || null };
-  let dmg = hitDamage(att, { cls: null, def: tgt.def }, unitBonus(def, 'plain', hd), null, true);
+  let dmg = hitDamage(att, { cls: null, def: tgt.def }, unitBonus(def, 'plain', 0), null, true) * hitHeightMul(ha, ht);
   if (u.charge) { dmg *= TD_CHARGE_BONUS; u.charge = false; }
   dmg *= tdFxAtk(u);
   tgt.hp = Math.max(0, tgt.hp - dmg);
@@ -704,9 +705,9 @@ function tdAttack(b, u, def) {
 // 單位打單位(接觸 / 守軍):team 0 的傷害計入 dealt,team 1 計入 dealtDef;被打的守軍 hurt = true
 function tdAttackUnit(b, u, def, t) {
   const tdef = UNITS[t.u];
-  const hd = b.map.height[tdCell(u.x, u.y)] - b.map.height[tdCell(t.x, t.y)];
+  const ha = b.map.height[tdCell(u.x, u.y)], ht = b.map.height[tdCell(t.x, t.y)];
   const att = { cls: def.cls, atk: tdAtkOf(u, def), vs: def.vs || null };
-  let dmg = hitDamage(att, { cls: tdef.cls, def: tdDefOf(t, tdef) }, unitBonus(def, 'plain', hd), unitBonus(tdef, 'plain', 0), false);
+  let dmg = hitDamage(att, { cls: tdef.cls, def: tdDefOf(t, tdef) }, unitBonus(def, 'plain', 0), unitBonus(tdef, 'plain', 0), false) * hitHeightMul(ha, ht);
   if (u.charge) { dmg *= TD_CHARGE_BONUS; u.charge = false; }
   dmg *= tdFxAtk(u) * tdMarkMul(t);
   t.hp = Math.max(0, t.hp - dmg);
@@ -1333,9 +1334,9 @@ function tdFireBld(b, bl, main) {
     const t = hits[k].t, tdef = UNITS[t.u];
     const ht = b.map.height[tdCell(t.x, t.y)];
     const att = { cls: null, atk: cb.atk, vs: cb.vs || null };
-    const attB = { atk: heightMul(hb, ht), dmgIn: 1, range: 0, spd: 1 };
+    const attB = { atk: 1, dmgIn: 1, range: 0, spd: 1 };
     const tdEff = { cls: tdef.cls, def: tdDefOf(t, tdef) * (1 - (cb.ap || 0)) };
-    const dmg = hitDamage(att, tdEff, attB, unitBonus(tdef, 'plain', 0), false) * TD_BLD_DMG_SCALE * hits[k].mul * tdMarkMul(t);
+    const dmg = hitDamage(att, tdEff, attB, unitBonus(tdef, 'plain', 0), false) * hitHeightMul(hb, ht) * TD_BLD_DMG_SCALE * hits[k].mul * tdMarkMul(t);
     t.hp = Math.max(0, t.hp - dmg);
     t.hurt = true;
     b.stats.dealtDef += dmg;

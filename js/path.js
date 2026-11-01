@@ -3,7 +3,14 @@
 // 外部全域:MAP_W MAP_H OBJECTS DIRS T_GRASS T_LAKE T_RIVER T_ROAD(data.js、units.js)
 // 選用掛點:stratCost(b, i, profile)(C 的危害;未定義時略過)、TD_COMBAT.climbCost(攀爬代價;未定義時 40)
 
-const WALL_BASE = 60;
+// 穿越牆線的基礎代價(PLACEHOLDER,平地 = 10;PLAN_DEFENSE「城門是牆線上最便宜的入口」):
+// 城門 / 閘樓 30(仍要破門,但繞行 2 格以上就不如破門)< 鹿角 60(繞行 > 5 格改破柵)< 城牆 160(繞行 ≤ 約 14 格就繞)。
+// 實際代價 = 基礎 × (PATH_WALL_HP_FLOOR + (1 − PATH_WALL_HP_FLOOR) × hp / maxHp):受損越重越便宜,滿血 = 表值。
+const PATH_WALL_COST = { wall: 160, lujiao: 60, gate: 30, zhalou: 30 };
+const PATH_WALL_COST_DEFAULT = 160;
+const PATH_WALL_HP_FLOOR = 0.7;
+// 'w' 修飾(牆偏好兵種:刀盾兵等)的代價倍率:牆 / 鹿角 ×0.25(40 / 15);門 ×0.4(12,仍略高於平地 10,維持「門最便宜、柵次之、牆最貴」)
+const PATH_WALL_W_MUL = { wall: 0.25, lujiao: 0.25, gate: 0.4, zhalou: 0.4 };
 const PATH_UNREACH = 0xFFFF;
 const PATH_COST_MAX = 0xFFFE;
 const PATH_INF = 0xFFFFFFFF;
@@ -86,11 +93,12 @@ function pathCellCost(b, i, row, pr, profile) {
   let c = -1;
   const bl = pathBldAt(b, i);
   if (bl) {
-    const cb = OBJECTS[bl.type].cb;
+    const cb = OBJECTS[bl.type].cb || {};
     if (cb.block === 'solid' || cb.block === 'obstacle') return PATH_UNREACH;
     if (cb.block === 'wall') {
-      c = WALL_BASE + Math.floor(bl.hp / 10);
-      if (pr.wallMul !== 1) c = Math.floor(c * pr.wallMul);
+      const ratio = bl.maxHp > 0 ? Math.max(0, Math.min(1, bl.hp / bl.maxHp)) : 1;
+      c = Math.floor((PATH_WALL_COST[bl.type] || PATH_WALL_COST_DEFAULT) * (PATH_WALL_HP_FLOOR + (1 - PATH_WALL_HP_FLOOR) * ratio));
+      if (pr.wallMul !== 1) c = Math.floor(c * (PATH_WALL_W_MUL[bl.type] || pr.wallMul));
     } else if (bl.type === 'bridge' || bl.type === 'stairs') {
       c = MOVE_BRIDGE[pr.base];
     } else if (bl.type === 'ramp') {
@@ -112,7 +120,7 @@ function pathIsBarrier(b, i) {
   if (b.map.block[i] === 1) return true;
   const bl = pathBldAt(b, i);
   if (!bl) return false;
-  const kind = OBJECTS[bl.type].cb.block;
+  const kind = (OBJECTS[bl.type].cb || {}).block;
   return kind === 'wall' || kind === 'solid' || kind === 'obstacle';
 }
 
@@ -253,14 +261,15 @@ function buildField(b, profile, goal) {
     const cur = heap.pop();
     const i = cur % PATH_KEY_SHIFT, d = (cur - i) / PATH_KEY_SHIFT;
     if (d > dist[i]) continue;
-    const e = P.edge[i];
-    if (!e) continue;
+    // 反向鬆弛:j 要能「走到 i」(P.edge[j] 的反方向位元)才可由 i 更新 dist[j]。
+    // 邊在攀爬 + 牆格時不對稱(可從牆格爬下、不能爬上牆格);舊版用 edge[i] 正向鬆弛,會讓崖腳的格拿到有限代價卻無下坡鄰格(死點,單位卡住)
     for (let k = 0; k < 8; k++) {
-      if (!(e & (1 << k))) continue;
-      const j = i + NB_OFF[k], c = P.cost[j];
+      const j = i + NB_OFF[k], kk = (k + 4) & 7;
+      if (j < 0 || j >= dist.length || !(P.edge[j] & (1 << kk))) continue;
+      const c = P.cost[j];
       if (c === PATH_UNREACH) continue;
       let step = (k & 1) ? Math.floor(c * 14 / 10) : c;
-      if (P.climb && (P.climb[i] & (1 << k))) step += PATH_CLIMB_COST;
+      if (P.climb && (P.climb[j] & (1 << kk))) step += PATH_CLIMB_COST;
       const nd = d + step;
       if (nd < dist[j]) { dist[j] = nd; heap.push(nd * PATH_KEY_SHIFT + j); }
     }

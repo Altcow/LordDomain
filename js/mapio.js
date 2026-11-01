@@ -59,8 +59,14 @@ function mioCb(type) {
   return (d && d.cb) || {};
 }
 
+// 樹 / 石(含變種樹種 tree_pine 等,art_deco4 無 cb)只是裝飾:不阻擋行走、不算實心、不產生紅區
+function mioIsDeco(type) {
+  return type === 'tree' || type === 'stone' || type.indexOf('tree_') === 0;
+}
+
 function mioKind(type) {
   const cb = mioCb(type);
+  if (cb.block === undefined && mioIsDeco(type)) return 'none';
   if (cb.block === 'none') return 'none';
   if (cb.block === 'wall') return 'wall';
   if (cb.block === 'obstacle') return 'obstacle';

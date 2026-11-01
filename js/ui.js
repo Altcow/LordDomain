@@ -25,10 +25,10 @@ const TERRAIN_TOOLS = {
 // 軍事建築 = 軍事與營地(mil);城牆、城門、階梯、斜坡等雖有防禦用途,留在「城牆與道路」(一般建築),不重複放。
 const BUILD_TOP = { live: 'gen', shop: 'gen', farm: 'gen', ind: 'gen', mil: 'mil', garden: 'gen', rite: 'gen', road: 'gen', misc: 'gen' };
 const TOP_LIST = [
-  { id: 'browse', icon: '✋', name: '瀏覽', short: '瀏覽' },
-  { id: 'terrain', icon: '⛰', name: '地形', short: '地形' },
-  { id: 'gen', icon: '🏠', name: '一般建築', short: '一般' },
-  { id: 'mil', icon: '⚔', name: '軍事建築', short: '軍事' }
+  { id: 'browse', kind: 'browse', icon: '✋', name: '瀏覽', short: '瀏覽' },
+  { id: 'terrain', kind: 'terrain', icon: '⛰', name: '地形', short: '地形' },
+  { id: 'gen', kind: 'build', icon: '🏠', name: '一般建築', short: '一般' },
+  { id: 'mil', kind: 'build', icon: '⚔', name: '軍事建築', short: '軍事' }
 ];
 // 地形頂層內容(不含拆除:拆除只在建築頂層出現)
 const TERRAIN_MENU = ['road', 'grass', 'lake', 'river', 'raise', 'lower'];
@@ -38,9 +38,11 @@ const VARIANT_GROUPS = {
 };
 const UI_TOP_KEY = 'lorddomain.ui.top';
 const UI_CAT_KEY = 'lorddomain.ui.cat';
+const UI_CAMPTOP_KEY = 'lorddomain.ui.camptop';   // 戰鬥布置的頂層 / 小分類另存,不與經營互蓋
+const UI_CAMPCAT_KEY = 'lorddomain.ui.campcat';
 const UI_VAR_KEY = 'lorddomain.ui.variant';
 
-const ui = { tool: null, editing: false, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco', buildCat: 'all', top: 'gen', variant: {}, objSel: null };
+const ui = { tool: null, editing: false, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco', buildCat: 'all', top: 'gen', campTop: 'cbuild', campCat: 'all', variant: {}, objSel: null };
 let topMenuOpen = false;
 
 // 單一物件草稿(虛影):{ type, x, y, rot, orig, ok, reason }。orig 為「移動已蓋建築」時的原建築物件(仍在 world.objects、由 objHold 暫時排除)。
@@ -151,6 +153,8 @@ function uiSetMode(m) {
 // 右側邊欄與頂列收進來的功能。top:true 的項目在正常模式留在頂列(原按鈕),精簡模式改由邊欄展開。
 // target 為既有按鈕 id,點擊時代為 click(原按鈕與其監聽不變);scope 限定經營(estate)或戰鬥布置(camp)
 const UI_SIDE_ITEMS = [
+  { key: 'slots', icon: '🏘', label: '經營', title: '版面選擇(3 格):點一下打開,再點一次關閉', scope: 'all', special: 'slots' },
+  { key: 'quest', icon: '📋', label: '任務', title: '任務清單(並重新顯示左上任務提示條)', scope: 'all', special: 'quest' },
   { key: 'edit', icon: '🔨', label: '布置', title: '草稿布置(單一草稿,存到版面格)', scope: 'all', special: 'edit' },
   { key: 'hide', icon: '👁', label: '建築', title: '隱藏建築（整地用，H）', top: true, scope: 'all', target: 'btnHide' },
   { key: 'fish', icon: '🎣', label: '釣魚', title: '釣魚', top: true, scope: 'estate', target: 'btnFish', gate: 'fishing' },
@@ -225,6 +229,8 @@ function uiSideAct(key) {
   if (!it) return;
   if (it.special === 'mode') uiSetMode(uiMode === 'compact' ? 'normal' : 'compact');
   else if (it.special === 'edit') editSideAct();
+  else if (it.special === 'slots') { if (typeof slotPopToggle === 'function') slotPopToggle(); }
+  else if (it.special === 'quest') { if (typeof progQuestEntry === 'function') progQuestEntry(); }
   else if (it.special === 'photo') uiSetMode('photo');
   else {
     const t = document.getElementById(it.target);
@@ -252,14 +258,30 @@ function syncSideBar() {
     } else if (it.key === 'hide') {
       icon = hide.on ? '🙈' : '👁';
       label = hide.on ? '隱藏中' : '建築';
+    } else if (it.special === 'slots') {
+      const camp = game.mode === 'battleDesign';
+      icon = camp ? '⚔' : '🏘';
+      label = camp ? '戰鬥' : '經營';
     }
     let hid = it.target ? (!orig || !!orig.hidden) : false;
+    if (it.special === 'slots') hid = typeof slotPopAvail === 'function' ? !slotPopAvail() : true;
     if (it.gate && !isUnlocked('feature', it.gate)) hid = true;
     b.hidden = hid;
-    b.classList.toggle('on', it.special === 'edit' ? !!ui.editing : !!(orig && orig.classList.contains('on')));
+    const slotsOn = it.special === 'slots' && typeof slotPopIsOpen === 'function' && slotPopIsOpen();
+    b.classList.toggle('on', it.special === 'edit' ? !!ui.editing : (it.special === 'slots' ? slotsOn : !!(orig && orig.classList.contains('on'))));
     b.querySelector('.ic').textContent = icon;
     b.querySelector('.lb').textContent = label;
   });
+  // 正常模式最多 6 顆:依序捨棄 拍照 → 商店(精簡模式的展開列都還在);頂列項目與另一畫面的項目不算
+  if (!uiIsCompact()) {
+    const camp = game.mode === 'battleDesign';
+    const vis = key => {
+      const b = side.querySelector('.side-btn[data-px="' + key + '"]');
+      return b && !b.hidden ? b : null;
+    };
+    const count = () => UI_SIDE_ITEMS.filter(it => !it.top && (it.scope === 'all' || (it.scope === 'camp') === camp) && vis(it.key)).length;
+    ['photo', 'shop'].forEach(k => { if (count() > 6 && vis(k)) vis(k).hidden = true; });
+  }
 }
 
 // 功能開放閘門(progdata PROG_UNLOCK_FEATURE):未開放的頂列鈕與邊欄項目完全不顯示(data-feat-locked,CSS 隱藏)。
@@ -268,7 +290,8 @@ const FEAT_GATE = [
   { id: 'fishing', name: '釣魚', btn: 'btnFish' },
   { id: 'pet', name: '仙獸苑', btn: 'btnPet' },
   { id: 'shop', name: '商店', btn: 'btnShop' },
-  { id: 'photo', name: '拍照', btn: null }
+  { id: 'photo', name: '拍照', btn: null },
+  { id: 'recorder', name: '錄影', btn: null }
 ];
 const featOpenPrev = {};
 let featSynced = false;
@@ -469,7 +492,10 @@ function buildToolbar() {
     buildTopToolbar(bar);
   } else {
     addToolButton(bar, null, '✋', '瀏覽', null);
-    for (const id in TERRAIN_TOOLS) addToolButton(bar, id, TERRAIN_TOOLS[id].icon, TERRAIN_TOOLS[id].name, null);
+    for (const id in TERRAIN_TOOLS) {
+      addToolButton(bar, id, TERRAIN_TOOLS[id].icon, TERRAIN_TOOLS[id].name, null);
+      if (id === 'river') addRiverDirBtn(bar);
+    }
   }
   syncToolActive();
   buildCatBar();
@@ -483,6 +509,10 @@ function uiMenuLoad() {
   if (TOP_LIST.some(x => x.id === t)) ui.top = t;
   const c = uiStorageGet(UI_CAT_KEY);
   if (c) ui.buildCat = c;
+  const ct = uiStorageGet(UI_CAMPTOP_KEY);
+  if (ct) ui.campTop = ct;
+  const cc = uiStorageGet(UI_CAMPCAT_KEY);
+  if (cc) ui.campCat = cc;
   const raw = uiStorageGet(UI_VAR_KEY);
   if (raw) {
     try {
@@ -500,6 +530,8 @@ function uiMenuLoad() {
 function uiMenuSave() {
   uiStorageSet(UI_TOP_KEY, ui.top);
   uiStorageSet(UI_CAT_KEY, ui.buildCat);
+  uiStorageSet(UI_CAMPTOP_KEY, ui.campTop);
+  uiStorageSet(UI_CAMPCAT_KEY, ui.campCat);
   uiStorageSet(UI_VAR_KEY, JSON.stringify(ui.variant));
 }
 function topIsBuild(top) { return top === 'gen' || top === 'mil'; }
@@ -580,9 +612,46 @@ function buildCatAllIds(catId, top) {
 }
 
 // 底部列:[頂層選擇器] + 對應內容(瀏覽=提示、地形=地形工具、建築=小分類內容 + 鎖頭提示 + 拆除固定在最右)
+// 頂層選單的資料來源(參數化):經營 = ESTATE_MENU(本檔)、戰鬥布置 = CAMP_MENU(mapedit.js);兩者各自記住頂層與小分類,
+// 共用 buildTopToolbar / buildTopMenu / buildCatBar / topSet。kind:browse / terrain / build(build 才有小分類 chips)
+const ESTATE_MENU = {
+  list: TOP_LIST,
+  defTop: 'gen',
+  getTop: function () { return ui.top; },
+  setTop: function (v) { ui.top = v; },
+  getCat: function () { return ui.buildCat; },
+  setCat: function (v) { ui.buildCat = v; },
+  catList: function (top) { return buildCatList(top); },
+  ids: function (cat, top) { return buildCatIds(cat, top); },
+  terrainIds: function () { return TERRAIN_MENU; },
+  addTerrain: function (bar, id) {
+    addToolButton(bar, id, TERRAIN_TOOLS[id].icon, TERRAIN_TOOLS[id].name, null);
+    if (id === 'river') addRiverDirBtn(bar);
+  },
+  addItem: function (bar, id) {
+    if (!OBJECTS[id]) return addToolButton(bar, id, TERRAIN_TOOLS[id].icon, TERRAIN_TOOLS[id].name, null);
+    return markNewBuild(addToolButton(bar, id, OBJECTS[id].icon, OBJECTS[id].name, OBJECTS[id]), id);
+  },
+  lockHint: function (bar, cat) { addLockHintButton(bar, buildLockHint(cat)); },
+  eraser: function () { return 'erase'; },
+  owns: function (t, top) {
+    if (t === null || t === undefined) return true;
+    if (top === 'terrain') return TERRAIN_MENU.indexOf(t) >= 0;
+    if (topIsBuild(top)) return t === 'erase' || (!!OBJECTS[t] && topOfItem(varLeader(t)) === top);
+    return false;
+  }
+};
+function menuSrc() {
+  return game.mode === 'battleDesign' && typeof CAMP_MENU !== 'undefined' ? CAMP_MENU : ESTATE_MENU;
+}
+function menuTopEntry(M) {
+  return M.list.find(t => t.id === M.getTop()) || M.list.find(t => t.id === M.defTop) || M.list[0];
+}
+
 function buildTopToolbar(bar) {
-  const cur = TOP_LIST.find(t => t.id === ui.top) || TOP_LIST[2];
-  ui.top = cur.id;
+  const M = menuSrc();
+  const cur = menuTopEntry(M);
+  M.setTop(cur.id);
   const sel = document.createElement('button');
   sel.id = 'topSel';
   sel.className = 'topsel';
@@ -595,36 +664,33 @@ function buildTopToolbar(bar) {
     buildTopMenu();
   });
   bar.appendChild(sel);
-  if (cur.id === 'browse') {
+  if (cur.kind === 'browse') {
     const hint = document.createElement('span');
     hint.className = 'tophint';
     hint.textContent = '平移縮放；按住建築可移動';
     bar.appendChild(hint);
     return;
   }
-  if (cur.id === 'terrain') {
-    TERRAIN_MENU.forEach(id => addToolButton(bar, id, TERRAIN_TOOLS[id].icon, TERRAIN_TOOLS[id].name, null));
+  if (cur.kind === 'terrain') {
+    M.terrainIds().forEach(id => M.addTerrain(bar, id));
     return;
   }
   if (uiIsCompact()) addCatMenuBtn(bar);
-  if (!buildCatList(cur.id).some(c => c.id === ui.buildCat)) ui.buildCat = 'all';
-  buildCatIds(ui.buildCat, cur.id).forEach(id => markNewBuild(addToolButton(bar, id, OBJECTS[id].icon, OBJECTS[id].name, OBJECTS[id]), id));
-  addLockHintButton(bar, buildLockHint(ui.buildCat));
-  const er = addToolButton(bar, 'erase', TERRAIN_TOOLS.erase.icon, TERRAIN_TOOLS.erase.name, null);
-  er.classList.add('erasefix');
+  if (!M.catList(cur.id).some(c => c.id === M.getCat())) M.setCat('all');
+  M.ids(M.getCat(), cur.id).forEach(id => M.addItem(bar, id));
+  M.lockHint(bar, M.getCat());
+  const erId = M.eraser(cur.id);
+  const er = erId ? M.addItem(bar, erId) : null;
+  if (er) er.classList.add('erasefix');
 }
 
 // 工具 t 是否屬於頂層 top 的內容(切換頂層時,不屬於者取消工具)
-function topOwnsTool(t, top) {
-  if (t === null || t === undefined) return true;
-  if (top === 'terrain') return TERRAIN_MENU.indexOf(t) >= 0;
-  if (topIsBuild(top)) return t === 'erase' || (!!OBJECTS[t] && topOfItem(varLeader(t)) === top);
-  return false;
-}
+function topOwnsTool(t, top) { return menuSrc().owns(t, top); }
 function topSet(top) {
-  if (!TOP_LIST.some(x => x.id === top)) return;
-  ui.top = top;
-  ui.buildCat = 'all';
+  const M = menuSrc();
+  if (!M.list.some(x => x.id === top)) return;
+  M.setTop(top);
+  M.setCat('all');
   topMenuOpen = false;
   uiCatOpen = false;
   uiMenuSave();
@@ -644,12 +710,13 @@ function buildTopMenu() {
       if (b && b.getAttribute('data-top')) topSet(b.getAttribute('data-top'));
     });
   }
-  box.hidden = !(topMenuOpen && game.mode === 'estate');
+  const M = menuSrc();
+  box.hidden = !(topMenuOpen && (game.mode === 'estate' || game.mode === 'battleDesign'));
   box.textContent = '';
-  TOP_LIST.forEach(t => {
+  M.list.forEach(t => {
     const b = document.createElement('button');
     b.setAttribute('data-top', t.id);
-    if (t.id === ui.top) b.classList.add('on');
+    if (t.id === M.getTop()) b.classList.add('on');
     b.innerHTML = '<span class="ic">' + t.icon + '</span><span>' + t.name + '</span>';
     box.appendChild(b);
   });
@@ -778,7 +845,9 @@ function buildCatBar() {
     document.body.appendChild(box);
     box.addEventListener('click', onCatClick);
   }
-  const on = game.mode === 'estate' && topIsBuild(ui.top);
+  const M = menuSrc();
+  const curTop = menuTopEntry(M);
+  const on = (game.mode === 'estate' || game.mode === 'battleDesign') && curTop.kind === 'build';
   const pop = uiIsCompact();
   box.hidden = !(on && (!pop || uiCatOpen));
   box.classList.toggle('pop', pop);
@@ -787,10 +856,10 @@ function buildCatBar() {
   const tb = document.getElementById('toolbar');
   box.style.bottom = (tb ? tb.offsetHeight : 0) + (pop ? 6 : 0) + 'px';
   box.textContent = '';
-  buildCatList(ui.top).forEach(c => {
+  M.catList(curTop.id).forEach(c => {
     const b = document.createElement('button');
     b.setAttribute('data-cat', c.id);
-    if (c.id === ui.buildCat) b.classList.add('on');
+    if (c.id === M.getCat()) b.classList.add('on');
     b.innerHTML = c.name + ' <small>' + c.n + '</small>';
     box.appendChild(b);
   });
@@ -800,7 +869,8 @@ function addCatMenuBtn(bar) {
   const b = document.createElement('button');
   b.id = 'catMenuBtn';
   b.className = 'catmenu';
-  const cur = buildCatList(ui.top).find(c => c.id === ui.buildCat);
+  const M = menuSrc();
+  const cur = M.catList(menuTopEntry(M).id).find(c => c.id === M.getCat());
   b.textContent = '☰';
   b.title = '建築分類：' + (cur ? cur.name : '全部');
   b.setAttribute('aria-label', b.title);
@@ -814,7 +884,7 @@ function addCatMenuBtn(bar) {
 function onCatClick(e) {
   const b = e.target.closest('button');
   if (!b || !b.getAttribute('data-cat')) return;
-  ui.buildCat = b.getAttribute('data-cat');
+  menuSrc().setCat(b.getAttribute('data-cat'));
   uiCatOpen = false;
   uiMenuSave();
   buildToolbar();
@@ -826,6 +896,37 @@ function syncToolActive() {
   document.querySelectorAll('#toolbar button').forEach(b => {
     b.classList.toggle('active', b.getAttribute('data-tool') === key);
   });
+  syncRiverDir();
+}
+
+// 河流方向小鈕(#riverDir):緊接在河流鈕後,只在選到河流時顯示;點一下順時針換向(與 R 鍵同一個 ui.rot)
+function addRiverDirBtn(bar) {
+  const btn = document.createElement('button');
+  btn.id = 'riverDir';
+  btn.className = 'rivdir';
+  btn.title = '河流方向(點一下順時針換向)';
+  const ic = document.createElement('span');
+  ic.className = 'ic';
+  const lb = document.createElement('span');
+  lb.textContent = '方向';
+  btn.appendChild(ic);
+  btn.appendChild(lb);
+  btn.addEventListener('click', riverDirCycle);
+  bar.appendChild(btn);
+  return btn;
+}
+function syncRiverDir() {
+  const b = document.getElementById('riverDir');
+  if (!b) return;
+  const on = ui.tool === 'river';
+  b.hidden = !on;
+  if (on) b.children[0].textContent = DIR_ARROWS[ui.rot] || '';
+}
+function riverDirCycle() {
+  ui.rot = (ui.rot + 1) % 4;
+  preview.rot = ui.rot;
+  if (gs.last) updatePreviewAt(gs.last.x, gs.last.y);
+  syncRiverDir();
 }
 
 // 底部疊放高度:工具列 + 分類列(顯示時),待購條與提示以此定位
@@ -878,6 +979,7 @@ function setTool(id) {
     b.classList.toggle('active', b.getAttribute('data-tool') === key);
   });
   preview.tool = id;
+  syncRiverDir();
   preview.visible = false;
   document.getElementById('info').textContent = toolInfo();
   pend.sel = -1;
@@ -917,6 +1019,7 @@ function rotate() {
   ui.rot = (ui.rot + 1) % 4;
   preview.rot = ui.rot;
   if (gs.last) updatePreviewAt(gs.last.x, gs.last.y);
+  syncRiverDir();
 }
 
 function isDraggable(t) {
@@ -1611,6 +1714,22 @@ function toggleTplMenu(open) {
   }
 }
 
+// 城市範本(city_lv01 ~ city_lv25,PLAN_PROGRESSION §6.4):cityLv ≤ 玩家等級可載入到草稿,更高級者鎖住(灰階、不可選)
+function tplCityLv(t) {
+  if (typeof t.cityLv === 'number') return t.cityLv;
+  const m = /^city_lv(\d+)$/.exec(t.id || '');
+  return m ? +m[1] : 0;
+}
+function tplCityLists(kind) {
+  const my = (typeof prog !== 'undefined' && prog && prog.lv) || (typeof PROG_LV_MAX !== 'undefined' ? PROG_LV_MAX : 25);
+  const all = TEMPLATES.filter(t => (t.kind || 'estate') === kind && !t.hidden && tplCityLv(t) > 0);
+  return {
+    my: my,
+    open: all.filter(t => tplCityLv(t) <= my).sort((a, b) => tplCityLv(b) - tplCityLv(a)),
+    locked: all.filter(t => tplCityLv(t) > my).sort((a, b) => tplCityLv(a) - tplCityLv(b))
+  };
+}
+
 function buildTplMenu() {
   const menu = document.getElementById('tplMenu');
   menu.textContent = '';
@@ -1631,7 +1750,28 @@ function buildTplMenu() {
   restore.appendChild(rs);
   restore.disabled = !dflt;
   menu.appendChild(restore);
-  const list = TEMPLATES.filter(t => (t.kind || 'estate') === world.board && !t.hidden);
+  const city = tplCityLists(world.board);
+  const cityAll = city.open.concat(city.locked);
+  if (cityAll.length) {
+    const gh = document.createElement('small');
+    gh.textContent = '── 城市 ──';
+    menu.appendChild(gh);
+    cityAll.forEach(t => {
+      const lock = tplCityLv(t) > city.my;
+      const btn = document.createElement('button');
+      btn.className = lock ? 'tpl locked' : 'tpl';
+      btn.setAttribute('data-tpl', t.id);
+      btn.textContent = lock ? '🔒 Lv ' + tplCityLv(t) : t.name + (t.isDefault ? ' ★預設' : '');
+      const small = document.createElement('small');
+      small.textContent = lock ? '升到 Lv ' + tplCityLv(t) + ' 後可載入　' + t.w + '×' + t.h : t.desc + '　' + t.w + '×' + t.h;
+      btn.appendChild(small);
+      btn.disabled = lock || t.w > MAP_W || t.h > MAP_H;
+      menu.appendChild(btn);
+    });
+  }
+  const cityIds = {};
+  cityAll.forEach(t => { cityIds[t.id] = 1; });
+  const list = TEMPLATES.filter(t => (t.kind || 'estate') === world.board && !t.hidden && !cityIds[t.id]);
   const ordered = list.filter(t => t.isDefault).concat(list.filter(t => !t.isDefault));
   let grp = null;
   for (const t of ordered) {
@@ -2267,7 +2407,7 @@ function draftFloatPlace(el) {
   if (key === draftFloatKey) return;
   draftFloatKey = key;
   const obs = [];
-  ['topbar', 'toolbar', 'catbar', 'varbar', 'pendBar', 'draftBar', 'editBar', 'slotPick', 'sideBar', 'modeBtn', 'btnAttack', 'progFtue']
+  ['topbar', 'toolbar', 'catbar', 'varbar', 'pendBar', 'draftBar', 'editBar', 'slotPop', 'sideBar', 'modeBtn', 'btnAttack', 'progFtue']
     .forEach(id => { const r = elRect(id); if (r) obs.push(r); });
   const tb = elRect('topbar');
   const minT = tb ? tb.b + 2 : 4;

@@ -53,10 +53,10 @@ const PROG_TUT_HOUSES = 3;
 // 教學提示文字(集中於此,日後改流程只改這裡)。hint 為「怎麼做」
 const PROG_TUT_HINTS = {
   houses2: { hint: '選建築 → 點地面 → ✓', go: '下方建築列' },
-  npcWin1: { hint: '左下 ⚔ 戰鬥 → 野營副本', go: '左下 ⚔ 戰鬥' },
+  npcWin1: { hint: '左下 ⚔ 出征 → 野營副本', go: '左下 ⚔ 出征' },
   campSet: { hint: '左下切到『戰鬥布置』,放或拆一個物件', go: '左下 戰鬥布置' },
-  npcWin2: { hint: '左下 ⚔ 戰鬥 → 野營副本', go: '左下 ⚔ 戰鬥' },
-  ghostWin1: { hint: '左下 ⚔ 戰鬥 → 隨機戰鬥', go: '左下 ⚔ 戰鬥' }
+  npcWin2: { hint: '左下 ⚔ 出征 → 野營副本', go: '左下 ⚔ 出征' },
+  ghostWin1: { hint: '左下 ⚔ 出征 → 隨機戰鬥', go: '左下 ⚔ 出征' }
 };
 
 // ───────── 3. 戰鬥回報(PLACEHOLDER 公式;結構 = 輸入欄位與分流規則)─────────
