@@ -595,7 +595,7 @@ body.ui-compact { --stack: 40px; --side-w: 80px; }
 }
 
 /* 右側邊欄:緊貼右緣(只留 safe-area)、頂列下方起;正常模式最多 6 顆,統一 44px 寬、左側圓角的貼邊分頁;直版單欄、橫版雙欄,整欄不超過畫面垂直中線 */
-#sideBar { position: fixed; z-index: 3; top: calc(var(--top-h) + env(safe-area-inset-top) + 6px); right: env(safe-area-inset-right, 0px); display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+#sideBar { position: fixed; z-index: 3; top: calc(var(--top-h) + env(safe-area-inset-top) + 6px); right: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 #sideBar [hidden] { display: none !important; }
 #sideBar .side-list { display: flex; flex-direction: column; gap: 4px; }
 #sideBar .side-btn { flex: 0 0 auto; width: 44px; height: 44px; min-width: 44px; min-height: 44px; margin: 0; padding: 2px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border-radius: 10px 0 0 10px; background: rgba(47, 59, 77, .78); border: 1px solid rgba(69, 86, 110, .8); border-right: none; color: #e8edf2; font-size: 10px; line-height: 1; box-shadow: -1px 2px 6px rgba(0, 0, 0, .3); }
@@ -622,7 +622,7 @@ body.ui-compact #topbar > button:not(#btnMenu) { display: none !important; }
 body.ui-compact #topbar { gap: 6px; }
 body.ui-compact #resbar { font-size: 10px; gap: 6px; }
 body.ui-compact #btnMenu.st-menu-btn { min-width: 26px; min-height: 26px; height: 26px; font-size: 13px; padding: 0 4px; }
-body.ui-compact #sideBar { top: calc(var(--top-h) + env(safe-area-inset-top) + 4px); right: env(safe-area-inset-right, 0px); align-items: flex-end; }
+body.ui-compact #sideBar { top: calc(var(--top-h) + env(safe-area-inset-top) + 4px); right: 0; align-items: flex-end; }
 body.ui-compact #sideBar .side-more { display: flex; align-items: center; justify-content: center; }
 body.ui-compact #sideBar .side-list { display: none; flex-direction: row; flex-wrap: wrap; width: max-content; max-width: 70vw; gap: 3px; margin-top: 4px; padding: 4px; border-radius: 10px; background: rgba(20, 26, 36, .9); border: 1px solid rgba(69, 86, 110, .8); }
 body.ui-compact #sideBar.open .side-list { display: flex; }
