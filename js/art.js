@@ -1118,6 +1118,15 @@ function artType(type) {
   // 未列於對照表的新物件(art_deco*.js 等):ART 若有同名定義就直接使用
   return (typeof ART !== 'undefined' && ART.OBJ && Object.prototype.hasOwnProperty.call(ART.OBJ, type)) ? type : null;
 }
+// 物件實際使用的 ART 定義 key:o.skin(wallskin.js 註冊表)有對應定義就用皮膚版,未知 / 預設一律回退原定義
+function artTypeOf(o) {
+  var t = artType(o.type);
+  if (o.skin && typeof wallSkinArt === 'function' && typeof ART !== 'undefined' && ART.OBJ) {
+    var s = wallSkinArt(o.type, o.skin);
+    if (s && ART.OBJ[s]) return s;
+  }
+  return t;
+}
 function artFacing(o) { return (o.facing != null ? o.facing : o.rot) || 0; }
 // 城牆相鄰判定:x 軸向 / y 軸向是否有城牆或城門,回傳 'x'、'y'、'xy' 或 ''(含門的佔格)
 function artWallConn(o) {
@@ -1148,7 +1157,7 @@ function artVariant(o) {
 // 回傳 true 表示已由 ART 畫好;false 則呼叫端走舊繪製
 function artDrawObject(ctx, o, alpha) {
   if (!artIsOn()) return false;
-  var t = artType(o.type);
+  var t = artTypeOf(o);
   if (!t || typeof ART === 'undefined' || !ART.OBJ[t]) return false;
   var bh = world.height[idx(o.x, o.y)] * HL;
   ctx.save();
@@ -1184,7 +1193,7 @@ function artLights(ctx, time) {
   if (hide.on && !pano.open) return;
   var list = world.objects;
   for (var i = 0; i < list.length; i++) {
-    var o = list[i], t = artType(o.type);
+    var o = list[i], t = artTypeOf(o);
     if (!t || !ART.OBJ[t] || !objVisible(o)) continue;
     ART.drawLights(ctx, t, o.x, o.y, world.height[idx(o.x, o.y)] * HL, artFacing(o), artVariant(o), time);
   }

@@ -12,7 +12,7 @@ const game = {
 };
 // 棋盤圖層（switchBoard / boardBackup 交換的鍵）；物件保留欄位（戰鬥陣用；facing 見 PLAN_TD_MASTER §15.2）
 const BOARD_KEYS = ['terrain', 'height', 'flow', 'block', 'zone', 'objects', 'marks'];
-const OBJ_KEEP = ['facing', 'dev', 'trig', 'mimic'];
+const OBJ_KEEP = ['facing', 'dev', 'trig', 'mimic', 'skin'];   // skin = 外觀皮膚 id(wallskin.js),純外觀
 
 const world = {
   terrain: new Uint8Array(MAP_W * MAP_H),
@@ -140,6 +140,7 @@ function boardRestore() {
 function objSave(o, keep) {
   const r = { type: o.type, x: o.x, y: o.y, rot: o.rot };
   if (keep) OBJ_KEEP.forEach(k => { if (o[k] !== undefined) r[k] = o[k]; });
+  if (typeof o.skin === 'string' && o.skin) r.skin = o.skin; else delete r.skin;
   r.facing = objFacing(o);
   return r;
 }
@@ -176,6 +177,7 @@ function boardFromJSON(j) {
         const r = { type: o.type, x: o.x, y: o.y, rot: (o.rot | 0) & 3 };
         OBJ_KEEP.forEach(k => { if (k !== 'facing' && o[k] !== undefined) r[k] = o[k]; });
         r.facing = o.facing != null ? (o.facing & 3) : r.rot;
+        if (typeof r.skin !== 'string' || !r.skin) delete r.skin;
         return r;
       });
     b.marks = normMarks(j.marks);
@@ -512,7 +514,11 @@ function loadWorldSave() {
         world.terrain[i] = s.terrain[j]; world.height[i] = s.height[j]; world.flow[i] = s.flow[j];
       }
     world.objects = (s.objects || []).filter(o => o && OBJECTS[o.type])
-      .map(o => ({ type: o.type, x: o.x + ox, y: o.y + oy, rot: o.rot || 0, facing: objFacing({ facing: o.facing, rot: o.rot || 0 }) }));
+      .map(o => {
+        const r = { type: o.type, x: o.x + ox, y: o.y + oy, rot: o.rot || 0, facing: objFacing({ facing: o.facing, rot: o.rot || 0 }) };
+        if (typeof o.skin === 'string' && o.skin) r.skin = o.skin;
+        return r;
+      });
     world.marks = newMarks();
     world.board = 'estate';
     world.stash = s.camp ? boardFromJSON(s.camp) : null;
@@ -698,7 +704,9 @@ function applyTemplate(id) {
             fails.push(e.type + '@' + p[0] + ',' + p[1]);
             return;
           }
-          world.objects.push({ type: e.type, x: x, y: y, rot: rot, facing: rot });
+          const no = { type: e.type, x: x, y: y, rot: rot, facing: rot };
+          if (typeof e.skin === 'string' && e.skin) no.skin = e.skin;
+          world.objects.push(no);
           const fp = footprint(e.type, rot), n = world.objects.length;
           for (let yy = y; yy < y + fp[1]; yy++) for (let xx = x; xx < x + fp[0]; xx++) world.occ[idx(xx, yy)] = n;
         });
@@ -967,8 +975,10 @@ function canPlacePending(type, x, y, rot, skip) {
   return true;
 }
 
-function pendAdd(type, x, y, rot) {
-  pend.list.push({ type: type, x: x, y: y, rot: rot });
+function pendAdd(type, x, y, rot, skin) {
+  const p = { type: type, x: x, y: y, rot: rot };
+  if (typeof skin === 'string' && skin) p.skin = skin;
+  pend.list.push(p);
   pendRebuild();
 }
 
@@ -997,7 +1007,11 @@ function pendCommit() {
   }
   spend(total);
   const n = pend.list.length;
-  pend.list.forEach(o => world.objects.push({ type: o.type, x: o.x, y: o.y, rot: o.rot, facing: o.rot }));
+  pend.list.forEach(o => {
+    const no = { type: o.type, x: o.x, y: o.y, rot: o.rot, facing: o.rot };
+    if (o.skin) no.skin = o.skin;
+    world.objects.push(no);
+  });
   rebuildOcc();
   pendClear();
   return { ok: true, n: n, cost: total };

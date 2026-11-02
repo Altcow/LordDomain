@@ -1,4 +1,4 @@
-const VERSION = 'v23';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v24';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const PRECACHE = [
@@ -9,6 +9,7 @@ const PRECACHE = [
   './js/data.js',
   './js/units.js',
   './js/unitinfo.js',
+  './js/wallskin.js',
   './js/progdata.js',
   './js/stratagems.js',
   './js/fishdata.js',
@@ -32,6 +33,7 @@ const PRECACHE = [
   './js/art_deco3.js',
   './js/art_deco4.js',
   './js/art_deco5.js',
+  './js/art_wallskin.js',
   './js/render.js',
   './js/tddraw.js',
   './js/fishdraw.js',

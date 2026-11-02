@@ -3,7 +3,7 @@
 // 執行期才使用的外部全域:MAP_W MAP_H T_LAKE T_RIVER OBJECTS footprint CAMP_CAPS CAMP_CP CAMP_CP_PCT CAMP_LV campTierNow campCpNow
 
 const MIO_LAYERS = ['terrain', 'height', 'flow', 'block', 'zone'];
-const MIO_EXTRA_KEYS = ['dev', 'trig', 'mimic'];
+const MIO_EXTRA_KEYS = ['dev', 'trig', 'mimic', 'skin'];
 const MIO_K = { none: 0, wall: 1, obstacle: 2, solid: 3 };
 const DEPLOY_RED = 3;   // 部署紅區:實體建築周圍 Chebyshev 距離 ≤ 此值的格不可部署(部落衝突式)
 const MIO_DX = [1, -1, 0, 0];

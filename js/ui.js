@@ -41,8 +41,9 @@ const UI_CAT_KEY = 'lorddomain.ui.cat';
 const UI_CAMPTOP_KEY = 'lorddomain.ui.camptop';   // 戰鬥布置的頂層 / 小分類另存,不與經營互蓋
 const UI_CAMPCAT_KEY = 'lorddomain.ui.campcat';
 const UI_VAR_KEY = 'lorddomain.ui.variant';
+const UI_SKIN_KEY = 'lorddomain.ui.wallskin';   // 城牆外觀皮膚偏好(per-viewer,id 見 wallskin.js WALL_SKINS)
 
-const ui = { tool: null, editing: false, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco', buildCat: 'all', top: 'gen', campTop: 'cbuild', campCat: 'all', variant: {}, objSel: null };
+const ui = { tool: null, editing: false, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco', buildCat: 'all', top: 'gen', campTop: 'cbuild', campCat: 'all', variant: {}, wallSkin: '', objSel: null };
 let topMenuOpen = false;
 
 // 單一物件草稿(虛影):{ type, x, y, rot, orig, ok, reason }。orig 為「移動已蓋建築」時的原建築物件(仍在 world.objects、由 objHold 暫時排除)。
@@ -513,6 +514,8 @@ function uiMenuLoad() {
   if (ct) ui.campTop = ct;
   const cc = uiStorageGet(UI_CAMPCAT_KEY);
   if (cc) ui.campCat = cc;
+  const sk = uiStorageGet(UI_SKIN_KEY);
+  if (sk && typeof wallSkinHas === 'function' && wallSkinHas(sk)) ui.wallSkin = sk;
   const raw = uiStorageGet(UI_VAR_KEY);
   if (raw) {
     try {
@@ -533,6 +536,7 @@ function uiMenuSave() {
   uiStorageSet(UI_CAMPTOP_KEY, ui.campTop);
   uiStorageSet(UI_CAMPCAT_KEY, ui.campCat);
   uiStorageSet(UI_VAR_KEY, JSON.stringify(ui.variant));
+  uiStorageSet(UI_SKIN_KEY, ui.wallSkin || '');
 }
 function topIsBuild(top) { return top === 'gen' || top === 'mil'; }
 
@@ -733,15 +737,18 @@ function buildVarBar() {
   }
   const leader = game.mode === 'estate' && ui.tool !== null ? varLeader(ui.tool) : null;
   const list = leader && VARIANT_GROUPS[leader] ? varList(leader) : [];
-  const show = list.length > 0 && !uiIsPhoto() && !(uiIsCompact() && uiCatOpen);
+  const skinT = list.length === 0 ? uiSkinTarget() : null;
+  skinBarKey = skinTargetKey(skinT);
+  const show = (list.length > 0 || !!skinT) && !uiIsPhoto() && !(uiIsCompact() && uiCatOpen);
   box.hidden = !show;
   document.body.classList.toggle('has-varbar', show);
   box.textContent = '';
   if (!show) return;
   const lab = document.createElement('span');
   lab.className = 'vlabel';
-  lab.textContent = '樹種';
+  lab.textContent = skinT ? '外觀' : '樹種';
   box.appendChild(lab);
+  if (skinT) buildSkinButtons(box, skinT);
   list.forEach(id => {
     const b = document.createElement('button');
     b.setAttribute('data-var', id);
@@ -755,8 +762,67 @@ function buildVarBar() {
   const cb = document.getElementById('catbar');
   box.style.bottom = (tb ? tb.offsetHeight : 0) + (cb && !cb.hidden && !cb.classList.contains('pop') ? cb.offsetHeight : 0) + 'px';
 }
+// ── 城牆外觀皮膚(wallskin.js):與樹種變體共用 #varbar;選工具 = 設定放置偏好,草稿(新建 / 按住編輯)= 改該件 ──
+let skinBarKey = '';
+// 目前外觀列的對象 { type, cur, draft, edit, all };不適用回 null。cur = 目前生效的皮膚 id('' = 原樣)
+function uiSkinTarget() {
+  if (typeof wallSkinCan !== 'function') return null;
+  if (game.mode !== 'estate' && game.mode !== 'battleDesign') return null;
+  if (draft && wallSkinCan(draft.type)) {
+    if (draft.orig && !draft.edit) return null;
+    return { type: draft.type, cur: draft.skin || WALL_SKIN_DEFAULT[draft.type] || '', draft: true, edit: !!draft.orig, all: !!draft.all };
+  }
+  if (ui.tool !== null && typeof ui.tool === 'string' && wallSkinCan(ui.tool)) {
+    return { type: ui.tool, cur: uiSkinPref(ui.tool) || WALL_SKIN_DEFAULT[ui.tool] || '', draft: false, edit: false, all: false };
+  }
+  return null;
+}
+function skinTargetKey(t) { return t ? [t.type, t.cur, t.draft, t.edit, t.all].join('|') : ''; }
+// 放置新牆時使用的皮膚('' = 原樣 / 預設):最近選的偏好,該類型不支援或等同預設外觀時為 ''
+function uiSkinPref(type) {
+  if (typeof wallSkinIds !== 'function' || !ui.wallSkin) return '';
+  if (wallSkinIds(type).indexOf(ui.wallSkin) < 0 || ui.wallSkin === WALL_SKIN_DEFAULT[type]) return '';
+  return ui.wallSkin;
+}
+function skinBarSync() {
+  if (skinTargetKey(uiSkinTarget()) !== skinBarKey) buildVarBar();
+}
+function buildSkinButtons(box, t) {
+  const add = (id, icon, name, on) => {
+    const b = document.createElement('button');
+    b.setAttribute('data-skin', id);
+    b.title = name;
+    if (on) b.classList.add('on');
+    b.innerHTML = '<span class="ic">' + icon + '</span><span>' + name + '</span>';
+    box.appendChild(b);
+  };
+  if (!WALL_SKIN_DEFAULT[t.type]) add('', '▫️', '原樣', t.cur === '');
+  wallSkinIds(t.type).forEach(id => add(id, WALL_SKINS[id].icon, WALL_SKINS[id].name, t.cur === id));
+  if (t.edit) {
+    const b = document.createElement('button');
+    b.setAttribute('data-skinall', '1');
+    b.title = '開啟後,確認時整段相連的牆體一起換';
+    if (t.all) b.classList.add('on');
+    b.innerHTML = '<span class="ic">🔗</span><span>整段</span>';
+    box.appendChild(b);
+  }
+}
+function onSkinPick(id) {
+  const t = uiSkinTarget();
+  if (!t || (id && wallSkinIds(t.type).indexOf(id) < 0)) return;
+  ui.wallSkin = id;
+  uiMenuSave();
+  if (t.draft && draft) draft.skin = id === WALL_SKIN_DEFAULT[t.type] ? '' : id;
+  buildVarBar();
+  showToast(id ? WALL_SKINS[id].name : '原樣');
+}
 function onVarClick(e) {
   const b = e.target.closest('button');
+  if (b && b.hasAttribute('data-skinall')) {
+    if (draft && draft.orig) { draft.all = !draft.all; buildVarBar(); showToast(draft.all ? '整段套用:開' : '整段套用:關'); }
+    return;
+  }
+  if (b && b.getAttribute('data-skin') !== null) { onSkinPick(b.getAttribute('data-skin')); return; }
   const id = b && b.getAttribute('data-var');
   if (!id || !OBJECTS[id]) return;
   const leader = varLeader(id);
@@ -1327,7 +1393,7 @@ function applyOne(x, y) {
       denyCost(need);
       return false;
     }
-    pendAdd(t, x, y, ui.rot);
+    pendAdd(t, x, y, ui.rot, uiSkinPref(t));
     if (progFreeBuild() && !commitPending()) pendClear();
     updateResBar();
     return false;
@@ -2038,6 +2104,7 @@ function updatePendBar() {
   const bar = document.getElementById('pendBar');
   const n = pend.list.length;
   updateDraftBar();
+  skinBarSync();
   document.body.classList.toggle('pending', n > 0);
   document.body.classList.toggle('psel', n > 0 && pend.sel >= 0);
   if (!n || draft || progFreeBuild()) {
@@ -2141,7 +2208,7 @@ function draftSync() {
 function draftStart(type, x, y, rot) {
   pend.sel = -1;
   pend.moving = false;
-  draft = { type: type, x: x, y: y, rot: rot, orig: null, ok: false, reason: '' };
+  draft = { type: type, x: x, y: y, rot: rot, orig: null, ok: false, reason: '', skin: uiSkinPref(type) };
   preview.visible = false;
   draftSync();
 }
@@ -2151,7 +2218,7 @@ function draftFromObj(o) {
   ui.objSel = null;
   objHold = o;
   rebuildOcc();
-  draft = { type: o.type, x: o.x, y: o.y, rot: o.rot, orig: o, ok: false, reason: '', edit: false, bounce: null };
+  draft = { type: o.type, x: o.x, y: o.y, rot: o.rot, orig: o, ok: false, reason: '', edit: false, bounce: null, skin: o.skin || '', all: false };
   preview.visible = false;
   draftSync();
 }
@@ -2221,24 +2288,31 @@ function draftConfirm() {
   preview.visible = false;
   if (d.orig) {
     const o = d.orig;
-    if (d.x === o.x && d.y === o.y && d.rot === o.rot) {
+    const skinChg = (d.skin || '') !== (o.skin || '');
+    if (d.x === o.x && d.y === o.y && d.rot === o.rot && !skinChg) {
       draftDiscard();
       fxMark(o, 'tap');
       return;
     }
+    const moved = d.x !== o.x || d.y !== o.y || d.rot !== o.rot;
     draft = null;
     objHold = null;
     o.x = d.x;
     o.y = d.y;
     o.rot = d.rot;
     o.facing = d.rot;
+    let nSkin = 0;
+    if (skinChg && typeof wallSkinSet === 'function') {
+      rebuildOcc();
+      (d.all ? wallSkinGroup(o) : [o]).forEach(g => { wallSkinSet(g, d.skin); nSkin++; });
+    }
     fxMark(o, 'land');
     if (typeof auPlay === 'function') auPlay('place');
     objPost();
-    showToast('已移動 ' + OBJECTS[o.type].name);
+    showToast(moved ? '已移動 ' + OBJECTS[o.type].name : '已更換外觀' + (nSkin > 1 ? '(' + nSkin + ' 件)' : ''));
   } else {
     draft = null;
-    pendAdd(d.type, d.x, d.y, d.rot);
+    pendAdd(d.type, d.x, d.y, d.rot, d.skin);
     if (progFreeBuild()) {
       if (!commitPending()) pendClear();
     } else {

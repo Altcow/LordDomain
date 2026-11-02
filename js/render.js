@@ -653,7 +653,7 @@ function drawDraft(ctx) {
     const ox = (1 - k) * (b.fx - d.x), oy = (1 - k) * (b.fy - d.y);
     ctx.save();
     ctx.translate(isoX(ox, oy), isoY(ox, oy, 0));
-    drawObject(ctx, { type: d.type, x: d.x, y: d.y, rot: d.rot }, 0.55);
+    drawObject(ctx, { type: d.type, x: d.x, y: d.y, rot: d.rot, skin: d.skin }, 0.55);
     ctx.restore();
     return;
   }
@@ -662,7 +662,7 @@ function drawDraft(ctx) {
   for (let yy = d.y; yy < d.y + fp[1]; yy++)
     for (let xx = d.x; xx < d.x + fp[0]; xx++)
       if (inBounds(xx, yy)) poly(ctx, topPts(xx, yy, world.height[idx(xx, yy)], 0), fill);
-  drawObject(ctx, { type: d.type, x: d.x, y: d.y, rot: d.rot }, 0.55);
+  drawObject(ctx, { type: d.type, x: d.x, y: d.y, rot: d.rot, skin: d.skin }, 0.55);
   const bh = world.height[idx(d.x, d.y)] * HL;
   const pts = [gpt(d.x, d.y, bh), gpt(d.x + fp[0], d.y, bh), gpt(d.x + fp[0], d.y + fp[1], bh), gpt(d.x, d.y + fp[1], bh)];
   ctx.save();
@@ -715,7 +715,7 @@ function drawPreview(ctx) {
   if (OBJECTS[t]) {
     const fp = footprint(t, preview.rot);
     fillCells(ctx, x, y, fp[0], fp[1], okColor);
-    drawObject(ctx, { type: t, x: x, y: y, rot: preview.rot }, 0.55);
+    drawObject(ctx, { type: t, x: x, y: y, rot: preview.rot, skin: typeof uiSkinPref === 'function' ? uiSkinPref(t) : '' }, 0.55);
   } else if (t === 'erase') {
     if (hide.on) {
       strokeCell(ctx, x, y, preview.ok ? 'rgba(80,220,120,1)' : 'rgba(230,70,70,1)', 2);
