@@ -1,4 +1,4 @@
-const VERSION = 'v22';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v23';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const PRECACHE = [
@@ -50,6 +50,7 @@ const PRECACHE = [
   './js/ui.js',
   './js/settingsui.js',
   './js/progui.js',
+  './js/guide.js',
   './js/mapedit.js',
   './js/battleui.js',
   './js/fishui.js',

@@ -281,7 +281,7 @@ function stFsRequest() {
   }
 }
 
-function stHowtoSec() {
+function stHowtoBody() {
   const wrap = stEl('div', 'st-howto');
   wrap.appendChild(stEl('p', '', '網址列與瀏覽器工具列會佔掉螢幕。下列方法可讓遊戲畫面更大:'));
   wrap.appendChild(stEl('p', '', 'iPhone(Safari)'));
@@ -303,7 +303,7 @@ function stHowtoSec() {
     b.addEventListener('click', stFsRequest);
     wrap.appendChild(b);
   }
-  return stSec('如何看更大畫面', [wrap]);
+  return wrap;
 }
 
 // 一次性提示條:手機版且未以主畫面開啟;關閉後記入 localStorage 不再顯示
@@ -348,6 +348,7 @@ function stFsTipMaybe() {
 
 // 頂列圖示說明(點開才列出目前已開放的圖示)
 let stIconOpen = false;
+let stHowtoOpen = false;
 const ST_ICON_LEGEND = [
   { icon: '🔨', name: '草稿布置(右側欄):另開一份草稿來設計,改完 💾 儲存到版面格,不影響正在用的城;平時直接點下方建築蓋即可(即時生效)' },
   { icon: '🏘', name: '經營 / 戰鬥(右側欄第一個):打開 3 格版面小面板,點一格把整座城 / 整個戰陣換成那一格;「空」= 還沒存,點了可把目前版面存進去;面板不會自動關閉,再點一次該鈕才收起' },
@@ -360,30 +361,63 @@ const ST_ICON_LEGEND = [
   { icon: '🐲', name: '仙獸苑', feat: 'pet' },
   { icon: '⚙', name: '設定' }
 ];
-function stIconSec() {
-  const wrap = stEl('div', 'st-icons');
-  const btn = stEl('button', 'st-link', stIconOpen ? '收起頂列圖示說明 ▴' : '頂列圖示說明 ▾');
-  btn.addEventListener('click', function () { stIconOpen = !stIconOpen; stRender(); });
-  wrap.appendChild(btn);
+// 介紹類卡片:有邊框底色、左圖示 + 標題 + 灰色副標、右側「展開 / 開啟」小標籤與箭頭;kind 'fold' 可展開收合(body 內容),'open' 點了開啟別的面板
+function stCard(icon, title, sub, kind, isOpen, onClick, bodyNode) {
+  const card = stEl('div', 'st-card ' + kind + (isOpen ? ' open' : ''));
+  const h = stEl('button', 'st-card-h');
+  h.appendChild(stEl('span', 'st-card-ic', icon));
+  const tx = stEl('span', 'st-card-tx');
+  tx.appendChild(stEl('b', '', title));
+  tx.appendChild(stEl('small', '', sub));
+  h.appendChild(tx);
+  h.appendChild(stEl('span', 'st-card-tag', kind === 'fold' ? (isOpen ? '收起' : '展開') : '開啟'));
+  h.appendChild(stEl('span', 'st-card-ar', kind === 'fold' ? '▸' : '›'));
+  if (kind === 'fold') h.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  h.addEventListener('click', onClick);
+  card.appendChild(h);
+  if (bodyNode) {
+    const b = stEl('div', 'st-card-b');
+    b.appendChild(bodyNode);
+    card.appendChild(b);
+  }
+  return card;
+}
+
+function stIconCard() {
+  const list = stEl('ul', 'st-iconlist');
   if (stIconOpen) {
-    const list = stEl('ul', 'st-iconlist');
     ST_ICON_LEGEND.forEach(function (it) {
       if (it.feat && !isUnlocked('feature', it.feat)) return;
       list.appendChild(stEl('li', '', it.icon + '  ' + it.name));
     });
-    wrap.appendChild(list);
   }
-  return stSec('圖示說明', [wrap]);
+  return stCard('🧭', '頂列圖示說明', '各個圖示按鈕是做什麼的', 'fold', stIconOpen, function () { stIconOpen = !stIconOpen; stRender(); }, stIconOpen ? list : null);
 }
 
 // 兵種圖鑑入口(戰鬥中不顯示,與其他畫面設定同規則)
-function stDexSec() {
-  const btn = stEl('button', 'st-link', '兵種圖鑑 ›');
-  btn.addEventListener('click', function () {
+function stDexCard() {
+  return stCard('📚', '兵種圖鑑', '查看每種兵種的能力與開放等級', 'open', false, function () {
     stClosePanel();
     if (typeof unitDexOpen === 'function') unitDexOpen();
   });
-  return stSec('圖鑑', [btn]);
+}
+
+function stGuideCard() {
+  return stCard('📖', '功能說明', '所有基本操作的介紹,可重看示範', 'open', false, function () {
+    stClosePanel();
+    if (typeof guideListOpen === 'function') guideListOpen();
+  });
+}
+
+function stHowtoCard() {
+  return stCard('🖥', '如何看更大畫面', '加入主畫面、隱藏瀏覽器列、全螢幕', 'fold', stHowtoOpen, function () { stHowtoOpen = !stHowtoOpen; stRender(); }, stHowtoBody());
+}
+
+function stHelpSec() {
+  const nodes = [];
+  if (typeof guideListOpen === 'function') nodes.push(stGuideCard());
+  nodes.push(stIconCard(), stDexCard(), stHowtoCard());
+  return stSec('說明', nodes.concat(stExtraNodes('說明')));
 }
 
 function stAboutSec() {
@@ -427,7 +461,7 @@ function stRender() {
   stBodyEl.innerHTML = '';
   const battle = stInBattle();
   stBodyEl.appendChild(stSoundSec());
-  const builtin = ['聲音', '畫面', '關於', '危險區'];
+  const builtin = ['聲音', '畫面', '說明', '關於', '危險區'];
   stExtraRows.forEach(function (r) {
     if (builtin.indexOf(r.group) >= 0) return;
     const nodes = stExtraNodes(r.group);
@@ -437,9 +471,7 @@ function stRender() {
   });
   if (battle) return;
   stBodyEl.appendChild(stDisplaySec());
-  stBodyEl.appendChild(stIconSec());
-  stBodyEl.appendChild(stDexSec());
-  stBodyEl.appendChild(stHowtoSec());
+  stBodyEl.appendChild(stHelpSec());
   stBodyEl.appendChild(stAboutSec());
   stBodyEl.appendChild(stDangerSec());
 }

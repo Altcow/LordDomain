@@ -1008,3 +1008,69 @@ body.photo-mode #draftFloat { display: none !important; }
 #unitHold { position: fixed; left: 50%; transform: translateX(-50%); z-index: 6; width: max-content; max-width: 70vw; box-sizing: border-box; padding: 6px 10px; border-radius: 10px; background: rgba(20, 26, 36, .92); color: #e8edf2; font-size: 12px; line-height: 1.4; text-align: left; pointer-events: none; user-select: none; -webkit-user-select: none; }
 #unitHold[hidden] { display: none; }
 #unitHold div + div { opacity: .85; font-size: 11px; }
+
+/* ===== 新手指引(guide.js):遮罩 #guideRoot + 聚光孔 #guideHole + 氣泡 #guideBubble;跳過鈕 #guideSkip 固定在螢幕底部正中;功能說明面板 #guideList ===== */
+#guideRoot { position: fixed; inset: 0; z-index: 60; background: transparent; }
+#guideRoot.nohole { background: rgba(0, 0, 0, .6); }
+#guideRoot[hidden], #guideHole[hidden], #guideSkip[hidden], #guideList[hidden] { display: none; }
+#guideHole { position: fixed; border-radius: 8px; border: 2px solid #f0b45a; box-shadow: 0 0 0 9999px rgba(0, 0, 0, .6); pointer-events: none; box-sizing: border-box; }
+#guideBubble { position: absolute; box-sizing: border-box; padding: 6px 10px 8px; border-radius: 12px; background: #243041; border: 1px solid #f0b45a; color: #e8edf2; font-size: 13px; line-height: 1.45; box-shadow: 0 4px 16px rgba(0, 0, 0, .5); }
+#guideBubble .gd-top { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+#guideBubble .gd-title { font-size: 14px; color: #f0b45a; }
+#guideBubble .gd-prog { font-size: 12px; opacity: .8; }
+#guideBubble .gd-text { margin: 0; }
+#guideBubble .gd-next { flex: 0 0 auto; min-width: 76px; min-height: 36px; padding: 0 10px; font-weight: bold; background: #c9892f; border-color: #f0b45a; color: #1b1308; }
+#guideSkip { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 16px); z-index: 62; min-width: 120px; min-height: 44px; padding: 0 16px; border-radius: 22px; background: rgba(20, 26, 36, .95); border: 1px solid #f0b45a; color: #f0b45a; font-size: 14px; font-weight: bold; }
+body.guide-on #toast, body.guide-list #toast { z-index: 70; }
+#guideList { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; background: #1c2430; color: #e8edf2; padding-top: env(safe-area-inset-top); }
+#guideList .gl-panel { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+#guideList .gl-top { flex: 0 0 auto; display: flex; align-items: center; padding: 4px 8px 4px 16px; font-size: 17px; }
+#guideList .gl-top b { flex: 1; }
+#guideList .gl-x { min-width: 44px; min-height: 44px; font-size: 18px; background: none; border: none; color: inherit; }
+#guideList .gl-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+#guideList .gl-item { padding: 8px 10px; border-radius: 8px; background: #243041; border: 1px solid #2f3b4d; }
+#guideList .gl-item.lock { opacity: .6; filter: grayscale(1); }
+#guideList .gl-head { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+#guideList .gl-t { flex: 1; min-width: 0; }
+#guideList .gl-tag { flex: 0 0 auto; font-size: 12px; opacity: .85; white-space: nowrap; }
+#guideList .gl-demo { flex: 0 0 auto; min-height: 36px; padding: 0 10px; background: #c9892f; border-color: #f0b45a; color: #1b1308; font-weight: bold; }
+#guideList .gl-steps { margin: 2px 0 2px 20px; padding: 0; font-size: 13px; line-height: 1.6; opacity: .9; }
+#guideList .gl-foot { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; padding-bottom: max(8px, env(safe-area-inset-bottom)); border-top: 1px solid rgba(255, 255, 255, .15); }
+#guideList .gl-note { flex: 1 1 100%; font-size: 12px; opacity: .8; }
+#guideList .gl-foot button { flex: 1 1 0; min-height: 44px; font-size: 13px; }
+#guideList .gl-off.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; font-weight: bold; }
+#guideList .gl-close { background: #c9892f; border-color: #f0b45a; color: #1b1308; font-weight: bold; }
+
+/* ===== 設定頁優化:控制項縮小、列間距、分類標題 + 分隔線、介紹卡片(可展開) ===== */
+#stRoot .st-sec { margin-top: 20px; padding-top: 10px; border-top: 2px solid rgba(240, 180, 90, .35); display: flex; flex-direction: column; gap: 6px; }
+#stRoot .st-h { margin: 0 0 2px; font-size: 14px; opacity: 1; color: #f0b45a; letter-spacing: 1px; }
+#stRoot .st-h::before { content: ''; display: inline-block; width: 4px; height: 13px; margin-right: 6px; vertical-align: -2px; border-radius: 2px; background: #f0b45a; }
+#stRoot .st-vol { display: flex; flex-direction: column; gap: 4px; }
+#stRoot .st-row { min-height: 38px; padding: 1px 8px; border-radius: 8px; background: rgba(255, 255, 255, .04); }
+#stRoot .st-lbl { font-size: 14px; }
+#stRoot .st-sw { min-width: 52px; min-height: 34px; padding: 2px 10px; font-size: 13px; }
+#stRoot .st-slide { min-height: 38px; padding-left: 8px; }
+#stRoot .st-range { height: 36px; margin: 0; background: transparent; -webkit-appearance: none; appearance: none; }
+#stRoot .st-range::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .25); }
+#stRoot .st-range::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: #f0b45a; border: 2px solid #1c2430; }
+#stRoot .st-range::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .25); }
+#stRoot .st-range::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #f0b45a; border: 2px solid #1c2430; }
+#stRoot .st-pct { min-width: 40px; font-size: 12px; }
+#stRoot .st-seg button { min-width: 38px; min-height: 34px; padding: 4px 8px; font-size: 13px; }
+#stRoot .st-quick button, #stRoot .st-btn-danger { min-height: 38px; font-size: 13px; }
+#stRoot .st-link { min-height: 40px; margin-top: 0; font-size: 14px; }
+#stRoot .st-done { min-height: 46px; font-size: 16px; }
+#stRoot .st-card { border-radius: 10px; background: #243041; border: 1px solid #3b4a60; overflow: hidden; }
+#stRoot .st-card-h { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 54px; padding: 6px 10px; text-align: left; color: inherit; background: none; border: none; border-radius: 0; }
+#stRoot .st-card-h:active { background: rgba(240, 180, 90, .18); }
+#stRoot .st-card-ic { flex: 0 0 28px; font-size: 22px; text-align: center; }
+#stRoot .st-card-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+#stRoot .st-card-tx b { font-size: 14px; }
+#stRoot .st-card-tx small { font-size: 12px; opacity: .65; }
+#stRoot .st-card-tag { flex: 0 0 auto; padding: 1px 8px; border-radius: 999px; font-size: 11px; background: rgba(240, 180, 90, .2); color: #f0b45a; }
+#stRoot .st-card-ar { flex: 0 0 auto; font-size: 16px; color: #f0b45a; transition: transform .2s; }
+#stRoot .st-card.fold.open .st-card-ar { transform: rotate(90deg); }
+#stRoot .st-card.open.fold { border-color: #f0b45a; }
+#stRoot .st-card:not(.open) .st-card-b { display: none; }
+#stRoot .st-card-b { padding: 4px 12px 10px; border-top: 1px solid rgba(255, 255, 255, .1); }
+#stRoot .st-card-b .st-iconlist { margin: 4px 0 0; }
