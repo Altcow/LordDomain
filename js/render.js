@@ -310,6 +310,227 @@ function drawLake(ctx, x, y, h, time) {
   ctx.restore();
 }
 
+// ===== 沙地 / 裂地 / 雪地(純視覺地形,玩法等同草地;見 data.js isGroundTerrain)=====
+// 繪製只依 (x, y, 高度, 地形, 季節) 與 PAL,與 time 無關,可直接放進地形分塊快取(若換季或 ART 時段改變須整批作廢)。
+// 色票:3 種底色、冬季 3 種底色、紋路色、點綴色、亮色。沙地四季近乎不變、冬季偏冷;雪地四季皆白,夏季不融化。
+const GROUND2 = {
+  4: { base: ['#ecd9a0', '#e6d195', '#f0dfab'], cold: ['#dcd7bf', '#d6d2bb', '#e2decb'], mark: '#d2ba7c', dot: '#c2a562', lite: '#f8ecc6' },
+  5: { base: ['#c9a66b', '#c19e62', '#d0ad74'], cold: ['#b9ab91', '#b2a48a', '#c0b49b'], mark: '#6b4a27', dot: '#a68a3c', lite: '#e0c48e' },
+  6: { base: ['#f2f8fd', '#e8f1f9', '#f8fbfe'], cold: ['#f0f6fc', '#e6eff8', '#f7fbfe'], mark: '#c3d6ea', dot: '#aebfd6', lite: '#ffffff' }
+};
+const G2_DETAIL_ZOOM = 0.5;   // 縮放低於此值只畫底色與接縫,不畫紋路
+// 龜裂紋:座標為格內 (u,v) 0~1 的折線;使用時依雜湊翻轉 / 對調,5 款 x 8 = 40 種
+const G2_CRACKS = [
+  [[0.1, 0.5, 0.3, 0.42, 0.5, 0.55, 0.72, 0.48, 0.9, 0.58], [0.5, 0.55, 0.46, 0.8, 0.52, 0.92]],
+  [[0.2, 0.1, 0.35, 0.35, 0.3, 0.6, 0.5, 0.78, 0.6, 0.95], [0.35, 0.35, 0.65, 0.3, 0.88, 0.4], [0.3, 0.6, 0.1, 0.72]],
+  [[0.08, 0.2, 0.4, 0.3, 0.55, 0.15], [0.4, 0.3, 0.5, 0.55, 0.85, 0.65], [0.5, 0.55, 0.35, 0.85, 0.2, 0.92], [0.85, 0.65, 0.92, 0.88]],
+  [[0.5, 0.08, 0.42, 0.3, 0.58, 0.5, 0.45, 0.7, 0.5, 0.92], [0.58, 0.5, 0.82, 0.42], [0.42, 0.3, 0.15, 0.38], [0.45, 0.7, 0.2, 0.82]],
+  [[0.12, 0.85, 0.3, 0.62, 0.55, 0.66, 0.7, 0.4, 0.9, 0.3], [0.55, 0.66, 0.62, 0.9], [0.7, 0.4, 0.62, 0.12]]
+];
+const g2MixMemo = {};
+
+function g2Hash(x, y, t) {
+  let h = (cellHash(x, y) ^ Math.imul(t, 0x9e3779b1)) >>> 0;
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) >>> 0;
+  h = Math.imul(h ^ (h >>> 12), 0x297a2d39) >>> 0;
+  return (h ^ (h >>> 15)) >>> 0;
+}
+
+// 兩個 #rrggbb 依比例 k 混色(有快取,色票有限)
+function g2Mix(a, b, k) {
+  const key = a + b + k;
+  let r = g2MixMemo[key];
+  if (r) return r;
+  r = '#';
+  for (let i = 1; i <= 5; i += 2) {
+    const v = Math.round(parseInt(a.substr(i, 2), 16) * (1 - k) + parseInt(b.substr(i, 2), 16) * k);
+    r += (v < 16 ? '0' : '') + v.toString(16);
+  }
+  g2MixMemo[key] = r;
+  return r;
+}
+
+function g2Tint(c) { return typeof artTile === 'function' ? artTile(c) : c; }
+
+// 地形 t(4~6)的底色;hs 為 cellHash(x, y)(與草地同樣依格挑 3 色之一)
+function groundTileCol(t, hs) {
+  const g = GROUND2[t];
+  return (currentSeason === 'winter' ? g.cold : g.base)[hs % 3];
+}
+
+// 該地形的代表色(接縫混色用,不分格)
+function g2Flat(t) {
+  if (t === T_GRASS || t > T_SNOW) return PAL.grass[0];
+  return (currentSeason === 'winter' ? GROUND2[t].cold : GROUND2[t].base)[0];
+}
+
+// 在格內畫折線 pts([u0,v0,u1,v1,...]),f 為 0~7 的翻轉 / 對調代碼
+function g2Poly(ctx, P, pts, f) {
+  for (let i = 0; i < pts.length; i += 2) {
+    let u = pts[i], v = pts[i + 1], w;
+    if (f & 4) { w = u; u = v; v = w; }
+    if (f & 1) u = 1 - u;
+    if (f & 2) v = 1 - v;
+    const q = P(u, v);
+    if (i === 0) ctx.moveTo(q[0], q[1]); else ctx.lineTo(q[0], q[1]);
+  }
+}
+
+function g2Ellipse(ctx, q, rx, ry) {
+  ctx.moveTo(q[0] + rx, q[1]);
+  ctx.ellipse(q[0], q[1], rx, ry, 0, 0, 6.2832);
+}
+
+// 沙地 / 裂地 / 雪地的細部紋路(底色已填);純函式,與 time 無關
+function drawGround2(ctx, x, y, h, t) {
+  const hs = g2Hash(x, y, t), hp = h * HL, g = GROUND2[t];
+  const P = (u, v) => gpt(x + u, y + v, hp);
+  ctx.save();
+  if (t === T_SAND) {
+    // 風紋:沿等角 x 或 y 軸的 2 條淺弧線 + 細沙點
+    const sw = (hs & 1) === 1, off = ((hs >>> 1) & 7) / 40;
+    ctx.beginPath();
+    for (let k = 0; k < 2; k++) {
+      const v = 0.28 + 0.38 * k + off, bend = (k ? -1 : 1) * 0.07;
+      const a = sw ? P(v, 0.14) : P(0.14, v), m = sw ? P(v + bend, 0.5) : P(0.5, v + bend), b = sw ? P(v, 0.86 - k * 0.12) : P(0.86 - k * 0.12, v);
+      ctx.moveTo(a[0], a[1]);
+      ctx.quadraticCurveTo(m[0], m[1], b[0], b[1]);
+    }
+    ctx.strokeStyle = g2Tint(g.mark);
+    ctx.lineWidth = 1.1;
+    ctx.globalAlpha = 0.75;
+    ctx.stroke();
+    ctx.beginPath();
+    const hi = sw ? P(0.3 + off, 0.22) : P(0.22, 0.3 + off), hj = sw ? P(0.3 + off, 0.5) : P(0.5, 0.3 + off);
+    ctx.moveTo(hi[0], hi[1] - 1);
+    ctx.lineTo(hj[0], hj[1] - 1);
+    ctx.strokeStyle = g2Tint(g.lite);
+    ctx.globalAlpha = 0.55;
+    ctx.stroke();
+    ctx.fillStyle = g2Tint(g.dot);
+    ctx.globalAlpha = 0.8;
+    for (let k = 0; k < 4; k++) {
+      const q = P(0.12 + ((hs >>> (4 + k * 5)) & 15) / 20, 0.12 + ((hs >>> (6 + k * 5)) & 15) / 20);
+      ctx.fillRect(q[0], q[1], 1.3, 1);
+    }
+  } else if (t === T_CRACK) {
+    const pat = G2_CRACKS[(hs >>> 3) % G2_CRACKS.length], f = (hs >>> 8) & 7;
+    // 土色斑塊(局部乾裂深淺)
+    if ((hs >>> 11) % 3 === 0) {
+      ctx.beginPath();
+      g2Ellipse(ctx, P(0.3 + ((hs >>> 13) & 7) / 14, 0.3 + ((hs >>> 16) & 7) / 14), 9, 4.5);
+      ctx.fillStyle = g2Tint(g.mark);
+      ctx.globalAlpha = 0.1;
+      ctx.fill();
+    }
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let k = 0; k < pat.length; k++) g2Poly(ctx, P, pat[k], f);
+    ctx.save();
+    ctx.translate(0, 1);
+    ctx.strokeStyle = g2Tint(g.lite);
+    ctx.lineWidth = 1.1;
+    ctx.globalAlpha = 0.4;
+    ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = g2Tint(g.mark);
+    ctx.lineWidth = 1.2;
+    ctx.globalAlpha = 0.8;
+    ctx.stroke();
+    // 小碎石或枯草
+    const r = (hs >>> 18) % 10;
+    if (r < 2) {
+      const q = P(0.2 + ((hs >>> 20) & 7) / 12, 0.2 + ((hs >>> 23) & 7) / 12);
+      ctx.beginPath();
+      g2Ellipse(ctx, q, 2.4, 1.3);
+      ctx.fillStyle = g2Tint('#a39a8a');
+      ctx.globalAlpha = 0.9;
+      ctx.fill();
+    } else if (r < 4) {
+      const q = P(0.25 + ((hs >>> 20) & 7) / 12, 0.3 + ((hs >>> 23) & 7) / 12);
+      ctx.beginPath();
+      ctx.moveTo(q[0] - 2, q[1]); ctx.lineTo(q[0] - 3, q[1] - 4);
+      ctx.moveTo(q[0], q[1]); ctx.lineTo(q[0], q[1] - 5);
+      ctx.moveTo(q[0] + 2, q[1]); ctx.lineTo(q[0] + 3, q[1] - 4);
+      ctx.strokeStyle = g2Tint(g.dot);
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.9;
+      ctx.stroke();
+    }
+  } else {
+    // 雪地:藍白陰影的積雪起伏 + 亮面 + 少量腳印
+    const q = P(0.3 + ((hs >>> 3) & 7) / 16, 0.3 + ((hs >>> 6) & 7) / 16);
+    ctx.beginPath();
+    g2Ellipse(ctx, q, 11, 5);
+    ctx.fillStyle = g2Tint(g.mark);
+    ctx.globalAlpha = 0.5;
+    ctx.fill();
+    ctx.beginPath();
+    g2Ellipse(ctx, [q[0] - 2, q[1] - 1.5], 8, 3.4);
+    ctx.fillStyle = g2Tint(g.lite);
+    ctx.globalAlpha = 0.85;
+    ctx.fill();
+    if ((hs >>> 9) % 3 === 0) {
+      const q2 = P(0.15 + ((hs >>> 12) & 7) / 14, 0.55 + ((hs >>> 15) & 3) / 12);
+      ctx.beginPath();
+      g2Ellipse(ctx, q2, 6, 2.2);
+      ctx.fillStyle = g2Tint(g.mark);
+      ctx.globalAlpha = 0.3;
+      ctx.fill();
+    }
+    if ((hs >>> 17) % 6 === 0) {
+      const a = P(0.3, 0.25 + ((hs >>> 20) & 3) / 20);
+      ctx.beginPath();
+      g2Ellipse(ctx, a, 1.3, 0.8);
+      g2Ellipse(ctx, [a[0] + 5, a[1] + 2.5], 1.3, 0.8);
+      g2Ellipse(ctx, [a[0] + 10, a[1] + 5], 1.3, 0.8);
+      g2Ellipse(ctx, [a[0] + 14, a[1] + 7.5], 1.3, 0.8);
+      ctx.fillStyle = g2Tint(g.dot);
+      ctx.globalAlpha = 0.55;
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+// 與不同陸地類地形(草 / 沙 / 裂 / 雪)或水岸的接縫:格內側一條混色窄帶 + 幾點鄰格色的點綴。
+// p 為本格頂面四角,e 為 drawTile 的邊定義 [起點索引, 終點索引, 鄰格 x, 鄰格 y];t 為本格地形,nt 為鄰格地形(兩者至少一個 >= T_SAND)
+function g2EdgeBlend(ctx, p, e, t, nt, x, y) {
+  if (nt === t) return;
+  const wetN = nt === T_LAKE || nt === T_RIVER;
+  if (nt === T_ROAD || (wetN && t < T_SAND)) return;
+  const a = p[e[0]], b = p[e[1]];
+  const cx = (p[0][0] + p[2][0]) / 2, cy = (p[0][1] + p[2][1]) / 2;
+  const own = g2Flat(t);
+  const k = wetN ? 0.16 : 0.24;
+  const col = g2Tint(wetN ? g2Mix(own, '#6a8ea0', 0.4) : g2Mix(own, g2Flat(nt), 0.5));
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(a[0], a[1]);
+  ctx.lineTo(b[0], b[1]);
+  ctx.lineTo(b[0] + (cx - b[0]) * k, b[1] + (cy - b[1]) * k);
+  ctx.lineTo(a[0] + (cx - a[0]) * k, a[1] + (cy - a[1]) * k);
+  ctx.closePath();
+  ctx.fillStyle = col;
+  ctx.globalAlpha = wetN ? 0.6 : 0.7;
+  ctx.fill();
+  if (!wetN && view.zoom >= G2_DETAIL_ZOOM) {
+    const hs = g2Hash(x, y, 16 + nt * 4 + e[0]);
+    ctx.fillStyle = g2Tint(g2Flat(nt));
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    for (let j = 0; j < 3; j++) {
+      const s = 0.12 + (((hs >>> (j * 6)) & 15) / 15) * 0.76, d = 0.2 + (((hs >>> (j * 6 + 3)) & 7) / 7) * 0.34;
+      const px = a[0] + (b[0] - a[0]) * s, py = a[1] + (b[1] - a[1]) * s;
+      ctx.moveTo(px + (cx - px) * d + 1.8, py + (cy - py) * d);
+      ctx.ellipse(px + (cx - px) * d, py + (cy - py) * d, 1.8, 1.1, 0, 0, 6.2832);
+    }
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawTile(ctx, x, y, time) {
   const i = idx(x, y);
   const h = world.height[i];
@@ -319,7 +540,8 @@ function drawTile(ctx, x, y, time) {
 
   const p = topPts(x, y, h, wet ? 3 : 0);
   polyPath(ctx, p);
-  let tileCol = t === T_ROAD ? PAL.road : (wet ? PAL.water : PAL.grass[cellHash(x, y) % 3]);
+  const hs0 = cellHash(x, y);
+  let tileCol = t === T_ROAD ? PAL.road : (wet ? PAL.water : (t >= T_SAND && t <= T_SNOW ? groundTileCol(t, hs0) : PAL.grass[hs0 % 3]));
   if (typeof artTile === 'function') tileCol = artTile(tileCol);
   ctx.fillStyle = tileCol;
   ctx.fill();
@@ -331,6 +553,7 @@ function drawTile(ctx, x, y, time) {
     const nt = world.terrain[idx(e[2], e[3])];
     if (t === T_ROAD && nt !== T_ROAD) edgeLine(ctx, p[e[0]], p[e[1]], PAL.roadEdge, 1, 1);
     else if (wet && nt !== T_LAKE && nt !== T_RIVER) edgeLine(ctx, p[e[0]], p[e[1]], PAL.foam, 2, 0.6);
+    else if (t >= T_SAND || nt >= T_SAND) g2EdgeBlend(ctx, p, e, t, nt, x, y);
   });
 
   if (view.zoom >= TILE_EDGE_MIN_ZOOM) {
@@ -342,6 +565,7 @@ function drawTile(ctx, x, y, time) {
 
   if (t === T_RIVER) drawRiver(ctx, x, y, h, time);
   else if (t === T_LAKE) drawLake(ctx, x, y, h, time);
+  else if (t >= T_SAND && t <= T_SNOW && view.zoom >= G2_DETAIL_ZOOM) drawGround2(ctx, x, y, h, t);
 }
 
 // 物件繪製
@@ -646,7 +870,12 @@ function drawGhostCell(ctx, x, y) {
 // 單一物件草稿虛影(ui.js draft):半透明本體＋綠/紅格底＋虛線外框;不進 occ / 待購,不計價
 function drawDraft(ctx) {
   const d = draft;
-  if (!d || !OBJECTS[d.type] || !inBounds(d.x, d.y)) return;
+  if (!d || (!OBJECTS[d.type] && !d.combo) || !inBounds(d.x, d.y)) return;
+  if (d.combo) {
+    // 組合模組:整組虛影(各件半透明 + 綠 / 紅格底,外框依整組可放與否)
+    if (typeof drawComboGhost === 'function') drawComboGhost(ctx, d.combo, d.x, d.y, d.rot, d.cres);
+    return;
+  }
   if (d.bounce) {
     // 彈回動畫:虛影從放開處(bounce.fx/fy)滑回 d.x/d.y(easeOut),不畫格底
     const b = d.bounce, p = Math.min(1, (performance.now() - b.t0) / b.dur), k = 1 - (1 - p) * (1 - p);

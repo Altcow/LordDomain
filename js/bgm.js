@@ -2,6 +2,8 @@
 // 零音檔:音色在 JS 內算成 PCM,預渲染成 AudioBuffer 快取;排程以 AudioContext 時間做 lookahead。
 // 依賴 audio.js 的 AU(ctx、master、buses.music、ready)、auCfg()、auNow();game / battle / ART_TOD / currentSeason 只讀。
 // 外部 API:bgmStart / bgmStop / bgmScene / bgmSetScene / bgmSetEnabled / bgmStats。檔案載入時自動 bgmStart,音訊解鎖後才出聲。
+// 曲目庫:BG_TRACKS[場景群組] = 多首可選曲目(只新增排程資料,音色共用快取);選曲 API:bgmGroups / bgmTracks / bgmPickGet / bgmPickSet / bgmAudition / bgmAuditionStop。
+// 曲目全由調式、速度、音色組合、節奏型、鼓型、和聲進行變化產生,無外部音檔、無第三方旋律。
 
 const BG_LOOK = 0.25;
 const BG_TICK_MS = 100;
@@ -16,6 +18,8 @@ const BG_PHRASE = 32;
 const BG_TRACK_GAIN = 0.8;
 const BG_WARM_MS = 6;
 const BG_FADE_OUT_QUICK = 0.05;
+const BG_PICK_KEY = 'lorddomain.bgm.pick';
+const BG_ROT_KEY = 'lorddomain.bgm.rot';
 
 const BG_MODES = {
   gong: [0, 2, 4, 7, 9],
@@ -25,8 +29,18 @@ const BG_MODES = {
   yu: [0, 3, 5, 7, 10]
 };
 
-const BG_GAIN = { guz: 0.55, flute: 0.4, erhu: 0.4, pipa: 0.5, horn: 0.35, taiko: 0.7, wood: 0.5, gong: 0.45, chime: 0.35 };
-const BG_DUR = { taiko: 0.7, wood: 0.12, gong: 2.6, chime: 2.2 };
+const BG_GAIN = {
+  guz: 0.55, flute: 0.4, erhu: 0.4, pipa: 0.5, horn: 0.35, taiko: 0.7, wood: 0.5, gong: 0.45, chime: 0.35,
+  taikoL: 0.7, taikoH: 0.5, woodL: 0.5, woodH: 0.4, gongH: 0.4, gongL: 0.45
+};
+const BG_DUR = { taiko: 0.7, wood: 0.12, gong: 2.6, chime: 2.2, taikoL: 0.45, taikoH: 0.2, woodL: 0.12, woodH: 0.1, gongH: 1.6, gongL: 3 };
+// 打擊樂變音:共用同一份預渲染樣本,只改播放速率(不增加渲染量)
+const BG_ALIAS = { taikoL: ['taiko', 0.62], taikoH: ['taiko', 1.6], woodL: ['wood', 0.66], woodH: ['wood', 1.4], gongH: ['gong', 1.45], gongL: ['gong', 0.75] };
+// 動機節奏型:可選的音符長度(格數);重複的值等於加權
+const BG_RHY = {
+  slow: [2, 4, 4, 6, 8], fast: [2, 2, 4], steady: [2, 2, 4, 4], flow: [1, 2, 2, 3, 4], long: [4, 6, 8, 8],
+  gallop: [1, 1, 2, 3, 3], drive: [1, 2, 2, 2, 4], syncop: [1, 1, 3, 6, 8]
+};
 const BG_BUF_DUR = { guz: 1.4, flute: 1.6, erhu: 1.6, pipa: 0.9, horn: 1.2 };
 const BG_PITCHED = { guz: 1, flute: 1, erhu: 1, pipa: 1, horn: 1 };
 
@@ -69,6 +83,151 @@ const BG_SCENE_INST = {
   lose: ['pipa', 'erhu', 'horn', 'gong']
 };
 
+// ---- 曲目庫 ----
+// 每首欄位沿用 BG_SCENES,另有:id / name / desc;modeB、modeC(B / C 段調式轉位);prog(每句的主音位移半音,循環);
+// dbl:[音色, 度數位移, 最短格數](旋律加疊一聲部);hornGap / fanfare(號角間隔句數 / 號角動機 [起格, 度數, 格數]);
+// swell(漸強週期句數);climax / cLift(第 9~12 句為高潮 C 段,可升八度);drumDur(鼓點最長秒數,控制聲部占用);
+// legacy:true = 原版曲(場景表原樣,含季節 / 時段微調)。群組 estate_night = 經營夜間(場景仍是 estate_day)。
+function bgClassic(scene, name, desc) {
+  return Object.assign({ id: 'classic', name: name, desc: desc, legacy: true }, BG_SCENES[scene]);
+}
+
+const BG_TRACKS = {
+  estate_day: [
+    bgClassic('estate_day', '庭園閒步', '原版經營曲,隨季節與時段微調'),
+    {
+      id: 'dawn', name: '田園清晨', desc: '薄霧中的長笛,舒緩開闊', bpm: 72, mode: 'gong', tonics: [60, 62, 67],
+      mel: [['flute', 0.7], ['guz', 0.3]], dens: 0.5, rhythm: 'long', pad: 0.15, horn: 0, prog: [0, 0, 5, 7],
+      percA: { wood: '........x.......' }, percB: { wood: '....x.......x...' }
+    },
+    {
+      id: 'market', name: '市集熱鬧', desc: '琵琶與古箏輕快對答,梆子打著拍子', bpm: 108, mode: 'zhi', tonics: [62, 67],
+      mel: [['pipa', 0.5], ['guz', 0.5]], dens: 0.8, rhythm: 'steady', pad: 0.1, horn: 0, prog: [0, 0, 7, 5],
+      percA: { wood: 'x.x.x.x.x.x.x.x.', taikoH: 'o.......o.......' },
+      percB: { wood: 'x.x.x.x.xxx.x.x.', woodH: '..o...o...o...o.' }
+    },
+    {
+      id: 'jiangnan', name: '江南小調', desc: '二胡與笛的婉轉小曲,帶水鄉韻味', bpm: 80, mode: 'gong', modeB: 'zhi', tonics: [57, 59],
+      mel: [['erhu', 0.5], ['flute', 0.5]], dens: 0.75, rhythm: 'flow', pad: 0.12, horn: 0, prog: [0, 5, 7, 0],
+      percA: { woodL: '..x.....x.......' }, percB: { woodL: '..x...x...x...x.' }
+    },
+    {
+      id: 'summit', name: '登高遠眺', desc: '遠方號角與二胡,視野遼闊', bpm: 66, mode: 'shang', tonics: [55, 57],
+      mel: [['erhu', 0.7], ['flute', 0.3]], dens: 0.45, rhythm: 'long', pad: 0.28, horn: 0.6, hornGap: 4, prog: [0, 7, 5, 0],
+      percA: { taikoL: 'o...............' }, percB: { taikoL: 'o.......o.......', gongL: 'o...............' }
+    }
+  ],
+  estate_night: [
+    bgClassic('estate_day', '夜色庭園', '原版夜間經營曲,極簡稀疏'),
+    {
+      id: 'moon', name: '月下撫琴', desc: '單一古箏,稀疏安靜', bpm: 54, mode: 'yu', tonics: [50, 53],
+      mel: [['guz', 1]], dens: 0.3, rhythm: 'long', pad: 0.22, horn: 0, percA: {}, percB: {}
+    },
+    {
+      id: 'watch', name: '更鼓夜深', desc: '遠處更梆與低笛,夜深人靜', bpm: 58, mode: 'jue', tonics: [48, 51],
+      mel: [['flute', 1]], dens: 0.22, rhythm: 'long', pad: 0.25, horn: 0, percA: {}, percB: {}, woodEvery: [7, 13]
+    }
+  ],
+  design: [
+    bgClassic('design', '運籌', '原版布置曲'),
+    {
+      id: 'plan', name: '運籌帷幄', desc: '古箏與長笛,沉穩思考', bpm: 72, mode: 'zhi', tonics: [52, 55],
+      mel: [['guz', 0.6], ['flute', 0.4]], dens: 0.4, rhythm: 'slow', pad: 0.25, horn: 0, prog: [0, 5, 0, 7],
+      percA: { taikoL: 'o.......o.......' }, percB: { taikoL: 'o.......o.......' }
+    },
+    {
+      id: 'camp', name: '營壘畫策', desc: '琵琶獨奏,低鼓如腳步', bpm: 62, mode: 'shang', tonics: [50, 53],
+      mel: [['pipa', 1]], dens: 0.35, rhythm: 'steady', pad: 0.3, horn: 0, prog: [0, 0, 7, 5],
+      percA: { taikoL: 'x...o...x...o...' }, percB: { taikoL: 'x...o...x...o...' }
+    }
+  ],
+  scout: [
+    bgClassic('scout', '潛行', '原版觀察期曲,低音墊與隨機梆子'),
+    {
+      id: 'mist', name: '霧中窺探', desc: '稀疏長笛飄在低音墊上', bpm: 56, mode: 'jue', tonics: [46, 48],
+      mel: [['flute', 1]], dens: 0.12, rhythm: 'long', pad: 0.3, horn: 0, percA: {}, percB: {}, woodEvery: [7, 13]
+    },
+    {
+      id: 'sentinel', name: '伏兵靜待', desc: '低沉單鼓與梆子,屏息等待', bpm: 64, mode: 'yu', tonics: [45, 48],
+      mel: [], dens: 0, rhythm: 'slow', pad: 0.35, horn: 0,
+      percA: { taikoL: 'o...............' }, percB: { taikoL: 'o.......o.......' }, woodEvery: [5, 10]
+    }
+  ],
+  fishing: [
+    bgClassic('fishing', '垂釣', '原版釣魚曲,長笛與流水'),
+    {
+      id: 'creek', name: '溪邊垂釣', desc: '笛與箏,流水潺潺', bpm: 70, mode: 'gong', tonics: [60, 62], mel: [['flute', 0.6], ['guz', 0.4]],
+      dens: 0.45, rhythm: 'flow', pad: 0.12, horn: 0, percA: { wood: '....x...........' }, percB: { wood: '....x.......x...' }, stream: 0.25
+    },
+    {
+      id: 'dusk', name: '暮江寒釣', desc: '二胡低吟,黃昏江面', bpm: 62, mode: 'shang', tonics: [55, 57], mel: [['erhu', 1]],
+      dens: 0.35, rhythm: 'long', pad: 0.18, horn: 0, percA: {}, percB: {}, stream: 0.3
+    },
+    {
+      id: 'rain', name: '蓑笠聽雨', desc: '柔音古箏,雨中靜坐', bpm: 68, mode: 'jue', tonics: [57, 60], mel: [['guz', 1]],
+      dens: 0.4, rhythm: 'flow', pad: 0.15, horn: 0, percA: { woodH: '..o.....o.......' }, percB: { woodH: '..o.....o...o...' }, stream: 0.35
+    }
+  ],
+  battle: [
+    bgClassic('battle', '行軍', '原版戰鬥曲,琵琶與穩定鼓點'),
+    {
+      id: 'pozhen', name: '破陣', desc: '急促大鼓與號角,滿格打擊,一路衝鋒', bpm: 146, mode: 'yu', tonics: [57, 59, 62],
+      mel: [['pipa', 1]], dens: 0.95, rhythm: 'drive', pad: 0.2, horn: 0.9, hornGap: 2, fanfare: [[0, 0, 4], [4, 2, 4], [8, 4, 6]],
+      drumDur: 0.26,
+      percA: { taiko: 'X.X.X.X.X.X.X.X.', taikoH: '.o.o.o.o.o.o.o.o' },
+      percB: { taiko: 'X.X.X.X.X.X.XXXX', taikoH: '.x.x.x.x.x.x....', woodH: '..x...x...x...x.' }
+    },
+    {
+      id: 'tieqi', name: '鐵騎', desc: '馬蹄切分節奏,琵琶疾彈並疊低八度', bpm: 138, mode: 'shang', tonics: [55, 57],
+      mel: [['pipa', 1]], dens: 1, rhythm: 'gallop', pad: 0.15, horn: 0.4, hornGap: 4, dbl: ['pipa', -5, 2], drumDur: 0.22,
+      percA: { taikoH: 'x.xxx.xxx.xxx.xx', taikoL: 'X.......X.......' },
+      percB: { taikoH: 'xxx.xxx.xxx.xxx.', taikoL: 'X...X...X...X...', woodH: '..x...x...x...x.' }
+    },
+    {
+      id: 'gongcheng', name: '攻城', desc: '沉重鼓點、銅鑼與號角長音,逐句漸強', bpm: 96, mode: 'yu', tonics: [50, 53],
+      mel: [['horn', 0.5], ['erhu', 0.5]], dens: 0.6, rhythm: 'long', pad: 0.4, horn: 1, hornGap: 1, fanfare: [[0, 0, 14]],
+      swell: 6, drumDur: 0.5,
+      percA: { taikoL: 'X.o.X.o.X.o.X.o.', gongL: 'X...............' },
+      percB: { taikoL: 'X.xxX.xxX.xxX.xx', gongL: 'X.......X.......' }
+    },
+    {
+      id: 'fenghuo', name: '烽火', desc: '高音笛與二胡的激昂旋律,節奏明快', bpm: 128, mode: 'gong', modeB: 'shang', tonics: [57, 60],
+      mel: [['erhu', 0.6], ['flute', 0.4]], dens: 0.9, rhythm: 'drive', pad: 0.2, horn: 0.5, hornGap: 4, prog: [0, 5, 7, 0],
+      dbl: ['flute', 5, 2], drumDur: 0.3,
+      percA: { taiko: 'X...x...X...x...', woodH: 'x.x.x.x.x.x.x.x.' },
+      percB: { taiko: 'X.x.X.x.X.x.X.xx', taikoH: '..o...o...o...o.', woodH: 'x.x.x.x.x.x.x.x.' }
+    },
+    {
+      id: 'juezhan', name: '決戰', desc: '全樂器密集,段落由低沉轉激昂再衝上高潮', bpm: 150, mode: 'yu', modeB: 'jue', modeC: 'gong', tonics: [57, 59],
+      mel: [['pipa', 0.5], ['erhu', 0.5]], dens: 0.95, rhythm: 'drive', pad: 0.25, horn: 1, hornGap: 1, fanfare: [[0, 0, 6], [8, 4, 8]],
+      prog: [0, 0, 5, 7], dbl: ['horn', -5, 4], climax: true, cLift: 12, drumDur: 0.2,
+      percA: { taiko: 'X.X.x.X.X.X.x.XX', taikoH: '.o.o.o.o.o.o.o..' },
+      percB: { taiko: 'X.x.X.x.X.x.X.xx', taikoH: '.x.x.x.x.x.x.x.x', woodH: 'x.x.x.x.x.x.x.x.' },
+      percC: { taiko: 'XxXxXxXxXxXxXxXx', taikoH: 'oooooooooooooooo', gong: 'X.......X.......', woodH: 'x.x.x.x.x.x.x.x.' }
+    },
+    {
+      id: 'yexi', name: '夜襲', desc: '低沉緊張,快慢交錯的切分,段尾鼓點疾滾', bpm: 112, mode: 'jue', tonics: [45, 48],
+      mel: [['erhu', 0.5], ['guz', 0.5]], dens: 0.6, rhythm: 'syncop', pad: 0.4, horn: 0.3, hornGap: 4, drumDur: 0.4,
+      percA: { taikoL: 'X.......X.o.o.o.', woodL: '....x.......x.x.' },
+      percB: { taikoL: 'X.o.X.o.X.xxxxxx', woodH: '.x..x..x..x..x..' }
+    }
+  ]
+};
+
+const BG_GROUPS = [
+  ['estate_day', '經營白天'], ['estate_night', '經營夜間'], ['design', '戰鬥布置'],
+  ['scout', '斥候觀察'], ['fishing', '釣魚'], ['battle', '戰鬥']
+];
+
+// 戰況強度層(只加疊鼓,不改旋律):1 = 低鼓四拍,2 = 低鼓密集 + 高鼓 + 每句號角
+const BG_INTENS = [
+  null,
+  { taikoL: 'X...x...X...x...' },
+  { taikoL: 'X.x.X.x.X.x.X.x.', taikoH: '.o.o.o.o.o.o.o.o' }
+];
+// 首領營預設用「決戰」(玩家未指定曲目時)
+const BG_BOSS_IDS = { hulao: 1, luoyang: 1, chanyu: 1 };
+
 const BG = {
   want: false,
   enabled: true,
@@ -88,6 +247,11 @@ const BG = {
   resultSeen: null,
   stingerEnd: 0,
   stats: { played: {}, dropped: {}, peak: 0 },
+  pick: null,
+  rot: null,
+  audi: null,
+  audiPrev: true,
+  intensity: 0,
   pollTimer: null,
   pollMs: 0,
   schedTimer: null
@@ -118,15 +282,19 @@ function bgMidiOf(tonic, mode, d) {
   return tonic + 12 * oct + n[d - oct * 5];
 }
 
-// 依時段 / 季節微調 estate_day;其他場景照表
-function bgStyleFor(scene) {
-  const base = BG_SCENES[scene];
+// 依時段 / 季節微調 estate_day;其他場景照表。tid 指定曲目(缺省 = 原版曲);group 為曲目群組(estate_night 時強制夜間)
+function bgStyleFor(scene, tid, group) {
+  const g = group || scene;
+  const tk = tid ? bgTrackById(g, tid) : null;
+  const legacy = !tk || tk.legacy === true;
+  const base = legacy ? BG_SCENES[scene] : tk;
   const st = Object.assign({}, base);
   st.stream = base.stream || 0;
   st.woodEvery = base.woodEvery || null;
-  if (scene === 'estate_day') {
-    const season = typeof currentSeason === 'string' ? currentSeason : 'spring';
-    const tod = typeof ART_TOD === 'string' ? ART_TOD : 'noon';
+  if (legacy && scene === 'estate_day') st.seasonal = true;
+  const season = typeof currentSeason === 'string' ? currentSeason : 'spring';
+  const tod = g === 'estate_night' ? 'night' : (typeof ART_TOD === 'string' ? ART_TOD : 'noon');
+  if (scene === 'estate_day' && legacy) {
     if (season === 'spring') { st.bpm += 6; st.dens += 0.1; }
     else if (season === 'summer') { st.bpm -= 4; st.mode = 'shang'; }
     else if (season === 'autumn') { st.bpm -= 6; st.mode = 'yu'; st.dens *= 0.7; }
@@ -136,13 +304,17 @@ function bgStyleFor(scene) {
       st.bpm = 60; st.dens = 0.22; st.mode = 'yu'; st.pad = 0.2; st.mel = [['guz', 1]];
       st.percA = {}; st.percB = {};
     }
+  } else if (g === 'estate_day' && !legacy) {
+    // 新白天曲只微調速度,保留各自的調式與樂器
+    st.bpm += { spring: 4, summer: -2, autumn: -4, winter: -8 }[season] || 0;
+    if (tod === 'dusk') st.bpm -= 3;
   }
   return st;
 }
 
 // 4 拍一小節(16 格)的動機:音符長度(格數)加總 = 16
 function bgMotif(rng, rhythm) {
-  const sizes = rhythm === 'fast' ? [2, 2, 4] : [2, 4, 4, 6, 8];
+  const sizes = BG_RHY[rhythm] || BG_RHY.slow;
   const steps = [];
   let left = 16;
   while (left > 0) {
@@ -186,18 +358,22 @@ function bgPickMel(mel, rng) {
   return mel[mel.length - 1][0];
 }
 
-// 一句 = 2 小節(32 格)。A-B-A:每 12 句一輪,第 4~7 句為 B 段(移到屬)。
+// 一句 = 2 小節(32 格)。A-B-A:每 12 句一輪,第 4~7 句為 B 段(移到屬);climax 曲第 8~11 句為高潮 C 段。
 function bgMakePhrase(tr, pi) {
   const rng = tr.rng;
-  const st = bgStyleFor(tr.scene);
+  const st = bgStyleFor(tr.scene, tr.tid, tr.group);
   tr.style = st;
   if (pi % 12 === 0 || !tr.motifs) {
     tr.tonic = st.tonics[Math.floor(rng() * st.tonics.length)];
     tr.motifs = { A: bgMotif(rng, st.rhythm), B: bgMotif(rng, st.rhythm) };
   }
   const k = pi % 12;
-  const sec = k >= 4 && k < 8 ? 'B' : 'A';
-  const tonic = sec === 'B' ? tr.tonic + 7 : tr.tonic;
+  const sec = st.climax && k >= 8 ? 'C' : (k >= 4 && k < 8 ? 'B' : 'A');
+  const root = tr.tonic + (st.prog ? st.prog[pi % st.prog.length] : 0);
+  const tonic = sec === 'B' ? root + 7 : root;
+  const mode = sec === 'B' ? (st.modeB || st.mode) : (sec === 'C' ? (st.modeC || st.modeB || st.mode) : st.mode);
+  const lift = sec === 'C' ? (st.cLift || 0) : 0;
+  const dens = sec === 'C' ? 1 : st.dens;
   const motif = sec === 'B' ? tr.motifs.B : tr.motifs.A;
   const bars = [motif, bgVary(motif, rng)];
   const mel = bgPickMel(st.mel, rng);
@@ -209,19 +385,29 @@ function bgMakePhrase(tr, pi) {
       for (let i = 0; i < seq.length; i++) {
         const it = seq[i];
         const last = b === 1 && i === seq.length - 1;
-        if (i === 0 || last || rng() < st.dens) {
+        if (i === 0 || last || rng() < dens) {
           const n = last ? BG_PHRASE - s : it.n;
           const d = last ? 0 : it.d;
-          (byStep[s] = byStep[s] || []).push({ inst: mel, midi: bgMidiOf(tonic, st.mode, d), n: n, v: 0.6 + 0.4 * rng() });
+          const v = 0.6 + 0.4 * rng();
+          (byStep[s] = byStep[s] || []).push({ inst: mel, midi: bgMidiOf(tonic, mode, d) + lift, n: n, v: v });
+          if (st.dbl && n >= (st.dbl[2] || 0)) {
+            (byStep[s] = byStep[s] || []).push({ inst: st.dbl[0], midi: bgMidiOf(tonic, mode, d + st.dbl[1]) + lift, n: n, v: v * 0.8 });
+          }
         }
         s += it.n;
       }
     }
   }
-  if (st.horn > 0 && sec === 'A' && pi % 4 === 0 && rng() < st.horn) {
-    (byStep[0] = byStep[0] || []).push({ inst: 'horn', midi: tonic, n: 12, v: 0.8 });
+  if (st.horn > 0 && (sec === 'A' || sec === 'C') && pi % (st.hornGap || 4) === 0 && rng() < st.horn) {
+    if (st.fanfare) {
+      st.fanfare.forEach(function (f) {
+        (byStep[f[0]] = byStep[f[0]] || []).push({ inst: 'horn', midi: bgMidiOf(tonic, mode, f[1]), n: f[2], v: 0.85 });
+      });
+    } else {
+      (byStep[0] = byStep[0] || []).push({ inst: 'horn', midi: tonic, n: 12, v: 0.8 });
+    }
   }
-  return { sec: sec, byStep: byStep, pads: [tonic - 12, tonic - 12 + (sec === 'B' ? 7 : 5)] };
+  return { sec: sec, byStep: byStep, pads: [root - 12, root - 12 + (sec === 'B' ? 7 : 5)], tonic: root };
 }
 
 // 結算短曲(固定譜,不循環):win 約 7.8 秒、lose 約 7.1 秒
@@ -482,6 +668,8 @@ function bgStream() {
 
 // 音色規格:箏 / 笛 / 二胡 / 琵琶 以 60~71 的 12 個音預渲染,其餘音以 playbackRate 移八度
 function bgSpec(inst, midi, vel) {
+  const al = BG_ALIAS[inst];
+  if (al) return { buf: bgBuf(al[0]), rate: al[1] };
   if (inst === 'horn') return { buf: bgBuf('horn:62'), rate: Math.pow(2, (midi - 62) / 12) };
   if (BG_PITCHED[inst] !== 1) return { buf: bgBuf(inst), rate: 1 };
   const base = 60 + (((midi - 60) % 12) + 12) % 12;
@@ -508,7 +696,7 @@ function bgPlay(tr, t, inst, midi, vel, dur) {
   const ctx = AU.ctx;
   const src = ctx.createBufferSource();
   src.buffer = sp.buf;
-  const jig = (inst === 'taiko' || inst === 'wood' || inst === 'gong' || inst === 'chime') ? 1 + (tr.rng() * 2 - 1) * 0.02 : 1;
+  const jig = BG_PITCHED[inst] !== 1 ? 1 + (tr.rng() * 2 - 1) * 0.02 : 1;
   src.playbackRate.setValueAtTime(sp.rate * jig, t);
   let end = t + (dur != null ? dur : (BG_DUR[inst] || 1));
   end = Math.min(end, t + sp.buf.duration / (sp.rate * jig));
@@ -576,17 +764,26 @@ function bgStep(tr, t) {
     tr.stepSec = 60 / tr.style.bpm / 4;
   }
   const ph = tr.phrase;
+  const st = tr.style;
   const bar = s % 16;
-  if (bar === 0 && tr.style.pad > 0) bgPadAt(tr, t, ph.pads[sp >= 16 ? 1 : 0]);
-  const pat = (ph.sec === 'B' ? tr.style.percB : tr.style.percA) || {};
-  for (const name in pat) {
-    const ch = pat[name].charAt(bar);
-    if (ch === 'X') bgPlay(tr, t, name, 0, 1);
-    else if (ch === 'x') bgPlay(tr, t, name, 0, 0.75);
-    else if (ch === 'o') bgPlay(tr, t, name, 0, 0.45);
+  if (bar === 0 && st.pad > 0) bgPadAt(tr, t, ph.pads[sp >= 16 ? 1 : 0]);
+  const pat = (ph.sec === 'B' ? st.percB : (ph.sec === 'C' ? (st.percC || st.percB) : st.percA)) || {};
+  let vm = 1;
+  if (st.swell > 0) vm = 0.5 + 0.5 * Math.min(1, ((tr.pi - 1) % st.swell) / Math.max(1, st.swell - 1));
+  const lay = tr.group === 'battle' && BG.intensity > 0 ? BG_INTENS[BG.intensity] : null;
+  const drum = function (name, ch) {
+    const dd = st.drumDur && name.indexOf('taiko') === 0 ? st.drumDur : undefined;
+    if (ch === 'X') bgPlay(tr, t, name, 0, vm, dd);
+    else if (ch === 'x') bgPlay(tr, t, name, 0, 0.75 * vm, dd);
+    else if (ch === 'o') bgPlay(tr, t, name, 0, 0.45 * vm, dd);
+  };
+  for (const name in pat) drum(name, pat[name].charAt(bar));
+  if (lay) {
+    for (const name in lay) drum(name, lay[name].charAt(bar));
+    if (sp === 0 && (BG.intensity >= 2 || tr.pi % 2 === 0)) bgPlay(tr, t, 'horn', ph.tonic, 0.8, 16 * tr.stepSec);
   }
-  if (tr.style.woodEvery && t >= tr.nextWood) {
-    const w = tr.style.woodEvery;
+  if (st.woodEvery && t >= tr.nextWood) {
+    const w = st.woodEvery;
     bgPlay(tr, t, 'wood', 0, 0.6);
     tr.nextWood = t + w[0] + (w[1] - w[0]) * tr.rng();
   }
@@ -598,7 +795,164 @@ function bgStep(tr, t) {
   }
 }
 
-function bgNewTrack(scene, now, fade) {
+function bgTrackById(group, id) {
+  const list = BG_TRACKS[group];
+  if (!list || !id) return null;
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].id === id) return list[i];
+  }
+  return null;
+}
+
+// 場景 → 曲目群組:經營白天遇夜間時段用 estate_night
+function bgGroupOf(scene) {
+  if (scene === 'estate_day' && typeof ART_TOD === 'string' && ART_TOD === 'night') return 'estate_night';
+  return scene;
+}
+
+function bgLoadJson(key) {
+  let o = null;
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    if (raw) o = JSON.parse(raw);
+  } catch (e) {
+    console.warn('[au] bgm storage read failed', e);
+  }
+  return o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+}
+
+function bgSaveJson(key, o) {
+  try {
+    localStorage.setItem(key, JSON.stringify(o));
+  } catch (e) {
+    console.warn('[au] bgm storage write failed', e);
+  }
+}
+
+function bgPicks() {
+  if (!BG.pick) BG.pick = bgLoadJson(BG_PICK_KEY);
+  return BG.pick;
+}
+
+// 玩家選的曲目 id;未選 / 已不存在的 id 一律視為 'auto'(自動輪播)
+function bgmPickGet(group) {
+  const id = bgPicks()[group];
+  return bgTrackById(group, id) ? id : 'auto';
+}
+
+function bgmPickSet(group, id) {
+  if (!BG_TRACKS[group]) return false;
+  const p = bgPicks();
+  if (id && id !== 'auto' && bgTrackById(group, id)) p[group] = id;
+  else delete p[group];
+  bgSaveJson(BG_PICK_KEY, p);
+  return true;
+}
+
+function bgmGroups() {
+  return BG_GROUPS.map(function (g) { return [g[0], g[1]]; });
+}
+
+function bgmTracks(group) {
+  return (BG_TRACKS[group] || []).map(function (t) {
+    return { id: t.id, name: t.name, desc: t.desc, bpm: t.bpm, mode: t.mode };
+  });
+}
+
+function bgBossId() {
+  try {
+    const b = bgCurBattle();
+    let id = b && b.refId ? b.refId : null;
+    if (!id && typeof game === 'object' && game && game.target) id = game.target.refId;
+    return id || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 該群組這次進場景要播哪一首:指定曲目 > 首領營預設 > 自動輪播(依序往下一首,不會連兩次同一首)
+function bgChooseTrack(group) {
+  const list = BG_TRACKS[group];
+  if (!list) return null;
+  const pick = bgmPickGet(group);
+  if (pick !== 'auto') return pick;
+  if (group === 'battle') {
+    const boss = bgBossId();
+    if (boss && BG_BOSS_IDS[boss] && bgTrackById(group, 'juezhan')) return 'juezhan';
+  }
+  if (!BG.rot) BG.rot = bgLoadJson(BG_ROT_KEY);
+  const last = typeof BG.rot[group] === 'number' ? BG.rot[group] : -1;
+  const idx = (((last + 1) % list.length) + list.length) % list.length;
+  BG.rot[group] = idx;
+  bgSaveJson(BG_ROT_KEY, BG.rot);
+  return list[idx].id;
+}
+
+function bgSelect(scene) {
+  if (BG.audi && BG.audi.scene === scene) return { group: BG.audi.group, tid: BG.audi.id };
+  const g = bgGroupOf(scene);
+  return { group: g, tid: bgChooseTrack(g) };
+}
+
+// 試聽:立即播指定群組的曲目(id 為 auto / 未知 = 依輪播挑一首);回傳實際曲目 id 或 false
+function bgmAudition(group, id) {
+  if (!BG_TRACKS[group]) return false;
+  const tid = id && id !== 'auto' && bgTrackById(group, id) ? id : bgChooseTrack(group);
+  const scene = group === 'estate_night' ? 'estate_day' : group;
+  if (!BG.audi) BG.audiPrev = BG.enabled;
+  BG.enabled = true;
+  BG.audi = { scene: scene, group: group, id: tid };
+  BG.forced = scene;
+  if (bgAudioReady() && bgMusicOn()) {
+    BG.running = true;
+    bgSwitch(scene, BG_FADE_HARD, bgNow());
+  }
+  return tid;
+}
+
+// 結束試聽:回到自動判定的場景(會依目前選曲重新挑曲)
+function bgmAuditionStop() {
+  if (!BG.audi) return;
+  BG.audi = null;
+  BG.forced = null;
+  BG.enabled = BG.audiPrev !== false;
+  if (!bgAudioReady()) return;
+  const now = bgNow();
+  if (!BG.enabled) {
+    if (BG.running) bgHalt(now);
+    return;
+  }
+  if (BG.running && bgMusicOn()) {
+    const want = bgDesired();
+    if (want) bgSwitch(want, BG_FADE, now);
+  }
+}
+
+function bgmAuditing() {
+  return BG.audi ? { group: BG.audi.group, id: BG.audi.id } : null;
+}
+
+// 戰況強度 0~2:剩餘時間 < 60 秒、兵力懸殊(任一方 ≥ 6 且另一方 ≤ 一半)、帥帳受襲警報各加 1;只影響音樂,不進模擬
+function bgUpdateIntensity() {
+  let lv = 0;
+  if (BG.cur && BG.cur.group === 'battle' && !BG.audi) {
+    try {
+      const b = bgCurBattle();
+      if (b && !b.over) {
+        if (typeof b.limitTick === 'number' && typeof b.tick === 'number' && (b.limitTick - b.tick) / 10 < 60) lv++;
+        const a = b.atkList ? b.atkList.length : 0;
+        const d = b.defList ? b.defList.length : 0;
+        if (a > 0 && d > 0 && Math.max(a, d) >= 6 && Math.max(a, d) >= 2 * Math.min(a, d)) lv++;
+        if (b.alarm && typeof b.alarm.until === 'number' && b.alarm.until > b.tick) lv++;
+      }
+    } catch (e) {
+      lv = 0;
+    }
+  }
+  BG.intensity = Math.min(2, lv);
+}
+
+function bgNewTrack(scene, now, fade, sel) {
   BG.seq++;
   const gain = AU.ctx.createGain();
   gain.gain.setValueAtTime(0, now);
@@ -607,7 +961,7 @@ function bgNewTrack(scene, now, fade) {
   const tr = {
     scene: scene, gain: gain, rng: bgRng(918273 + BG.seq * 7919), style: null, tonic: 62, motifs: null,
     phrase: null, pi: 0, step: 0, stepSec: 0.2, nextT: now + 0.05, out: false, done: false, fadeEnd: 0,
-    endT: 0, pad: null, nextWood: now + 3, stinger: false, score: null, len: 0
+    endT: 0, pad: null, nextWood: now + 3, stinger: false, score: null, len: 0, group: scene, tid: null
   };
   if (scene === 'win' || scene === 'lose') {
     const sc = bgStingerScore(scene);
@@ -616,7 +970,10 @@ function bgNewTrack(scene, now, fade) {
     tr.len = sc.len;
     tr.stepSec = sc.stepSec;
   } else {
-    tr.style = bgStyleFor(scene);
+    const pick = sel || bgSelect(scene);
+    tr.group = pick.group;
+    tr.tid = pick.tid;
+    tr.style = bgStyleFor(scene, tr.tid, tr.group);
     tr.stepSec = 60 / tr.style.bpm / 4;
     if (tr.style.stream > 0) bgStartLoop(tr, 'stream', tr.style.stream, now);
   }
@@ -665,9 +1022,43 @@ function bgHalt(now) {
   BG.pending = null;
 }
 
-function bgQueueScene(scene) {
-  (BG_SCENE_INST[scene] || []).forEach(function (inst) {
-    bgKeysOf(inst).forEach(function (k) {
+// 曲子可能用到的音高集合(0~11):各主音 × 位移(prog / 屬音 +7)× 調式的音;會隨季節換調的經營原版曲回傳 null = 全部 12 個
+function bgPcs(st) {
+  if (!st || st.seasonal) return null;
+  const set = {};
+  const shifts = [];
+  (st.prog || [0]).forEach(function (p) { shifts.push(p, p + 7); });
+  [st.mode, st.modeB, st.modeC].forEach(function (m) {
+    if (!BG_MODES[m]) return;
+    st.tonics.forEach(function (t) {
+      shifts.forEach(function (s) {
+        BG_MODES[m].forEach(function (iv) { set[(((t + s + iv) % 12) + 12) % 12] = true; });
+      });
+    });
+  });
+  return set;
+}
+
+function bgQueueScene(scene, st, group) {
+  let insts = BG_SCENE_INST[scene] || [];
+  if (st) {
+    const set = {};
+    const add = function (n) { set[BG_ALIAS[n] ? BG_ALIAS[n][0] : n] = true; };
+    (st.mel || []).forEach(function (m) { add(m[0]); });
+    if (st.dbl) add(st.dbl[0]);
+    if (st.horn > 0 || st.fanfare || group === 'battle') add('horn');
+    if (group === 'battle') add('taiko');
+    [st.percA, st.percB, st.percC].forEach(function (p) {
+      if (p) Object.keys(p).forEach(add);
+    });
+    if (st.woodEvery) add('wood');
+    if (st.pad > 0) add('pad');
+    if (st.stream > 0) add('stream');
+    insts = Object.keys(set);
+  }
+  const pcs = bgPcs(st);
+  insts.forEach(function (inst) {
+    bgKeysOf(inst, pcs).forEach(function (k) {
       if (!BG.bufs[k] && !BG.queued[k]) {
         BG.queued[k] = true;
         BG.queue.unshift(k);
@@ -676,12 +1067,19 @@ function bgQueueScene(scene) {
   });
 }
 
-function bgKeysOf(inst) {
+function bgKeysOf(inst, pcs) {
   const out = [];
   if (inst === 'guz') {
-    for (let m = 60; m < 72; m++) { out.push('guz:s:' + m); out.push('guz:h:' + m); }
+    for (let m = 60; m < 72; m++) {
+      if (pcs && !pcs[m % 12]) continue;
+      out.push('guz:s:' + m);
+      out.push('guz:h:' + m);
+    }
   } else if (inst === 'flute' || inst === 'erhu' || inst === 'pipa') {
-    for (let m = 60; m < 72; m++) out.push(inst + ':' + m);
+    for (let m = 60; m < 72; m++) {
+      if (pcs && !pcs[m % 12]) continue;
+      out.push(inst + ':' + m);
+    }
   } else if (inst === 'horn') {
     out.push('horn:62');
   } else {
@@ -717,7 +1115,7 @@ function bgSwitch(scene, fade, now) {
     BG.resultSeen = bgCurBattle();
     BG.stingerEnd = now + tr.len * tr.stepSec;
   }
-  bgQueueScene(scene);
+  bgQueueScene(scene, tr.style, tr.group);
 }
 
 // 目標場景 → 是否切換(去抖動 1.2 s、最短停留 8 s;進戰鬥與結算硬切 0.6 s)
@@ -818,6 +1216,12 @@ function bgmPoll() {
   BG.running = true;
   const want = bgDesired();
   if (want) bgRequest(want, now);
+  // 經營白天 ↔ 夜間:曲目群組改變時換曲(尊重最短停留)
+  if (want === 'estate_day' && BG.scene === 'estate_day' && BG.cur && !BG.cur.out && !BG.audi &&
+      bgGroupOf('estate_day') !== BG.cur.group && now - BG.sceneStart >= BG_MIN_DWELL) {
+    bgSwitch('estate_day', BG_FADE, now);
+  }
+  bgUpdateIntensity();
 }
 
 // 排程:每 100 ms 把 0.25 s 內的格子排進 AudioContext 時間軸
@@ -882,6 +1286,10 @@ function bgmScene() {
 
 // 面板或其他模組要求暫停程序化 BGM(例:自訂音樂替換模式)
 function bgmSetEnabled(on) {
+  if (BG.audi) {
+    BG.audiPrev = !!on;
+    return;
+  }
   BG.enabled = !!on;
   if (!BG.enabled && BG.running && bgAudioReady()) bgHalt(bgNow());
 }
@@ -896,6 +1304,9 @@ function bgmStats() {
     scene: BG.scene,
     running: BG.running,
     forced: BG.forced,
+    group: BG.cur ? BG.cur.group : null,
+    track: BG.cur ? BG.cur.tid : null,
+    intensity: BG.intensity,
     tracks: BG.tracks.length,
     voices: bgVoices(now),
     peakVoices: BG.stats.peak,

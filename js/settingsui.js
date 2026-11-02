@@ -11,6 +11,7 @@ let stRootEl = null;
 let stBodyEl = null;
 let stVerText = '';
 let stVerEl = null;
+let stBgmOpen = false;
 let stExtraRows = [];   // settingsAddRow 登記的列:{ label, onclick, group }
 
 function stClone(o) {
@@ -215,6 +216,65 @@ function stExtraNodes(group) {
   });
 }
 
+// 背景音樂曲目:每個場景一列「選單 + 試聽」,選擇存在 bgm.js 的 localStorage(lorddomain.bgm.pick)
+function stBgmRow(g) {
+  const key = g[0];
+  const aud = bgmAuditing();
+  const cur = bgmPickGet(key);
+  const tracks = bgmTracks(key);
+  const row = stEl('div', 'st-bgm-row');
+  row.appendChild(stEl('span', 'st-bgm-l', g[1]));
+  const sel = document.createElement('select');
+  sel.className = 'st-bgm-s';
+  sel.setAttribute('aria-label', g[1] + '曲目');
+  const o0 = document.createElement('option');
+  o0.value = 'auto';
+  o0.textContent = '自動輪播';
+  sel.appendChild(o0);
+  tracks.forEach(function (t) {
+    const o = document.createElement('option');
+    o.value = t.id;
+    o.textContent = t.name;
+    sel.appendChild(o);
+  });
+  sel.value = cur;
+  const playing = !!(aud && aud.group === key);
+  const play = stEl('button', 'st-bgm-p' + (playing ? ' on' : ''), playing ? '■' : '▶');
+  play.setAttribute('aria-label', playing ? '停止試聽' : '試聽');
+  sel.addEventListener('change', function () {
+    bgmPickSet(key, sel.value);
+    if (playing) bgmAudition(key, sel.value);
+    stRender();
+  });
+  play.addEventListener('click', function () {
+    if (playing) {
+      bgmAuditionStop();
+    } else {
+      if (typeof AU === 'object' && AU.unlock) AU.unlock();
+      bgmAudition(key, sel.value);
+    }
+    stRender();
+  });
+  row.appendChild(sel);
+  row.appendChild(play);
+  const hit = tracks.filter(function (t) { return t.id === cur; })[0];
+  const shown = playing ? tracks.filter(function (t) { return t.id === aud.id; })[0] : hit;
+  const desc = shown ? shown.name + ':' + shown.desc + '(' + shown.bpm + ' BPM)' : '每次進入場景依序換一首,共 ' + tracks.length + ' 首';
+  const wrap = stEl('div', '');
+  wrap.appendChild(row);
+  wrap.appendChild(stEl('div', 'st-bgm-d', desc));
+  return wrap;
+}
+
+function stBgmCard() {
+  const body = stEl('div', 'st-bgm');
+  if (stBgmOpen) {
+    bgmGroups().forEach(function (g) { body.appendChild(stBgmRow(g)); });
+    body.appendChild(stEl('p', 'st-bgm-h', '選好的曲目於下次進入該場景時播放;▶ 立即試聽,離開設定自動恢復。若已為該場景指定自訂音樂,以自訂音樂優先。'));
+  }
+  return stCard('🎼', '背景音樂曲目', '每個場景可選曲目,或自動輪播', 'fold', stBgmOpen, function () { stBgmOpen = !stBgmOpen; stRender(); }, stBgmOpen ? body : null);
+}
+
 function stSoundSec() {
   const cfg = settingsGet();
   const nodes = [
@@ -222,14 +282,17 @@ function stSoundSec() {
       settingsSet('quiet', v);
       stRender();
     })),
-    stVolBlock('音樂', 'music'),
+    stVolBlock('音樂', 'music')
+  ];
+  if (typeof bgmGroups === 'function' && typeof bgmAudition === 'function') nodes.push(stBgmCard());
+  nodes.push(
     stVolBlock('音效', 'sfx'),
     stVolBlock('環境音', 'amb'),
     stRow('跟隨靜音鍵', stSwitch(cfg.followSilent, function (v) {
       settingsSet('followSilent', v);
       stRender();
     }))
-  ];
+  );
   return stSec('聲音', nodes.concat(stExtraNodes('聲音')));
 }
 
@@ -488,6 +551,7 @@ function stClosePanel() {
   if (!stRootEl) return;
   stRootEl.classList.remove('st-open');
   stIsOpen = false;
+  if (typeof bgmAuditionStop === 'function') bgmAuditionStop();
   stDangerOpen = false;
 }
 

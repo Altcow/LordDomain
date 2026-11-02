@@ -18,7 +18,7 @@ const LIFE = {
   seedLeft: 0, seedFail: 0, road: null, buck: null, seeded: false, reseed: false,
   lastT: null, clock: 0, sigT: 0, spawnT: 0.5, chatT: 0, sprT: 0, statT: 0, tod: 'noon',
   bfsBudget: 1, dots: 0, pairCmp: 0, chatHead: null, chatNext: null, tradeAt: new Map(),
-  drawAcc: 0, wallT: -1, fps: 0, perfLog: false, sprBytes: 0, specs: {}, variantIds: {},
+  portT: 0, portTarget: 0, xT: 0, xSeed: 6, xCd: {}, xTarget: null, dockRes: new Map(), spotRes: new Set(), lowEnd: undefined, drawAcc: 0, wallT: -1, fps: 0, perfLog: false, sprBytes: 0, specs: {}, variantIds: {},
   perf: { ms: 0 }, card: null, cardFor: null
 };
 
@@ -111,7 +111,7 @@ function lifeRoadSig() {
   for (let i = 0; i < N; i++) {
     const n = world.occ[i];
     const o = n ? world.objects[n - 1] : null;
-    let t = world.terrain[i] | (world.height[i] << 2);
+    let t = world.terrain[i] | (world.height[i] << 3);
     if (o) {
       let th = 0;
       for (let c = 0; c < o.type.length; c++) th = (th * 31 + o.type.charCodeAt(c)) | 0;
@@ -156,6 +156,11 @@ function lifeFindDoor(o, ok) {
   return null;
 }
 
+// 地面鋪面物件(OBJECTS[type].walk === true,如 plaza_stone / plaza_earth):路人可踩過,視為可走格
+function lifeWalkObj(t) {
+  return typeof OBJECTS !== 'undefined' && !!OBJECTS[t] && OBJECTS[t].walk === true;
+}
+
 // 可穿越的門類 3×1(中格可走,兩側為柱/牆不可走);通行軸由 rot 決定(0/2 南北、1/3 東西)
 const LIFE_PASS_TYPES = { gate: 1, paifang: 1, toll_gate: 1, gate_courtyard: 1 };
 
@@ -181,6 +186,7 @@ function lifeRebuild() {
     if (tp === 'stairs' || tp === 'ramp') stairs[i] = 1;
     if (gm[i] || tp === 'bridge') { ok[i] = 1; continue; }
     if (world.terrain[i] === T_ROAD && (!obj || tp === 'stairs' || tp === 'ramp')) ok[i] = 1;
+    else if (obj && world.terrain[i] !== T_LAKE && world.terrain[i] !== T_RIVER && lifeWalkObj(tp)) ok[i] = 1; // 鋪面(walk:true,如廣場石板)可踩
   }
   for (i = 0; i < N; i++) {
     if (!ok[i]) continue;
@@ -225,16 +231,20 @@ function lifeRebuild() {
     });
     for (k = 0; k < ends.length && k < 3; k++) ent.push({ cell: ends[k], ox: 0, oy: 0 });
   }
-  const dests = [], bcount = {};
+  const dests = [], bcount = {}, pdoors = [], pcells = {};
   for (k = 0; k < world.objects.length; k++) {
     o = world.objects[k];
+    if (LIFE_PORT_TYPES[o.type]) {
+      const pdr = lifeFindDoor(o, ok);
+      if (pdr) { pdoors.push({ type: o.type, cell: pdr.cell, bx: pdr.bx, by: pdr.by }); pcells[pdr.cell] = 1; }
+    }
     if (LIFE_DEST_TYPES.indexOf(o.type) < 0) continue;
     const d = lifeFindDoor(o, ok);
     if (!d) continue;
     dests.push({ type: o.type, cell: d.cell, bx: d.bx, by: d.by });
     bcount[o.type] = (bcount[o.type] || 0) + 1;
   }
-  LIFE.road = { ok: ok, nb: nb, list: list, ent: ent, dests: dests, bcount: bcount, dc: new Map(), q: new Int32Array(N), sig: lifeRoadSig(), spots: [], patrol: null };
+  LIFE.road = { ok: ok, nb: nb, list: list, ent: ent, dests: dests, bcount: bcount, port: pdoors, portCells: pcells, dc: new Map(), q: new Int32Array(N), sig: lifeRoadSig(), spots: [], patrol: null };
   const R = LIFE.road;
   // 閒逛停點:道路格等距抽樣(確定性),讓距離場數量有上限
   const step = Math.max(1, Math.floor(list.length / LIFE_IDLE_SPOTS));
@@ -253,12 +263,15 @@ function lifeRebuild() {
     LIFE.buck = [];
     for (k = 0; k < MAP_W + MAP_H; k++) LIFE.buck.push([]);
   }
+  if (typeof lifeTrafficBuild === 'function') lifeTrafficBuild(ok);
   // 站在被拆掉道路上(或下一步要踏上去)的人直接淡出
   LIFE.npcs.forEach(n => {
     if (n.st === 'fade' || n.st === 'enter' || n.st === 'exit') return;
+    if (n.stat) { if (typeof lifeTrafficStatOk === 'function' && !lifeTrafficStatOk(n)) lifeFadeOut(n); return; }
     const fx = Math.floor(n.x), fy = Math.floor(n.y);
     const onGround = fx >= 0 && fy >= 0 && fx < MAP_W && fy < MAP_H && !ok[idx(fx, fy)];
     if (onGround || (n.cur >= 0 && !ok[n.cur]) || (n.nx >= 0 && !ok[n.nx])) lifeFadeOut(n);
+    else if (n.port && (!pcells[n.pa] || !(pcells[n.pb] || ok[n.pb]))) lifeFadeOut(n);
   });
 }
 
@@ -405,11 +418,11 @@ function lifePickType() {
 }
 
 // 外觀:ART.UNIT 的 NPC 基本外觀;civil 外觀有一半機率換成替代服色(id 加 _a),變體總數遠低於 40
-function lifeSpecFor(look) {
+function lifeSpecFor(look, alt) {
   if (typeof ART === 'undefined' || !ART.UNIT || !ART.UNIT[look]) return null;
   const base = ART.UNIT[look];
   LIFE.variantIds[look] = true;
-  if (!base.civil || Math.random() < 0.5) return base;
+  if (!base.civil || !(alt === undefined ? Math.random() >= 0.5 : alt)) return base;
   const vid = look + '_a';
   let s = LIFE.specs[vid];
   if (!s) {
@@ -427,8 +440,10 @@ function lifeNew(key, T, start, plan) {
   const look = T.looks[Math.floor(Math.random() * T.looks.length)];
   return {
     id: ++LIFE.nid, type: key, name: LIFE_NAMES[Math.floor(Math.random() * LIFE_NAMES.length)],
-    look: look, spec: lifeSpecFor(look), col: LIFE_PH_COL[key] || '#888888',
+    look: look, spec: lifeSpecFor(look), col: LIFE_PH_COL[key] || (typeof LIFE_XPH_COL !== 'undefined' && LIFE_XPH_COL[key]) || '#888888',
     st: 'walk', t: 0, dur: 0, act: '', life: 0, alpha: 0, acc: 0, cd: 0, dead: false, onS: false,
+    port: false, pa: -1, pb: -1, specL: null, specE: null,
+    ext: false, role: '', stat: false, keep: false, dock: -1, pc: -1, host: null, hand: null, squad: 0, bub: '', bubP: 6, frr: 4, fid: false, bx: 0, by: 0, hh: 0,
     x: 0, y: 0, px: 0, py: 0, cur: start, nx: -1, tx: 0, ty: 0, goal: plan[0].cell, plan: plan, pi: 0,
     lane: 0.12, spd: T.spd, ph: Math.random() * 2, wait: 0, det: 0, loop: false, hold: 0,
     fx: 0, fy: 0, ex: 0, ey: 0, ddx: 0, ddy: 0, ox: 0, oy: 0, pair: null, gi: -1,
@@ -445,7 +460,7 @@ function lifeEmit(T, key, count, start, plan, entry, mid, o) {
   let made = 0;
   for (let i = 0; i < count; i++) {
     const n = lifeNew(key, T, start, plan);
-    n.det = o.det || 0; n.lane = lane; n.spd = T.spd * sf; n.loop = !!o.loop; n.hold = (o.stagger || 0) * i;
+    n.det = o.det || 0; n.lane = o.lane === undefined ? lane : o.lane; n.spd = T.spd * sf; n.loop = !!o.loop; n.hold = (o.stagger || 0) * i;
     if (mid) {
       n.x = sx; n.y = sy; n.life = 1;
     } else if (entry && entry.bx !== undefined) {
@@ -551,9 +566,73 @@ function lifeShed(k) {
     for (let i = 0; i < L.length && k > 0; i++) {
       const n = L[i];
       if (n.st !== 'walk' && n.st !== 'act' && n.st !== 'chat') continue;
-      if (n.hold > 0 || (pass === 0 && n.onS)) continue;
+      if (n.hold > 0 || n.port || n.ext || (pass === 0 && n.onS)) continue;
       lifeFadeOut(n);
       k--;
+    }
+  }
+}
+
+// 港口苦力目標數:有門格的港口設施數 × per(進位),受 max 與密度(low 12→2、mid 60→12)約束,再乘時段與季節倍率;沒有就 0
+function lifePortTarget() {
+  const R = LIFE.road, base = LIFE_DENSITY[LIFE.density] || 0;
+  if (!LIFE.on || !base || !R || !R.port.length) return 0;
+  const cap = Math.min(LIFE_PORT.max, Math.max(2, Math.round(base / 5)));
+  const raw = Math.min(cap, Math.ceil(R.port.length * LIFE_PORT.per));
+  const mul = (LIFE_TOD_MUL[LIFE.tod] || 1) * (lifeSeason() === 'winter' ? LIFE_WINTER_MUL : 1);
+  return Math.min(cap, Math.max(1, Math.round(raw * mul)));
+}
+
+// 在一座港口設施的門格生成一名苦力:門格 A(扛貨)↔ 另一座設施門格或閒逛停點 B(卸貨),來回搬運不離場
+function lifePortSpawn() {
+  const R = LIFE.road, P = R.port;
+  const a = P[Math.floor(Math.random() * P.length)];
+  const D = lifeField(a.cell);
+  if (!D) return false;
+  let b = -1;
+  for (let t = 0; t < 6 && b < 0; t++) {
+    const c = P[Math.floor(Math.random() * P.length)];
+    if (c.cell !== a.cell && D[c.cell] >= 0) b = c.cell;
+  }
+  if (b < 0) b = lifePickCell(a.cell);
+  if (b < 0) return false;
+  const T = LIFE_TYPES.coolie;
+  const plan = [
+    { cell: b, act: 'carry', dur: 1.5 + Math.random() * 2, load: false },
+    { cell: a.cell, act: 'carry', dur: 1.5 + Math.random() * 2, load: true }
+  ];
+  if (!lifeEmit(T, 'coolie', 1, a.cell, plan, a, false, { det: 0, loop: true })) return false;
+  const n = LIFE.npcs[LIFE.npcs.length - 1];
+  n.port = true; n.pa = a.cell; n.pb = b;
+  n.specL = n.spec;
+  const el = LIFE_PORT.empty[n.look];
+  n.specE = el ? lifeSpecFor(el, !!n.spec && n.spec.id === n.look + '_a') : n.spec;
+  return true;
+}
+
+// 每 0.5 秒:苦力不足就補(一次最多 3 名),過多則淡出多出的(畫面外優先)
+function lifePortTick(dt) {
+  LIFE.portT -= dt;
+  if (LIFE.portT > 0) return;
+  LIFE.portT = 0.5;
+  const tgt = LIFE.road ? lifePortTarget() : 0;
+  LIFE.portTarget = tgt;
+  const L = LIFE.npcs;
+  let cnt = 0, i;
+  for (i = 0; i < L.length; i++) if (L[i].port && !L[i].dead && L[i].st !== 'fade') cnt++;
+  if (cnt > tgt) {
+    for (let pass = 0; pass < 2 && cnt > tgt; pass++) {
+      for (i = 0; i < L.length && cnt > tgt; i++) {
+        const n = L[i];
+        if (!n.port || n.dead || n.st === 'fade' || (pass === 0 && n.onS)) continue;
+        lifeFadeOut(n);
+        cnt--;
+      }
+    }
+  } else {
+    for (let k = 0; k < 3 && cnt < tgt; k++) {
+      if (!lifePortSpawn()) break;
+      cnt++;
     }
   }
 }
@@ -583,12 +662,15 @@ function lifeReset() {
   LIFE.seeded = false;
   LIFE.seedLeft = 0;
   LIFE.spawnT = 0.5;
+  LIFE.portT = 0;
   LIFE.chatT = 0;
+  if (typeof lifeTrafficReset === 'function') lifeTrafficReset();
   lifeCardHide();
 }
 
 function lifeArrive(n) {
   const s = n.plan[n.pi];
+  if (n.port && s.load !== undefined) n.spec = s.load ? n.specL : n.specE;
   n.t = 0;
   n.ex = n.x; n.ey = n.y;
   if (s.end === 'enter') {
@@ -608,14 +690,16 @@ function lifeArrive(n) {
     }
     n.st = 'act'; n.act = act;
     n.dur = act === 'queue' ? 4 + Math.random() * 3 : s.dur;
+    if (act === 'park' && typeof lifeTrafficParked === 'function') lifeTrafficParked(n);
   }
 }
 
 // 進行到行程的下一站;巡邏循環、超過壽命則改走向入口離場。回傳 false 表示無路可走
 function lifeNextStop(n) {
+  if (n.ext && typeof lifeTrafficLeave === 'function') lifeTrafficLeave(n);
   if (n.pi + 1 < n.plan.length) {
     n.pi++;
-  } else if (n.loop && n.life < LIFE_MAX_LIFE) {
+  } else if (n.loop && (n.port || n.keep || n.life < LIFE_MAX_LIFE)) {
     n.pi = 0;
   } else {
     const ex = lifePickEnt(n.cur, null);
@@ -629,6 +713,7 @@ function lifeNextStop(n) {
 }
 
 function lifeFadeOut(n) {
+  if (n.ext && typeof lifeTrafficLeave === 'function') lifeTrafficLeave(n, true);
   if (n.pair) {
     const p = n.pair;
     if (p.pair === n) { p.pair = null; if (p.st === 'chat') { p.st = 'walk'; p.cd = 20; } }
@@ -695,7 +780,10 @@ function lifeAdvance(n, dt) {
       break;
     case 'act':
       n.t += dt;
-      if (n.t >= n.dur && !lifeNextStop(n)) lifeFadeOut(n);
+      if (n.t >= n.dur) {
+        if (n.stat) lifeFadeOut(n);
+        else if (!lifeNextStop(n)) lifeFadeOut(n);
+      }
       break;
     case 'enter': {
       n.t += dt;
@@ -722,7 +810,7 @@ function lifeAdvance(n, dt) {
 }
 
 function lifeChatOk(a) {
-  return a.st === 'walk' && a.cd <= 0 && a.life >= 1 && !a.dead && a.onS && !a.pair && !(a.hold > 0);
+  return a.st === 'walk' && a.cd <= 0 && a.life >= 1 && !a.dead && a.onS && !a.pair && !(a.hold > 0) && !a.ext;
 }
 
 function lifeCellOf(x, y, GW, GH) {
@@ -843,7 +931,7 @@ function lifeAdapt(dt, t0) {
 function lifeStats() {
   return {
     n: LIFE.npcs.length, target: LIFE.target, ms: Math.round(LIFE.perf.ms * 100) / 100,
-    fps: Math.round(LIFE.fps), level: LIFE.level
+    fps: Math.round(LIFE.fps), level: LIFE.level, ext: LIFE.npcs.filter(n => n.ext).length
   };
 }
 
@@ -879,6 +967,8 @@ function lifeFrame(time) {
     LIFE.seedLeft = Math.max(0, Math.floor(LIFE.target * 0.6) - LIFE.live);
   }
   lifeSpawnTick(dt);
+  lifePortTick(dt);
+  if (typeof lifeTrafficTick === 'function') lifeTrafficTick(dt);
   LIFE.chatT -= dt;
   if (LIFE.chatT <= 0) { LIFE.chatT = 0.5; lifeChatCheck(); }
 
@@ -915,12 +1005,13 @@ function lifeFrame(time) {
   for (let i = 0; i < L.length; i++) {
     const n = L[i];
     if (n.dead) {
+      if (n.ext && typeof lifeTrafficLeave === 'function') lifeTrafficLeave(n, true);
       if (n.pair) { const p = n.pair; if (p.pair === n) { p.pair = null; if (p.st === 'chat') p.st = 'walk'; } n.pair = null; }
       if (LIFE.cardFor === n) lifeCardHide();
       continue;
     }
     L[w++] = n;
-    if (n.st === 'walk' || n.st === 'act' || n.st === 'chat') live++;
+    if (!n.port && !n.ext && (n.st === 'walk' || n.st === 'act' || n.st === 'chat')) live++;
     if (n.st === 'act' && n.act === 'trade') tradeAt.set(n.goal, (tradeAt.get(n.goal) || 0) + 1);
   }
   L.length = w;
@@ -955,7 +1046,7 @@ function lifeDrawOne(ctx, n, res, tod, season, useArt, alpha) {
   if (useArt && n.spec) {
     const pp = n.pp, f = lifeFaceF(n.fx, n.fy), flip = f === 2 || f === 3;
     pp.spec = n.spec; pp.x = n.px; pp.y = n.py; pp.f = (f === 1 || f === 2) ? 1 : 0;
-    pp.fr = n.st === 'walk' ? Math.floor(LIFE.clock * 4 + n.ph) % 2 : 0;
+    pp.fr = n.st === 'walk' ? Math.floor(LIFE.clock * n.frr + n.ph) % 2 : (n.fid ? Math.floor(LIFE.clock * 0.8 + n.ph * 2) % 2 : 0);
     pp.alpha = alpha;
     if (flip) { ctx.save(); ctx.translate(n.px, 0); ctx.scale(-1, 1); ctx.translate(-n.px, 0); }
     ART.chibiPose(ctx, pp, res, tod, season);
@@ -1018,6 +1109,9 @@ function lifeDrawDiag(ctx, d, time) {
       } else if (n.type === 'vendor' && n.st === 'walk' && ((LIFE.clock + n.ph * 3) % 7) < 1.6) {
         // 挑擔商販沿路叫賣
         ART.bubble(ctx, n.px, n.py, 'talk', LIFE.clock, res, n.spec.scale || 1);
+      } else if (n.bub && (n.st === 'walk' || n.st === 'act') && ((n.act === 'hawk' && n.st === 'act') || ((LIFE.clock + n.ph * 3) % n.bubP) < 1.6)) {
+        // 街景角色(走販 / 叫賣者 / 圍觀者)的頭上泡泡
+        ART.bubble(ctx, n.px, n.py, n.bub, LIFE.clock, res, n.spec.scale || 1);
       }
     }
   }
@@ -1046,10 +1140,11 @@ function lifeTap(sx, sy) {
 }
 
 function lifeGreetNext(n) {
-  let k = Math.floor(Math.random() * LIFE_GREET.length);
-  if (LIFE_GREET.length > 1) while (k === n.gi) k = Math.floor(Math.random() * LIFE_GREET.length);
+  const G = (typeof LIFE_LINES !== 'undefined' && LIFE_LINES[n.type]) || LIFE_GREET;
+  let k = Math.floor(Math.random() * G.length);
+  if (G.length > 1) while (k === n.gi) k = Math.floor(Math.random() * G.length);
   n.gi = k;
-  return LIFE_GREET[k];
+  return G[k];
 }
 
 function lifeCardMake() {
@@ -1089,7 +1184,7 @@ function lifeCardShow(n) {
   if (!c) return;
   LIFE.cardFor = n;
   c.nameEl.textContent = n.name;
-  c.typeEl.textContent = LIFE_TYPES[n.type].name;
+  c.typeEl.textContent = (typeof LIFE_LOOK_TITLE !== 'undefined' && LIFE_LOOK_TITLE[n.look]) || LIFE_TYPES[n.type].name;
   c.greet.textContent = '「' + lifeGreetNext(n) + '」';
   c.box.style.display = 'block';
 }

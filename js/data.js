@@ -2,6 +2,12 @@ const TW = 64, TH = 32, HL = 16;
 const MAP_W = 56, MAP_H = 56, MAX_H = 2;
 
 const T_GRASS = 0, T_LAKE = 1, T_RIVER = 2, T_ROAD = 3;
+// 純視覺地形:沙地 / 裂地(乾旱龜裂)/ 雪地。玩法一律等同草地(可走、可蓋、高度規則相同)。
+// 判斷「是否為陸地草地類」一律用下列輔助函式,不要自行比對 T_GRASS;未知的大值(>= T_SAND)也當草地類,讀檔不崩潰。
+const T_SAND = 4, T_CRACK = 5, T_SNOW = 6;
+function isGroundTerrain(t) { return t === T_GRASS || t >= T_SAND; }
+function terrainBase(t) { return t >= T_SAND ? T_GRASS : t; }               // 規則用地形(沙/裂/雪 → 草地)
+function terrainOn(d, t) { return d.on.indexOf(terrainBase(t)) >= 0; }      // 物件定義 d.on 是否允許放在地形 t
 
 // 方向索引: 0=(-1,0) 1=(0,-1) 2=(+1,0) 3=(0,+1)
 const DIRS = [[-1, 0], [0, -1], [1, 0], [0, 1]];

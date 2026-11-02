@@ -370,7 +370,7 @@ function mioSimVer() { return typeof SIM_VER !== 'undefined' ? SIM_VER : 1; }
 // 舊版錄影(rep.v 低於目前 SIM_VER:戰鬥規則已更新,重算 checksum 不符)不可重播,只保留文字戰報
 const REPLAY_OLD_TEXT = '舊版錄影(戰鬥規則已更新),無法重播';
 function replayIsOldVer(rep) {
-  return !!rep && typeof rep === 'object' && (rep.v | 0) < mioSimVer();
+  return !!rep && typeof rep === 'object' && ((rep.v | 0) < mioSimVer() || !(rep.maxTicks > 0));   // 缺 maxTicks(SIM_VER 4 之前的錄影)視為舊版
 }
 function mioHz() { return typeof SIM_HZ !== 'undefined' ? SIM_HZ : 10; }
 function mioDeep(v) { return JSON.parse(JSON.stringify(v)); }
@@ -519,7 +519,7 @@ function replayMake(b, snap, meta) {
     pop: mioDeployPop(b), traps: trimmed.hidden.objects.length
   };
   const base = {
-    v: mioSimVer(), kind: b.kind, refId: b.refId || null, atk: meta.atk || null, def: snap.def || null,
+    v: mioSimVer(), maxTicks: b.limitTick, kind: b.kind, refId: b.refId || null, atk: meta.atk || null, def: snap.def || null,
     snapHash: snap.snapHash, result: result, merits: stars, checksum: mioChecksum(b),
     ts: meta.ts != null ? meta.ts : Date.now()
   };
@@ -529,7 +529,7 @@ function replayMake(b, snap, meta) {
   try {
     const init = {
       kind: b.kind, seed: b.seed, refId: b.refId || null, map: battleMapOf(snapFull(trimmed)),
-      popCap: army.popCap
+      popCap: army.popCap, limitTick: b.limitTick
     };
     const re = runHeadless(init, cmds, b.limitTick);
     ok = mioChecksum(re) === base.checksum;

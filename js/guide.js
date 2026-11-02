@@ -59,7 +59,8 @@ var GUIDE_TOPICS = [
     { target: ['#sideBar [data-px="photo"]', '#sideMore'], text: '拍照模式會隱藏所有介面方便截圖,畫面上只留一顆還原鈕。' }
   ] },
   { id: 'recorder', title: '錄影', feat: 'recorder', mode: 'estate', steps: [
-    { target: '#btnMenu', text: '想把領地錄下來:點 ⚙ 設定,在「拍攝」區找「🎬 拍攝錄影」。' }
+    { target: '#btnMenu', text: '想把領地錄下來:點 ⚙ 設定,在「拍攝」區找「🎬 拍攝錄影」。' },
+    { target: '#btnMenu', text: '錄影面板可選運鏡:手動運鏡自己拖曳(速度會自動限制,不會滑太快)、路徑導覽照路點飛行。iPhone 建議選「運鏡模式」,再用系統螢幕錄影來錄。' }
   ] },
   { id: 'shop', title: '商店', feat: 'shop', mode: 'estate', steps: [
     { target: ['#sideBar [data-px="shop"]', '#btnShop', '#sideMore'], text: '商店開放了:可以買建築與道具,每日特賣會換品項。' }

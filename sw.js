@@ -1,4 +1,4 @@
-const VERSION = 'v24';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v25';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const PRECACHE = [
@@ -33,6 +33,11 @@ const PRECACHE = [
   './js/art_deco3.js',
   './js/art_deco4.js',
   './js/art_deco5.js',
+  './js/art_port.js',
+  './js/art_town.js',
+  './js/art_set.js',
+  './js/combos.js',
+  './js/art_traffic.js',
   './js/art_wallskin.js',
   './js/render.js',
   './js/tddraw.js',
@@ -41,6 +46,7 @@ const PRECACHE = [
   './js/lifedata.js',
   './js/roster_data.js',
   './js/citylife.js',
+  './js/citytraffic.js',
   './js/panorama.js',
   './js/audiodata.js',
   './js/audio.js',

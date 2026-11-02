@@ -1291,7 +1291,7 @@ function rpEl(tag, cls, text) {
 }
 
 function rpPlayable(rep) {
-  return !!rep && rep.v === SIM_VER && !!rep.snap && typeof rep.snap === 'object' && Array.isArray(rep.cmds) &&
+  return !!rep && rep.v === SIM_VER && rep.maxTicks > 0 && !!rep.snap && typeof rep.snap === 'object' && Array.isArray(rep.cmds) &&
     rep.army != null && rep.seed != null;
 }
 
@@ -1496,6 +1496,7 @@ function rpPlay(rep) {
     '・' + (rep.result && rep.result.stars ? atkStars(rep.result.stars) : '敗');
   rp.lines.innerHTML = '';
   (rep.text || []).forEach(t => rp.lines.appendChild(rpEl('p', '', t)));
+  rp.slide.max = rep.maxTicks;
   rp.slide.value = 0;
   rp.bar.hidden = false;
   atkSync();
@@ -1509,12 +1510,12 @@ function rpStart(tick) {
   // 錄影的 army 為 { popCap }(人口制);舊格式陣列或缺值一律以預設上限重跑(指令已記錄,不另行解讀兵力)
   const cap = rep.army && typeof rep.army === 'object' && !Array.isArray(rep.army) && rep.army.popCap > 0 ? rep.army.popCap | 0 : TD_POP_CAP;
   const b = battleInit({
-    kind: rep.kind || 'npc', seed: rep.seed, refId: rep.refId || null, map: battleMapOf(snapFull(rep.snap)), popCap: cap
+    kind: rep.kind || 'npc', seed: rep.seed, refId: rep.refId || null, map: battleMapOf(snapFull(rep.snap)), popCap: cap, limitTick: rep.maxTicks | 0
   });
   b.cmds = JSON.parse(JSON.stringify(rep.cmds));
   rp.checked = null;
   battle = b;
-  const want = Math.max(0, Math.min(BATTLE_TICKS, tick | 0));
+  const want = Math.max(0, Math.min(rep.maxTicks, tick | 0));
   while (b.tick < want && !b.over) simTick(b);
   return b;
 }
@@ -1522,7 +1523,7 @@ function rpStart(tick) {
 // 進度條:往後拖直接快進;往回拖從頭重建後快跑到該 tick(不繪製,由 simTick 純邏輯完成)
 function rpSeek(tick) {
   if (!rp.on) return;
-  const want = Math.max(0, Math.min(BATTLE_TICKS, tick | 0));
+  const want = Math.max(0, Math.min(rp.rep.maxTicks, tick | 0));
   if (battle && want >= battle.tick) {
     while (battle.tick < want && !battle.over) simTick(battle);
   } else {
@@ -1557,7 +1558,7 @@ function rpPaint() {
   if (b.over) msg = rp.checked === true ? '播放完畢 ・ 重播校驗一致 ✔' : (rp.checked === false ? '播放完畢 ・ 重播校驗不一致(錄影可能損毀)' : '播放完畢');
   else if (game.simSpeed === 0) msg = '已暫停';
   if (!rp.drag) {
-    rp.time.textContent = sandClock(b.tick) + ' / ' + sandClock(BATTLE_TICKS);
+    rp.time.textContent = sandClock(b.tick) + ' / ' + sandClock(rp.rep.maxTicks);
     rp.slide.value = b.tick;
   }
   rp.msg.textContent = msg;
@@ -1599,7 +1600,7 @@ function rpBuildBar() {
   rp.slide.step = 1;
   rp.slide.addEventListener('input', () => {
     rp.drag = true;
-    rp.time.textContent = sandClock(+rp.slide.value) + ' / ' + sandClock(BATTLE_TICKS);
+    rp.time.textContent = sandClock(+rp.slide.value) + ' / ' + sandClock(rp.rep ? rp.rep.maxTicks : BATTLE_TICKS);
   });
   rp.slide.addEventListener('change', () => rpSeek(+rp.slide.value));
   prog.appendChild(rp.slide);

@@ -152,36 +152,36 @@ const PROG_NPC_SLOTS = 3;   // 野營榜同時顯示幾座(結構)
 const PROG_GHOST_SLOTS = 3; // 他城榜同時顯示幾座(結構)
 
 // ───────── 6. 等級開放表(結構:不是平衡數字)─────────
-// 經營建築:BUILD_GROUPS 的實際 id(research 不在分組內);共 171 件全覆蓋(tools/prog/prog_check.js 驗證)
+// 經營建築:BUILD_GROUPS 的實際 id(research 不在分組內);共 200 件全覆蓋(tools/prog/prog_check.js 驗證)
 const PROG_UNLOCK_ESTATE = {
-  1: ['house', 'palace', 'lumber', 'quarry', 'tree', 'stone', 'well', 'field_sprout', 'vegetable_plot', 'fence_wood', 'woodpile', 'haystack', 'chicken', 'dog', 'deco_bush', 'flower_bed', 'stone_table', 'stone_stool', 'bench_wood'],
-  2: ['field_millet', 'plow', 'hoe', 'ox', 'pig', 'duck', 'barrel_water', 'basket', 'grain_sacks', 'tree_willow', 'deco_rocks', 'table_wood'],
-  3: ['market', 'wall', 'gate', 'stall_veg', 'stall_fruit', 'handcart', 'wheelbarrow', 'cat', 'tree_pine', 'road_stone', 'table_long'],
-  4: ['stairs', 'ramp', 'shield', 'training_dummy', 'deco_target', 'deco_weaponrack', 'flag_army', 'sheep', 'trough', 'fodder', 'hu_chuang'],
-  5: ['shop_rice', 'shop_wine', 'stall_rice', 'stall_meat', 'stall_wine', 'winejar', 'winejar_big', 'food_table', 'mat', 'broom', 'privy', 'table_set'],
-  6: ['bridge', 'fish_rack', 'fishery', 'dock', 'boat_small', 'lotus', 'reeds', 'deco_pond', 'small_bridge', 'barrel_empty', 'goose', 'chair_bamboo'],
-  7: ['research', 'archer', 'bookshelf', 'shop_book', 'stall_book', 'stele', 'lamp_stand', 'deco_bamboo', 'fence_bamboo', 'screen_fold'],
-  8: ['post_station', 'inn', 'cart_hay', 'cart_goods', 'cart_empty', 'donkey', 'horse', 'stable', 'tree_maple', 'stools_pair'],
-  9: ['shop_cloth', 'stall_cloth', 'stall_pottery', 'stall_tea', 'shop_tea', 'tea_garden', 'bank', 'shop_pawn', 'tea_set'],
-  10: ['cavalry', 'parade_ground', 'drill_ground', 'wall_courtyard', 'gate_courtyard', 'deco_campfire', 'deco_jumaa', 'deco_lujiao', 'low_table_cushion'],
+  1: ['house', 'palace', 'lumber', 'quarry', 'tree', 'stone', 'well', 'field_sprout', 'vegetable_plot', 'fence_wood', 'woodpile', 'haystack', 'chicken', 'dog', 'deco_bush', 'flower_bed', 'stone_table', 'stone_stool', 'bench_wood', 'hut_ruin', 'hut_mud', 'shack_lean', 'wall_ruin', 'fence_broken', 'junk_pile', 'tree_dead', 'gate_wicker'],
+  2: ['tbl_wood', 'tbl_stone', 'stool_wood', 'field_millet', 'plow', 'hoe', 'ox', 'pig', 'duck', 'barrel_water', 'basket', 'grain_sacks', 'tree_willow', 'deco_rocks', 'table_wood', 'hut_plank', 'hut_collapsed', 'yard_poor', 'well_old', 'rack_net', 'rack_cloth', 'ground_veg', 'ground_sandal'],
+  3: ['tbl_low', 'tbl_meal', 'cushion_round', 'grain_drying', 'lantern_post', 'market', 'wall', 'gate', 'stall_veg', 'stall_fruit', 'handcart', 'wheelbarrow', 'cat', 'tree_pine', 'road_stone', 'table_long', 'cave_dwelling', 'shed_livestock', 'plaza_earth', 'ground_goods', 'ground_bamboo', 'hawker_carrier', 'water_vat', 'food_noodle'],
+  4: ['tbl_long', 'tbl_meal_long', 'tbl_chess', 'chair_wood', 'tent_small', 'stairs', 'ramp', 'shield', 'training_dummy', 'deco_target', 'deco_weaponrack', 'flag_army', 'sheep', 'trough', 'fodder', 'hu_chuang', 'house_tile', 'hitching_post', 'notice_board', 'ground_pottery', 'food_wonton'],
+  5: ['tbl_big', 'tbl_tea', 'tbl_wine', 'shop_rice', 'shop_wine', 'stall_rice', 'stall_meat', 'stall_wine', 'winejar', 'winejar_big', 'food_table', 'mat', 'broom', 'privy', 'table_set', 'bamboo_house', 'plaza_stone', 'vendor_platform', 'banner_wine', 'banner_cloth', 'ground_cloth', 'food_hubing', 'storyteller'],
+  6: ['tbl_round', 'tbl_wine_long', 'tbl_book', 'bridge', 'fish_rack', 'fishery', 'dock', 'boat_small', 'lotus', 'reeds', 'deco_pond', 'small_bridge', 'barrel_empty', 'goose', 'chair_bamboo', 'ground_iron', 'ground_old', 'banner_herb', 'barber_stand', 'fortune_stall'],
+  7: ['tbl_tea_long', 'tbl_study', 'research', 'archer', 'bookshelf', 'shop_book', 'stall_book', 'stele', 'lamp_stand', 'deco_bamboo', 'fence_bamboo', 'screen_fold'],
+  8: ['tbl_feast', 'tbl_low_meal', 'post_station', 'inn', 'cart_hay', 'cart_goods', 'cart_empty', 'donkey', 'horse', 'stable', 'tree_maple', 'stools_pair', 'boat_sampan', 'pier_plank', 'mooring_post', 'cargo_sacks', 'cargo_crates', 'perform_ring', 'livestock_pen', 'smith_awning'],
+  9: ['stone_lion', 'shop_cloth', 'stall_cloth', 'stall_pottery', 'stall_tea', 'shop_tea', 'tea_garden', 'bank', 'shop_pawn', 'tea_set', 'wharf_platform', 'cargo_jars', 'port_lamp', 'house_gentry'],
+  10: ['tbl_banquet', 'chair_taishi', 'spirit_wall', 'cavalry', 'parade_ground', 'drill_ground', 'wall_courtyard', 'gate_courtyard', 'deco_campfire', 'deco_jumaa', 'deco_lujiao', 'low_table_cushion', 'warehouse_port', 'ship_cargo', 'cargo_salt', 'fish_market', 'plaza_center'],
   11: ['field_wheat', 'mulberry_grove', 'orchard', 'herb_garden', 'beehive', 'millstone', 'winnower', 'granary_round', 'sheepfold', 'ranch_fence'],
-  12: ['deco_lumberyard', 'sawbench', 'lograft', 'mine_entrance', 'minecart', 'ore_stone', 'ore_iron', 'ore_copper', 'smithy', 'shop_smith'],
+  12: ['deco_lumberyard', 'sawbench', 'lograft', 'mine_entrance', 'minecart', 'ore_stone', 'ore_iron', 'ore_copper', 'smithy', 'shop_smith', 'ship_grain', 'crane_pole', 'cargo_silk'],
   13: ['she_altar', 'incense_burner', 'censer', 'stone_lamp', 'tree_cypress', 'potted_plant'],
-  14: ['shop_herb', 'shop_rouge', 'stall_rouge', 'stall_toy', 'couch', 'screen', 'chest', 'winejar_stack', 'winejar_mix'],
-  15: ['siege', 'army_camp', 'tent_group', 'flag_great', 'drum_tower', 'well_sweep'],
-  16: ['tree_mulberry', 'deco_brazier', 'paifang'],
+  14: ['shop_herb', 'shop_rouge', 'stall_rouge', 'stall_toy', 'couch', 'screen', 'chest', 'winejar_stack', 'winejar_mix', 'mansion_great'],
+  15: ['siege', 'army_camp', 'tent_group', 'flag_great', 'drum_tower', 'well_sweep', 'shipyard'],
+  16: ['tree_mulberry', 'deco_brazier', 'paifang', 'ship_tower'],
   17: ['saltfield', 'salt_pile', 'waterwheel', 'oxcart', 'deco_oxcart'],
-  18: ['toll_gate', 'beacon', 'deco_watchtower', 'ferry', 'deco_stable'],
+  18: ['toll_gate', 'beacon', 'deco_watchtower', 'ferry', 'deco_stable', 'mansion_clan'],
   19: ['tent_general', 'war_chariot', 'cloud_ladder', 'ram'],
   20: ['trebuchet', 'jinglan', 'warship'],
   21: ['shop_gamble', 'carriage'],
-  22: ['rockery', 'tree_sakura', 'tree_peach'],
+  22: ['rockery', 'tree_sakura', 'tree_peach', 'manor_estate'],
   23: ['lantern_line'],
   24: ['shop_brothel'],
   25: []
 };
 // 地形工具(經營與戰陣共用)
-const PROG_UNLOCK_TERRAIN = { 1: ['road', 'grass', 'erase'], 4: ['raise', 'lower'], 6: ['lake', 'river'] };
+const PROG_UNLOCK_TERRAIN = { 1: ['road', 'grass', 'erase'], 3: ['sand'], 4: ['raise', 'lower'], 5: ['crack'], 6: ['lake', 'river'], 7: ['snow'] };
 // 戰陣物件(CAMP_OBJECTS 26 件 + 共用的 wall/gate/stairs/ramp/bridge;tree/stone 跟經營同 Lv1)
 const PROG_UNLOCK_CAMP = {
   1: ['hq', 'tower', 'qtower', 'wall', 'gate', 'tent', 'wagon'],

@@ -7,11 +7,11 @@
 // team:0 攻擊方(我方放兵)、team:1 守方(守軍)。建築不是單位,以 b.bld 管理。
 // 模擬路徑禁用 Math.random / Date.now / performance.now / new Date / for-in 遍歷物件。
 
-const SIM_VER = 3;   // 3:牆線代價(城門最便宜,path.js PATH_WALL_COST)+ 仰攻 / 俯射乘數(units.js hitHeightMul、牆 +1 層)+ 樹石不阻擋 + 崖腳死點修正;2:單兵放置制(每次放 1 個單位、UNIT_PLACE_STAT 屬性);1 為舊整隊制,舊錄影無法以新規則重跑
+const SIM_VER = 4;   // 4:戰鬥時間上限 1800 → 4200 tick(3 分 → 7 分,BATTLE_TICKS;錄影存 maxTicks);3:牆線代價(城門最便宜,path.js PATH_WALL_COST)+ 仰攻 / 俯射乘數(units.js hitHeightMul、牆 +1 層)+ 樹石不阻擋 + 崖腳死點修正;2:單兵放置制(每次放 1 個單位、UNIT_PLACE_STAT 屬性);1 為舊整隊制,舊錄影無法以新規則重跑
 const SIM_HZ = 10;
 const SIM_DT = 0.1;
 const MAX_UNITS = 400;
-const BATTLE_TICKS = 1800;
+const BATTLE_TICKS = 4200;   // 7 分鐘(10Hz);回放以錄影內存的 maxTicks 為準
 const TD_POP_CAP = 200;         // 出兵人口上限(攻方整場共用;battleInit 參數 popCap 可覆蓋)。人口 = UNITS[u].pop(每次放 1 個單位,squad 恆為 1)
 
 const TD_SEP_R = 0.35;          // 分離力半徑(格)
@@ -66,7 +66,7 @@ function battleInit(init) {
   };
   const b = {
     ver: SIM_VER, kind: kind, seed: seed, rng: makeRng(seed), tick: 0, acc: 0, speed: 1, paused: false,
-    limitTick: BATTLE_TICKS, refId: init.refId || null,
+    limitTick: init.limitTick > 0 ? init.limitTick | 0 : BATTLE_TICKS, refId: init.refId || null,
     map: map,
     army: null, popCap: init.popCap != null ? init.popCap | 0 : TD_POP_CAP, popUsed: 0, minPop: tdMinDeployPop(),
     orders: { drum: 0, flag: 0 },

@@ -50,6 +50,10 @@ function npcBuildBoard(t, add, marks, remove) {
   const ox = (MAP_W - t.w) >> 1, oy = (MAP_H - t.h) >> 1;
   const R = (x0, y0, w, h, fn) => fillRect(ox + x0, oy + y0, ox + x0 + w - 1, oy + y0 + h - 1, fn);
   (t.heights || []).forEach(a => R(a[1], a[2], a[3], a[4], (x, y) => { world.height[idx(x, y)] = Math.min(MAX_H, a[0]); }));
+  (t.ground || []).forEach(op => {
+    const gt = TPL_GROUND[op.t];
+    if (gt !== undefined) R(op.rect[0], op.rect[1], op.rect[2], op.rect[3], (x, y) => paintTerrain(x, y, gt, 0));
+  });
   (t.water || []).forEach(op => {
     const r = op.rect, hl = op.hole, tt = op.t === 'river' ? T_RIVER : T_LAKE;
     R(r[0], r[1], r[2], r[3], (x, y) => {

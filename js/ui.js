@@ -2,18 +2,25 @@
 const BUILD_FAVS = ['house', 'market', 'wall', 'gate', 'tree', 'stone', 'well', 'lumber', 'quarry', 'field_sprout', 'shop_wine', 'stairs'];
 const BUILD_GROUPS = [
   { id: 'live', name: '居住與生活', items: ['house', 'palace', 'well', 'well_sweep', 'privy', 'woodpile', 'barrel_water', 'barrel_empty', 'basket', 'food_table', 'couch', 'mat', 'screen', 'chest', 'bookshelf', 'lamp_stand', 'broom', 'winejar', 'winejar_big', 'winejar_stack', 'winejar_mix', 'deco_brazier', 'dog', 'cat'] },
+  { id: 'table', name: '桌几與座椅', items: ['tbl_wood', 'tbl_stone', 'tbl_low', 'tbl_long', 'tbl_big', 'tbl_round', 'tbl_tea', 'tbl_tea_long', 'tbl_meal', 'tbl_meal_long', 'tbl_low_meal', 'tbl_feast', 'tbl_banquet', 'tbl_book', 'tbl_study', 'tbl_wine', 'tbl_wine_long', 'tbl_chess', 'stone_table', 'table_wood', 'table_long', 'table_set', 'tea_set', 'low_table_cushion', 'stone_stool', 'stool_wood', 'cushion_round', 'stools_pair', 'bench_wood', 'hu_chuang', 'chair_bamboo', 'chair_wood', 'chair_taishi', 'screen_fold'] },
   { id: 'shop', name: '商鋪與市集', items: ['market', 'inn', 'post_station', 'shop_wine', 'shop_book', 'shop_cloth', 'shop_rice', 'shop_rouge', 'shop_gamble', 'shop_brothel', 'shop_herb', 'shop_tea', 'shop_pawn', 'stall_veg', 'stall_fruit', 'stall_cloth', 'stall_pottery', 'stall_rice', 'stall_book', 'stall_rouge', 'stall_meat', 'stall_wine', 'stall_tea', 'stall_toy', 'handcart', 'cart_hay', 'cart_goods', 'cart_empty', 'oxcart', 'deco_oxcart', 'wheelbarrow', 'carriage'] },
-  { id: 'farm', name: '農牧', items: ['field_millet', 'field_sprout', 'field_wheat', 'mulberry_grove', 'orchard', 'vegetable_plot', 'herb_garden', 'tea_garden', 'beehive', 'plow', 'hoe', 'millstone', 'waterwheel', 'winnower', 'ox', 'horse', 'donkey', 'chicken', 'duck', 'goose', 'sheep', 'pig', 'stable', 'sheepfold', 'ranch_fence', 'trough', 'fodder', 'haystack', 'grain_sacks', 'granary_round', 'salt_pile', 'saltfield', 'fish_rack', 'fishery'] },
-  { id: 'ind', name: '產業', items: ['lumber', 'deco_lumberyard', 'sawbench', 'lograft', 'quarry', 'mine_entrance', 'minecart', 'ore_iron', 'ore_copper', 'ore_stone', 'smithy', 'shop_smith', 'dock', 'bank'] },
-  { id: 'mil', name: '軍事與營地', items: ['army_camp', 'parade_ground', 'drill_ground', 'archer', 'shield', 'cavalry', 'siege', 'hospital', 'tent_group', 'tent_general', 'flag_army', 'flag_great', 'drum_tower', 'beacon', 'deco_watchtower', 'deco_stable', 'deco_weaponrack', 'deco_target', 'training_dummy', 'deco_jumaa', 'deco_campfire', 'deco_lujiao', 'war_chariot', 'cloud_ladder', 'ram', 'trebuchet', 'jinglan', 'warship'] },
-  { id: 'garden', name: '庭園與景觀', items: ['tree', 'stone', 'tree_pine', 'tree_willow', 'tree_sakura', 'tree_maple', 'tree_mulberry', 'tree_peach', 'tree_cypress', 'deco_bamboo', 'deco_bush', 'flower_bed', 'deco_rocks', 'rockery', 'stone_lamp', 'lantern_line', 'deco_pond', 'lotus', 'reeds', 'potted_plant', 'small_bridge'] },
+  { id: 'town', name: '民居與村落', items: ['hut_ruin', 'hut_mud', 'hut_plank', 'hut_collapsed', 'shack_lean', 'cave_dwelling', 'bamboo_house', 'house_tile', 'house_gentry', 'mansion_great', 'mansion_clan', 'manor_estate', 'yard_poor', 'wall_ruin', 'gate_wicker', 'fence_broken', 'well_old', 'rack_net', 'rack_cloth', 'shed_livestock', 'junk_pile', 'tree_dead'] },
+  { id: 'bazaar', name: '市集地攤', items: ['plaza_stone', 'plaza_earth', 'plaza_center', 'vendor_platform', 'banner_wine', 'banner_cloth', 'banner_herb', 'ground_veg', 'ground_sandal', 'ground_goods', 'ground_bamboo', 'ground_pottery', 'ground_cloth', 'ground_iron', 'ground_old', 'hawker_carrier', 'perform_ring', 'storyteller', 'notice_board', 'hitching_post', 'water_vat', 'livestock_pen', 'smith_awning', 'barber_stand', 'fortune_stall', 'food_wonton', 'food_hubing', 'food_noodle'] },
+  { id: 'farm', name: '農牧', items: ['field_millet', 'field_sprout', 'field_wheat', 'mulberry_grove', 'orchard', 'vegetable_plot', 'herb_garden', 'tea_garden', 'beehive', 'plow', 'hoe', 'millstone', 'waterwheel', 'winnower', 'ox', 'horse', 'donkey', 'chicken', 'duck', 'goose', 'sheep', 'pig', 'stable', 'sheepfold', 'ranch_fence', 'trough', 'fodder', 'haystack', 'grain_sacks', 'granary_round', 'salt_pile', 'saltfield', 'grain_drying'] },
+  { id: 'ind', name: '產業', items: ['lumber', 'deco_lumberyard', 'sawbench', 'lograft', 'quarry', 'mine_entrance', 'minecart', 'ore_iron', 'ore_copper', 'ore_stone', 'smithy', 'shop_smith', 'bank'] },
+  { id: 'port', name: '港口與碼頭', items: ['dock', 'pier_plank', 'wharf_platform', 'mooring_post', 'boat_small', 'boat_sampan', 'ship_cargo', 'ship_grain', 'ship_tower', 'ferry', 'warehouse_port', 'crane_pole', 'cargo_sacks', 'cargo_crates', 'cargo_jars', 'cargo_salt', 'cargo_silk', 'port_lamp', 'fish_market', 'shipyard', 'fishery', 'fish_rack'] },
+  { id: 'mil', name: '軍事與營地', items: ['army_camp', 'parade_ground', 'drill_ground', 'archer', 'shield', 'cavalry', 'siege', 'hospital', 'tent_group', 'tent_general', 'flag_army', 'flag_great', 'drum_tower', 'beacon', 'deco_watchtower', 'deco_stable', 'deco_weaponrack', 'deco_target', 'training_dummy', 'deco_jumaa', 'deco_campfire', 'deco_lujiao', 'tent_small', 'war_chariot', 'cloud_ladder', 'ram', 'trebuchet', 'jinglan', 'warship'] },
+  { id: 'garden', name: '庭園與景觀', items: ['tree', 'stone', 'tree_pine', 'tree_willow', 'tree_sakura', 'tree_maple', 'tree_mulberry', 'tree_peach', 'tree_cypress', 'deco_bamboo', 'deco_bush', 'flower_bed', 'deco_rocks', 'rockery', 'stone_lamp', 'lantern_line', 'deco_pond', 'lotus', 'reeds', 'potted_plant', 'small_bridge', 'lantern_post', 'stone_lion', 'spirit_wall'] },
   { id: 'rite', name: '祭祀與禮制', items: ['paifang', 'she_altar', 'incense_burner', 'censer', 'stele'] },
-  { id: 'road', name: '城牆與道路', items: ['wall', 'gate', 'stairs', 'ramp', 'bridge', 'wall_courtyard', 'gate_courtyard', 'fence_wood', 'fence_bamboo', 'road_stone', 'toll_gate', 'ferry', 'boat_small'] }
+  { id: 'road', name: '城牆與道路', items: ['wall', 'gate', 'stairs', 'ramp', 'bridge', 'wall_courtyard', 'gate_courtyard', 'fence_wood', 'fence_bamboo', 'road_stone', 'toll_gate'] }
 ];
 
 const TERRAIN_TOOLS = {
   road:  { name: '道路', icon: '🛤️', drag: true },
   grass: { name: '草地', icon: '🌱', drag: true },
+  sand:  { name: '沙地', icon: '🏜️', drag: true, tip: '淡黃沙地,純外觀,玩法同草地' },
+  crack: { name: '裂地', icon: '🪨', drag: true, tip: '乾旱龜裂的土地,純外觀,玩法同草地' },
+  snow:  { name: '雪地', icon: '❄️', drag: true, tip: '終年積雪,純外觀,玩法同草地' },
   lake:  { name: '湖',   icon: '💧', drag: true },
   river: { name: '河流', icon: '🌊', drag: true },
   raise: { name: '升高', icon: '⬆️', drag: true },
@@ -23,7 +30,7 @@ const TERRAIN_TOOLS = {
 
 // 頂層分類(底部列最左的選擇器):瀏覽 / 地形 / 一般建築 / 軍事建築。BUILD_TOP:BUILD_GROUPS 群組 id → 建築頂層(misc = 不在任何群組者);
 // 軍事建築 = 軍事與營地(mil);城牆、城門、階梯、斜坡等雖有防禦用途,留在「城牆與道路」(一般建築),不重複放。
-const BUILD_TOP = { live: 'gen', shop: 'gen', farm: 'gen', ind: 'gen', mil: 'mil', garden: 'gen', rite: 'gen', road: 'gen', misc: 'gen' };
+const BUILD_TOP = { combo: 'gen', live: 'gen', table: 'gen', town: 'gen', bazaar: 'gen', shop: 'gen', farm: 'gen', ind: 'gen', port: 'gen', mil: 'mil', garden: 'gen', rite: 'gen', road: 'gen', misc: 'gen' };
 const TOP_LIST = [
   { id: 'browse', kind: 'browse', icon: '✋', name: '瀏覽', short: '瀏覽' },
   { id: 'terrain', kind: 'terrain', icon: '⛰', name: '地形', short: '地形' },
@@ -31,7 +38,7 @@ const TOP_LIST = [
   { id: 'mil', kind: 'build', icon: '⚔', name: '軍事建築', short: '軍事' }
 ];
 // 地形頂層內容(不含拆除:拆除只在建築頂層出現)
-const TERRAIN_MENU = ['road', 'grass', 'lake', 'river', 'raise', 'lower'];
+const TERRAIN_MENU = ['road', 'grass', 'sand', 'crack', 'snow', 'lake', 'river', 'raise', 'lower'];
 // 變體群組:群組第一個為代表(選單只顯示代表),其餘變體在選到代表後以小圖示列選擇;變體仍是合法物件 id(舊存檔與範本照常)
 const VARIANT_GROUPS = {
   tree: ['tree', 'tree_pine', 'tree_willow', 'tree_sakura', 'tree_maple', 'tree_mulberry', 'tree_peach', 'tree_cypress']
@@ -43,8 +50,10 @@ const UI_CAMPCAT_KEY = 'lorddomain.ui.campcat';
 const UI_VAR_KEY = 'lorddomain.ui.variant';
 const UI_SKIN_KEY = 'lorddomain.ui.wallskin';   // 城牆外觀皮膚偏好(per-viewer,id 見 wallskin.js WALL_SKINS)
 
-const ui = { tool: null, editing: false, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco', buildCat: 'all', top: 'gen', campTop: 'cbuild', campCat: 'all', variant: {}, wallSkin: '', objSel: null };
+const ui = { tool: null, editing: false, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco', buildCat: 'all', top: 'gen', campTop: 'cbuild', campCat: 'all', variant: {}, wallSkin: '', objSel: null, comboSkip: false };
 let topMenuOpen = false;
+// 組合模組(combos.js):工具 id 為 'combo:<id>';combos.js 未載入時恆為 false
+function uiIsCombo(t) { return typeof comboIs === 'function' && comboIs(t); }
 
 // 單一物件草稿(虛影):{ type, x, y, rot, orig, ok, reason }。orig 為「移動已蓋建築」時的原建築物件(仍在 world.objects、由 objHold 暫時排除)。
 // 草稿不占 world.occ / pend.occ、不計價、不進存檔;✓ 才轉為待購項(新建)或放回新位置(移動)。
@@ -54,8 +63,8 @@ let fxHi = null;   // 輕點高亮 / 落地光圈(render.js drawFx)
 let draftFloatKey = '', lastFloatHtml = '';
 let lastDraftHtml = '', lastSettleHtml = '';
 
-const TERRAIN_OF = { road: T_ROAD, grass: T_GRASS, lake: T_LAKE, river: T_RIVER };
-const TERRAIN_NAME = ['草地', '湖', '河', '道路'];
+const TERRAIN_OF = { road: T_ROAD, grass: T_GRASS, sand: T_SAND, crack: T_CRACK, snow: T_SNOW, lake: T_LAKE, river: T_RIVER };
+const TERRAIN_NAME = ['草地', '湖', '河', '道路', '沙地', '裂地', '雪地'];
 
 // 指標手勢狀態: mode = null | pan | tool | pending | paint | pinch
 const gs = { ptrs: new Map(), mode: null, primary: null, pinch: null, timer: 0, op: null, last: null };
@@ -405,6 +414,7 @@ function bindEvents(canvas) {
   draftBar.hidden = true;
   document.body.appendChild(draftBar);
   draftBar.addEventListener('pointerdown', e => e.stopPropagation());
+  draftBar.addEventListener('click', onDraftBarClick);
   const settle = document.createElement('div');
   settle.id = 'settleDlg';
   settle.hidden = true;
@@ -577,6 +587,7 @@ function topOfGroup(gid) { return BUILD_TOP[gid] || 'gen'; }
 function buildCatIds(catId, top) {
   const ok = k => !!OBJECTS[k] && sideOk(k) && !varIsFollower(k);
   const t = top || (topIsBuild(ui.top) ? ui.top : null);
+  if (catId === 'combo') return game.mode === 'estate' && t === BUILD_TOP.combo && typeof comboMenuIds === 'function' ? comboMenuIds() : [];
   if (catId === 'all') {
     const seen = {}, out = [];
     const add = k => { if (!seen[k] && ok(k)) { seen[k] = true; out.push(k); } };
@@ -598,6 +609,7 @@ function buildCatIds(catId, top) {
 function buildCatAllIds(catId, top) {
   const ok = k => hasType(k) && !OBJECTS[k].retired && (sideOf(k) === 'estate' || sideOf(k) === 'both') && !varIsFollower(k);
   const t = top || (topIsBuild(ui.top) ? ui.top : null);
+  if (catId === 'combo') return t === BUILD_TOP.combo && typeof comboAllIds === 'function' ? comboAllIds() : [];
   if (catId === 'all') {
     const seen = {}, out = [];
     const add = k => { if (!seen[k] && ok(k)) { seen[k] = true; out.push(k); } };
@@ -633,6 +645,7 @@ const ESTATE_MENU = {
     if (id === 'river') addRiverDirBtn(bar);
   },
   addItem: function (bar, id) {
+    if (uiIsCombo(id)) return addComboButton(bar, id);
     if (!OBJECTS[id]) return addToolButton(bar, id, TERRAIN_TOOLS[id].icon, TERRAIN_TOOLS[id].name, null);
     return markNewBuild(addToolButton(bar, id, OBJECTS[id].icon, OBJECTS[id].name, OBJECTS[id]), id);
   },
@@ -641,7 +654,7 @@ const ESTATE_MENU = {
   owns: function (t, top) {
     if (t === null || t === undefined) return true;
     if (top === 'terrain') return TERRAIN_MENU.indexOf(t) >= 0;
-    if (topIsBuild(top)) return t === 'erase' || (!!OBJECTS[t] && topOfItem(varLeader(t)) === top);
+    if (topIsBuild(top)) return t === 'erase' || (!!OBJECTS[t] && topOfItem(varLeader(t)) === top) || (uiIsCombo(t) && top === BUILD_TOP.combo);
     return false;
   }
 };
@@ -838,10 +851,11 @@ function buildLockHint(catId, top) {
   if (game.mode !== 'estate' || typeof progUnlockLv !== 'function' || typeof prog === 'undefined' || !prog) return null;
   let lv = null, names = [];
   buildCatAllIds(catId, top).forEach(k => {
-    const L = progUnlockLv('estate', k);
+    const cb = uiIsCombo(k);
+    const L = cb ? comboUnlockLv(comboId(k)) : progUnlockLv('estate', k);
     if (L === null || L <= prog.lv) return;
     if (lv === null || L < lv) { lv = L; names = []; }
-    if (L === lv) names.push(OBJECTS[k].name);
+    if (L === lv) names.push(cb ? comboDef(k).name : OBJECTS[k].name);
   });
   return lv === null ? null : { lv: lv, names: names };
 }
@@ -895,6 +909,7 @@ function buildCatList(top) {
   const fav = buildCatIds('常用', top).length;
   if (fav) out.push({ id: '常用', name: '常用', n: fav });
   BUILD_GROUPS.forEach(g => { if (topOfGroup(g.id) === top) out.push({ id: g.id, name: g.name, n: buildCatIds(g.id).length }); });
+  if (BUILD_TOP.combo === top && game.mode === 'estate' && typeof comboAllIds === 'function' && comboAllIds().length) out.push({ id: 'combo', name: '組合', n: buildCatIds('combo', top).length });
   if (BUILD_TOP.misc === top) {
     const misc = buildCatIds('misc').length;
     if (misc) out.push({ id: 'misc', name: '其他', n: misc });
@@ -1008,6 +1023,7 @@ function addToolButton(bar, id, icon, name, def) {
   btn.setAttribute('data-tool', id === null ? '' : id);
   let html = '<span class="ic">' + icon + '</span><span>' + name + '</span>';
   let title = name;
+  if (!def && TERRAIN_TOOLS[id] && TERRAIN_TOOLS[id].tip) title += '：' + TERRAIN_TOOLS[id].tip;
   if (def) {
     html += '<span class="cost">' + costText(objCost(id)) + '</span>';
     title += ' ' + costText(objCost(id));
@@ -1031,12 +1047,27 @@ function addToolButton(bar, id, icon, name, def) {
   return btn;
 }
 
+// 組合工具鈕:圖示 + 名稱 + 格數(如「9格」);點一下選取,再點一下取消
+function addComboButton(bar, id) {
+  const d = comboDef(id);
+  const btn = document.createElement('button');
+  btn.setAttribute('data-tool', id);
+  btn.innerHTML = '<span class="ic">' + d.icon + '</span><span>' + d.name + '</span><span class="cost">' + d.cells + '格</span>';
+  btn.title = d.name + ' ' + d.w + '×' + d.h + '(' + d.cells + '格)　' + comboGroupName(comboId(id)) + '　Lv' + comboUnlockLv(comboId(id)) + (d.step === 2 ? '　只能 180° 旋轉' : '');
+  btn.addEventListener('click', () => {
+    setTool(ui.tool === id ? null : id);
+    if (ui.tool !== null) showToast(d.name + ':點地圖放置整組,可拖曳 / 旋轉,按 ✓ 放下');
+  });
+  bar.appendChild(btn);
+  return btn;
+}
+
 function isCampTool(t) {
   return t !== null && typeof CAMP_TOOLS !== 'undefined' && Object.prototype.hasOwnProperty.call(CAMP_TOOLS, t);
 }
 
 function setTool(id) {
-  if (hide.on && id !== null && OBJECTS[id] && !toggleHide(false)) return;
+  if (hide.on && id !== null && (OBJECTS[id] || uiIsCombo(id)) && !toggleHide(false)) return;
   draftDiscard();
   closeSettle();
   ui.tool = id;
@@ -1058,10 +1089,11 @@ function setTool(id) {
 function toolInfo() {
   const t = ui.tool;
   if (t === null) return '瀏覽模式：拖曳移動、滾輪／雙指縮放';
-  if (draft) return '草稿：' + OBJECTS[draft.type].name + '　拖到想要的位置，按 ✓ 放下（✕ 或 Esc 取消）';
+  if (draft) return '草稿：' + (draft.combo ? comboDef(draft.type) : OBJECTS[draft.type]).name + '　拖到想要的位置，按 ✓ 放下（✕ 或 Esc 取消）';
   const hl = toolHelpLine(t);
   if (hl) return hl;
   if (isCampTool(t)) return CAMP_TOOLS[t].name;
+  if (uiIsCombo(t)) { const cd = comboDef(t); return cd.name + '　組合 ' + cd.w + '×' + cd.h + '(' + cd.cells + '格)　免費　點地圖放置整組'; }
   if (OBJECTS[t]) {
     const d = OBJECTS[t];
     let s = d.name + '　成本 ' + feeText(objCost(t));
@@ -1069,7 +1101,7 @@ function toolInfo() {
     if (d.unit && CAMP_POP[d.unit]) s += '　出征容量 +' + CAMP_POP[d.unit];
     return s;
   }
-  return TERRAIN_TOOLS[t].name;
+  return TERRAIN_TOOLS[t].name + (TERRAIN_TOOLS[t].tip ? '　' + TERRAIN_TOOLS[t].tip : '');
 }
 
 function rotate() {
@@ -1095,6 +1127,7 @@ function isDraggable(t) {
 }
 
 function previewOk(t, x, y) {
+  if (uiIsCombo(t)) return true;
   const i = idx(x, y);
   if (hide.on) return previewOkHidden(t, x, y, i);
   if (OBJECTS[t]) return canPlacePending(t, x, y, ui.rot, -1) && canAfford(addCost(pendTotal(), objCost(t)));
@@ -1126,7 +1159,7 @@ function updatePreviewAt(sx, sy) {
   } else {
     preview.tool = ui.tool;
     preview.rot = ui.rot;
-    preview.visible = ui.tool !== null && !isCampTool(ui.tool);
+    preview.visible = ui.tool !== null && !isCampTool(ui.tool) && !uiIsCombo(ui.tool);
     preview.ok = ui.tool === null || previewOk(ui.tool, c.x, c.y);
   }
   info.textContent = toolInfo() + '　(' + c.x + ',' + c.y + ') ' + TERRAIN_NAME[world.terrain[i]] + ' 高度' + world.height[i];
@@ -1146,7 +1179,7 @@ function placeFailReason(type, x, y, rot) {
       const i = idx(xx, yy);
       if (world.occ[i]) return '已有物件';
       if (world.height[i] !== h0) return '高度不一致';
-      if (OBJECTS[type].on.indexOf(world.terrain[i]) < 0) return '地形不符';
+      if (!terrainOn(OBJECTS[type], world.terrain[i])) return '地形不符';
     }
   }
   return '未知原因';
@@ -1366,6 +1399,12 @@ function applyOne(x, y) {
   if (isCampTool(t)) return mapeditApply(t, x, y, 'down');
   const i = idx(x, y);
   const pn = pend.occ[i];
+  if (uiIsCombo(t)) {
+    if (hide.on) return false;
+    if (draft) draftMoveTo(x, y);
+    else if (!(gs.op && gs.op.selectOnly)) draftStart(t, x, y, ui.rot);
+    return false;
+  }
   if (hide.on) return applyHidden(t, x, y, i, pn);
   if (OBJECTS[t]) {
     if (!OBJECTS[t].drag) {
@@ -2156,7 +2195,7 @@ function objFailReason(n, x, y, rot) {
       if (pend.occ[i]) return '與待購建築重疊';
       if (world.occ[i] && world.occ[i] !== n + 1) return '此處已有建築';
       if (world.height[i] !== h0) return '高度不一致';
-      if (d.on.indexOf(world.terrain[i]) < 0) return '地形不符';
+      if (!terrainOn(d, world.terrain[i])) return '地形不符';
     }
   }
   return '未知原因';
@@ -2191,6 +2230,10 @@ function holdFire() {
 // ── 草稿(虛影):新建與移動已蓋建築共用 ──
 // 草稿是否可放:新建 = 待購規則(含待購數量上限);移動 = 已蓋建築規則(排除自己的舊佔格,不計數量上限)
 function draftCheck(d) {
+  if (d.combo) {
+    d.cres = comboCheck(d.combo, d.x, d.y, d.rot, ui.comboSkip);
+    return d.cres.reason;
+  }
   if (d.orig) {
     const n = world.objects.indexOf(d.orig);
     if (n < 0) return '建築已不存在';
@@ -2205,10 +2248,14 @@ function draftSync() {
   draft.ok = !draft.reason;
   updatePendBar();
 }
+// 草稿占格(組合 = 整組外框;單件 = footprint)
+function draftFp(d) { return d.combo ? comboFootprint(d.combo, d.rot) : footprint(d.type, d.rot); }
 function draftStart(type, x, y, rot) {
   pend.sel = -1;
   pend.moving = false;
-  draft = { type: type, x: x, y: y, rot: rot, orig: null, ok: false, reason: '', skin: uiSkinPref(type) };
+  const combo = uiIsCombo(type) ? comboId(type) : null;
+  if (combo) rot -= rot % comboRotStep(combo);
+  draft = { type: type, x: x, y: y, rot: rot, orig: null, ok: false, reason: '', skin: combo ? '' : uiSkinPref(type), combo: combo, cres: null };
   preview.visible = false;
   draftSync();
 }
@@ -2240,11 +2287,17 @@ function draftHit(sx, sy) {
   if (!draft) return false;
   const c = screenToCell(sx, sy);
   if (!c) return false;
-  const fp = footprint(draft.type, draft.rot);
+  const fp = draftFp(draft);
   return c.x >= draft.x && c.x < draft.x + fp[0] && c.y >= draft.y && c.y < draft.y + fp[1];
 }
 function draftRotate() {
   if (!draft || draft.bounce) return false;
+  if (draft.combo) {
+    draft.rot = (draft.rot + comboRotStep(draft.combo)) % 4;
+    ui.rot = draft.rot;
+    draftSync();
+    return true;
+  }
   for (let k = 1; k <= 3; k++) {
     const r = (draft.rot + k) % 4;
     const probe = { type: draft.type, x: draft.x, y: draft.y, rot: r, orig: draft.orig };
@@ -2286,6 +2339,19 @@ function draftConfirm() {
   }
   const d = draft;
   preview.visible = false;
+  if (d.combo) {
+    const r = comboPlace(d.combo, d.x, d.y, d.rot, ui.comboSkip);
+    if (!r.ok) {
+      showToast(r.reason || '無法放置');
+      return;
+    }
+    draft = null;
+    const nm = comboDef(d.type).name;
+    showToast('已放下「' + nm + '」' + r.n + ' 件' + (r.skipped ? '(略過 ' + r.skipped + ' 件不合法)' : '') + '　可用「↶ 撤銷上一組」整組撤銷');
+    updateResBar();
+    updatePendBar();
+    return;
+  }
   if (d.orig) {
     const o = d.orig;
     const skinChg = (d.skin || '') !== (o.skin || '');
@@ -2408,6 +2474,22 @@ function draftDemolish() {
     if (nb.focus) nb.focus();
   }
 }
+// 草稿列上的組合按鈕:略過不合法件(開關)/ 撤銷上一組
+function onDraftBarClick(e) {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const act = b.getAttribute('data-cact');
+  if (act === 'skip') {
+    ui.comboSkip = !ui.comboSkip;
+    if (draft) draftSync();
+    else updatePendBar();
+  } else if (act === 'undo') {
+    const n = typeof comboUndoLast === 'function' ? comboUndoLast() : 0;
+    showToast(n ? '已撤銷整組（' + n + ' 件）' : '沒有可撤銷的組合');
+    updateResBar();
+    updatePendBar();
+  }
+}
 function onFloatClick(e) {
   const b = e.target.closest('button');
   if (!b || !draft) return;
@@ -2424,8 +2506,37 @@ function updateDraftBar() {
   const bar = document.getElementById('draftBar');
   if (!bar) return;
   if (!draft) {
+    const li = uiIsCombo(ui.tool) && typeof comboLastInfo === 'function' ? comboLastInfo() : null;
+    if (li) {
+      const uh = '<div class="drow top"><span class="dname">' + comboDef(comboKey(li.id)).icon + ' ' + comboDef(comboKey(li.id)).name + '</span><small class="dmsg">點地圖放下下一組</small></div>' +
+        '<div class="drow btns"><button data-cact="undo">↶ 撤銷上一組（' + li.n + ' 件）</button></div>';
+      if (uh !== lastDraftHtml) {
+        lastDraftHtml = uh;
+        bar.innerHTML = uh;
+      }
+      bar.hidden = false;
+      bar.style.bottom = (bottomStackPx() + 8) + 'px';
+      draftFloatSync();
+      return;
+    }
     bar.hidden = true;
     lastDraftHtml = '';
+    draftFloatSync();
+    return;
+  }
+  if (draft.combo) {
+    const cd = comboDef(draft.type), cr = draft.cres;
+    const note = draft.reason ? '✕ ' + draft.reason : (cr && cr.nBad ? '⚠ ' + comboSkipNote(cr) : '拖到想要的位置，按 ✓ 放下整組');
+    const ch = '<div class="drow top"><span class="dname">' + cd.icon + ' ' + cd.name + '　' + cd.cells + '格　免費</span>' +
+      '<small class="dmsg' + (draft.reason ? ' bad' : '') + '">' + note + '</small></div>' +
+      '<div class="drow btns"><button data-cact="skip"' + (ui.comboSkip ? ' class="pok"' : '') + '>' + (ui.comboSkip ? '☑' : '☐') + ' 略過不合法件</button></div>';
+    if (ch !== lastDraftHtml) {
+      lastDraftHtml = ch;
+      bar.innerHTML = ch;
+    }
+    bar.hidden = false;
+    bar.style.bottom = (bottomStackPx() + 8) + 'px';
+    draftFloatKey = '';
     draftFloatSync();
     return;
   }
@@ -2462,7 +2573,7 @@ function elRect(id) {
 function rectHit(a, b) { return a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t; }
 // 草稿虛影的螢幕包圍盒(含建築本體高度的粗估)
 function draftBox() {
-  const d = draft, fp = footprint(d.type, d.rot);
+  const d = draft, fp = draftFp(d);
   const bh = world.height[idx(d.x, d.y)] * HL;
   let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
   [[d.x, d.y], [d.x + fp[0], d.y], [d.x + fp[0], d.y + fp[1]], [d.x, d.y + fp[1]]].forEach(c => {

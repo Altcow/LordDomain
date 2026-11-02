@@ -170,6 +170,7 @@ function boardFromJSON(j) {
       if (!Array.isArray(j[k]) || j[k].length !== N) throw new Error('layer ' + k);
       b[k] = Uint8Array.from(j[k]);
     });
+    for (let i = 0; i < N; i++) if (b.terrain[i] > T_SNOW) b.terrain[i] = T_GRASS;   // 未知的大值當草地,不崩潰
     b.objects = (Array.isArray(j.objects) ? j.objects : [])
       .filter(o => o && typeof o.type === 'string' && hasType(o.type) && Number.isInteger(o.x) && Number.isInteger(o.y) &&
         o.x >= 0 && o.y >= 0 && o.x < MAP_W && o.y < MAP_H)
@@ -264,7 +265,7 @@ function canPlace(type, x, y, rot) {
     for (let xx = x; xx < x + w; xx++) {
       const i = idx(xx, yy);
       if (world.occ[i] || world.height[i] !== h0) return false;
-      if (d.on.indexOf(world.terrain[i]) < 0) return false;
+      if (!terrainOn(d, world.terrain[i])) return false;
     }
   }
   return true;
@@ -511,7 +512,7 @@ function loadWorldSave() {
     for (let y = 0; y < side; y++)
       for (let x = 0; x < side; x++) {
         const j = y * side + x, i = idx(x + ox, y + oy);
-        world.terrain[i] = s.terrain[j]; world.height[i] = s.height[j]; world.flow[i] = s.flow[j];
+        world.terrain[i] = s.terrain[j] > T_SNOW ? T_GRASS : s.terrain[j]; world.height[i] = s.height[j]; world.flow[i] = s.flow[j];
       }
     world.objects = (s.objects || []).filter(o => o && OBJECTS[o.type])
       .map(o => {
@@ -613,6 +614,9 @@ function loadDemo(ox, oy) {
   for (let x = 12; x <= 36; x++) if (x !== 18 && x !== 19 && x !== 26 && rnd() < 0.7) put('stone', x, 19);
 }
 
+// 範本 ground 欄位的地形名稱 → 地形值(純視覺地形,見 data.js)
+const TPL_GROUND = { sand: T_SAND, crack: T_CRACK, snow: T_SNOW };
+
 function tplCells(e) {
   let pts = [];
   if (e.at) pts = [e.at];
@@ -676,6 +680,10 @@ function applyTemplate(id) {
       if (estate) clearWorld(); else clearBoard();
       (t.heights || []).forEach(a => fillRect(ox + a[1], oy + a[2], ox + a[1] + a[3] - 1, oy + a[2] + a[4] - 1,
         (x, y) => { world.height[idx(x, y)] = Math.min(MAX_H, a[0]); }));
+      (t.ground || []).forEach(op => {   // 沙地 / 裂地 / 雪地(先鋪,後面的水與路會覆蓋)
+        const r = op.rect, gt = TPL_GROUND[op.t];
+        if (gt !== undefined) fillRect(ox + r[0], oy + r[1], ox + r[0] + r[2] - 1, oy + r[1] + r[3] - 1, (x, y) => paintTerrain(x, y, gt, 0));
+      });
       (t.water || []).forEach(op => {
         const r = op.rect, hl = op.hole, tt = op.t === 'river' ? T_RIVER : T_LAKE;
         fillRect(ox + r[0], oy + r[1], ox + r[0] + r[2] - 1, oy + r[1] + r[3] - 1, (x, y) => {
@@ -1030,7 +1038,7 @@ function objValidAt(n) {
     for (let xx = o.x; xx < o.x + w; xx++) {
       const i = idx(xx, yy);
       if (world.occ[i] !== n + 1 || world.height[i] !== h0) return false;
-      if (d.on.indexOf(world.terrain[i]) < 0) return false;
+      if (!terrainOn(d, world.terrain[i])) return false;
     }
   }
   return true;
@@ -1050,7 +1058,7 @@ function objFitAt(n, x, y, rot) {
       const i = idx(xx, yy);
       if ((world.occ[i] && world.occ[i] !== n + 1) || pend.occ[i]) return false;
       if (world.height[i] !== h0) return false;
-      if (d.on.indexOf(world.terrain[i]) < 0) return false;
+      if (!terrainOn(d, world.terrain[i])) return false;
     }
   }
   return true;
@@ -1073,7 +1081,7 @@ function hideAudit() {
 // 把 (x,y) 改成地形 t 後，該格的已建物件是否仍合法（無物件 → true）
 function terrainOkUnder(x, y, t) {
   const n = world.occ[idx(x, y)];
-  return !n || OBJECTS[world.objects[n - 1].type].on.indexOf(t) >= 0;
+  return !n || terrainOn(OBJECTS[world.objects[n - 1].type], t);
 }
 
 // 只改地形、不刪物件（paintTerrain 會無退款刪物件，隱藏模式改用此函式；呼叫前先檢查 terrainOkUnder）

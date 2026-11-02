@@ -26,7 +26,7 @@ var PUI_FEATURE_NAME = {
   spar: '切磋', random: '隨機對手', research: '科研', photo: '拍照', shop: '商店', deals: '每日特賣',
   auction: '拍賣場', recorder: '錄影', replayFeed: '精采回顧', campSlots: '我的陣圖', fishing: '釣魚', pet: '仙獸苑'
 };
-var PUI_TERRAIN_NAME = { road: '道路', grass: '草地', erase: '清除', raise: '堆高', lower: '挖低', lake: '湖泊', river: '河流' };
+var PUI_TERRAIN_NAME = { road: '道路', grass: '草地', erase: '清除', raise: '堆高', lower: '挖低', lake: '湖泊', river: '河流', sand: '沙地', crack: '裂地', snow: '雪地' };
 var PUI_SRC_NAME = { boss: '首領營', any3hard: '3★ 難營' };
 
 function puiEl(tag, cls, txt) {
