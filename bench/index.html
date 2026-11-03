@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" translate="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="google" content="notranslate">
+<title>城主領地 效能測試(約 12 分鐘)</title>
+<style>
+  html, body { margin: 0; min-height: 100%; background: #1c2430; color: #e8edf2; font: 15px/1.55 -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif; }
+  body.run { overflow: hidden; height: 100%; }
+  #gf { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #1c2430; z-index: 1; }
+  #rbwrap { position: fixed; inset: 0; z-index: 1; display: none; background: #26303c; }
+  #rbwrap canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .page { padding: 14px 14px calc(28px + env(safe-area-inset-bottom)); max-width: 760px; margin: 0 auto; position: relative; z-index: 5; box-sizing: border-box; }
+  #home, #report { display: none; }
+  #run { display: none; position: fixed; left: 0; right: 0; top: 0; z-index: 10; padding: calc(8px + env(safe-area-inset-top)) 12px 10px; background: rgba(10,14,20,.86); pointer-events: none; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  h2 { font-size: 16px; margin: 20px 0 6px; border-top: 1px solid #3a4a60; padding-top: 12px; }
+  .muted { opacity: .72; font-size: 13px; }
+  .tip { background: #3a3220; border: 1px solid #8a7430; border-radius: 10px; padding: 10px 12px; margin: 12px 0; font-size: 15px; }
+  .tip b { color: #ffd87a; }
+  button { font: inherit; color: inherit; background: #2f3b4d; border: 1px solid #45566e; border-radius: 12px; padding: 12px 16px; margin: 4px 6px 4px 0; }
+  button.big { display: block; width: 100%; font-size: 19px; font-weight: bold; padding: 18px; background: #2c6e49; border-color: #4aa36f; margin: 14px 0; }
+  button:disabled { opacity: .45; }
+  button.tb { padding: 12px 18px; font-size: 17px; }
+  button.tb.on { background: #8a5a1a; border-color: #e0a040; font-weight: bold; }
+  input[type=text] { font: inherit; font-size: 18px; color: inherit; background: #263243; border: 1px solid #45566e; border-radius: 8px; padding: 8px 10px; width: 4em; }
+  textarea { width: 100%; box-sizing: border-box; height: 60px; font: inherit; color: inherit; background: #263243; border: 1px solid #45566e; border-radius: 8px; padding: 8px; margin-top: 6px; }
+  #copyTa { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .row { margin: 8px 0; }
+  .bar { height: 16px; background: #2a3445; border-radius: 8px; overflow: hidden; margin: 6px 0; }
+  .bar > div { height: 100%; width: 0; background: #4aa36f; transition: width .25s; }
+  #runRemain { font-size: 30px; font-weight: bold; font-variant-numeric: tabular-nums; }
+  #runStage { font-size: 14px; font-weight: bold; }
+  #runLabel, #runWake { font-size: 12px; opacity: .85; }
+  #runWake.bad, .bad { color: #ff9a9a; opacity: 1; }
+  .ok { color: #8fe0ab; }
+  #runWarn { font-size: 12px; color: #ffd87a; margin-top: 4px; }
+  #runFast { display: none; font-size: 12px; color: #9ad; }
+  #fastTag { display: none; background: #44506a; border-radius: 6px; padding: 1px 6px; font-size: 12px; vertical-align: middle; }
+  #repBanner { display: none; background: #2a3a55; border-radius: 10px; padding: 10px 12px; margin: 8px 0; font-size: 14px; }
+  .acts { position: sticky; top: 0; z-index: 6; background: #1c2430; padding: 6px 0; }
+  .acts button { padding: 14px 12px; font-size: 16px; font-weight: bold; }
+  #btnShare { background: #2c6e49; border-color: #4aa36f; }
+  .concl { margin: 4px 0 0 18px; padding: 0; font-size: 14px; }
+  .concl li { margin: 4px 0; }
+  .tw { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; width: 100%; font-size: 11px; margin: 6px 0; }
+  th, td { border: 1px solid #3a4a60; padding: 3px 3px; text-align: center; vertical-align: top; }
+  th { background: #263243; }
+  td.g { background: #1f4a32; } td.y { background: #5a4a14; } td.r { background: #5a1f1f; } td.u, td.x { background: #3a3a44; }
+  td small { display: block; opacity: .8; font-size: 10px; }
+  b.r { color: #ff8a8a; } b.y { color: #ffd87a; } b.g { color: #8fe0ab; }
+  pre { background: #11171f; border-radius: 8px; padding: 8px; font-size: 10.5px; line-height: 1.35; white-space: pre; overflow: auto; max-height: 55vh; user-select: text; -webkit-user-select: text; }
+</style>
+</head>
+<body class="home">
+<div id="rbwrap"><canvas id="c2d"></canvas><canvas id="cgl" hidden></canvas></div>
+
+<div id="home" class="page">
+  <h1>城主領地 效能測試(約 12 分鐘) <span id="fastTag">快速演示</span></h1>
+  <div class="muted">一鍵自動跑完,不需任何操作。測什麼:(1) 大地圖 56 / 84 / 112 × 路人 120 / 200 × 現行或分塊預畫 × 6 種縮放的每幀耗時與 fps;(2) Canvas 2D 與 WebGL 批次貼圖在 500~4000 張 sprite 的提交耗時;(3) 112 全城連續 3.5 分鐘 × 2 的發熱/降頻趨勢。測完會跳出報告,可一鍵傳給 LINE。全程無聲。</div>
+  <div class="tip"><b>測試期間請保持螢幕亮著、不要切換 App、不要充電、亮度調低。</b><br>也請先關閉低電量模式。畫面會自動縮放平移,不用碰它。</div>
+  <div class="row">開始前電量 <input id="bat0" type="text" inputmode="numeric" placeholder="%" maxlength="3"> %</div>
+  <button id="btnStart" class="big" disabled>開始 12 分鐘效能測試</button>
+  <div id="homeMsg" class="muted"></div>
+  <div id="envline" class="muted"></div>
+</div>
+
+<div id="run">
+  <div id="runStage">準備中</div>
+  <div style="display:flex;align-items:baseline;gap:12px"><span id="runRemain">--:--</span><span class="muted">剩餘時間</span><span id="runPct" class="muted" style="margin-left:auto">0%</span></div>
+  <div class="bar"><div id="runBar"></div></div>
+  <div id="runLabel"></div>
+  <div id="runWake"></div>
+  <div id="runWarn">請保持螢幕亮著、不要切換 App、不要充電。</div>
+  <div id="runFast">快速演示模式:各階段已縮短,結果僅供驗證流程。</div>
+</div>
+
+<div id="report" class="page">
+  <h1>城主領地 效能測試報告</h1>
+  <div id="repBanner"></div>
+  <div class="acts">
+    <button id="btnShare">分享報告檔</button><button id="btnCopy">複製報告文字</button><button id="btnDl">下載報告檔</button>
+    <div id="shareMsg" class="muted">「分享報告檔」可選 LINE / 存到檔案 / AirDrop;「下載」在主畫面 App 可能無效,請改用分享。</div>
+  </div>
+  <div id="repBody"></div>
+  <button id="btnAgain" class="big" style="background:#2f3b4d;border-color:#45566e">重新測試(約 12 分鐘)</button>
+</div>
+
+<script src="bench_all.js"></script>
+</body>
+</html>
