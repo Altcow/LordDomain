@@ -66,6 +66,9 @@
   alias('field_sprout', 'field', 2, 2, 30, function (v) { return { level: 2, season: v.season }; });
   alias('field_wheat', 'field', 2, 2, 30, function (v) { return { level: 4, season: v.season }; });
   alias('ranch_fence', 'fence', 1, 1, 30, function (v) { return { season: v.season }; });
+  // 生產鏈(PLAN_CITY §23)新增建築的暫用外觀:麻田 = 田的別名、織坊 = 布攤的別名(日後可換專屬美術)
+  alias('field_hemp', 'field', 2, 2, 30, function (v) { return { level: 3, season: v.season }; });
+  if (OBJ.stall_cloth) alias('loom_shop', 'stall_cloth', 2, 1, 56, function (v) { return v; });
 
   // ---------- 運輸 ----------
   A.def('handcart', spec(1, 1, 24, function (m, v) {
@@ -296,7 +299,9 @@
     saltfield:      { name: '鹽田', icon: '🧂', w: 2, h: 2, cost: { coin: 90 } },
     fish_rack:      { name: '曬魚架', icon: '🐟', w: 1, h: 1, cost: { coin: 30 } },
     fishery:        { name: '魚場(漁棚)', icon: '🎣', w: 2, h: 2, cost: { coin: 180 } },
-    winnower:       { name: '風扇車', icon: '🌀', w: 1, h: 1, cost: { coin: 40 } }
+    winnower:       { name: '風扇車', icon: '🌀', w: 1, h: 1, cost: { coin: 40 } },
+    field_hemp:     { name: '麻田', icon: '🌿', w: 2, h: 2, cost: { coin: 45 } },
+    loom_shop:      { name: '織坊', icon: '🧵', w: 2, h: 1, cost: { coin: 90 } }
   };
   if (typeof OBJECTS !== 'undefined') {
     Object.keys(NEW).forEach(function (k) {

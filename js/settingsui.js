@@ -345,17 +345,25 @@ function stDisplaySec() {
   }
   if (typeof perfSetFps === 'function') {
     const ps = isPowerSave();
-    nodes.push(stRow('畫面幀率(60 較耗電)', stSeg([[30, '30'], [60, '60']], ps ? 30 : perfGetFps(), function (v) {
+    nodes.push(stRow('操作時幀率', stSeg([[30, '30'], [60, '60']], ps ? 30 : perfGetFps(), function (v) {
       perfSetFps(v);
-      if (v === 60 && typeof showToast === 'function') showToast('60 fps 較順,但耗電較多、手機容易發燙;預設 30 就是為了省電');
+      if (v === 60 && typeof showToast === 'function') showToast('操作時用 60 較順;不操作時自動降到 30 省電');
       stRender();
     })));
-    if (!ps && perfGetFps() === 60) nodes.push(stEl('p', 'st-hint', '目前為 60 fps:畫面每秒重畫的次數是 30 的兩倍,會更耗電、更容易發燙。平常看城市建議用 30,拖曳地圖時才有感差別。'));
+    if (!ps && perfGetFps() === 60) nodes.push(stEl('p', 'st-hint', '操作時用 60 較順;不操作時自動降到 30 省電。'));
     nodes.push(stRow('省電模式(較不順但較不燙)', stSwitch(ps, function (v) {
       perfSetPowerSave(v);
       stRender();
     })));
-    nodes.push(stEl('p', 'st-hint', '幀率不影響畫質(清晰度、解析度),只影響動作順不順:30 在拖曳地圖時略不如 60 流暢,但手機比較不燙。省電模式固定 30、居民少一級且動作較稀、水面靜止、背景音樂較簡單。'));
+    nodes.push(stEl('p', 'st-hint', '幀率不影響畫質(清晰度、解析度),只影響動作順不順:拖曳、縮放、點選時用上面的設定,看著城市不動時固定 30。省電模式一律 30、居民少一級且動作較稀、水面靜止、背景音樂較簡單。'));
+  }
+  if (typeof renderSetBackend === 'function') {
+    nodes.push(stRow('繪圖引擎', stSeg([['c2d', '標準'], ['gl', '加速(實驗)']], renderGetBackend(), function (v) {
+      renderSetBackend(v);
+      if (v === 'gl' && typeof showToast === 'function') showToast('加速繪圖(實驗):下一個畫面起生效;若無法使用會自動改回標準');
+      stRender();
+    })));
+    nodes.push(stEl('p', 'st-hint', '加速(實驗)用 WebGL 合成建築與居民,地形與介面仍用標準畫法;手機若出現黑畫面或異常請改回標準。錄影與拍照時會自動使用標準繪圖。'));
   }
   if (typeof uiSetMode === 'function') {
     const curMode = typeof uiGetMode === 'function' ? uiGetMode() : 'normal';

@@ -6,8 +6,8 @@ const BUILD_GROUPS = [
   { id: 'shop', name: '商鋪與市集', items: ['market', 'inn', 'post_station', 'shop_wine', 'shop_book', 'shop_cloth', 'shop_rice', 'shop_rouge', 'shop_gamble', 'shop_brothel', 'shop_herb', 'shop_tea', 'shop_pawn', 'stall_veg', 'stall_fruit', 'stall_cloth', 'stall_pottery', 'stall_rice', 'stall_book', 'stall_rouge', 'stall_meat', 'stall_wine', 'stall_tea', 'stall_toy', 'handcart', 'cart_hay', 'cart_goods', 'cart_empty', 'oxcart', 'deco_oxcart', 'wheelbarrow', 'carriage'] },
   { id: 'town', name: '民居與村落', items: ['hut_ruin', 'hut_mud', 'hut_plank', 'hut_collapsed', 'shack_lean', 'cave_dwelling', 'bamboo_house', 'house_tile', 'house_gentry', 'mansion_great', 'mansion_clan', 'manor_estate', 'yard_poor', 'wall_ruin', 'gate_wicker', 'fence_broken', 'well_old', 'rack_net', 'rack_cloth', 'shed_livestock', 'junk_pile', 'tree_dead'] },
   { id: 'bazaar', name: '市集地攤', items: ['plaza_stone', 'plaza_earth', 'plaza_center', 'vendor_platform', 'banner_wine', 'banner_cloth', 'banner_herb', 'ground_veg', 'ground_sandal', 'ground_goods', 'ground_bamboo', 'ground_pottery', 'ground_cloth', 'ground_iron', 'ground_old', 'hawker_carrier', 'perform_ring', 'storyteller', 'notice_board', 'hitching_post', 'water_vat', 'livestock_pen', 'smith_awning', 'barber_stand', 'fortune_stall', 'food_wonton', 'food_hubing', 'food_noodle'] },
-  { id: 'farm', name: '農牧', items: ['field_millet', 'field_sprout', 'field_wheat', 'mulberry_grove', 'orchard', 'vegetable_plot', 'herb_garden', 'tea_garden', 'beehive', 'plow', 'hoe', 'millstone', 'waterwheel', 'winnower', 'ox', 'horse', 'donkey', 'chicken', 'duck', 'goose', 'sheep', 'pig', 'stable', 'sheepfold', 'ranch_fence', 'trough', 'fodder', 'haystack', 'grain_sacks', 'granary_round', 'salt_pile', 'saltfield', 'grain_drying'] },
-  { id: 'ind', name: '產業', items: ['lumber', 'deco_lumberyard', 'sawbench', 'lograft', 'quarry', 'mine_entrance', 'minecart', 'ore_iron', 'ore_copper', 'ore_stone', 'smithy', 'shop_smith', 'bank'] },
+  { id: 'farm', name: '農牧', items: ['field_millet', 'field_sprout', 'field_hemp', 'field_wheat', 'mulberry_grove', 'orchard', 'vegetable_plot', 'herb_garden', 'tea_garden', 'beehive', 'plow', 'hoe', 'millstone', 'waterwheel', 'winnower', 'ox', 'horse', 'donkey', 'chicken', 'duck', 'goose', 'sheep', 'pig', 'stable', 'sheepfold', 'ranch_fence', 'trough', 'fodder', 'haystack', 'grain_sacks', 'granary_round', 'salt_pile', 'saltfield', 'grain_drying'] },
+  { id: 'ind', name: '產業', items: ['lumber', 'deco_lumberyard', 'loom_shop', 'sawbench', 'lograft', 'quarry', 'mine_entrance', 'minecart', 'ore_iron', 'ore_copper', 'ore_stone', 'smithy', 'shop_smith', 'bank'] },
   { id: 'port', name: '港口與碼頭', items: ['dock', 'pier_plank', 'wharf_platform', 'mooring_post', 'boat_small', 'boat_sampan', 'ship_cargo', 'ship_grain', 'ship_tower', 'ferry', 'warehouse_port', 'crane_pole', 'cargo_sacks', 'cargo_crates', 'cargo_jars', 'cargo_salt', 'cargo_silk', 'port_lamp', 'fish_market', 'shipyard', 'fishery', 'fish_rack'] },
   { id: 'mil', name: '軍事與營地', items: ['army_camp', 'parade_ground', 'drill_ground', 'archer', 'shield', 'cavalry', 'siege', 'hospital', 'tent_group', 'tent_general', 'flag_army', 'flag_great', 'drum_tower', 'beacon', 'deco_watchtower', 'deco_stable', 'deco_weaponrack', 'deco_target', 'training_dummy', 'deco_jumaa', 'deco_campfire', 'deco_lujiao', 'tent_small', 'war_chariot', 'cloud_ladder', 'ram', 'trebuchet', 'jinglan', 'warship'] },
   { id: 'garden', name: '庭園與景觀', items: ['tree', 'stone', 'tree_pine', 'tree_willow', 'tree_sakura', 'tree_maple', 'tree_mulberry', 'tree_peach', 'tree_cypress', 'deco_bamboo', 'deco_bush', 'flower_bed', 'deco_rocks', 'rockery', 'stone_lamp', 'lantern_line', 'deco_pond', 'lotus', 'reeds', 'potted_plant', 'small_bridge', 'lantern_post', 'stone_lion', 'spirit_wall'] },
@@ -171,6 +171,8 @@ const UI_SIDE_ITEMS = [
   { key: 'pet', icon: '🐲', label: '仙獸', title: '仙獸苑', top: true, scope: 'estate', target: 'btnPet', gate: 'pet' },
   { key: 'sandbox', icon: '⚔', label: '沙盤', title: '沙盤推演', top: true, scope: 'camp', target: 'btnSandbox' },
   { key: 'shop', icon: '🏪', label: '商店', title: '商店', scope: 'estate', target: 'btnShop', gate: 'shop' },
+  { key: 'tech', icon: '📜', label: '科技', title: '科技樹與研發序列', scope: 'estate', special: 'tech' },
+  { key: 'goods', icon: '📦', label: '庫房', title: '庫房(貨品與工坊狀態)', scope: 'estate', target: 'btnGoods' },
   { key: 'save', icon: '💾', label: '存檔', title: '布置存檔', scope: 'estate', target: 'btnLayoutSave' },
   { key: 'season', icon: '🌤', label: '季節', title: '季節與時段', scope: 'estate', target: 'seasonBtn' },
   { key: 'help', icon: '❓', label: '說明', title: '戰鬥布置工具說明', scope: 'camp', target: 'btnToolHelp' },
@@ -241,6 +243,7 @@ function uiSideAct(key) {
   else if (it.special === 'edit') editSideAct();
   else if (it.special === 'slots') { if (typeof slotPopToggle === 'function') slotPopToggle(); }
   else if (it.special === 'quest') { if (typeof progQuestEntry === 'function') progQuestEntry(); }
+  else if (it.special === 'tech') { if (typeof techPanelToggle === 'function') techPanelToggle(); }
   else if (it.special === 'photo') uiSetMode('photo');
   else {
     const t = document.getElementById(it.target);
@@ -283,7 +286,7 @@ function syncSideBar() {
     b.querySelector('.ic').textContent = icon;
     b.querySelector('.lb').textContent = label;
   });
-  // 正常模式最多 6 顆:依序捨棄 拍照 → 商店(精簡模式的展開列都還在);頂列項目與另一畫面的項目不算
+  // 正常模式最多 6 顆:依序捨棄 拍照 → 季節(精簡模式的展開列都還在);頂列項目與另一畫面的項目不算
   if (!uiIsCompact()) {
     const camp = game.mode === 'battleDesign';
     const vis = key => {
@@ -291,7 +294,7 @@ function syncSideBar() {
       return b && !b.hidden ? b : null;
     };
     const count = () => UI_SIDE_ITEMS.filter(it => !it.top && (it.scope === 'all' || (it.scope === 'camp') === camp) && vis(it.key)).length;
-    ['photo', 'shop'].forEach(k => { if (count() > 6 && vis(k)) vis(k).hidden = true; });
+    ['photo', 'season'].forEach(k => { if (count() > 6 && vis(k)) vis(k).hidden = true; });
   }
 }
 
@@ -317,7 +320,8 @@ function featGuard(id) {
     showToast('城建專注模式中已隱藏' + featNameOf(id) + '(設定可關閉此模式)');
     return false;
   }
-  showToast('城市 ' + progUnlockLv('feature', id) + ' 級才開放' + featNameOf(id));
+  showToast(typeof techFeatLockText === 'function' ? techFeatLockText(id, featNameOf(id)) : '尚未開放' + featNameOf(id));
+  if (typeof techFeatLockGo === 'function') techFeatLockGo(id);
   return false;
 }
 function featDot(f, b) {
@@ -341,8 +345,7 @@ function syncFeatureGate() {
   FEAT_GATE.forEach(function (f) {
     const open = isUnlocked('feature', f.id);
     if (featSynced && open && featOpenPrev[f.id] === false) {
-      const lv = progUnlockLv('feature', f.id);
-      setTimeout(() => showToast('城市 ' + lv + ' 級開放:' + f.name), 2200);
+      setTimeout(() => showToast('已開放:' + f.name), 2200);
     }
     featOpenPrev[f.id] = open;
     const b = f.btn ? document.getElementById(f.btn) : null;
@@ -858,16 +861,12 @@ function onVarClick(e) {
 
 // 鎖頭提示:分類內下一個要開放的等級(lv)與該級建築名稱(names);僅經營模式且有未開放者才有,否則 null
 function buildLockHint(catId, top) {
-  if (game.mode !== 'estate' || typeof progUnlockLv !== 'function' || typeof prog === 'undefined' || !prog) return null;
-  let lv = null, names = [];
-  buildCatAllIds(catId, top).forEach(k => {
-    const cb = uiIsCombo(k);
-    const L = cb ? comboUnlockLv(comboId(k)) : progUnlockLv('estate', k);
-    if (L === null || L <= prog.lv) return;
-    if (lv === null || L < lv) { lv = L; names = []; }
-    if (L === lv) names.push(cb ? comboDef(k).name : OBJECTS[k].name);
-  });
-  return lv === null ? null : { lv: lv, names: names };
+  if (game.mode !== 'estate') return null;
+  if (typeof techLockedNames === 'function') {   // NL2:改列「尚未研發」的物件名;nodeId = 最近可研的解鎖節點
+    const r = techLockedNames(buildCatAllIds(catId, top).map(k => uiIsCombo(k) ? { name: comboDef(k).name, combo: comboId(k) } : { name: OBJECTS[k].name, id: k }));
+    return r;
+  }
+  return null;
 }
 
 // 灰階「🔒 +n 於 Lv X」提示鈕(無 data-tool,不參與工具選取);點了 toast 列出該級開放的建築
@@ -875,13 +874,14 @@ function addLockHintButton(bar, hint) {
   if (!hint) return;
   const b = document.createElement('button');
   b.className = 'lockhint';
-  b.textContent = '🔒 +' + hint.names.length + ' 於 Lv' + hint.lv;
-  b.title = '城市 ' + hint.lv + ' 級開放';
+  b.textContent = '🔒 +' + hint.names.length + ' 需研發';
+  b.title = '需研發' + (hint.techName ? '〈' + hint.techName + '〉' : '科技');
   b.style.filter = 'grayscale(1)';
   b.style.opacity = '0.6';
   b.addEventListener('click', () => {
     const more = hint.names.length > 4 ? '…等 ' + hint.names.length + ' 項' : '';
-    showToast('城市 ' + hint.lv + ' 級開放:' + hint.names.slice(0, 4).join('、') + more);
+    showToast('需研發' + (hint.techName ? '〈' + hint.techName + '〉' : '科技') + ':' + hint.names.slice(0, 4).join('、') + more);
+    if (typeof techPanelOpen === 'function') techPanelOpen(hint.nodeId || undefined);
   });
   bar.appendChild(b);
 }
@@ -904,6 +904,7 @@ function markNewBuild(btn, id) {
 function progLockText(type) {
   const kind = game.mode === 'battleDesign' ? 'camp' : 'estate';
   if (!progRulesOn() || isUnlocked(kind, type)) return '';
+  if (kind === 'estate' && typeof techObjLockText === 'function') { const t = techObjLockText(type); if (t) return t; }
   return '城市 ' + progUnlockLv(kind, type) + ' 級才開放';
 }
 
@@ -1063,7 +1064,7 @@ function addComboButton(bar, id) {
   const btn = document.createElement('button');
   btn.setAttribute('data-tool', id);
   btn.innerHTML = '<span class="ic">' + d.icon + '</span><span>' + d.name + '</span><span class="cost">' + d.cells + '格</span>';
-  btn.title = d.name + ' ' + d.w + '×' + d.h + '(' + d.cells + '格)　' + comboGroupName(comboId(id)) + '　Lv' + comboUnlockLv(comboId(id)) + (d.step === 2 ? '　只能 180° 旋轉' : '');
+  btn.title = d.name + ' ' + d.w + '×' + d.h + '(' + d.cells + '格)　' + comboGroupName(comboId(id)) + (d.step === 2 ? '　只能 180° 旋轉' : '');
   btn.addEventListener('click', () => {
     setTool(ui.tool === id ? null : id);
     if (ui.tool !== null) showToast(d.name + ':點地圖放置整組,可拖曳 / 旋轉,按 ✓ 放下');
@@ -1712,6 +1713,7 @@ function tapObjectAt(sx, sy) {
   const n = world.occ[idx(c.x, c.y)];
   if (!n) return;
   const o = world.objects[n - 1];
+  if (typeof lordhallTap === 'function' && lordhallTap(o)) return;
   if (o.type === LAB_TYPE) {
     toggleTechPanel(true);
     return;
@@ -1816,7 +1818,8 @@ function toggleShop(open) {
     toggleTplMenu(false);
     toggleTechPanel(false);
     updateShop();
-  }
+    if (typeof panelOpen === 'function') panelOpen('shop');
+  } else if (typeof panelClose === 'function') panelClose('shop');
 }
 
 function toggleTplMenu(open) {
@@ -1826,23 +1829,8 @@ function toggleTplMenu(open) {
     toggleShop(false);
     toggleTechPanel(false);
     buildTplMenu();
-  }
-}
-
-// 城市範本(city_lv01 ~ city_lv25,PLAN_PROGRESSION §6.4):cityLv ≤ 玩家等級可載入到草稿,更高級者鎖住(灰階、不可選)
-function tplCityLv(t) {
-  if (typeof t.cityLv === 'number') return t.cityLv;
-  const m = /^city_lv(\d+)$/.exec(t.id || '');
-  return m ? +m[1] : 0;
-}
-function tplCityLists(kind) {
-  const my = (typeof prog !== 'undefined' && prog && prog.lv) || (typeof PROG_LV_MAX !== 'undefined' ? PROG_LV_MAX : 25);
-  const all = TEMPLATES.filter(t => (t.kind || 'estate') === kind && !t.hidden && tplCityLv(t) > 0);
-  return {
-    my: my,
-    open: all.filter(t => tplCityLv(t) <= my).sort((a, b) => tplCityLv(b) - tplCityLv(a)),
-    locked: all.filter(t => tplCityLv(t) > my).sort((a, b) => tplCityLv(a) - tplCityLv(b))
-  };
+    if (typeof panelOpen === 'function') panelOpen('tpl');
+  } else if (typeof panelClose === 'function') panelClose('tpl');
 }
 
 function buildTplMenu() {
@@ -1865,28 +1853,7 @@ function buildTplMenu() {
   restore.appendChild(rs);
   restore.disabled = !dflt;
   menu.appendChild(restore);
-  const city = tplCityLists(world.board);
-  const cityAll = city.open.concat(city.locked);
-  if (cityAll.length) {
-    const gh = document.createElement('small');
-    gh.textContent = '── 城市 ──';
-    menu.appendChild(gh);
-    cityAll.forEach(t => {
-      const lock = tplCityLv(t) > city.my;
-      const btn = document.createElement('button');
-      btn.className = lock ? 'tpl locked' : 'tpl';
-      btn.setAttribute('data-tpl', t.id);
-      btn.textContent = lock ? '🔒 Lv ' + tplCityLv(t) : t.name + (t.isDefault ? ' ★預設' : '');
-      const small = document.createElement('small');
-      small.textContent = lock ? '升到 Lv ' + tplCityLv(t) + ' 後可載入　' + t.w + '×' + t.h : t.desc + '　' + t.w + '×' + t.h;
-      btn.appendChild(small);
-      btn.disabled = lock || !tplFitsBoard(t);
-      menu.appendChild(btn);
-    });
-  }
-  const cityIds = {};
-  cityAll.forEach(t => { cityIds[t.id] = 1; });
-  const list = TEMPLATES.filter(t => (t.kind || 'estate') === world.board && !t.hidden && !cityIds[t.id]);
+  const list = TEMPLATES.filter(t => (t.kind || 'estate') === world.board && !t.hidden);
   const ordered = list.filter(t => t.isDefault).concat(list.filter(t => !t.isDefault));
   let grp = null;
   for (const t of ordered) {
@@ -1944,6 +1911,11 @@ function onTplClick(e) {
 
 // 科研院面板（PLAN_TECH §5）：研發中卡片＋軍事／經濟頁籤，依階分組
 function toggleTechPanel(open) {
+  if (game.mode === 'estate' && typeof techPanelOpen === 'function') {   // NL2:經營端改開新科技樹頁;兵種科技(tech.js)只在戰陣端
+    if (open === undefined) open = !(typeof techPanelIsOpen === 'function' && techPanelIsOpen());
+    if (open) techPanelOpen(); else techPanelClose();
+    return;
+  }
   ui.techOpen = open === undefined ? !ui.techOpen : !!open;
   document.getElementById('techPanel').hidden = !ui.techOpen;
   if (ui.techOpen) {
@@ -1951,7 +1923,8 @@ function toggleTechPanel(open) {
     toggleTplMenu(false);
     lastTechHtml = '';
     updateTechPanel();
-  }
+    if (typeof panelOpen === 'function') panelOpen('tech');
+  } else if (typeof panelClose === 'function') panelClose('tech');
 }
 
 function techTimeText(sec) {

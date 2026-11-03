@@ -15,6 +15,8 @@ function boot() {
   ctx = canvas.getContext('2d');
   resizeCanvas(canvas);
   window.addEventListener('resize', () => resizeCanvas(canvas));
+  // iOS 直版轉橫版後視窗尺寸與安全區常延遲更新:轉向後再補量兩次,並強制重排固定定位的邊欄/頂列
+  window.addEventListener('orientationchange', () => { [120, 450].forEach(ms => setTimeout(() => { resizeCanvas(canvas); const sb = document.getElementById('sideBar'); if (sb) { sb.style.display = 'none'; void sb.offsetWidth; sb.style.display = ''; } }, ms)); });
   const migr = progBoot();
   if (!loadWorld()) applyTemplate(DEFAULT_TEMPLATE);
   initUI(canvas);
@@ -48,7 +50,7 @@ function frame(nowMs) {
   lastFrameMs = nowMs;
   // 攻擊/沙盤/錄影期間不累積經濟(資源列改顯示掠奪);同步 lastTs 避免離線結算把戰鬥時間算進去
   if (typeof lootMode === 'function' && lootMode()) world.lastTs = Date.now();
-  else tickResources(dt);
+  else { tickResources(dt); if (typeof techTick === 'function') techTick(dt); }
   const td = tickResearch(dt);
   if (td) onTechDone(td, false);
   if (battle && ((game.mode === 'attack' && game.phase === 'march') || game.mode === 'replay')) {
@@ -74,7 +76,7 @@ function frame(nowMs) {
   }
   if (typeof battleUiTick === 'function') battleUiTick(dt);
   if (typeof game !== 'undefined' && game.mode === 'fishing') { requestAnimationFrame(frame); return; }
-  // 繪製幀率上限(預設 30 fps,設定可選 60;省電固定 30);未達間隔的 rAF 只跑上面的模擬 / tick,不畫
+  // 繪製幀率上限(動態:操作中用設定值 60/30,閒置 30;省電固定 30);未達間隔的 rAF 只跑上面的模擬 / tick,不畫
   if (!pano.open && (typeof perfGateOk !== 'function' || perfGateOk(drawGate || (drawGate = perfGateNew()), nowMs))) draw(ctx, nowMs / 1000);
   requestAnimationFrame(frame);
 }

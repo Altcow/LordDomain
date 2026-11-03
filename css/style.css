@@ -606,6 +606,8 @@ body.ui-compact { --stack: 40px; --side-w: 80px; }
 @media (orientation: landscape) {
   #sideBar .side-list { display: grid; grid-template-columns: 44px 44px; }
 }
+/* 橫版:右側不留瀏海安全區(瀏海/動態島在左側),頂列右側圖示與右邊欄一樣貼齊右邊 */
+@media (orientation: landscape) { #topbar { padding-right: 4px; } }
 @media (orientation: landscape) and (max-height: 500px) {
   #sideBar { gap: 3px; }
   #sideBar .side-list { gap: 3px; }
@@ -1123,3 +1125,36 @@ body.city-only #modeBtn, body.city-only #btnAttack, body.city-only #fightMenu, b
 body.city-only #sideBar .side-btn[data-px="fish"], body.city-only #sideBar .side-btn[data-px="pet"], body.city-only #sideBar .side-btn[data-px="sandbox"] { display: none !important; }
 #progDrawer .pg-xbar { width: 100%; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .15); overflow: hidden; margin: 2px 0 6px; }
 #progDrawer .pg-xfill { display: block; height: 100%; background: #f0b45a; }
+/* ===== 城建評分(cityscoreui.js,PLAN_CITY §2.3):頂列繁榮度晶片、繁榮度面板、放置預覽浮字、升級抽屜「前往」鈕。只追加 ===== */
+#csChip { flex: 0 0 auto; position: relative; display: inline-flex; align-items: center; height: 26px; padding: 0 8px; border-radius: 999px; background: rgba(47, 59, 77, .9); border: 1px solid #45566e; color: #e8edf2; font-size: 12px; line-height: 1; white-space: nowrap; cursor: pointer; user-select: none; }
+#csChip[hidden], #csPanel[hidden], #csPreview[hidden], #csPanel [hidden] { display: none !important; }
+body.ui-compact #csChip { height: 22px; padding: 0 6px; font-size: 11px; }
+body.atk-mode #csChip, body.replay-mode #csChip, body.sandbox #csChip, body.photo-mode #csChip, body.atk-mode #csPanel, body.replay-mode #csPanel, body.sandbox #csPanel, body.photo-mode #csPanel, body.atk-mode #csPreview, body.replay-mode #csPreview, body.sandbox #csPreview, body.photo-mode #csPreview { display: none !important; }
+#csPanel { position: fixed; z-index: 4; left: 8px; right: 8px; bottom: calc(var(--stack) + 8px + env(safe-area-inset-bottom)); max-width: 320px; max-height: 52vh; margin: 0 auto; box-sizing: border-box; display: flex; flex-direction: column; padding: 8px 10px; border-radius: 12px; background: rgba(28, 36, 48, .96); border: 1px solid #45566e; color: #e8edf2; font-size: 13px; }
+#csPanel .cs-head { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255, 255, 255, .15); }
+#csPanel .cs-title { font-size: 15px; }
+#csPanel .cs-sp { flex: 1 1 auto; }
+#csPanel .cs-x { min-width: 36px; min-height: 36px; padding: 0 6px; background: none; border: none; color: inherit; }
+#csPanel .cs-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; margin-top: 4px; }
+#csPanel .cs-big { display: flex; align-items: baseline; gap: 8px; margin-top: 4px; }
+#csPanel .cs-bigl { font-size: 12px; opacity: .8; }
+#csPanel .cs-bign { font-size: 20px; font-variant-numeric: tabular-nums; }
+#csPanel .cs-bigs { flex: 1 1 auto; text-align: right; font-size: 11px; opacity: .7; }
+#csPanel .cs-bar { display: block; position: relative; height: 6px; margin: 2px 0 4px; border-radius: 3px; background: rgba(255, 255, 255, .15); overflow: hidden; }
+#csPanel .cs-axl .cs-bar { flex: 1 1 auto; margin: 0; }
+#csPanel .cs-fill { display: block; height: 100%; background: #f0b45a; }
+#csPanel .cs-fill2 { background: #7fc7a0; }
+#csPanel .cs-ax { margin-top: 2px; }
+#csPanel .cs-axl { display: flex; align-items: center; gap: 6px; min-height: 32px; cursor: pointer; }
+#csPanel .cs-axn { flex: 0 0 34px; font-size: 12px; }
+#csPanel .cs-axv { flex: 0 0 38px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+#csPanel .cs-axs { flex: 0 0 56px; font-size: 10px; color: #f0b45a; letter-spacing: -1px; }
+#csPanel .cs-top { padding-left: 40px; font-size: 11px; opacity: .8; line-height: 1.5; }
+#csPanel .cs-hint, #csPanel .cs-cov { margin-top: 6px; font-size: 11px; opacity: .7; }
+#csPanel .cs-say { margin-top: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(240, 180, 90, .12); font-size: 12px; line-height: 1.5; }
+#csPreview { position: fixed; z-index: 3; top: calc(46px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); max-width: 90vw; padding: 3px 10px; border-radius: 999px; background: rgba(28, 36, 48, .85); border: 1px solid rgba(240, 180, 90, .6); color: #ffd98a; font-size: 13px; font-weight: bold; white-space: nowrap; pointer-events: none; }
+#progDrawer .pg-go { flex: 0 0 auto; min-height: 28px; padding: 0 8px; margin-left: 4px; font-size: 11px; }
+/* panelmgr: z-index table and big-panel mask */
+:root { --z-hud: 10; --z-dock: 20; --z-card: 30; --z-big-mask: 40; --z-big: 41; --z-dlg-mask: 50; --z-dlg: 51; --z-transient: 60; --z-guide: 70; --z-fullscreen: 80; --z-photo-back: 90; }
+#panelMask { position: fixed; inset: 0; z-index: var(--z-big-mask); background: rgba(8, 12, 18, .45); touch-action: none; }
+#panelMask[hidden] { display: none; }

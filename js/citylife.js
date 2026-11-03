@@ -754,7 +754,7 @@ function lifeWalk(n, dt) {
       }
     }
     const dx = n.tx - n.x, dy = n.ty - n.y, d = Math.sqrt(dx * dx + dy * dy);
-    const step = n.spd * dt;
+    const step = n.spd * dt * (typeof cityRoadSpd === 'function' ? cityRoadSpd(n.x, n.y) : 1);   // CT10:道路暢通路速(只讀,不寫資料)
     if (d <= step || d < 1e-6) {
       n.x = n.tx; n.y = n.ty;
       if (n.spd > 0) dt -= d / n.spd;
@@ -896,6 +896,7 @@ function lifeSprTrim() {
     const c = A.cache[k];
     bytes -= c.bytes; A.cacheBytes -= c.bytes; A.cacheCount--;
     delete A.cache[k];
+    if (A.onDrop) A.onDrop(c);
   }
   LIFE.sprBytes = bytes;
 }
@@ -1059,19 +1060,17 @@ function lifeDrawOne(ctx, n, res, tod, season, useArt, alpha) {
     pp.spec = n.spec; pp.x = n.px; pp.y = n.py; pp.f = (f === 1 || f === 2) ? 1 : 0;
     pp.fr = n.st === 'walk' ? Math.floor(LIFE.clock * n.frr + n.ph) % 2 : (n.fid ? Math.floor(LIFE.clock * 0.8 + n.ph * 2) % 2 : 0);
     pp.alpha = alpha;
-    if (flip) { ctx.save(); ctx.translate(n.px, 0); ctx.scale(-1, 1); ctx.translate(-n.px, 0); }
+    if (flip) { rqSave(ctx); rqTranslate(ctx, n.px, 0); rqScale(ctx, -1, 1); rqTranslate(ctx, -n.px, 0); }
     ART.chibiPose(ctx, pp, res, tod, season);
-    if (flip) ctx.restore();
+    if (flip) rqRestore(ctx);
     return;
   }
   // 占位小人;縮放 < 0.5 時(LIFE.small)縮成約 8px 高的小人
   const k = LIFE.small ? 0.6 : 1;
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = n.col;
-  ctx.beginPath(); ctx.ellipse(n.px, n.py - 9 * k, 3.8 * k, 6.5 * k, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#f0d2b0';
-  ctx.beginPath(); ctx.arc(n.px, n.py - 18 * k, 3.4 * k, 0, Math.PI * 2); ctx.fill();
-  ctx.globalAlpha = 1;
+  rqAlpha(ctx, alpha);
+  rqDisc(ctx, n.px, n.py - 9 * k, 3.8 * k, 6.5 * k, n.col);
+  rqDisc(ctx, n.px, n.py - 18 * k, 3.4 * k, 3.4 * k, '#f0d2b0');
+  rqAlpha(ctx, 1);
 }
 
 // 依對角線分桶繪製(每個對角線一次呼叫,總成本 O(n));縮放分三級:正常 / <0.5 簡化 / <0.35 色點
@@ -1094,10 +1093,9 @@ function lifeDrawDiag(ctx, d, time) {
     if (dots) {
       if (LIFE.dots >= LIFE_DOT_MAX) continue;
       LIFE.dots++;
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = n.col;
-      ctx.beginPath(); ctx.arc(n.px, n.py - 5, 2.2, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 1;
+      rqAlpha(ctx, alpha);
+      rqDisc(ctx, n.px, n.py - 5, 2.2, 2.2, n.col);
+      rqAlpha(ctx, 1);
       continue;
     }
     if (n.st === 'chat' && n.pair) {

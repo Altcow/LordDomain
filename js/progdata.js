@@ -11,7 +11,7 @@ const PROG_FREE_BUILD = true;   // 經營建築免費(PLAN_PROGRESSION §2.6 方
 
 // ───────── 1. 等級曲線(PLACEHOLDER:全部用簡單公式產生,日後換成逐級表只改這裡)─────────
 function progCoreSide(lv) { return 20 + Math.floor(1.5 * (lv - 1)); }           // 城郭/戰陣土地(舊公式):Lv1 20×20 → Lv25 56×56;範本、戰陣(camp)用
-// 經營土地(PLAN_BIGMAP §5.1 α 曲線):Lv1 20 → Lv25 = EST_W(112);不小於 progCoreSide(Lv3 起保證放得下對應等級範本)。EST_W <= 56 時等同 progCoreSide
+// 經營土地(PLAN_BIGMAP §5.1 α 曲線):Lv1 20 → Lv25 = EST_W(112);不小於 progCoreSide(僅 Lv3 時 23 > α 的 22;城市範本已移除,保留此下限以免既有 Lv3 存檔的土地縮小)。EST_W <= 56 時等同 progCoreSide
 function progLandSide(lv) {
   const core = progCoreSide(lv);
   if (typeof EST_W === 'undefined' || EST_W <= 56) return core;
@@ -45,6 +45,7 @@ function progUpgradeCost(lv) {
   if (PROG_RARE_REQ[lv]) mats[PROG_RARE_REQ[lv]] = 1;                           // 珍材料(里程碑)
   // 城建專注模式(js/cityonly.js):免材料、免首領營、免戰鬥教學,經驗改用 PROG_CITY_NEED;資源需求不變。關閉模式後回到原規則
   if (typeof isCityOnly === 'function' && isCityOnly()) {
+    if (typeof cityUpgradeCost === 'function') return cityUpgradeCost(lv, k);   // js/cityscore.js:資源 ×0.6 + 繁榮度 / 人口 / 營造要求(沒載入時退回舊規則)
     return { res: { coin: 500 * k, wood: 150 * k, stone: 100 * k }, xp: PROG_CITY_NEED(lv), mats: {}, boss: null, ftue: null };
   }
   return {
@@ -72,10 +73,10 @@ const PROG_CITY_QUEST = [
   { id: 'cq_house3', text: '① 再蓋 1 座民房', hint: '選建築 → 點地面 → ✓', go: '下方建築列', kind: 'houses', n: 3 },
   { id: 'cq_lumber', text: '② 蓋 1 座伐木場或採石場', hint: '分類選「產業」,蓋好會自己生產木頭或石頭', go: '下方建築列 → 產業', kind: 'anyType', types: ['lumber', 'quarry'] },
   { id: 'cq_house4', text: '③ 民房蓋到 4 座', hint: '民房會自己生產金幣;目前最多蓋 4 座', go: '下方建築列', kind: 'houses', n: 4 },
-  { id: 'cq_deco5', text: '④ 擺 5 件裝飾', hint: '樹、花圃、水井、石桌都算,讓小村熱鬧起來', go: '下方建築列', kind: 'deco', n: 5 },
-  { id: 'cq_lv2', text: '⑤ 點頂列 Lv,升到 Lv2', hint: '資源與經驗都夠就能升級;升級後土地會變大', go: '頂列 Lv', kind: 'lv', n: 2 },
+  { id: 'cq_deco5', text: '④ 擺 5 件裝飾', hint: '樹、花圃、水井、石桌都算,讓小村熱鬧起來(也會提高繁榮度)', go: '下方建築列', kind: 'deco', n: 5 },
+  { id: 'cq_lv2', text: '⑤ 點頂列 Lv,升到 Lv2', hint: '資源、經驗、繁榮度、人口與營造要求都達標就能升級(點頂列 Lv 看缺什麼);升級後土地會變大', go: '頂列 Lv', kind: 'lv', n: 2 },
   { id: 'cq_house7', text: '⑥ 趁土地變大,民房蓋到 7 座', hint: '人口越多,生產越多,經驗也越多', go: '下方建築列', kind: 'houses', n: 7 },
-  { id: 'cq_lv3', text: '⑦ 再升一級到 Lv3', hint: '蓋出更多種類的建築、擴大規模就能累積經驗', go: '頂列 Lv', kind: 'lv', n: 3 }
+  { id: 'cq_lv3', text: '⑦ 再升一級到 Lv3', hint: '每級有一條營造要求(例:每戶民居 6 格內有水井);蓋出更多種類的建築、擴大規模能累積經驗與繁榮度', go: '頂列 Lv', kind: 'lv', n: 3 }
 ];
 // 升 L+1 之前必須在首領營拿到 ≥1★ 的 NPC id(結構)
 const PROG_BOSS_REQ = { 5: 'huangjin', 8: 'shankou', 12: 'shuizhai', 14: 'jun', 17: 'shanyue', 20: 'hulao', 22: 'chanyu', 24: 'luoyang' };
@@ -187,18 +188,18 @@ const PROG_GHOST_SLOTS = 3; // 他城榜同時顯示幾座(結構)
 // ───────── 6. 等級開放表(結構:不是平衡數字)─────────
 // 經營建築:BUILD_GROUPS 的實際 id(research 不在分組內);共 200 件全覆蓋(tools/prog/prog_check.js 驗證)
 const PROG_UNLOCK_ESTATE = {
-  1: ['house', 'palace', 'lumber', 'quarry', 'tree', 'stone', 'well', 'field_sprout', 'vegetable_plot', 'fence_wood', 'woodpile', 'haystack', 'chicken', 'dog', 'deco_bush', 'flower_bed', 'stone_table', 'stone_stool', 'bench_wood', 'hut_ruin', 'hut_mud', 'shack_lean', 'wall_ruin', 'fence_broken', 'junk_pile', 'tree_dead', 'gate_wicker'],
-  2: ['tbl_wood', 'tbl_stone', 'stool_wood', 'field_millet', 'plow', 'hoe', 'ox', 'pig', 'duck', 'barrel_water', 'basket', 'grain_sacks', 'tree_willow', 'deco_rocks', 'table_wood', 'hut_plank', 'hut_collapsed', 'yard_poor', 'well_old', 'rack_net', 'rack_cloth', 'ground_veg', 'ground_sandal'],
-  3: ['tbl_low', 'tbl_meal', 'cushion_round', 'grain_drying', 'lantern_post', 'market', 'wall', 'gate', 'stall_veg', 'stall_fruit', 'handcart', 'wheelbarrow', 'cat', 'tree_pine', 'road_stone', 'table_long', 'cave_dwelling', 'shed_livestock', 'plaza_earth', 'ground_goods', 'ground_bamboo', 'hawker_carrier', 'water_vat', 'food_noodle'],
+  1: ['house', 'palace', 'lumber', 'quarry', 'tree', 'stone', 'well', 'field_sprout', 'vegetable_plot', 'fence_wood', 'woodpile', 'haystack', 'chicken', 'dog', 'deco_bush', 'flower_bed', 'stone_table', 'stone_stool', 'bench_wood', 'hut_ruin', 'hut_mud', 'shack_lean', 'wall_ruin', 'fence_broken', 'junk_pile', 'tree_dead', 'gate_wicker', 'field_hemp', 'sawbench'],
+  2: ['tbl_wood', 'tbl_stone', 'stool_wood', 'field_millet', 'plow', 'hoe', 'ox', 'pig', 'duck', 'barrel_water', 'basket', 'grain_sacks', 'tree_willow', 'deco_rocks', 'table_wood', 'hut_plank', 'hut_collapsed', 'yard_poor', 'well_old', 'rack_net', 'rack_cloth', 'ground_veg', 'ground_sandal', 'loom_shop'],
+  3: ['tbl_low', 'tbl_meal', 'cushion_round', 'grain_drying', 'lantern_post', 'market', 'wall', 'gate', 'stall_veg', 'stall_fruit', 'handcart', 'wheelbarrow', 'cat', 'tree_pine', 'road_stone', 'table_long', 'cave_dwelling', 'shed_livestock', 'plaza_earth', 'ground_goods', 'ground_bamboo', 'hawker_carrier', 'water_vat', 'food_noodle', 'smith_awning', 'shop_cloth', 'mine_entrance', 'ore_iron'],
   4: ['tbl_long', 'tbl_meal_long', 'tbl_chess', 'chair_wood', 'tent_small', 'stairs', 'ramp', 'shield', 'training_dummy', 'deco_target', 'deco_weaponrack', 'flag_army', 'sheep', 'trough', 'fodder', 'hu_chuang', 'house_tile', 'hitching_post', 'notice_board', 'ground_pottery', 'food_wonton'],
   5: ['tbl_big', 'tbl_tea', 'tbl_wine', 'shop_rice', 'shop_wine', 'stall_rice', 'stall_meat', 'stall_wine', 'winejar', 'winejar_big', 'food_table', 'mat', 'broom', 'privy', 'table_set', 'bamboo_house', 'plaza_stone', 'vendor_platform', 'banner_wine', 'banner_cloth', 'ground_cloth', 'food_hubing', 'storyteller'],
   6: ['tbl_round', 'tbl_wine_long', 'tbl_book', 'bridge', 'fish_rack', 'fishery', 'dock', 'boat_small', 'lotus', 'reeds', 'deco_pond', 'small_bridge', 'barrel_empty', 'goose', 'chair_bamboo', 'ground_iron', 'ground_old', 'banner_herb', 'barber_stand', 'fortune_stall'],
   7: ['tbl_tea_long', 'tbl_study', 'research', 'archer', 'bookshelf', 'shop_book', 'stall_book', 'stele', 'lamp_stand', 'deco_bamboo', 'fence_bamboo', 'screen_fold'],
-  8: ['tbl_feast', 'tbl_low_meal', 'post_station', 'inn', 'cart_hay', 'cart_goods', 'cart_empty', 'donkey', 'horse', 'stable', 'tree_maple', 'stools_pair', 'boat_sampan', 'pier_plank', 'mooring_post', 'cargo_sacks', 'cargo_crates', 'perform_ring', 'livestock_pen', 'smith_awning'],
-  9: ['stone_lion', 'shop_cloth', 'stall_cloth', 'stall_pottery', 'stall_tea', 'shop_tea', 'tea_garden', 'bank', 'shop_pawn', 'tea_set', 'wharf_platform', 'cargo_jars', 'port_lamp', 'house_gentry'],
+  8: ['tbl_feast', 'tbl_low_meal', 'post_station', 'inn', 'cart_hay', 'cart_goods', 'cart_empty', 'donkey', 'horse', 'stable', 'tree_maple', 'stools_pair', 'boat_sampan', 'pier_plank', 'mooring_post', 'cargo_sacks', 'cargo_crates', 'perform_ring', 'livestock_pen'],
+  9: ['stone_lion', 'stall_cloth', 'stall_pottery', 'stall_tea', 'shop_tea', 'tea_garden', 'bank', 'shop_pawn', 'tea_set', 'wharf_platform', 'cargo_jars', 'port_lamp', 'house_gentry'],
   10: ['tbl_banquet', 'chair_taishi', 'spirit_wall', 'cavalry', 'parade_ground', 'drill_ground', 'wall_courtyard', 'gate_courtyard', 'deco_campfire', 'deco_jumaa', 'deco_lujiao', 'low_table_cushion', 'warehouse_port', 'ship_cargo', 'cargo_salt', 'fish_market', 'plaza_center'],
   11: ['field_wheat', 'mulberry_grove', 'orchard', 'herb_garden', 'beehive', 'millstone', 'winnower', 'granary_round', 'sheepfold', 'ranch_fence'],
-  12: ['deco_lumberyard', 'sawbench', 'lograft', 'mine_entrance', 'minecart', 'ore_stone', 'ore_iron', 'ore_copper', 'smithy', 'shop_smith', 'ship_grain', 'crane_pole', 'cargo_silk'],
+  12: ['deco_lumberyard', 'lograft', 'minecart', 'ore_stone', 'ore_copper', 'smithy', 'shop_smith', 'ship_grain', 'crane_pole', 'cargo_silk'],
   13: ['she_altar', 'incense_burner', 'censer', 'stone_lamp', 'tree_cypress', 'potted_plant'],
   14: ['shop_herb', 'shop_rouge', 'stall_rouge', 'stall_toy', 'couch', 'screen', 'chest', 'winejar_stack', 'winejar_mix', 'mansion_great'],
   15: ['siege', 'army_camp', 'tent_group', 'flag_great', 'drum_tower', 'well_sweep', 'shipyard'],

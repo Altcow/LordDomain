@@ -23,7 +23,7 @@ function progBlank() {
     bossBest: {},
     friendHits: {},
     mod: { seq: 0, fav: [], my: [] },
-    city: { done: {}, gained: 0 },   // 城建專注模式的經驗里程碑(prog.city.done 的鍵 = 已給過經驗的里程碑;舊存檔無此欄位視為空)
+    city: { done: {}, gained: 0, high: -1 },   // 城建專注模式的經驗里程碑(prog.city.done 的鍵 = 已給過經驗的里程碑;舊存檔無此欄位視為空)
     lastEstate: null
   };
   Object.keys(PROG_MATS).forEach(function (id) { d.mats[id] = 0; });
@@ -86,6 +86,8 @@ function progNorm(raw) {
   }
   if (progIsObj(raw.city)) {
     b.city.gained = progInt(raw.city.gained, 0, Number.MAX_SAFE_INTEGER, 0);
+    b.city.high = progInt(raw.city.high, -1, Number.MAX_SAFE_INTEGER, -1);   // 繁榮度歷史最高(-1 = 尚未記錄;cityscore.js cityscoreXpGain)
+    if (raw.city.matMigrated) b.city.matMigrated = 1;   // 舊普材料已複製進庫房(goods.js goodsMigrateMats)
     if (progIsObj(raw.city.done)) {
       for (k in raw.city.done) if (raw.city.done[k] === true) b.city.done[k] = true;
     }
@@ -196,7 +198,7 @@ function progBossDef(id) {
 
 // 升級檢查:回傳 {ok, reason};reason 為給玩家看的原因字串(ok 時為空字串)
 function progCanUpgrade() {
-  var p = progGet(), c, k, id, have, need;
+  var p = progGet(), c, k, id, have, need, chk;
   if (p.lv >= PROG_LV_MAX) return { ok: false, reason: '已達最高等級' };
   c = progUpgradeCost(p.lv);
   if (c.ftue && !p.ftue.done[c.ftue]) return { ok: false, reason: '尚未完成教學:' + (PROG_FTUE_TEXT[c.ftue] || c.ftue) };
@@ -213,6 +215,10 @@ function progCanUpgrade() {
     need = c.res[k];
     if (have < need) return { ok: false, reason: '資源不足:' + (PROG_RES_NAME[k] || k) + '(' + Math.floor(have) + ' / ' + need + ')' };
   }
+  if (progCityActive() && typeof cityUpgradeCheck === 'function') {   // 城建專注模式:繁榮度 / 人口 / 營造要求 / 貨品(js/cityscore.js)
+    chk = cityUpgradeCheck(p.lv);
+    if (!chk.ok) return chk;
+  }
   return { ok: true, reason: '' };
 }
 
@@ -226,6 +232,7 @@ function progDoUpgrade() {
   for (k in c.res) world.res[k] = (world.res[k] || 0) - c.res[k];
   for (id in c.mats) p.mats[id] -= c.mats[id];
   p.xp -= c.xp;
+  if (progCityActive() && typeof cityUpgradeGoodsSpend === 'function') cityUpgradeGoodsSpend(p.lv);   // 貨品鉤子(js/cityscore.js;貨品需求表接入後才有實際扣繳)
   p.lv += 1;
   progSave();
   progFtueCheck();
@@ -434,6 +441,7 @@ function progCityCheck() {
   if (p.lv >= PROG_LV_MAX) return 0;
   objs = estateObjects();
   gain = progCityGrant(p, progCityStats(objs));
+  if (typeof cityscoreXpGain === 'function') gain += cityscoreXpGain(p);   // 繁榮度創新高 → 政績
   if (gain > 0) {
     p.xp += gain;
     p.city.gained += gain;

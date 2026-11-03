@@ -14,7 +14,7 @@ function zoomAbsMin() { return boardW() > MAP_W ? ZOOM_ABS_MIN_BIG : ZOOM_ABS_MI
 const VIEW_LAND_MARGIN = 6;
 function viewCells() {
   const W = boardW(), H = boardH();
-  if (W > MAP_W && game.mode === 'estate' && typeof prog !== 'undefined' && prog && typeof progLandSide === 'function' && prog.lv < PROG_LV_MAX) {
+  if (W > MAP_W && game.mode === 'estate' && world.board !== 'estate' && typeof prog !== 'undefined' && prog && typeof progLandSide === 'function' && prog.lv < PROG_LV_MAX) {
     const side = Math.min(W, progLandSide(prog.lv) + VIEW_LAND_MARGIN * 2), o = (W - side) >> 1;
     return [o, o, o + side, o + side];
   }
@@ -583,7 +583,7 @@ function drawTile(ctx, x, y, time) {
   }
 
   // 省電模式:水面改為靜態(略過河流流線的 clip + 描邊與湖面閃光,這兩者是水格最貴的部分)
-  const still = wet && typeof isPowerSave === 'function' && isPowerSave();
+  const still = tileBake || (wet && typeof isPowerSave === 'function' && isPowerSave());
   if (t === T_RIVER) { if (!still) drawRiver(ctx, x, y, h, time); }
   else if (t === T_LAKE) { if (!still) drawLake(ctx, x, y, h, time); }
   else if (t >= T_SAND && t <= T_SNOW && view.zoom >= G2_DETAIL_ZOOM) drawGround2(ctx, x, y, h, t);
@@ -592,6 +592,7 @@ function drawTile(ctx, x, y, time) {
 // 物件繪製
 function drawObject(ctx, o, alpha) {
   if (typeof artDrawObject === 'function' && artDrawObject(ctx, o, alpha)) return;
+  ctx = rqOv(ctx);   // GL 幀:舊式向量物件畫在疊加層(底層 2D 已被 GL 地形蓋住);c2d 時不變
   if (alpha === undefined) alpha = 1;
   const x = o.x, y = o.y;
   const bh = world.height[idx(x, y)] * HL;
@@ -854,7 +855,8 @@ function drawObjBlob(ctx, o) {
   const fp = OBJECTS[o.type] ? footprint(o.type, o.rot) : [1, 1];
   const top = world.height[idx(o.x, o.y)] * HL + 14;
   const col = o.type === 'tree' ? PAL.canopyDark : (OBJECTS[o.type] && OBJECTS[o.type].mil ? MIL_COL.red : '#c9b48a');
-  poly(ctx, [gpt(o.x, o.y, top), gpt(o.x + fp[0], o.y, top), gpt(o.x + fp[0], o.y + fp[1], top), gpt(o.x, o.y + fp[1], top)], col);
+  const a = gpt(o.x, o.y, top), b = gpt(o.x + fp[0], o.y, top), c = gpt(o.x + fp[0], o.y + fp[1], top), d = gpt(o.x, o.y + fp[1], top);
+  rqPoly4(ctx, a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1], col);
 }
 
 // 待購物件：金色底＋半透明本體＋金色虛線外框；選取中改白色實線
@@ -863,12 +865,13 @@ function drawPendingObj(ctx, o) {
   const bh = world.height[idx(o.x, o.y)] * HL;
   const sel = pend.sel >= 0 && pend.list[pend.sel] === o;
   const pts = [gpt(o.x, o.y, bh), gpt(o.x + fp[0], o.y, bh), gpt(o.x + fp[0], o.y + fp[1], bh), gpt(o.x, o.y + fp[1], bh)];
-  poly(ctx, pts, sel ? 'rgba(255,255,255,.30)' : 'rgba(255,214,90,.22)');
+  rqPoly4(ctx, pts[0][0], pts[0][1], pts[1][0], pts[1][1], pts[2][0], pts[2][1], pts[3][0], pts[3][1], sel ? 'rgba(255,255,255,.30)' : 'rgba(255,214,90,.22)');
   drawObject(ctx, o, sel && pend.moving ? 0.3 : 0.6);
-  ctx.save();
-  ctx.setLineDash(sel ? [] : [5, 4]);
-  outline(ctx, pts, sel ? '#ffffff' : '#ffd65a', sel ? 2.5 : 1.5);
-  ctx.restore();
+  const oc = rqOv(ctx);   // GL 幀:外框畫在疊加層(c2d 時 oc === ctx)
+  oc.save();
+  oc.setLineDash(sel ? [] : [5, 4]);
+  outline(oc, pts, sel ? '#ffffff' : '#ffd65a', sel ? 2.5 : 1.5);
+  oc.restore();
 }
 
 // 隱藏建築時的佔格輪廓（PLAN 12.17）：已建 = 白、待購 = 金、不合法 = 紅；只畫物件外緣的邊
@@ -878,13 +881,13 @@ function drawGhostCell(ctx, x, y) {
   if (!n && !pn) return;
   const bad = n && hide.badCell[i];
   const p = topPts(x, y, world.height[i], 0);
-  poly(ctx, p, bad ? 'rgba(230,70,70,.40)' : (n ? 'rgba(255,255,255,.14)' : 'rgba(255,214,90,.18)'));
+  rqPoly4(ctx, p[0][0], p[0][1], p[1][0], p[1][1], p[2][0], p[2][1], p[3][0], p[3][1], bad ? 'rgba(230,70,70,.40)' : (n ? 'rgba(255,255,255,.14)' : 'rgba(255,214,90,.18)'));
   const col = bad ? '#ff5a4a' : (n ? 'rgba(255,255,255,.8)' : '#ffd65a');
   const edges = [[0, 1, x, y - 1], [1, 2, x + 1, y], [2, 3, x, y + 1], [3, 0, x - 1, y]];
   edges.forEach(e => {
     const j = inBounds(e[2], e[3]) ? idx(e[2], e[3]) : -1;
     const same = j >= 0 && (n ? world.occ[j] === n : pend.occ[j] === pn);
-    if (!same) edgeLine(ctx, p[e[0]], p[e[1]], col, bad ? 2 : 1.5, 1);
+    if (!same) rqLine(ctx, p[e[0]][0], p[e[0]][1], p[e[1]][0], p[e[1]][1], bad ? 2 : 1.5, col, 1);
   });
 }
 
@@ -1045,7 +1048,7 @@ var landMask = null;   // { fn, lv, out: Uint8Array（1 = 遮罩外）, edges: [
 function landDrawInvalidate() { landMask = null; }
 
 function landMaskOn() {
-  return (game.mode === 'estate' || game.mode === 'battleDesign') && typeof inLand === 'function';
+  return (game.mode === 'estate' || game.mode === 'battleDesign') && world.board !== 'estate' && typeof inLand === 'function';
 }
 
 function landMaskGet() {
@@ -1119,10 +1122,197 @@ function visSpan(BW, BH) {
   };
 }
 
+// ===== 地形分塊(WebGL 後端,PLAN_RENDER R2 / BIGMAP B2)=====
+// 把 N×N 格(16 / 8 / 4,依解析度)的地形預畫成離屏畫布 → GL 紋理,每幀只貼可見塊;塊內逐像素記錄對角線 d(深度圖),
+// 讓 GL 內的物件 / 居民與地形以畫家順序(d)遮擋。烘焙時 view.zoom 暫代為該層級的代表值(drawTile 內的邊線 / 紋路門檻),時段乘色改在合成時套用。
+// 失效條件由簽名自動判定:塊 + 外圍一圈的 (高度, 地形)、土地遮罩、季節、層級;換季 / 擴地 / 地形編輯 / 縮放層級改變 → 該塊重烘(每幀有時間預算,未烘好的塊先用舊版)。
+let tileBake = false;
+const TERR_LV = [{ res: 0.25, N: 16 }, { res: 0.5, N: 16 }, { res: 1, N: 16 }, { res: 2, N: 8 }, { res: 4, N: 4 }];
+const TERR_SEASON_ID = { spring: 1, summer: 2, autumn: 3, winter: 4 };
+const terrDCol = [];
+for (let k = 0; k < 80; k++) terrDCol.push('rgb(' + k + ',0,0)');
+
+// 依 縮放 × dpr 選解析度(略偏低 0.75 倍,記憶體優先);flag 層級 = 邊線 / 紋路門檻區間,跨門檻時整批重烘。
+// 可見塊總量估計超過 TERR_BUDGET(< glr.js 的 48 MB 硬上限)時自動降一級解析度(迴圈到放得下;回升需估計 <= 預算 80%,避免來回跳)
+const TERR_BUDGET = 38 * 1024 * 1024;
+let terrAdj = 0;
+function terrBytesEst(li) {
+  const L = TERR_LV[li], N = L.N, res = L.res, dres = Math.max(0.25, Math.min(1, res / 2));
+  const rw = 64 * N + 6, rh = 32 * N + 66, per = (Math.ceil(rw * res) * Math.ceil(rh * res) + Math.ceil(rw * dres) * Math.ceil(rh * dres)) * 4;
+  const z = view.zoom, hw = viewport.w / (2 * z), hh = viewport.h / (2 * z);
+  const wl = view.x - hw, wr = view.x + hw, wt = view.y - hh, wb = view.y + hh, BW = boardW(), BH = boardH();
+  let n = 0;
+  for (let Y0 = 0; Y0 < BH; Y0 += N)
+    for (let X0 = 0; X0 < BW; X0 += N) {
+      const rx = (X0 - Y0 - N) * (TW / 2) - 3, ry = (X0 + Y0) * (TH / 2) - MAX_H * HL - 10;
+      if (rx < wr && rx + rw > wl && ry < wb && ry + rh > wt) n++;
+    }
+  return n * per;
+}
+function terrLevel() {
+  const e = view.zoom * viewport.dpr * 0.75;
+  let want = TERR_LV.length - 1;
+  for (let i = 0; i < TERR_LV.length; i++) if (TERR_LV[i].res >= e) { want = i; break; }
+  let li = Math.max(0, want - terrAdj);
+  while (li > 0 && terrBytesEst(li) > TERR_BUDGET) { li--; terrAdj = want - li; }
+  if (terrAdj > 0 && li < want && terrBytesEst(li + 1) <= TERR_BUDGET * 0.8) { li++; terrAdj = want - li; }
+  const z = view.zoom, fl = z >= G2_DETAIL_ZOOM ? 2 : (z >= TILE_EDGE_MIN_ZOOM ? 1 : 0), L = TERR_LV[li];
+  return { id: li + '/' + fl, res: L.res, N: L.N, zrep: fl === 2 ? 1 : (fl === 1 ? 0.4 : 0.3), dres: Math.max(0.25, Math.min(1, L.res / 2)) };
+}
+
+function terrSig(X0, Y0, N, lvl, landOn, lm) {
+  let h = Math.imul(2166136261 ^ (TERR_SEASON_ID[currentSeason] || 0), 16777619);
+  for (let i = 0; i < lvl.id.length; i++) h = Math.imul(h ^ lvl.id.charCodeAt(i), 16777619);
+  for (let y = Y0 - 1; y <= Y0 + N; y++)
+    for (let x = X0 - 1; x <= X0 + N; x++) {
+      let v = 255;
+      if (inBounds(x, y)) {
+        const i = idx(x, y);
+        v = world.height[i] * 16 + world.terrain[i];
+        if (landOn) v = v * 2 + lm.out[i];
+      }
+      h = Math.imul(h ^ v, 16777619);
+    }
+  return h >>> 0;
+}
+
+// 目前視圖要用的分塊清單(依畫家順序:塊對角線 ci + cj 由小到大);pre = 視窗外一圈,只在有餘裕時預烘
+function terrPlan(lvl, landOn, lm) {
+  const BW = boardW(), BH = boardH(), N = lvl.N, res = lvl.res, dres = lvl.dres, z = view.zoom;
+  const hw = viewport.w / (2 * z), hh = viewport.h / (2 * z);
+  const wl = view.x - hw, wr = view.x + hw, wt = view.y - hh, wb = view.y + hh;
+  const mx = hw * 0.6, my = hh * 0.6;
+  const nc = Math.ceil(BW / N), nr = Math.ceil(BH / N), items = [];
+  for (let cj = 0; cj < nr; cj++)
+    for (let ci = 0; ci < nc; ci++) {
+      const X0 = ci * N, Y0 = cj * N;
+      const rx = Math.floor((X0 - Y0 - N) * (TW / 2)) - 3, ry = Math.floor((X0 + Y0) * (TH / 2) - MAX_H * HL) - 10;
+      const rr = (X0 + N - Y0) * (TW / 2) + 3, rb = (X0 + Y0 + 2 * N) * (TH / 2) + HL + 8;
+      const cw = Math.ceil((rr - rx) * res), ch = Math.ceil((rb - ry) * res), rw = cw / res, rh = ch / res;
+      let pre = false;
+      if (rx >= wr || rx + rw <= wl || ry >= wb || ry + rh <= wt) {
+        if (rx >= wr + mx || rx + rw <= wl - mx || ry >= wb + my || ry + rh <= wt - my) continue;
+        pre = true;
+      }
+      items.push({
+        k: N + ':' + ci + ',' + cj, sig: terrSig(X0, Y0, N, lvl, landOn, lm), d0: X0 + Y0, ord: ci + cj, ci: ci, X0: X0, Y0: Y0,
+        rx: rx, ry: ry, rw: rw, rh: rh, cw: cw, ch: ch, dw: Math.max(1, Math.ceil(rw * dres)), dh: Math.max(1, Math.ceil(rh * dres)), pre: pre, rec: null, key: ''
+      });
+    }
+  items.sort((a, b) => a.ord - b.ord || a.ci - b.ci);
+  return { items: items };
+}
+
+// 深度圖:每格的頂面 + 懸崖面外形,填入「塊內對角線 + 1」(紅色通道);筆畫略外擴避免低解析度下邊緣漏洞
+function terrDepthTile(dc, x, y, h, wet, dl) {
+  const col = terrDCol[dl + 1];
+  dc.fillStyle = col;
+  dc.strokeStyle = col;
+  dc.lineWidth = 2;
+  polyPath(dc, topPts(x, y, h, wet ? 3 : 0));
+  dc.fill();
+  dc.stroke();
+  const hx = inBounds(x + 1, y) ? world.height[idx(x + 1, y)] : -1;
+  if (hx < h) {
+    dc.beginPath();
+    dc.moveTo(isoX(x + 1, y), isoY(x + 1, y, h)); dc.lineTo(isoX(x + 1, y + 1), isoY(x + 1, y + 1, h));
+    dc.lineTo(isoX(x + 1, y + 1), isoY(x + 1, y + 1, hx)); dc.lineTo(isoX(x + 1, y), isoY(x + 1, y, hx));
+    dc.closePath(); dc.fill(); dc.stroke();
+  }
+  const hy = inBounds(x, y + 1) ? world.height[idx(x, y + 1)] : -1;
+  if (hy < h) {
+    dc.beginPath();
+    dc.moveTo(isoX(x, y + 1), isoY(x, y + 1, h)); dc.lineTo(isoX(x + 1, y + 1), isoY(x + 1, y + 1, h));
+    dc.lineTo(isoX(x + 1, y + 1), isoY(x + 1, y + 1, hy)); dc.lineTo(isoX(x, y + 1), isoY(x, y + 1, hy));
+    dc.closePath(); dc.fill(); dc.stroke();
+  }
+}
+
+// 烘一塊(glr.js rqTerrain 呼叫):c = 色圖 ctx(世界座標 × 解析度),dc = 深度圖 ctx;回傳水格座標清單 [x, y, ...]
+function terrBake(it, c, dc, lvl, landOn, lm) {
+  const N = lvl.N, BW = boardW(), BH = boardH(), water = [], zs = view.zoom;
+  tileBake = true;
+  ART_NEUTRAL = true;
+  view.zoom = lvl.zrep;
+  try {
+    for (let d = 0; d <= 2 * N - 2; d++)
+      for (let xl = Math.max(0, d - N + 1); xl <= Math.min(d, N - 1); xl++) {
+        const x = it.X0 + xl, y = it.Y0 + d - xl;
+        if (x >= BW || y >= BH) continue;
+        const i = idx(x, y), t = world.terrain[i], waste = landOn && lm.out[i] === 1;
+        if (waste) drawWasteTile(c, x, y); else drawTile(c, x, y, 0);
+        terrDepthTile(dc, x, y, world.height[i], !waste && (t === T_LAKE || t === T_RIVER), d);
+        if (!waste && (t === T_RIVER || t === T_LAKE)) water.push(x, y);
+      }
+  } finally {
+    tileBake = false;
+    ART_NEUTRAL = false;
+    view.zoom = zs;
+  }
+  return water;
+}
+
+// 時段乘色(合成時套用;ART 關閉 / 正午為白)
+function terrTint() {
+  if (typeof artIsOn !== 'function' || !artIsOn() || typeof ART === 'undefined' || !ART.TOD) return [1, 1, 1];
+  const t = ART.TOD[artTodKey()], m = t ? t.mul : null;
+  if (!m) return [1, 1, 1];
+  return [parseInt(m.substr(1, 2), 16) / 255, parseInt(m.substr(3, 2), 16) / 255, parseInt(m.substr(5, 2), 16) / 255];
+}
+
+// 水面動態(GL):河流流線 / 湖面閃光畫成細長四邊形,深度 = 該格 d;縮放 < 0.5 或省電模式時靜態(不畫)。有物件佔用的格(橋等)略過
+function terrWaterGl(ctx, x, y, t, time) {
+  const h = world.height[idx(x, y)];
+  if (t === T_RIVER) {
+    const f = DIRS[world.flow[idx(x, y)]], dx = f[0], dy = f[1], hp = h * HL - 3;
+    for (let k = 0; k < 3; k++) {
+      let p = time * 0.6 - (x * dx + y * dy) * 0.25 + k / 3;
+      p -= Math.floor(p);
+      const s = p - 0.5, q = (k - 1) * 0.25;
+      const cx = x + 0.5 + dx * s - dy * q, cy = y + 0.5 + dy * s + dx * q;
+      const a = gpt(cx - dx * 0.125, cy - dy * 0.125, hp), b = gpt(cx + dx * 0.125, cy + dy * 0.125, hp);
+      rqLine(ctx, a[0], a[1], b[0], b[1], 1.5, PAL.waterHi, 0.5);
+    }
+  } else {
+    const hs = cellHash(x, y);
+    if (hs % 3 === 0) return;
+    let b = Math.pow(Math.max(0, Math.sin(time * 2 + hs)), 4);
+    if (currentSeason === 'winter') b *= 0.5;
+    if (b < 0.02) return;
+    const px = x + ((hs >>> 3) % 10) / 10, py = y + ((hs >>> 7) % 10) / 10, hp = h * HL - 3, s = 0.08;
+    const a1 = gpt(px - s, py, hp), a2 = gpt(px + s, py, hp), b1 = gpt(px, py - s, hp), b2 = gpt(px, py + s, hp);
+    rqLine(ctx, a1[0], a1[1], a2[0], a2[1], 1.5, PAL.waterHi, b);
+    rqLine(ctx, b1[0], b1[1], b2[0], b2[1], 1.5, PAL.waterHi, b);
+  }
+}
+
+// GL 幀的地形:回傳 true = 分塊已畫(物件走深度遮擋);false = 還有塊沒烘好 → 呼叫端整幀改走 c2d
+function terrGl(ctx, landOn, lm, time) {
+  const lvl = terrLevel(), plan = terrPlan(lvl, landOn, lm);
+  plan.lvl = lvl.id;
+  plan.tint = terrTint();
+  plan.bake = (it, c, dc) => terrBake(it, c, dc, lvl, landOn, lm);
+  if (!rqTerrain(ctx, plan)) return false;
+  if (view.zoom >= 0.5 && !(typeof isPowerSave === 'function' && isPowerSave())) {
+    for (const rec of plan.out) {
+      const w = rec.water;
+      if (!w) continue;
+      for (let k = 0; k < w.length; k += 2) {
+        const x = w[k], y = w[k + 1], i = idx(x, y), t = world.terrain[i];
+        if ((t !== T_RIVER && t !== T_LAKE) || world.occ[i] || !cellVisible(x, y)) continue;
+        rqDepth(ctx, x + y);
+        terrWaterGl(ctx, x, y, t, time);
+      }
+    }
+  }
+  return true;
+}
+
 var drawNow = 0;
 function draw(ctx, time) {
   drawNow = time;
   const cv = ctx.canvas;
+  rqBegin(ctx);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   let bgCol = PAL.bg;
   if (typeof artSky === 'function') bgCol = artSky(bgCol);
@@ -1131,6 +1321,7 @@ function draw(ctx, time) {
 
   const z = view.zoom, r = viewport.dpr;
   ctx.setTransform(r * z, 0, 0, r * z, r * (viewport.w / 2 - view.x * z), r * (viewport.h / 2 - view.y * z));
+  rqView(ctx, r * z, r * (viewport.w / 2 - view.x * z), r * (viewport.h / 2 - view.y * z));
 
   const hid = hide.on && !pano.open; // 隱藏建築（PLAN 12.17）；全景一律畫實際建築
   const landOn = landMaskOn();
@@ -1139,22 +1330,35 @@ function draw(ctx, time) {
   if (typeof lifeFrame === 'function') lifeFrame(time);
   syncBoardView();
 
-  // 可見範圍(B1):由螢幕四角反投影出要走訪的對角線 d 與每條對角線的 x 範圍(保守外擴,最後仍用 cellVisible 判定,結果與全域走訪相同)
   const BW = boardW(), BH = boardH();
+  // GL 幀:地形走分塊紋理(含逐像素深度),物件 / 居民以對角線 d 為深度;分塊尚未烘好 → 本幀整幀回 c2d(不混畫)
+  let tg = false;
+  if (rqActive(ctx)) {
+    rqDepthSetup(ctx, BW + BH + 6);
+    tg = terrGl(ctx, landOn, lm, time);
+    if (!tg) rqAbort(ctx);
+  }
+  const ov = rqOv(ctx);   // 頂層 2D(GL 幀為疊加層畫布;c2d 時就是 ctx)
+  const cells = !tg || hid || (typeof tdDepArr !== 'undefined' && (tdDepArr !== null || tdDepFlank !== null));   // GL 幀只有隱藏建築 / 部署區需要逐格走訪
+
+  // 可見範圍(B1):由螢幕四角反投影出要走訪的對角線 d 與每條對角線的 x 範圍(保守外擴,最後仍用 cellVisible 判定,結果與全域走訪相同)
   const vs = visSpan(BW, BH);
   for (let d = 0; d <= BW + BH - 2; d++) {
-    const inT = d >= vs.dT0 && d <= vs.dT1;
+    if (tg) rqDepth(ctx, d);
+    const inT = cells && d >= vs.dT0 && d <= vs.dT1;
     const xa = inT ? Math.max(0, d - BH + 1, (d + vs.uMin + 1) >> 1) : 1, xb = inT ? Math.min(d, BW - 1, (d + vs.uMax) >> 1) : 0;
     for (let x = xa; x <= xb; x++) {
       const y = d - x;
       if (cellVisible(x, y)) {
-        if (landOn && lm.out[idx(x, y)]) drawWasteTile(ctx, x, y);
-        else drawTile(ctx, x, y, time);
+        if (!tg) {
+          if (landOn && lm.out[idx(x, y)]) drawWasteTile(ctx, x, y);
+          else drawTile(ctx, x, y, time);
+        }
         if (hid) drawGhostCell(ctx, x, y);
-        if (typeof tdZoneCell === 'function') tdZoneCell(ctx, x, y);
+        if (typeof tdZoneCell === 'function') tdZoneCell(ov, x, y);
       }
     }
-    if (typeof drawOverlayDiag === 'function') drawOverlayDiag(ctx, d, time);
+    if (typeof drawOverlayDiag === 'function') drawOverlayDiag(ov, d, time);
     const inO = d >= vs.dT0 && d <= vs.dO1;
     const list = hid || !inO ? null : world.objDiag[d];
     if (list) {
@@ -1162,7 +1366,7 @@ function draw(ctx, time) {
         if (!objVisible(o) || (typeof tdObjSkip === 'function' && tdObjSkip(o))) return;
         const dim = landOn && lm.out[idx(o.x, o.y)] === 1; // 遮罩外的既有物件照常畫，只略為壓暗
         if (view.zoom < OBJ_BLOB_ZOOM) {
-          if (dim) { ctx.save(); ctx.globalAlpha = LAND_DIM_ALPHA; drawObjBlob(ctx, o); ctx.restore(); }
+          if (dim) { rqSave(ctx); rqAlpha(ctx, LAND_DIM_ALPHA); drawObjBlob(ctx, o); rqRestore(ctx); }
           else drawObjBlob(ctx, o);
         } else drawObject(ctx, o, dim ? LAND_DIM_ALPHA : 1);
       });
@@ -1176,21 +1380,25 @@ function draw(ctx, time) {
     if (typeof drawBattleDiag === 'function') drawBattleDiag(ctx, d, time);
     if (typeof lifeDrawDiag === 'function') lifeDrawDiag(ctx, d, time);
   }
-  if (landOn) drawLandBorder(ctx, lm);
+  rqFlush(ctx);   // GL 幀:物件 / 居民批次在此一次送出;以下皆畫在頂層 2D(c2d 時 ov === ctx)
+  if (landOn) drawLandBorder(ov, lm);
 
-  if (typeof drawWorldOverlay === 'function') drawWorldOverlay(ctx, time);
-  if (typeof tdDrawDrop === 'function') tdDrawDrop(ctx, time);
-  if (typeof artLights === 'function') artLights(ctx, time);
-  if (typeof lifeDrawTop === 'function') lifeDrawTop(ctx, time);
-  if (preview.visible) drawPreview(ctx);
+  if (typeof drawWorldOverlay === 'function') drawWorldOverlay(ov, time);
+  if (typeof tdDrawDrop === 'function') tdDrawDrop(ov, time);
+  if (typeof artLights === 'function') artLights(ctx, time);   // GL 幀:光暈走 GL 加法混色批次(rqGlow);c2d 時 ctx === ov
+  if (typeof lifeDrawTop === 'function') lifeDrawTop(ov, time);
+  if (typeof talentPatrolDraw === 'function') talentPatrolDraw(ov, time);
+  if (preview.visible) drawPreview(ov);
   // 草稿只在經營模式顯示;離開經營模式(釣魚、仙獸、戰鬥布置等)即丟棄,移動中的建築回原位
   if (typeof draft !== 'undefined' && draft) {
     if (game.mode !== 'estate' && !(game.mode === 'battleDesign' && draft.orig)) {
       if (typeof draftDiscard === 'function') draftDiscard();
-    } else if (!pano.open && !uiIsPhoto()) drawDraft(ctx);
+    } else if (!pano.open && !uiIsPhoto()) drawDraft(ov);
   }
-  if (typeof fxHi !== 'undefined' && fxHi && !pano.open && !uiIsPhoto()) drawFx(ctx);
+  if (typeof fxHi !== 'undefined' && fxHi && !pano.open && !uiIsPhoto()) drawFx(ov);
   ctx.setTransform(r, 0, 0, r, 0, 0);
+  if (ov !== ctx) ov.setTransform(r, 0, 0, r, 0, 0);
   if (typeof draftFloatSync === 'function') draftFloatSync();
-  if (typeof drawScreenHud === 'function') drawScreenHud(ctx, time);
+  if (typeof drawScreenHud === 'function') drawScreenHud(ov, time);
+  rqEnd(ctx);
 }

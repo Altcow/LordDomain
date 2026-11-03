@@ -144,6 +144,7 @@ function puiRenderReq(p, c, lvMax) {
     need = c.res[k];
     R.appendChild(puiReq(have >= need, PROG_RES_NAME[k] || k, have, need));
   }
+  if (puiCity() && typeof cityRenderReq === 'function') cityRenderReq(R, p, c);   // 繁榮度 / 人口 / 營造要求 / 貨品(js/cityscoreui.js)
   for (id in c.mats) {
     have = p.mats[id] || 0;
     need = c.mats[id];
@@ -178,16 +179,17 @@ function progUiRefresh() {
   lvMax = lv >= PROG_LV_MAX;
   c = lvMax ? null : progUpgradeCost(lv);
   pct = (lvMax || !c || c.xp <= 0) ? 1 : Math.min(1, p.xp / c.xp);
-  pui.chipLv.textContent = 'Lv ' + lv;
+  pui.chipLv.textContent = puiRankText(lv);
+  if (pui.upBtn) pui.upBtn.hidden = puiNoLevel();
   pui.chipFill.style.width = Math.round(pct * 100) + '%';
   pui.chipDot.hidden = !(lv > 1 && !p.seen['lvup:' + lv]);
   puiTaskRender();
   if (!pui.open) return;
   pui.headLv.textContent = '目前 Lv ' + lv + ' / ' + PROG_LV_MAX;
-  pui.sel.value = String(lv);
-  pui.legacyBtn.disabled = !puiHasLegacy();
+  if (pui.sel) pui.sel.value = String(lv);
   puiRenderReq(p, c, lvMax);
   puiRenderUnl(lv);
+  if (typeof cityFxPanelFill === 'function') cityFxPanelFill(pui.list);   // CT10:民情小面板(唯讀)
   chk = progCanUpgrade();
   pui.upBtn.disabled = !chk.ok;
   pui.upBtn.textContent = lvMax ? '已滿級' : '升級';
@@ -200,6 +202,7 @@ function progUiOpen() {
   pui.open = true;
   pui.drawer.hidden = false;
   pui.chip.setAttribute('aria-expanded', 'true');
+  if (typeof panelOpen === 'function') panelOpen('prog');
   progUiRefresh();
 }
 
@@ -210,6 +213,7 @@ function progUiClose() {
   pui.open = false;
   pui.drawer.hidden = true;
   pui.chip.setAttribute('aria-expanded', 'false');
+  if (typeof panelClose === 'function') panelClose('prog');
   if (typeof progNeedsMigrate === 'function' && progNeedsMigrate()) return;
   p = progGet();
   if (p.lv > 1 && !p.seen['lvup:' + p.lv]) {
@@ -273,6 +277,23 @@ function puiRestoreLegacy() {
   if (typeof location !== 'undefined' && location && typeof location.reload === 'function') location.reload();
 }
 
+// NL2:經營端不顯示等級,晶片改「官階 · 科技進度」(沿用 lordhallRank);戰陣端沿用 Lv
+function puiNoLevel() { return typeof game !== 'undefined' && game.mode === 'estate' && typeof techPanelOpen === 'function' && typeof lordhallRank === 'function'; }
+var puiRankCache = { t: 0, s: '' };
+function puiRankText(lv) {
+  var now, s, rk, done, tot;
+  if (!puiNoLevel()) return 'Lv ' + lv;
+  now = Date.now();
+  if (now - puiRankCache.t < 1500 && puiRankCache.s) return puiRankCache.s;
+  rk = '里正';
+  try { if (typeof lordhallOverview === 'function') rk = lordhallOverview().rank || rk; } catch (e) { /* 略過 */ }
+  done = 0; tot = 0;
+  if (typeof CITY_TECHS !== 'undefined' && typeof techDone === 'function') CITY_TECHS.forEach(function (n) { if (n.id.indexOf('st_') === 0 || n.id.indexOf('mg_') === 0) return; tot++; if (techDone(n.id)) done++; });
+  s = rk + ' · 科技 ' + done + '/' + tot;
+  puiRankCache.t = now; puiRankCache.s = s;
+  return s;
+}
+
 function puiBuildChip(top) {
   var info = document.getElementById('info'), fillWrap;
   pui.chip = puiEl('span', 'pg-chip');
@@ -290,7 +311,7 @@ function puiBuildChip(top) {
   pui.chip.appendChild(pui.chipLv);
   pui.chip.appendChild(fillWrap);
   pui.chip.appendChild(pui.chipDot);
-  pui.chip.addEventListener('click', function () { puiToggle(); });
+  pui.chip.addEventListener('click', function () { if (puiNoLevel() && typeof techPanelOpen === 'function') { techPanelOpen(); return; } puiToggle(); });
   pui.chip.addEventListener('keydown', function (ev) {
     if (ev.key === 'Enter' || ev.key === ' ') puiToggle();
   });
@@ -299,20 +320,10 @@ function puiBuildChip(top) {
 }
 
 function puiBuildTools() {
-  var t = puiEl('div', 'pg-tools'), row = puiEl('div', 'pg-trow'), i, o;
+  var t = puiEl('div', 'pg-tools');
   pui.tools = t;
   t.hidden = true;
   t.appendChild(puiEl('div', 'pg-tnote', '測試工具:僅測試用,正式遊戲不會出現'));
-  t.appendChild(puiBtn('pg-tb', '⬆ 升一級(忽略條件)', function () { puiTestAct(function () { progDebugUp(); }); }));
-  pui.sel = puiEl('select', 'pg-sel');
-  for (i = 1; i <= PROG_LV_MAX; i++) {
-    o = puiEl('option', null, 'Lv ' + i);
-    o.value = String(i);
-    pui.sel.appendChild(o);
-  }
-  row.appendChild(pui.sel);
-  row.appendChild(puiBtn('pg-tb', '直達', function () { puiTestAct(function () { progDebugSetLv(+pui.sel.value); }); }));
-  t.appendChild(row);
   t.appendChild(puiBtn('pg-tb', '📦 補滿資源與材料', function () { puiTestAct(function () { progDebugGrantAll(); }); }));
   pui.legacyBtn = puiBtn('pg-tb', '↩ 恢復舊存檔備份', function () { puiRestoreLegacy(); });
   t.appendChild(pui.legacyBtn);
@@ -320,7 +331,7 @@ function puiBuildTools() {
 }
 
 function puiBuildDrawer() {
-  var head = puiEl('div', 'pg-head'), foot = puiEl('div', 'pg-foot'), toolsWrap;
+  var head = puiEl('div', 'pg-head'), foot = puiEl('div', 'pg-foot');
   pui.drawer = puiEl('div');
   pui.drawer.id = 'progDrawer';
   pui.drawer.setAttribute('role', 'dialog');
@@ -332,14 +343,10 @@ function puiBuildDrawer() {
   pui.list = puiEl('div', 'pg-list');
   pui.req = puiEl('div', 'pg-req');
   pui.unl = puiEl('div', 'pg-unl');
-  pui.toolsBtn = puiBtn('pg-tt', '🧪 測試工具(僅測試用) ▸', function () { puiToggleTools(); });
-  toolsWrap = puiBuildTools();
   pui.taskBtn = puiBtn('pg-tt', '📋 新手任務清單 ▸', function () { progUiClose(); progQuestOpen(); });
   pui.list.appendChild(pui.req);
   pui.list.appendChild(pui.unl);
   pui.list.appendChild(pui.taskBtn);
-  pui.list.appendChild(pui.toolsBtn);
-  pui.list.appendChild(toolsWrap);
   pui.why = puiEl('span', 'pg-why', '');
   pui.upBtn = puiBtn('pg-up', '升級', function () { puiDoUp(); });
   foot.appendChild(pui.why);

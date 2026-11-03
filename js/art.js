@@ -366,13 +366,13 @@ var ART = window.ART = (function () {
   A.cache = {}; A.cacheCount = 0; A.cacheBytes = 0; A.cacheTick = 0;
   A.CACHE_LIMIT = 48 * 1024 * 1024; // sprite 快取上限(bytes),超過以 LRU 淘汰
   A.touch = function (key) { var c = A.cache[key]; if (c) c.last = ++A.cacheTick; return c; };
-  A.clearCache = function () { A.cache = {}; A.cacheCount = 0; A.cacheBytes = 0; };
+  A.clearCache = function () { if (A.onDrop) for (var k in A.cache) A.onDrop(A.cache[k]); A.cache = {}; A.cacheCount = 0; A.cacheBytes = 0; };
   A.evict = function (keep) {
     while (A.cacheBytes > A.CACHE_LIMIT && A.cacheCount > 1) {
       var old = null, oldK = null, k;
       for (k in A.cache) { if (k !== keep && (!old || A.cache[k].last < old.last)) { old = A.cache[k]; oldK = k; } }
       if (!old) break;
-      delete A.cache[oldK]; A.cacheCount--; A.cacheBytes -= old.bytes;
+      delete A.cache[oldK]; A.cacheCount--; A.cacheBytes -= old.bytes; if (A.onDrop) A.onDrop(old);
     }
   };
   A.OUTLINE = 1.6; // 世界像素
@@ -420,7 +420,11 @@ var ART = window.ART = (function () {
     A.evict(key);
     return c;
   };
-  A.blit = function (ctx, spr, x, y) { ctx.drawImage(spr.cv, x + spr.l, y + spr.t, spr.cv.width / spr.res, spr.cv.height / spr.res); };
+  A.blit = function (ctx, spr, x, y) {
+    if (typeof rqSprite === 'function') rqSprite(ctx, spr, x + spr.l, y + spr.t, spr.cv.width / spr.res, spr.cv.height / spr.res);
+    else ctx.drawImage(spr.cv, x + spr.l, y + spr.t, spr.cv.width / spr.res, spr.cv.height / spr.res);
+  };
+  A.onDrop = function (rec) { if (typeof glrRelease === 'function') glrRelease(rec); };   // glr.js 在 art.js 之後載入,執行期才解析
   A.resBucket = function (r) { return Math.max(1, Math.min(4, Math.round(r * 2) / 2)); };
 
   // ---------------- 物件註冊 ----------------
@@ -439,12 +443,37 @@ var ART = window.ART = (function () {
     var P = A.P;
     A.poly(ctx, [P(0.18, 0.02, 0), P(fw + 0.22, 0.02, 0), P(fw + 0.22, fd - 0.02, 0), P(0.18, fd - 0.02, 0)], col, 0);
   };
+  // 換季 / 換時段後,GL 幀內 sprite 重烤有每幀時間預算(A.bakeBudget,glr.js 設定;c2d 為 0 = 不節流):超過預算先用舊版 sprite(A.stale 記著前一個時段 / 季節),下幾幀陸續烤新版
+  A.bakeBudget = 0; A.bakeMs = 0; A.prev = { tod: '', season: '', todOld: '', seasonOld: '' };
+  A.track = function (tod, season) {
+    var P = A.prev;
+    if (P.tod !== tod) { P.todOld = P.tod; P.tod = tod; }
+    if (P.season !== season) { P.seasonOld = P.season; P.season = season; }
+  };
+  A.stale = function (tod, season) {
+    var P = A.prev, t = (tod === P.tod && P.todOld) ? P.todOld : tod, n = (season === P.season && P.seasonOld) ? P.seasonOld : season;
+    return (t !== tod || n !== season) ? { tod: t, season: n } : null;
+  };
   A.objSprite = function (type, f, v, res) {
     var s = A.OBJ[type];
     v = v || {};
     if (s.sym) f = 0;
     var key = type + '|' + f + '|' + A.vkey(v) + '|' + res;
     if (A.cache[key]) return A.touch(key);
+    if (A.bakeBudget > 0 && A.bakeMs > A.bakeBudget) {
+      var st = A.stale(v.tod || 'noon', v.season || 'spring');
+      if (st) {
+        var v2 = {}, q;
+        for (q in v) v2[q] = v[q];
+        v2.tod = st.tod; v2.season = st.season;
+        var key2 = type + '|' + f + '|' + A.vkey(v2) + '|' + res;
+        if (A.cache[key2]) return A.touch(key2);
+      }
+    }
+    var tb0 = A.bakeBudget > 0 ? performance.now() : 0;
+    try { return A.objSpriteBake(s, type, f, v, res, key); } finally { if (tb0) A.bakeMs += performance.now() - tb0; }
+  };
+  A.objSpriteBake = function (s, type, f, v, res, key) {
     var fp = A.foot(type, f), H = s.hmax || 80, tod = A.todOf(v);
     var b = { l: -fp[1] * 32 - 6, t: -H, w: (fp[0] + fp[1]) * 32 + 12, h: H + (fp[0] + fp[1]) * 16 + 4 };
     function build(c) { A.state.lit = tod.lit; var m = new Model(s.w, s.d, f); s.build(m, v); m.render(c); A.state.lit = false; }
@@ -460,14 +489,18 @@ var ART = window.ART = (function () {
     var key = col + '|' + r, g = A.glowCache[key];
     if (!g) {
       var c = h2r(col), n = Math.ceil(r * 2);
-      g = mk(n * 2, n * 2); var gc = g.getContext('2d'), gr = gc.createRadialGradient(n, n, 0, n, n, n);
+      var gcv = mk(n * 2, n * 2); g = { cv: gcv, res: 1 }; var gc = gcv.getContext('2d'), gr = gc.createRadialGradient(n, n, 0, n, n, n);
       var rgb = c[0] + ',' + c[1] + ',' + c[2];
       gr.addColorStop(0, 'rgba(' + rgb + ',0.9)'); gr.addColorStop(0.25, 'rgba(' + rgb + ',0.45)'); gr.addColorStop(1, 'rgba(' + rgb + ',0)');
       gc.fillStyle = gr; gc.fillRect(0, 0, n * 2, n * 2);
       A.glowCache[key] = g;
     }
-    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.max(0, Math.min(1, a));
-    ctx.drawImage(g, x - r, y - r, r * 2, r * 2); ctx.restore();
+    var aa = Math.max(0, Math.min(1, a));
+    // GL 幀:進 GL 加法混色光暈批次(rqGlow);否則(c2d / 上傳失敗)畫在頂層 2D,c2d 時 rqOv(ctx) === ctx,指令與原本相同
+    if (typeof rqGlow === 'function' && rqGlow(ctx, g, x - r, y - r, r * 2, r * 2, aa)) return;
+    var c2 = typeof rqOv === 'function' ? rqOv(ctx) : ctx;
+    c2.save(); c2.globalCompositeOperation = 'lighter'; c2.globalAlpha = aa;
+    c2.drawImage(g.cv, x - r, y - r, r * 2, r * 2); c2.restore();
   };
   // 物件光暈:spec.lights(v) 回傳 [[u,v,z,半徑,色]](局部座標)
   A.drawLights = function (ctx, type, gx, gy, bh, f, v, t) {
@@ -502,15 +535,57 @@ var ART = window.ART = (function () {
     ctx.quadraticCurveTo(x + 2 * s, y - 4 * s * k, x + 1.8 * s, y); ctx.closePath(); ctx.fillStyle = A.C.lampHot; ctx.fill();
   };
   // 在格 (gx,gy) 地面高 bh 畫物件;time 供動畫件
+  // 動畫件預烘(GL 後端):anim / animPre 烘成 ANIM_K 張畫格 sprite(進 ART 快取、LRU),以 ANIM_FPS 循環貼進 GL 批次;縮放 < ANIM_MIN_ZOOM 不播。
+  // 畫格取樣時間 = k / ANIM_FPS(動畫件多為週期函式,循環點略有跳動);烘焙失敗的類型記入 animBad,改走疊加層 2D 向量
+  var ANIM_K = 4, ANIM_FPS = 6;
+  A.ANIM_MIN_ZOOM = 0.5; A.animBad = {};
+  A.animFrame = function (time) { return Math.floor(time * ANIM_FPS) % ANIM_K; };
+  A.animSprite = function (type, f, v, res, kind, k) {
+    var s = A.OBJ[type], fp = A.foot(type, f), H = s.hmax || 80, vv = v || {};
+    var key = 'anim|' + kind + '|' + type + '|' + f + '|' + [vv.season || 'spring', vv.level || 0, vv.skin || '', vv.kind || '', vv.seed || 0, vv.dmg || 0].join('/') + '|' + res + '|' + k;
+    var c = A.touch(key);
+    if (c) return c;
+    var b = { l: -fp[1] * 32 - 30, t: -H - 56, w: (fp[0] + fp[1]) * 32 + 60, h: H + (fp[0] + fp[1]) * 16 + 68 };
+    var fn = kind === 'pre' ? s.animPre : s.anim, mdl = new Model(s.w, s.d, f), tk = k / ANIM_FPS;
+    // 先以 0.25 倍解析度粗畫一次找出實際外框,再依外框裁切烘正式畫格(畫格只佔該動畫件的實際面積,省 atlas)
+    var cs = 0.25, cw0 = Math.ceil(b.w * cs), ch0 = Math.ceil(b.h * cs), c0 = mk(cw0, ch0), x0 = c0.getContext('2d', { willReadFrequently: true });   // 軟體畫布,避免 GPU 回讀停頓
+    x0.setTransform(cs, 0, 0, cs, -b.l * cs, -b.t * cs);
+    fn(x0, mdl, tk, vv);
+    var px = x0.getImageData(0, 0, cw0, ch0).data, mnx = cw0, mny = ch0, mxx = -1, mxy = -1, ix, iy;
+    for (iy = 0; iy < ch0; iy++) for (ix = 0; ix < cw0; ix++) if (px[(iy * cw0 + ix) * 4 + 3] > 6) { if (ix < mnx) mnx = ix; if (ix > mxx) mxx = ix; if (iy < mny) mny = iy; if (iy > mxy) mxy = iy; }
+    if (mxx < 0) {
+      c = { cv: mk(1, 1), l: 0, t: 0, res: res, bytes: 4, last: ++A.cacheTick, empty: true };
+    } else {
+      var L = b.l + mnx / cs - 3, T = b.t + mny / cs - 3, R = b.l + (mxx + 1) / cs + 3, B = b.t + (mxy + 1) / cs + 3;
+      var w = Math.ceil((R - L) * res), h = Math.ceil((B - T) * res), cv = mk(w, h), cx = cv.getContext('2d');
+      cx.setTransform(res, 0, 0, res, -L * res, -T * res);
+      fn(cx, new Model(s.w, s.d, f), tk, vv);
+      c = { cv: cv, l: L, t: T, res: res, bytes: w * h * 4, last: ++A.cacheTick };
+    }
+    A.cache[key] = c; A.cacheCount++; A.cacheBytes += c.bytes;
+    A.evict(key);
+    return c;
+  };
+  A.animTry = function (type, f, v, res, kind, k) {
+    try { return A.animSprite(type, f, v, res, kind, k); } catch (e) { A.animBad[type] = true; return null; }
+  };
   A.drawObj = function (ctx, type, gx, gy, bh, f, v, res, time) {
     var s = A.OBJ[type];
     if (s.sym) f = 0;
-    var spr = A.objSprite(type, f, v, res), p = A.P(gx, gy, bh);
+    var spr = A.objSprite(type, f, v, res), p = A.P(gx, gy, bh), rq = typeof rqScope2D === 'function', c;
+    if (rq && time !== undefined && typeof rqActive === 'function' && rqActive(ctx) && !A.animBad[type]) {
+      var still = typeof view !== 'undefined' && view.zoom < A.ANIM_MIN_ZOOM, k = A.animFrame(time), a;
+      if (s.animPre && !still && (a = A.animTry(type, f, v, res, 'pre', k)) && !a.empty) A.blit(ctx, a, p[0], p[1]);
+      A.blit(ctx, spr, p[0], p[1]);
+      if (s.anim && !still && (a = A.animTry(type, f, v, res, 'post', k)) && !a.empty) A.blit(ctx, a, p[0], p[1]);
+      return;   // 烘焙失敗的類型(A.animBad)本幀略過動畫,下一幀起走疊加層向量
+    }
     // animPre:位於物件背面、應被本體遮住的動畫件(先畫);anim:其餘動畫件(後畫)
-    if (s.animPre && time !== undefined) { ctx.save(); ctx.translate(p[0], p[1]); s.animPre(ctx, new Model(s.w, s.d, f), time, v || {}); ctx.restore(); }
+    // GL 幀的特例(烘焙失敗的類型):動畫件為 2D 向量,畫在疊加層(rqScope2D 套好矩陣與透明度);c2d 時 c === ctx,指令與原本相同
+    if (s.animPre && time !== undefined) { c = rq ? rqScope2D(ctx, 1) : ctx; c.save(); c.translate(p[0], p[1]); s.animPre(c, new Model(s.w, s.d, f), time, v || {}); c.restore(); if (rq) rqScopeEnd(ctx, c); }
     A.blit(ctx, spr, p[0], p[1]);
     if (s.anim && time !== undefined) {
-      ctx.save(); ctx.translate(p[0], p[1]); s.anim(ctx, new Model(s.w, s.d, f), time, v || {}); ctx.restore();
+      c = rq ? rqScope2D(ctx, 1) : ctx; c.save(); c.translate(p[0], p[1]); s.anim(c, new Model(s.w, s.d, f), time, v || {}); c.restore(); if (rq) rqScopeEnd(ctx, c);
     }
   };
 
@@ -787,6 +862,17 @@ var ART = window.ART = (function () {
   A.chibiSprite = function (spec0, f, frame, res, todName, season) {
     var key = 'chibi|' + spec0.id + '|' + f + '|' + frame + '|' + (todName || 'noon') + '|' + (season || '') + '|' + res;
     if (A.cache[key]) return A.touch(key);
+    if (A.bakeBudget > 0 && A.bakeMs > A.bakeBudget) {
+      var st = A.stale(todName || 'noon', season || '');
+      if (st) {
+        var key2 = 'chibi|' + spec0.id + '|' + f + '|' + frame + '|' + st.tod + '|' + st.season + '|' + res;
+        if (A.cache[key2]) return A.touch(key2);
+      }
+    }
+    var tb0 = A.bakeBudget > 0 ? performance.now() : 0;
+    try { return A.chibiBake(spec0, f, frame, res, todName, season, key); } finally { if (tb0) A.bakeMs += performance.now() - tb0; }
+  };
+  A.chibiBake = function (spec0, f, frame, res, todName, season, key) {
     var back = (f === 1 || f === 2), mir = (f === 2 || f === 3), tod = A.TOD[todName || 'noon'];
     // 季節衣著:冬 = 毛領 + 無帽者戴棉帽;夏 = 無帽平民戴草笠
     var spec = Object.assign({}, spec0);
@@ -851,15 +937,15 @@ var ART = window.ART = (function () {
   // 依姿勢畫一個人物:p = {spec, x, y(腳底世界像素), f, fr, lean(px,上身往 +x 傾), nod(0/1), alpha, scale}
   A.chibiPose = function (ctx, p, res, tod, season) {
     var spr = A.chibiSprite(p.spec, p.f, p.fr || 0, res, tod, season);
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    if (p.alpha !== undefined) ctx.globalAlpha *= p.alpha;
+    rqSave(ctx);
+    rqTranslate(ctx, p.x, p.y);
+    if (p.alpha !== undefined) rqAlphaMul(ctx, p.alpha);
     var sc = p.scale || 1, sy = sc * (p.nod ? 0.96 : 1);
     // 傾斜 = 以腳底為原點的水平剪切:x' = x + k·y(y 向上為負,所以頭部位移 = −k·42)
     var k = -(p.lean || 0) / 42;
-    ctx.transform(sc, 0, k * sc, sy, 0, 0);
+    rqTransform(ctx, sc, 0, k * sc, sy, 0, 0);
     A.blit(ctx, spr, 0, 0);
-    ctx.restore();
+    rqRestore(ctx);
   };
   // 閒聊/爭吵/圍觀:a、b 為 chibiPose 參數;kind = A.BUBBLE 的 key;回合長 period 秒,兩人輪流說
   A.chat = function (ctx, a, b, t, kind, res, tod, season, o) {
@@ -874,13 +960,13 @@ var ART = window.ART = (function () {
     var bx = sp.x * 0.7 + ot.x * 0.3, by = Math.min(sp.y, ot.y) - 44 * (sp.spec.scale || 1);
     var kinds = o.kinds || [kind, kind], k2 = kinds[turn], n = k2 === 'talk' ? (Math.floor(t * 3) % 3) + 1 : 0;
     var pop = Math.min(1, (t % period) / 0.15);
-    ctx.save(); ctx.translate(bx, by); ctx.scale(0.6 + 0.4 * pop, 0.6 + 0.4 * pop);
-    A.blit(ctx, A.bubbleSprite(k2, n, res), 0, 0); ctx.restore();
+    rqSave(ctx); rqTranslate(ctx, bx, by); rqScale(ctx, 0.6 + 0.4 * pop, 0.6 + 0.4 * pop);
+    A.blit(ctx, A.bubbleSprite(k2, n, res), 0, 0); rqRestore(ctx);
   };
   // 單人頭上泡泡(圍觀、乞討、叫賣)
   A.bubble = function (ctx, x, y, kind, t, res, scale) {
     var n = kind === 'talk' ? (Math.floor(t * 3) % 3) + 1 : 0;
-    ctx.save(); ctx.translate(x, y - 44 * (scale || 1)); A.blit(ctx, A.bubbleSprite(kind, n, res), 0, 0); ctx.restore();
+    rqSave(ctx); rqTranslate(ctx, x, y - 44 * (scale || 1)); A.blit(ctx, A.bubbleSprite(kind, n, res), 0, 0); rqRestore(ctx);
   };
   // 進出門:p 0→1 = 從門外走進門內(出門則 1→0);alpha 線性,縮放 2 段(1.0 / 0.9),沿正面法線往門內移 0.3 格
   A.doorStep = function (p) {
@@ -1171,6 +1257,7 @@ function artSeedFor(t, seed) {
 function artVariant(o) {
   var seed = typeof cellHash === 'function' ? cellHash(o.x, o.y) : ((o.x * 73856093) ^ (o.y * 19349663)) >>> 0;
   var season = (typeof currentSeason !== 'undefined' && currentSeason) ? currentSeason : 'spring';
+  if (typeof ART !== 'undefined' && ART.track) ART.track(artTodKey(), season);
   var v = { season: season, tod: artTodKey(), seed: artSeedFor(artTypeOf(o), seed), level: o.level || 0, skin: '' };
   if (o.type === 'hospital') v.skin = 'herb';
   if (o.type === 'wall') v.skin = artWallConn(o);
@@ -1185,15 +1272,16 @@ function artDrawObject(ctx, o, alpha) {
   var t = artTypeOf(o);
   if (!t || typeof ART === 'undefined' || !ART.OBJ[t]) return false;
   var bh = world.height[idx(o.x, o.y)] * HL;
-  ctx.save();
-  ctx.globalAlpha = alpha === undefined ? 1 : alpha;
+  rqSave(ctx);
+  rqAlpha(ctx, alpha === undefined ? 1 : alpha);
   ART.drawObj(ctx, t, o.x, o.y, bh, artFacing(o), artVariant(o), ART.resBucket(view.zoom * viewport.dpr), typeof drawNow === 'number' ? drawNow : undefined);
-  ctx.restore();
+  rqRestore(ctx);
   return true;
 }
 
+var ART_NEUTRAL = false;   // render.js 烘地形分塊時設 true:不套時段乘色(乘色改在 GL 合成時套用)
 function artTile(color) {
-  if (!artIsOn() || typeof ART === 'undefined' || !ART.TOD) return color;
+  if (ART_NEUTRAL || !artIsOn() || typeof ART === 'undefined' || !ART.TOD) return color;
   var k = artTodKey();
   var mul = ART.TOD[k] ? ART.TOD[k].mul : null;
   if (!mul) return color;

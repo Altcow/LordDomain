@@ -110,3 +110,34 @@ const PALETTES = {
 };
 
 let PAL = PALETTES.spring;
+
+// rq* 繪圖薄介面的 c2d 後備(PLAN_RENDER R0.5):js/glr.js 載入後以完整版覆寫;未載入(部分測試 / 工具頁)時行為 = 原本的 ctx 呼叫
+if (typeof rqBegin === 'undefined') {
+  var rqBegin = function () { return false; }, rqView = function () {}, rqFlush = function () {}, rqEnd = function () {};
+  var rqOv = function (ctx) { return ctx; }, rqActive = function () { return false; };
+  var rqSave = function (ctx) { ctx.save(); }, rqRestore = function (ctx) { ctx.restore(); };
+  var rqAlpha = function (ctx, a) { ctx.globalAlpha = a; }, rqAlphaMul = function (ctx, a) { ctx.globalAlpha *= a; };
+  var rqTransform = function (ctx, a, b, c, d, e, f) { ctx.transform(a, b, c, d, e, f); };
+  var rqTranslate = function (ctx, x, y) { ctx.translate(x, y); }, rqScale = function (ctx, x, y) { ctx.scale(x, y); };
+  var rqScope2D = function (ctx) { return ctx; }, rqScopeEnd = function () {};
+  var rqSprite = function (ctx, spr, x, y, w, h, alpha) {
+    if (alpha === undefined || alpha === 1) { ctx.drawImage(spr.cv, x, y, w, h); return; }
+    var ga = ctx.globalAlpha; ctx.globalAlpha = ga * alpha; ctx.drawImage(spr.cv, x, y, w, h); ctx.globalAlpha = ga;
+  };
+  var rqPoly4 = function (ctx, x0, y0, x1, y1, x2, y2, x3, y3, color) {
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y3); ctx.closePath(); ctx.fillStyle = color; ctx.fill();
+  };
+  var rqRect = function (ctx, x, y, w, h, color, alpha) {
+    if (alpha === undefined || alpha === 1) { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); return; }
+    var ga = ctx.globalAlpha; ctx.globalAlpha = ga * alpha; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.globalAlpha = ga;
+  };
+  var rqDisc = function (ctx, cx, cy, rx, ry, color) {
+    ctx.fillStyle = color; ctx.beginPath();
+    if (rx === ry) ctx.arc(cx, cy, rx, 0, Math.PI * 2); else ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  var rqLine = function (ctx, x0, y0, x1, y1, lw, color, alpha) {
+    ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.restore();
+  };
+  var rqDepthSetup = function () {}, rqDepth = function () {}, rqAbort = function () {}, rqTerrain = function () { return false; }, rqGlow = function () { return false; };
+}

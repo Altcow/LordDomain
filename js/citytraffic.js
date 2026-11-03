@@ -219,6 +219,7 @@ function lifeXEmit(role, count, start, plan, entry, mid, o) {
   LIFE.live -= out.length; // lifeEmit 已計入一般居民;街景角色不占居民額度
   out.forEach(function (n) {
     n.ext = true; n.role = role;
+    if (typeof crowdSpecFor === 'function' && n.spec) { const cs = crowdSpecFor(role, n.spec); if (cs) { n.spec = cs; LIFE.variantIds[cs.id] = true; } } // 路人零件化外觀(模組缺失時沿用舊外觀)
     n.bub = T.bub || ''; n.bubP = T.bubP || 6; n.frr = T.frr || 4;
   });
   return out;

@@ -177,7 +177,19 @@ function comboUnlockLv(id) {
   });
   return lv;
 }
+// NL2:組合件成員節點聯集,全研完才可用(未登記於科技對照者沿用舊等級判定)
+function comboUnlockNodes(id) {
+  const out = [];
+  COMBO_SETS[id].items.forEach(it => {
+    const n = typeof nlObjTech === 'function' ? nlObjTech(it.type) : undefined;
+    if (n && n !== 'start' && out.indexOf(n) < 0 && !(typeof NL_START_OBJS !== 'undefined' && NL_START_OBJS.indexOf(it.type) >= 0)) out.push(n);
+  });
+  return out;
+}
 function comboUnlocked(id) {
+  if (typeof nlUnlocked === 'function' && typeof NL_OBJ_TECH !== 'undefined' && COMBO_SETS[id].items.every(it => nlUnlocked(it.type) !== null)) {
+    return COMBO_SETS[id].items.every(it => nlUnlocked(it.type) === true);
+  }
   if (typeof prog === 'undefined' || !prog) return true;
   return prog.lv >= comboUnlockLv(id);
 }

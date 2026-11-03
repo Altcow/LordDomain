@@ -339,6 +339,14 @@ function copyEstateToCamp() {
 // 解鎖閘門（PLAN_TD_MASTER §3.6；PLAN_PROGRESSION §2.5）：開放等級由 progUnlockLv 查表；表中沒有的 id 或 prog 未載入一律開放
 function isUnlocked(kind, id) {
   if (kind === 'feature' && typeof cityOnlyHides === 'function' && cityOnlyHides(id)) return false;   // 城建專注模式(js/cityonly.js):釣魚 / 仙獸 / 戰鬥相關功能一律視為未開放
+  if (kind === 'estate' && typeof nlUnlocked === 'function') {   // NL1:經營板物件改看起手集合 ∪ 已研完科技(citytech.js);戰陣板與其他類別沿用等級表
+    const nl = nlUnlocked(id);
+    if (nl !== null) return nl;
+  }
+  if (kind === 'feature' && typeof nlFeatureOpen === 'function') {   // NL2:功能依科技 / 建築而非 prog.lv(focusHidden 與未登記者沿用等級表)
+    const nf = nlFeatureOpen(id);
+    if (nf !== null) return nf;
+  }
   if (typeof progUnlockLv !== 'function' || typeof prog === 'undefined' || !prog) return true;
   const lv = progUnlockLv(kind, id);
   return lv === null || prog.lv >= lv;
@@ -354,6 +362,7 @@ function progRulesOn() {
 // 土地遮罩：以地圖中心為準的正方形，邊長 progLandSide(lv)；未載入或 Lv25 = 全開。(x,y,w,h) 是否整個在土地內
 function inLandRect(x, y, w, h) {
   if (typeof prog === 'undefined' || !prog || typeof progLandSide !== 'function' || prog.lv >= PROG_LV_MAX) return true;
+  if (world.board === 'estate') return true;   // NL0:經營板全圖開放,不再依等級限制土地
   const W = boardW();
   const side = Math.min(W, world.board === 'camp' && typeof progCoreSide === 'function' ? progCoreSide(prog.lv) : progLandSide(prog.lv)), x0 = (W - side) >> 1, y0 = x0;   // 戰陣板仍用舊公式(56);經營板用大地圖曲線
   return x >= x0 && y >= y0 && x + w <= x0 + side && y + h <= y0 + side;
@@ -383,6 +392,7 @@ function countObjects(type) {
 function capOf(type) {
   const d = OBJECTS[type];
   let m = d.max || null;
+  if (type === 'research' && typeof techLabCap === 'function' && typeof CITY_TECHS !== 'undefined') m = techLabCap();   // NL1:研究院上限依時代
   if (progRulesOn() && typeof progProdCap === 'function') {
     const pc = progProdCap(type, prog.lv);
     if (pc !== null && (m === null || pc < m)) m = pc;
@@ -477,6 +487,7 @@ function tickResources(dt) {
       resFrac[k] -= whole;
     }
   }
+  if (typeof cityGoodsTick === 'function') cityGoodsTick(dt);   // 生產鏈(goods.js):庫房與工坊結算
   world.lastTs = Date.now();
 }
 
@@ -615,6 +626,7 @@ function saveWorldObj() {
   o.camp = cb ? boardToJSON(cb) : null;
   o.res = world.res; o.lastTs = world.lastTs; o.season = currentSeason; o.deals = world.deals; o.tech = world.tech;
   o.record = world.record; o.npcBest = world.npcBest; o.raid = world.raid;
+  if (world.city) o.city = world.city;   // 庫房(goods.js)
   o.layoutSlots = world.layoutSlots; o.layoutActive = world.layoutActive;
   return o;
 }
@@ -664,6 +676,17 @@ function savePreBackup(raw) {
   } catch (e) {
     saveNotice('存檔空間不足,略過舊存檔備份');
   }
+}
+
+// NL1 舊存檔遷移:存檔沒有 city.tech(NL 前的存檔)且有 prog.lv 時,依等級發科技;先原樣備份一次(只留第一份)。已放置的物件一律保留
+const SAVE_PRENL_KEY = 'lorddomain.save.prenl.v1';
+function nlMigrateSave(s) {
+  if (typeof techMigrateFromLevel !== 'function' || (s.city && s.city.tech)) return;
+  if (typeof prog === 'undefined' || !prog || !(prog.lv >= 1)) return;
+  try {
+    if (localStorage.getItem(SAVE_PRENL_KEY) === null) localStorage.setItem(SAVE_PRENL_KEY, JSON.stringify(s));
+  } catch (e) { saveNotice('存檔空間不足,略過舊存檔備份'); }
+  techMigrateFromLevel(prog.lv);
 }
 
 function loadWorldSave() {
@@ -717,6 +740,9 @@ function loadWorldSave() {
     world.record = normRecord(s.record);
     world.npcBest = normNpcBest(s.npcBest);
     world.raid = normRaid(s.raid);
+    if (typeof goodsNormCity === 'function') { world.city = goodsNormCity(s.city); goodsInvalidate(); }
+    if (typeof techLoadFrom === 'function') techLoadFrom(s.city);   // 研發狀態 world.city.tech(citytech.js)
+    nlMigrateSave(s);
     world.layoutSlots = normLayoutSlots(s.layoutSlots);
     world.layoutActive = normLayoutActive(s.layoutActive, world.layoutSlots);
     world.lastTs = s.lastTs || Date.now();
@@ -741,6 +767,8 @@ function applyOfflineGains() {
     if (n > 0) { world.res[k] += n; any = true; }
   }
   techOfflineDone = applyOfflineResearch(sec);
+  if (typeof cityGoodsOffline === 'function') cityGoodsOffline(sec);   // 生產鏈離線結算(≤ 48 步)
+  if (typeof techOffline === 'function') techOffline(sec);   // 研發序列離線推進(上限 8 小時)
   world.lastTs = Date.now();
   return any ? sec : 0;
 }
@@ -918,7 +946,7 @@ function applyTemplate(id) {
   if (estate) world.lastTs = Date.now();
   // 城市等級略過件數以 toast 說明(延後一拍顯示,蓋過呼叫端緊接著的「已套用」提示)
   if (lvSkip > 0 && typeof showToast === 'function') {
-    const msg = lvSkip + ' 件超出目前城市等級,未放置';
+    const msg = lvSkip + ' 件需要研發或已達數量上限,未放置';
     if (typeof setTimeout === 'function') setTimeout(() => showToast(msg), 0); else showToast(msg);
   }
   return { placed: world.objects.length, failed: failed, skipLv: lvSkip, ox: ox, oy: oy };

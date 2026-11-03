@@ -268,6 +268,7 @@ function toggleToolHelp(open) {
   const show = open === undefined ? p.hidden : !!open;
   if (show) buildToolHelp(p);
   p.hidden = !show;
+  if (show) { if (typeof panelOpen === 'function') panelOpen('toolHelp'); } else if (typeof panelClose === 'function') panelClose('toolHelp');
 }
 
 function buildToolHelp(p) {
@@ -1194,18 +1195,9 @@ function draftBeginMod(rec, lv) {
 function draftTplRender(st) {
   const type = st.type;
   const h = ldNew('draftStartDlg', (type === 'camp' ? '推薦陣地 / 戰陣範本' : '經營範本') + '(載入到草稿)');
-  const city = typeof tplCityLists === 'function' ? tplCityLists(type) : { my: 0, open: [], locked: [] };
-  const cityAll = city.open.concat(city.locked);
-  const cityIds = {};
-  cityAll.forEach(t => { cityIds[t.id] = 1; });
-  const list = TEMPLATES.filter(t => (t.kind || 'estate') === type && !t.hidden && !cityIds[t.id]);
+  const list = TEMPLATES.filter(t => (t.kind || 'estate') === type && !t.hidden);
   const ordered = list.filter(t => t.isDefault).concat(list.filter(t => !t.isDefault));
   const col = ldRow(h, 'ld-col ld-scroll');
-  cityAll.forEach(t => {
-    const lock = tplCityLv(t) > city.my;
-    ldBtn(h, col, 'tpl:' + t.id, lock ? '🔒 Lv ' + tplCityLv(t) : t.name + (t.isDefault ? ' ★預設' : ''), () => draftBeginFrom(type, 'tpl:' + t.id), lock ? 'empty locked' : '', lock || !tplFitsBoard(t),
-      lock ? '升到 Lv ' + tplCityLv(t) + ' 後可載入 ' + t.w + '×' + t.h : (t.desc || '') + ' ' + t.w + '×' + t.h);
-  });
   ordered.forEach(t => {
     ldBtn(h, col, 'tpl:' + t.id, t.name + (t.isDefault ? ' ★預設' : ''), () => draftBeginFrom(type, 'tpl:' + t.id), '', !tplFitsBoard(t), (t.desc || '') + ' ' + t.w + '×' + t.h);
   });
@@ -1403,7 +1395,15 @@ function slotPopToggle() {
   slotPopOn = !slotPopOn;
   layoutPickSync(true);
   if (typeof syncSideBar === 'function') syncSideBar();
+  if (slotPopOn) { if (typeof panelOpen === 'function' && !panelOpen('slotPop')) slotPopOn = false; } else if (typeof panelClose === 'function') panelClose('slotPop');
   return slotPopOn;
+}
+// 面板管理器(點外 / Esc / 地圖拖曳)收起版面選擇
+function slotPopClose() {
+  if (!slotPopOn) return;
+  slotPopOn = false;
+  layoutPickSync(true);
+  if (typeof syncSideBar === 'function') syncSideBar();
 }
 function slotPickBuild() {
   if (document.getElementById('slotPop')) return;
