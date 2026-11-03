@@ -36,7 +36,7 @@ function lifeTrafficReset() {
 
 // 站得住的格子:可走道路格,或沒有物件的草地 / 道路,且高度與參考相同
 function lifeStandOk(cx, cy, hh) {
-  if (cx < 0 || cy < 0 || cx >= MAP_W || cy >= MAP_H) return false;
+  if (cx < 0 || cy < 0 || cx >= boardW() || cy >= boardH()) return false;
   const i = idx(cx, cy);
   if (world.height[i] !== hh) return false;
   const R = LIFE.road;
@@ -52,8 +52,8 @@ function lifeTrafficStatOk(n) {
 
 // 重建道路圖後呼叫:停靠點、站崗點、外圍巡走點、叫賣點、巡邏關鍵點、道路網大小(馬車 / 騎士只在路網夠大時生成)
 function lifeTrafficBuild(ok) {
-  const R = LIFE.road, N = MAP_W * MAP_H;
-  const X = { dock: [], nStall: 0, stallC: [], mil: 0, post: [], gwalk: [], keys: [], palaceOk: false, cx: MAP_W / 2, cy: MAP_H / 2, span: 0, comp: 0 };
+  const R = LIFE.road, N = boardW() * boardH();
+  const X = { dock: [], nStall: 0, stallC: [], mil: 0, post: [], gwalk: [], keys: [], palaceOk: false, cx: boardW() / 2, cy: boardH() / 2, span: 0, comp: 0 };
   R.x = X;
   const milObjs = [], walls = [], stallObjs = [], crowdObjs = [];
   let palace = null, k, i, o, fp;
@@ -114,7 +114,7 @@ function lifeTrafficBuild(ok) {
   let pd = null;
   for (k = 0; k < R.dests.length; k++) if (R.dests[k].type === 'palace') { pd = R.dests[k]; break; }
   if (pd) {
-    const px = pd.cell % MAP_W, py = Math.floor(pd.cell / MAP_W), hb = world.height[pd.cell];
+    const px = pd.cell % boardW(), py = Math.floor(pd.cell / boardW()), hb = world.height[pd.cell];
     let added = 0;
     for (let dy = -1; dy <= 1 && added < 4; dy++) {
       for (let dx = -1; dx <= 1 && added < 4; dx++) {
@@ -136,7 +136,7 @@ function lifeTrafficBuild(ok) {
     const f = footprint(m.type, m.rot);
     for (let y = m.y - 2; y <= m.y + f[1] + 1; y++) {
       for (let x = m.x - 2; x <= m.x + f[0] + 1; x++) {
-        if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) continue;
+        if (x < 0 || y < 0 || x >= boardW() || y >= boardH()) continue;
         const c = idx(x, y);
         if (ok[c] && !wset.has(c)) { wset.add(c); wlist.push(c); }
       }

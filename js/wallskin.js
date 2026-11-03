@@ -69,7 +69,7 @@ function wallSkinGroup(o) {
     }
     for (let j = 0; j < fp[1]; j++) around.push([c.x - 1, c.y + j], [c.x + fp[0], c.y + j]);
     around.forEach(p => {
-      if (p[0] < 0 || p[1] < 0 || p[0] >= MAP_W || p[1] >= MAP_H) return;
+      if (p[0] < 0 || p[1] < 0 || p[0] >= boardW() || p[1] >= boardH()) return;
       const n = world.occ[idx(p[0], p[1])];
       const p2 = n ? world.objects[n - 1] : null;
       if (p2 && !seen.has(p2) && WALL_SKIN_FAMILY[p2.type] === fam) { seen.add(p2); q.push(p2); }

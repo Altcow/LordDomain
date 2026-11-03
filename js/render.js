@@ -8,12 +8,22 @@ function setSeason(name) {
 
 const view = { x: 0, y: 0, zoom: 1 };
 const ZOOM_ABS_MIN = 0.35, ZOOM_MIN_CAP = 1.5, ZOOM_MAX = 2.5;
-// 整張地圖的螢幕外框(世界像素、未乘縮放):寬 = 對角投影寬;高 = 頂部留建築高度 + 底邊
-const MAP_FIT_W = (MAP_W + MAP_H) * TW / 2;
-const MAP_FIT_H = (MAP_W + MAP_H) * TH / 2 + MAX_H * HL + 64;
+const ZOOM_ABS_MIN_BIG = 0.15;   // 經營大板(邊長 > MAP_W)的全景縮放下限(PLAN_BIGMAP §7.1);戰陣 / 戰鬥板維持 ZOOM_ABS_MIN
+function zoomAbsMin() { return boardW() > MAP_W ? ZOOM_ABS_MIN_BIG : ZOOM_ABS_MIN; }
+// 視圖範圍(格座標 [x0, y0, x1, y1],x1 / y1 不含):大板的經營模式在土地未全開時限制在「土地外框 + 6 格」,其餘為整張板子
+const VIEW_LAND_MARGIN = 6;
+function viewCells() {
+  const W = boardW(), H = boardH();
+  if (W > MAP_W && game.mode === 'estate' && typeof prog !== 'undefined' && prog && typeof progLandSide === 'function' && prog.lv < PROG_LV_MAX) {
+    const side = Math.min(W, progLandSide(prog.lv) + VIEW_LAND_MARGIN * 2), o = (W - side) >> 1;
+    return [o, o, o + side, o + side];
+  }
+  return [0, 0, W, H];
+}
 // 縮放低於此值:不畫地格邊線(細線會閃爍)、建築改畫色塊
 const TILE_EDGE_MIN_ZOOM = 0.35, OBJ_BLOB_ZOOM = 0.35;
 let zoomMin = ZOOM_ABS_MIN;
+let viewKey = null;   // 板子邊長 + 視圖範圍;改變(換板 / 升級擴地)時重算 zoomMin 與視圖夾限
 const viewport = { w: 0, h: 0, dpr: 1 };
 const preview = { visible: false, x: 0, y: 0, tool: null, rot: 0, ok: true };
 
@@ -26,11 +36,19 @@ function resizeCanvas(canvas) {
   updateZoomMin();
 }
 
-// 縮放下限 = 整張地圖剛好塞進視窗(寬高取較嚴者),上限 ZOOM_MIN_CAP;所有地圖共用
+// 縮放下限 = 視圖範圍(整張地圖或大板的土地外框)剛好塞進視窗(寬高取較嚴者),上限 ZOOM_MIN_CAP;所有地圖共用
 function updateZoomMin() {
-  const fit = Math.min(viewport.w / MAP_FIT_W, viewport.h / MAP_FIT_H);
-  zoomMin = Math.max(ZOOM_ABS_MIN, Math.min(ZOOM_MIN_CAP, fit));
+  const b = viewCells(), n = (b[2] - b[0]) + (b[3] - b[1]);
+  const fit = Math.min(viewport.w / (n * TW / 2), viewport.h / (n * TH / 2 + MAX_H * HL + 64));
+  zoomMin = Math.max(zoomAbsMin(), Math.min(ZOOM_MIN_CAP, fit));
   if (view.zoom < zoomMin) view.zoom = zoomMin;
+  viewKey = boardW() + '|' + b.join(',');
+}
+// 每幀檢查:換板或土地擴張後視圖範圍變了才重算(第一次只記錄,不動視圖)
+function syncBoardView() {
+  const key = boardW() + '|' + viewCells().join(',');
+  if (viewKey === null) { viewKey = key; return; }
+  if (key !== viewKey) { updateZoomMin(); clampView(); }
 }
 
 // 手機(窗寬 <= 600 或觸控裝置)開機時的預設縮放:可視面積約 1.6 倍;不小於 zoomMin。僅開機套用一次,使用者手動縮放不受影響
@@ -88,8 +106,9 @@ function centerOnCell(x, y) {
 
 // 地圖比視窗小的方向置中;否則限制在地圖範圍內
 function clampView() {
-  const xl = isoX(0, MAP_H), xh = isoX(MAP_W, 0);
-  const yl = isoY(0, 0, MAX_H), yh = isoY(MAP_W, MAP_H, 0);
+  const b = viewCells();
+  const xl = isoX(b[0], b[3]), xh = isoX(b[2], b[1]);
+  const yl = isoY(b[0], b[1], MAX_H), yh = isoY(b[2], b[3], 0);
   view.x = (xh - xl) * view.zoom <= viewport.w ? (xl + xh) / 2 : Math.min(xh, Math.max(xl, view.x));
   view.y = (yh - yl) * view.zoom <= viewport.h ? (yl + yh) / 2 : Math.min(yh, Math.max(yl, view.y));
 }
@@ -1032,21 +1051,22 @@ function landMaskOn() {
 function landMaskGet() {
   const lv = typeof progLv === 'function' ? progLv() : 0;
   const m = landMask;
-  if (m && m.fn === inLand && m.lv === lv) return m;
-  const out = new Uint8Array(MAP_W * MAP_H), edges = [];
-  for (let y = 0; y < MAP_H; y++)
-    for (let x = 0; x < MAP_W; x++)
+  if (m && m.fn === inLand && m.lv === lv && m.w === boardW() && m.board === world.board) return m;
+  const BW = boardW(), BH = boardH();
+  const out = new Uint8Array(BW * BH), edges = [];
+  for (let y = 0; y < BH; y++)
+    for (let x = 0; x < BW; x++)
       if (!inLand(x, y)) out[idx(x, y)] = 1;
   const nb = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-  for (let y = 0; y < MAP_H; y++)
-    for (let x = 0; x < MAP_W; x++) {
+  for (let y = 0; y < BH; y++)
+    for (let x = 0; x < BW; x++) {
       if (out[idx(x, y)]) continue;
       for (let k = 0; k < 4; k++) {
         const nx = x + nb[k][0], ny = y + nb[k][1];
         if (inBounds(nx, ny) && out[idx(nx, ny)]) edges.push([x, y, k]);
       }
     }
-  landMask = { fn: inLand, lv: lv, out: out, edges: edges };
+  landMask = { fn: inLand, lv: lv, w: BW, board: world.board, out: out, edges: edges };
   return landMask;
 }
 
@@ -1077,6 +1097,28 @@ function drawLandBorder(ctx, lm) {
   ctx.restore();
 }
 
+// 物件最大佔格 (w + h - 2):物件掛在遠角對角線 key 上,畫面可見時 key 最多比螢幕底再大這麼多
+let maxFpSum = -1;
+function objMaxFpSum() {
+  if (maxFpSum < 0) {
+    maxFpSum = 0;
+    for (const k in OBJECTS) { const o = OBJECTS[k]; maxFpSum = Math.max(maxFpSum, (o.w || 1) + (o.h || 1) - 2); }
+  }
+  return maxFpSum;
+}
+// 目前視圖的可見對角線 / u = x - y 範圍(世界座標 → 格座標的保守外擴):
+// dT0..dT1 = 地形格需走訪的 d;dT0..dO1 = 物件 / 待購清單需處理的 d;uMin..uMax = x - y 範圍(每條對角線再依 d 換成 x 範圍)
+function visSpan(BW, BH) {
+  const z = view.zoom;
+  const wl = view.x - viewport.w / (2 * z), wr = view.x + viewport.w / (2 * z);
+  const wt = view.y - viewport.h / (2 * z), wb = view.y + viewport.h / (2 * z);
+  const dT0 = Math.floor((wt - 64) / (TH / 2)) - 3, dT1 = Math.ceil((wb + 144) / (TH / 2)) + 2;
+  return {
+    dT0: dT0, dT1: dT1, dO1: dT1 + objMaxFpSum() + 2,
+    uMin: Math.floor((wl - TW / 2) / (TW / 2)) - 2, uMax: Math.ceil((wr + TW / 2) / (TW / 2)) + 2
+  };
+}
+
 var drawNow = 0;
 function draw(ctx, time) {
   drawNow = time;
@@ -1095,9 +1137,15 @@ function draw(ctx, time) {
   const lm = landOn ? landMaskGet() : null;
   if (typeof tdZonePrep === 'function') tdZonePrep(time);
   if (typeof lifeFrame === 'function') lifeFrame(time);
+  syncBoardView();
 
-  for (let d = 0; d <= MAP_W + MAP_H - 2; d++) {
-    for (let x = Math.max(0, d - MAP_H + 1); x <= Math.min(d, MAP_W - 1); x++) {
+  // 可見範圍(B1):由螢幕四角反投影出要走訪的對角線 d 與每條對角線的 x 範圍(保守外擴,最後仍用 cellVisible 判定,結果與全域走訪相同)
+  const BW = boardW(), BH = boardH();
+  const vs = visSpan(BW, BH);
+  for (let d = 0; d <= BW + BH - 2; d++) {
+    const inT = d >= vs.dT0 && d <= vs.dT1;
+    const xa = inT ? Math.max(0, d - BH + 1, (d + vs.uMin + 1) >> 1) : 1, xb = inT ? Math.min(d, BW - 1, (d + vs.uMax) >> 1) : 0;
+    for (let x = xa; x <= xb; x++) {
       const y = d - x;
       if (cellVisible(x, y)) {
         if (landOn && lm.out[idx(x, y)]) drawWasteTile(ctx, x, y);
@@ -1107,7 +1155,8 @@ function draw(ctx, time) {
       }
     }
     if (typeof drawOverlayDiag === 'function') drawOverlayDiag(ctx, d, time);
-    const list = hid ? null : world.objDiag[d];
+    const inO = d >= vs.dT0 && d <= vs.dO1;
+    const list = hid || !inO ? null : world.objDiag[d];
     if (list) {
       list.slice().sort((a, b) => a.x - b.x).forEach(o => {
         if (!objVisible(o) || (typeof tdObjSkip === 'function' && tdObjSkip(o))) return;
@@ -1118,7 +1167,7 @@ function draw(ctx, time) {
         } else drawObject(ctx, o, dim ? LAND_DIM_ALPHA : 1);
       });
     }
-    const pl = pano.open || hid ? null : pend.diag[d];
+    const pl = pano.open || hid || !inO ? null : pend.diag[d];
     if (pl) {
       pl.slice().sort((a, b) => a.x - b.x).forEach(o => {
         if (objVisible(o)) drawPendingObj(ctx, o);

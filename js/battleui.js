@@ -472,6 +472,7 @@ function atkBossMilestone(id) {
   return L;
 }
 function atkCanOpen() {
+  if (typeof isCityOnly === 'function' && isCityOnly()) return false;   // 城建專注模式:不能出征
   return !atk.on && !battle && !game.backup && (game.mode === 'estate' || game.mode === 'battleDesign');
 }
 
@@ -562,7 +563,7 @@ function initAttackUI() {
 function atkSync() {
   if (!atk.btn) return;
   const m = game.mode;
-  atk.btn.hidden = atk.on || !!game.backup || (m !== 'estate' && m !== 'battleDesign') || (typeof cornerHidden === 'function' && cornerHidden());
+  atk.btn.hidden = (typeof isCityOnly === 'function' && isCityOnly()) || atk.on || !!game.backup || (m !== 'estate' && m !== 'battleDesign') || (typeof cornerHidden === 'function' && cornerHidden());
 }
 
 // 面板貼齊工具列上方(進攻中工具列隱藏,貼底)

@@ -10,7 +10,7 @@ var pui = {
   drawer: null, headLv: null, list: null, req: null, unl: null,
   toolsBtn: null, tools: null, sel: null, legacyBtn: null,
   why: null, upBtn: null,
-  ftue: null, ftueTxt: null, ftueProg: null, ftueX: null, ftueStep: '',
+  welTxt: null, ftue: null, ftueTxt: null, ftueProg: null, ftueX: null, ftueStep: '',
   wel: null, welShown: false, taskShown: false, doneAt: 0, doneSeen: null,
   quest: null, questOpen: false, qTab: 'tutorial', qTabs: null, qList: null, qProg: null, qMsg: null, taskBtn: null
 };
@@ -66,14 +66,23 @@ function puiName(kind, id) {
   return (d && d.name) || id;
 }
 
+// 建築是否屬於城建專注模式隱藏的分類(軍事建築)
+function puiEstateHidden(id) {
+  return typeof BUILD_GROUPS !== 'undefined' && BUILD_GROUPS.some(function (g) { return g.items.indexOf(id) >= 0 && progCityGroupHidden(g.id); });
+}
+
 function puiUnlockNames(L) {
   var out = [], groups = [
     ['estate', PROG_UNLOCK_ESTATE], ['camp', PROG_UNLOCK_CAMP], ['terrain', PROG_UNLOCK_TERRAIN],
     ['trap', PROG_UNLOCK_TRAP], ['unit', PROG_UNLOCK_UNIT], ['feature', PROG_UNLOCK_FEATURE]
   ];
+  if (puiCity()) groups = groups.filter(function (g) { return ['camp', 'trap', 'unit'].indexOf(g[0]) < 0; });   // 城建專注模式:不列戰陣物件、陷阱、兵種
   groups.forEach(function (g) {
     (g[1][L] || []).forEach(function (id) {
-      var nm = puiName(g[0], id);
+      var nm;
+      if (g[0] === 'feature' && typeof cityOnlyHides === 'function' && cityOnlyHides(id)) return;
+      if (g[0] === 'estate' && puiCity() && puiEstateHidden(id)) return;   // 軍事建築(城建專注模式隱藏)
+      nm = puiName(g[0], id);
       if (nm && out.indexOf(nm) < 0) out.push(nm);
     });
   });
@@ -89,6 +98,17 @@ function puiSrcText(from) {
   return from.map(function (f) {
     return PUI_SRC_NAME[f] || (PROG_FACTIONS[f] ? PROG_FACTIONS[f].name : f);
   }).join('、');
+}
+
+// 城建專注模式(js/cityonly.js)是否開啟
+function puiCity() { return typeof isCityOnly === 'function' && isCityOnly(); }
+
+// 經驗進度條(城建專注模式的升級抽屜用)
+function puiXpBar(have, need) {
+  var bar = puiEl('div', 'pg-xbar'), fill = puiEl('i', 'pg-xfill');
+  fill.style.width = Math.round(Math.max(0, Math.min(1, need > 0 ? have / need : 1)) * 100) + '%';
+  bar.appendChild(fill);
+  return bar;
 }
 
 // 需求列:✓/✗、名稱、現有 / 需要、缺少量;note 另起一行(來源、說明)
@@ -113,7 +133,12 @@ function puiRenderReq(p, c, lvMax) {
     return;
   }
   R.appendChild(puiEl('div', 'pg-sec', '升到 Lv' + (p.lv + 1) + ' 需要'));
-  R.appendChild(puiReq(p.xp >= c.xp, '經驗', p.xp, c.xp));
+  if (puiCity()) {
+    R.appendChild(puiReq(p.xp >= c.xp, '經驗', p.xp, c.xp, '經驗:蓋出新種類建築、擴大城市規模'));
+    R.appendChild(puiXpBar(p.xp, c.xp));
+  } else {
+    R.appendChild(puiReq(p.xp >= c.xp, '經驗', p.xp, c.xp));
+  }
   for (k in c.res) {
     have = puiRes(k);
     need = c.res[k];
@@ -337,8 +362,17 @@ function puiModeOk() {
 
 // 新手任務各項目(依 PROG_FTUE_REQ 順序):state = done / cur(當前關) / todo
 function puiQuestItems(tabId) {
-  var p = progGet(), out = [], cur = PROG_FTUE_REQ[p.lv];
+  var p = progGet(), out = [], cur = PROG_FTUE_REQ[p.lv], curQ = null;
   if (tabId !== 'tutorial') return out;
+  if (puiCity()) {   // 城建專注模式:城建任務(蓋民房 → 擴大 → 升級),取代戰鬥教學
+    PROG_CITY_QUEST.forEach(function (q) {
+      var st = 'todo';
+      if (p.ftue.done[q.id]) st = 'done';
+      else if (!curQ) { curQ = q; st = 'cur'; }
+      out.push({ id: q.id, text: q.text, hint: q.hint, go: q.go, state: st });
+    });
+    return out;
+  }
   Object.keys(PROG_FTUE_REQ).forEach(function (L) {
     var id = PROG_FTUE_REQ[L], st = 'todo', t = PROG_TUT_HINTS[id] || {};
     if (p.ftue.done[id]) st = 'done';
@@ -350,8 +384,13 @@ function puiQuestItems(tabId) {
 
 // 提示條內容(只看進度,不看模式與關閉狀態):kind = none / step / ready / done
 function puiTaskModel() {
-  var p = progGet(), items = puiQuestItems('tutorial'), n = 0, cur = PROG_FTUE_REQ[p.lv];
+  var p = progGet(), items = puiQuestItems('tutorial'), n = 0, cur = puiCity() ? '' : PROG_FTUE_REQ[p.lv];
   items.forEach(function (it) { if (it.state === 'done') n++; });
+  if (puiCity()) {
+    items.forEach(function (it) { if (it.state === 'cur' && !cur) cur = it.text; });
+    if (n === items.length) return { kind: 'done', text: '🎉 城建任務完成', n: n, total: items.length };
+    return { kind: 'step', text: cur, n: n, total: items.length };
+  }
   if (!cur) return { kind: 'none', text: '', n: n, total: items.length };
   if (n === items.length) return { kind: 'done', text: '🎉 新手任務完成', n: n, total: items.length };
   if (p.ftue.done[cur]) return { kind: 'ready', text: '✓ 本步完成,點頂列 Lv 升級', n: n, total: items.length };
@@ -364,6 +403,7 @@ function puiTaskRender() {
   p = progGet();
   m = puiTaskModel();
   wel = !p.ftue.welcomed && puiModeOk();
+  if (pui.welTxt) pui.welTxt.textContent = puiCity() ? '歡迎,城主!先點下方的建築,多蓋幾座民房,再蓋伐木場;蓋出新種類、擴大城市就能升級,點頂列 Lv 看條件。' : '歡迎,城主!先點下方的建築,蓋一座民房;點頂列 Lv 看升級條件。';
   pui.welShown = wel;
   pui.wel.hidden = !wel;
   show = !wel && !p.ftue.off && m.kind !== 'none' && puiModeOk();
@@ -424,7 +464,7 @@ function puiQuestRender() {
     pui.qList.appendChild(row);
   });
   pui.qProg.textContent = m.n + '/' + m.total;
-  pui.qMsg.textContent = m.kind === 'done' ? '🎉 新手任務完成!點頂列 Lv 升級' : (m.kind === 'ready' ? '✓ 本步完成,點頂列 Lv 升級' : '');
+  pui.qMsg.textContent = puiCity() ? (m.kind === 'done' ? '🎉 城建任務完成!繼續蓋出更多種類的建築、擴大城市,就能一路升級' : '') : m.kind === 'done' ? '🎉 新手任務完成!點頂列 Lv 升級' : (m.kind === 'ready' ? '✓ 本步完成,點頂列 Lv 升級' : '');
   pui.qMsg.hidden = !pui.qMsg.textContent;
 }
 
@@ -474,7 +514,8 @@ function puiBuildFtue() {
   pui.wel.id = 'progWelcome';
   pui.wel.setAttribute('role', 'status');
   pui.wel.hidden = true;
-  pui.wel.appendChild(puiEl('span', 'pg-wtx', '歡迎,城主!先點下方的建築,蓋一座民房;點頂列 Lv 看升級條件。'));
+  pui.welTxt = puiEl('span', 'pg-wtx', '歡迎,城主!先點下方的建築,蓋一座民房;點頂列 Lv 看升級條件。');
+  pui.wel.appendChild(pui.welTxt);
   pui.wel.appendChild(puiBtn('pg-wok', '知道了', function () { puiWelcomeDone(); }));
   document.body.appendChild(pui.wel);
   puiQuestBuild();
@@ -510,9 +551,21 @@ function puiFtueWatch() {
   p = progGet();
   if (!pui.doneSeen) {
     pui.doneSeen = {};
+    if (puiCity()) {   // 城建任務:先偵測一次,已達成的當作舊的,不 toast
+      progFtueCheck();
+      PROG_CITY_QUEST.forEach(function (q) { if (p.ftue.done[q.id]) pui.doneSeen[q.id] = true; });
+    }
     Object.keys(PROG_FTUE_REQ).forEach(function (L) { if (p.ftue.done[PROG_FTUE_REQ[L]]) pui.doneSeen[PROG_FTUE_REQ[L]] = true; });
   }
   progFtueCheck();
+  if (puiCity()) {
+    PROG_CITY_QUEST.forEach(function (q) {
+      if (p.ftue.done[q.id] && !pui.doneSeen[q.id]) {
+        pui.doneSeen[q.id] = true;
+        puiToast('✓ 完成:' + q.text);
+      }
+    });
+  }
   Object.keys(PROG_FTUE_REQ).forEach(function (L) {
     id = PROG_FTUE_REQ[L];
     if (p.ftue.done[id] && !pui.doneSeen[id]) {

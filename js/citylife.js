@@ -106,14 +106,14 @@ function lifeSeason() {
 }
 
 function lifeHAt(x, y) {
-  const cx = Math.min(MAP_W - 1, Math.max(0, Math.floor(x)));
-  const cy = Math.min(MAP_H - 1, Math.max(0, Math.floor(y)));
+  const cx = Math.min(boardW() - 1, Math.max(0, Math.floor(x)));
+  const cy = Math.min(boardH() - 1, Math.max(0, Math.floor(y)));
   return world.height[idx(cx, cy)];
 }
 
 function lifeRoadSig() {
-  let h = (0x811c9dc5 ^ world.objects.length) >>> 0;
-  const N = MAP_W * MAP_H;
+  let h = (0x811c9dc5 ^ world.objects.length ^ (boardW() << 20)) >>> 0;   // 含板子邊長:換板即重建
+  const N = boardW() * boardH();
   for (let i = 0; i < N; i++) {
     const n = world.occ[i];
     const o = n ? world.objects[n - 1] : null;
@@ -172,7 +172,7 @@ const LIFE_PASS_TYPES = { gate: 1, paifang: 1, toll_gate: 1, gate_courtyard: 1 }
 
 // 道路圖:可走格 + 4 鄰接(同高;高差 1 且任一格有階梯/斜坡才相連)+ 入口 + 門格 + 閒逛停點 + 固定巡邏路線
 function lifeRebuild() {
-  const N = MAP_W * MAP_H;
+  const N = boardW() * boardH();
   const ok = new Uint8Array(N), nb = new Int16Array(N * 4), stairs = new Uint8Array(N), gm = new Uint8Array(N), gt = new Uint8Array(N);
   nb.fill(-1);
   let k, i, o, fp;
@@ -196,10 +196,10 @@ function lifeRebuild() {
   }
   for (i = 0; i < N; i++) {
     if (!ok[i]) continue;
-    const x = i % MAP_W, y = (i - x) / MAP_W;
+    const x = i % boardW(), y = (i - x) / boardW();
     for (let d = 0; d < 4; d++) {
       const nx = x + DIRS[d][0], ny = y + DIRS[d][1];
-      if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+      if (nx < 0 || ny < 0 || nx >= boardW() || ny >= boardH()) continue;
       const j = idx(nx, ny);
       if (!ok[j]) continue;
       const diff = Math.abs(world.height[i] - world.height[j]);
@@ -211,15 +211,15 @@ function lifeRebuild() {
   for (i = 0; i < N; i++) {
     if (!ok[i]) continue;
     list.push(i);
-    const x = i % MAP_W, y = (i - x) / MAP_W;
+    const x = i % boardW(), y = (i - x) / boardW();
     if (x === 0) ent.push({ cell: i, ox: -1, oy: 0 });
-    else if (x === MAP_W - 1) ent.push({ cell: i, ox: 1, oy: 0 });
+    else if (x === boardW() - 1) ent.push({ cell: i, ox: 1, oy: 0 });
     else if (y === 0) ent.push({ cell: i, ox: 0, oy: -1 });
-    else if (y === MAP_H - 1) ent.push({ cell: i, ox: 0, oy: 1 });
+    else if (y === boardH() - 1) ent.push({ cell: i, ox: 0, oy: 1 });
   }
   if (!ent.length) for (i = 0; i < N; i++) if (gt[i] && ok[i]) ent.push({ cell: i, ox: 0, oy: 0 });
   if (!ent.length) {
-    let rx = MAP_W / 2, ry = MAP_H / 2;
+    let rx = boardW() / 2, ry = boardH() / 2;
     for (k = 0; k < world.objects.length; k++) {
       if (world.objects[k].type === 'palace') { rx = world.objects[k].x + 2; ry = world.objects[k].y + 2; break; }
     }
@@ -231,8 +231,8 @@ function lifeRebuild() {
       if (deg === 1) ends.push(i);
     }
     ends.sort((a, b) => {
-      const da = Math.hypot(a % MAP_W - rx, Math.floor(a / MAP_W) - ry);
-      const db = Math.hypot(b % MAP_W - rx, Math.floor(b / MAP_W) - ry);
+      const da = Math.hypot(a % boardW() - rx, Math.floor(a / boardW()) - ry);
+      const db = Math.hypot(b % boardW() - rx, Math.floor(b / boardW()) - ry);
       return db - da;
     });
     for (k = 0; k < ends.length && k < 3; k++) ent.push({ cell: ends[k], ox: 0, oy: 0 });
@@ -265,17 +265,15 @@ function lifeRebuild() {
     for (k = 0; k < ent.length; k++) if (D[ent[k].cell] > bd) { bd = D[ent[k].cell]; best = ent[k]; }
     if (best) R.patrol = { da: pd, a: pd.cell, b: best.cell };
   }
-  if (!LIFE.buck) {
-    LIFE.buck = [];
-    for (k = 0; k < MAP_W + MAP_H; k++) LIFE.buck.push([]);
-  }
+  if (!LIFE.buck) LIFE.buck = [];
+  for (k = LIFE.buck.length; k < boardW() + boardH(); k++) LIFE.buck.push([]);   // 換板(56 ↔ 經營大板)時補足對角線桶
   if (typeof lifeTrafficBuild === 'function') lifeTrafficBuild(ok);
   // 站在被拆掉道路上(或下一步要踏上去)的人直接淡出
   LIFE.npcs.forEach(n => {
     if (n.st === 'fade' || n.st === 'enter' || n.st === 'exit') return;
     if (n.stat) { if (typeof lifeTrafficStatOk === 'function' && !lifeTrafficStatOk(n)) lifeFadeOut(n); return; }
     const fx = Math.floor(n.x), fy = Math.floor(n.y);
-    const onGround = fx >= 0 && fy >= 0 && fx < MAP_W && fy < MAP_H && !ok[idx(fx, fy)];
+    const onGround = fx >= 0 && fy >= 0 && fx < boardW() && fy < boardH() && !ok[idx(fx, fy)];
     if (onGround || (n.cur >= 0 && !ok[n.cur]) || (n.nx >= 0 && !ok[n.nx])) lifeFadeOut(n);
     else if (n.port && (!pcells[n.pa] || !(pcells[n.pb] || ok[n.pb]))) lifeFadeOut(n);
   });
@@ -287,7 +285,7 @@ function lifeDist(g) {
   let D = R.dc.get(g);
   if (D) { R.dc.delete(g); R.dc.set(g, D); return D; }
   if (R.dc.size >= LIFE_LRU) R.dc.delete(R.dc.keys().next().value);
-  D = new Int16Array(MAP_W * MAP_H).fill(-1);
+  D = new Int16Array(boardW() * boardH()).fill(-1);
   if (R.ok[g]) {
     let head = 0, tail = 0;
     R.q[tail++] = g; D[g] = 0;
@@ -462,7 +460,7 @@ function lifeNew(key, T, start, plan) {
 function lifeEmit(T, key, count, start, plan, entry, mid, o) {
   const lane = 0.12 + Math.random() * 0.13;
   const sf = (0.85 + Math.random() * 0.3) * (o.spdMul || 1);
-  const sx = (start % MAP_W) + 0.5, sy = Math.floor(start / MAP_W) + 0.5;
+  const sx = (start % boardW()) + 0.5, sy = Math.floor(start / boardW()) + 0.5;
   let made = 0;
   for (let i = 0; i < count; i++) {
     const n = lifeNew(key, T, start, plan);
@@ -746,9 +744,9 @@ function lifeWalk(n, dt) {
       if (j < 0) { lifeFadeOut(n); return; }
       n.wait = 0;
       n.nx = j;
-      const jx = (j % MAP_W) + 0.5, jy = Math.floor(j / MAP_W) + 0.5;
+      const jx = (j % boardW()) + 0.5, jy = Math.floor(j / boardW()) + 0.5;
       if (n.cur >= 0) {
-        const cx = (n.cur % MAP_W) + 0.5, cy = Math.floor(n.cur / MAP_W) + 0.5;
+        const cx = (n.cur % boardW()) + 0.5, cy = Math.floor(n.cur / boardW()) + 0.5;
         const ux = jx - cx, uy = jy - cy;
         n.tx = jx - uy * n.lane; n.ty = jy + ux * n.lane;
       } else {
@@ -831,7 +829,7 @@ function lifeCellOf(x, y, GW, GH) {
 function lifeChatCheck() {
   const L = LIFE.npcs, n = L.length;
   if (n < 2) return;
-  const GW = Math.ceil((MAP_W + 4) / LIFE_GRID), GH = Math.ceil((MAP_H + 4) / LIFE_GRID);
+  const GW = Math.ceil((boardW() + 4) / LIFE_GRID), GH = Math.ceil((boardH() + 4) / LIFE_GRID);
   if (!LIFE.chatHead || LIFE.chatHead.length !== GW * GH) LIFE.chatHead = new Int32Array(GW * GH);
   if (!LIFE.chatNext || LIFE.chatNext.length < n) LIFE.chatNext = new Int32Array(Math.max(256, n * 2));
   const head = LIFE.chatHead, nxt = LIFE.chatNext;
@@ -1031,7 +1029,7 @@ function lifeFrame(time) {
   LIFE.live = live;
 
   // 依對角線分桶(重用陣列,不配置記憶體);成對閒聊時由較小 id 的一方負責畫整組
-  const buck = LIFE.buck, D = MAP_W + MAP_H;
+  const buck = LIFE.buck, D = boardW() + boardH();
   for (let k = 0; k < D; k++) buck[k].length = 0;
   for (let i = 0; i < L.length; i++) {
     const n = L[i];

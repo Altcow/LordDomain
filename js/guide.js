@@ -35,7 +35,7 @@ var GUIDE_TOPICS = [
   ] },
   { id: 'draft', title: '布置草稿與存檔', feat: null, mode: 'estate', steps: [
     { target: '#sideBar [data-px="edit"]', text: '點 🔨 布置進入草稿:在草稿裡隨便改,正在用的城不會變。' },
-    { target: '#sideBar [data-px="save"]', text: '改好按 💾 存檔,選一格存進去。經營和戰鬥布置各有 3 格,存好的版面可隨時切換。' }
+    { target: '#sideBar [data-px="save"]', text: function () { return gdCity() ? '改好按 💾 存檔,選一格存進去。經營布置有 3 格,存好的版面可隨時切換。' : '改好按 💾 存檔,選一格存進去。經營和戰鬥布置各有 3 格,存好的版面可隨時切換。'; } }
   ] },
   { id: 'camp', title: '戰鬥布置', feat: 'battleDesign', mode: 'camp', steps: [
     { target: '#modeBtn', text: '左下這顆可以切換「經營布置」和「戰鬥布置」。你現在在戰鬥布置,這裡設計的是被攻打時的防守陣。' },
@@ -53,7 +53,7 @@ var GUIDE_TOPICS = [
   ] },
   { id: 'upgrade', title: '升級與材料', feat: 'upgrade', mode: 'any', steps: [
     { target: '#progChip', text: '點 Lv 晶片打開升級抽屜,會列出升級需要的資源、材料與經驗。' },
-    { target: '#progChip', text: '部分材料要打野營副本(首領營、難營)才拿得到;條件都達成才能按升級。' }
+    { target: '#progChip', text: function () { return gdCity() ? '經驗靠蓋出新種類的建築、擴大城市規模累積;資源與經驗都夠就能按升級。' : '部分材料要打野營副本(首領營、難營)才拿得到;條件都達成才能按升級。'; } }
   ] },
   { id: 'photo', title: '拍照模式', feat: 'photo', mode: 'estate', steps: [
     { target: ['#sideBar [data-px="photo"]', '#sideMore'], text: '拍照模式會隱藏所有介面方便截圖,畫面上只留一顆還原鈕。' }
@@ -137,6 +137,15 @@ function gdTopic(id) {
   return null;
 }
 
+function gdCity() { return typeof isCityOnly === 'function' && isCityOnly(); }
+
+// 城建專注模式下隱藏的主題:戰鬥布置畫面、出征戰鬥中,以及 feat 被 cityOnlyHides 隱藏者(camp / attack / battle / friend / fishing / pet 等)
+function gdCityHidden(t) {
+  if (!gdCity()) return false;
+  if (t.mode === 'camp' || t.mode === 'attack') return true;
+  return !!t.feat && typeof cityOnlyHides === 'function' && cityOnlyHides(t.feat);
+}
+
 function gdFeatOpen(feat) {
   if (!feat) return true;
   if (typeof isUnlocked !== 'function') return true;
@@ -172,7 +181,7 @@ function guideQueue() {
   var s = gdLoad(), out = [];
   GUIDE_TOPICS.forEach(function (t) {
     if (s.seen[t.id]) return;
-    if (!gdFeatOpen(t.feat) || !gdModeOk(t.mode)) return;
+    if (!gdFeatOpen(t.feat) || !gdModeOk(t.mode) || gdCityHidden(t)) return;
     out.push(t.id);
   });
   return out;
@@ -454,6 +463,7 @@ function gdListRender() {
   body.textContent = '';
   GUIDE_TOPICS.forEach(function (t) {
     var open = gdFeatOpen(t.feat), card = gdEl('div', 'gl-item' + (open ? '' : ' lock')), head = gdEl('div', 'gl-head'), ol = gdEl('ol', 'gl-steps'), btn;
+    if (gdCityHidden(t)) return;   // 城建專注模式:戰鬥 / 釣魚 / 仙獸主題不列出
     head.appendChild(gdEl('b', 'gl-t', t.title));
     if (!open) head.appendChild(gdEl('span', 'gl-tag', 'Lv ' + guideTopicLv(t) + ' 開放'));
     else if (t.mode !== 'attack') {

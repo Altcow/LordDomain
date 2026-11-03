@@ -23,6 +23,7 @@ function progBlank() {
     bossBest: {},
     friendHits: {},
     mod: { seq: 0, fav: [], my: [] },
+    city: { done: {}, gained: 0 },   // 城建專注模式的經驗里程碑(prog.city.done 的鍵 = 已給過經驗的里程碑;舊存檔無此欄位視為空)
     lastEstate: null
   };
   Object.keys(PROG_MATS).forEach(function (id) { d.mats[id] = 0; });
@@ -81,6 +82,12 @@ function progNorm(raw) {
     if (Array.isArray(raw.mod.my)) {
       src = raw.mod.my;
       for (i = 0; i < PROG_MOD.mySlots; i++) b.mod.my[i] = progIsObj(src[i]) ? src[i] : null;
+    }
+  }
+  if (progIsObj(raw.city)) {
+    b.city.gained = progInt(raw.city.gained, 0, Number.MAX_SAFE_INTEGER, 0);
+    if (progIsObj(raw.city.done)) {
+      for (k in raw.city.done) if (raw.city.done[k] === true) b.city.done[k] = true;
     }
   }
   if (progIsObj(raw.lastEstate)) b.lastEstate = raw.lastEstate;
@@ -211,7 +218,9 @@ function progCanUpgrade() {
 
 // 升級:扣資源、材料、經驗 → 等級 +1 → 先 progSave() 再 saveWorld()(§8.1 寫入順序)
 function progDoUpgrade() {
-  var p = progGet(), chk = progCanUpgrade(), c, k, id;
+  var p = progGet(), chk, c, k, id;
+  progCityCheck();   // 城建專注模式:先把剛蓋的建築換成經驗(其他模式回 0)
+  chk = progCanUpgrade();
   if (!chk.ok) return chk;
   c = progUpgradeCost(p.lv);
   for (k in c.res) world.res[k] = (world.res[k] || 0) - c.res[k];
@@ -374,6 +383,84 @@ function progFtueBase(id) {
   if (id === 'npcWin2') return String(progGet().ftue.counts.npcWin);
   return '';
 }
+// ───── 城建專注模式(js/cityonly.js):經驗由城建行為取得、城建任務偵測。數值見 progdata.js PROG_CITY_XP / PROG_CITY_QUEST ─────
+function progCityActive() { return typeof isCityOnly === 'function' && isCityOnly(); }
+// 建築所屬分類是否因城建專注模式隱藏(目前只有軍事建築)
+function progCityGroupHidden(gid) {
+  return typeof BUILD_TOP !== 'undefined' && typeof cityOnlyTopHidden === 'function' && cityOnlyTopHidden(BUILD_TOP[gid]);
+}
+// 統計經營棋盤:{ types:{type:n}, total, houses, deco, groups:{gid:不同種類數} }
+function progCityStats(objs) {
+  var s = { types: {}, total: 0, houses: 0, deco: 0, groups: {} }, X = PROG_CITY_XP;
+  (objs || []).forEach(function (o) {
+    var d;
+    if (!o || typeof OBJECTS === 'undefined' || !(d = OBJECTS[o.type])) return;
+    s.types[o.type] = (s.types[o.type] || 0) + 1;
+    if (X.noCount.indexOf(o.type) >= 0) return;
+    s.total++;
+    if (o.type === 'house') s.houses++;
+    if (!d.prod) s.deco++;
+  });
+  if (typeof BUILD_GROUPS !== 'undefined') {
+    BUILD_GROUPS.forEach(function (g) { s.groups[g.id] = g.items.filter(function (id) { return !!s.types[id]; }).length; });
+  }
+  return s;
+}
+// 依統計給一次性經驗(寫入 p.city.done),回傳本次新增的經驗;不碰 p.xp
+function progCityGrant(p, st) {
+  var X = PROG_CITY_XP, done = p.city.done, gain = 0;
+  function give(key, xp) { if (!done[key]) { done[key] = true; gain += xp; } }
+  function steps(key, tab, val) { tab.at.forEach(function (n) { if (val >= n) give(key + n, tab.xp(n)); }); }
+  Object.keys(st.types).forEach(function (t) {
+    var L = progUnlockLv('estate', t), skip = false;
+    if (L === null) return;
+    if (typeof BUILD_GROUPS !== 'undefined') BUILD_GROUPS.forEach(function (g) { if (g.items.indexOf(t) >= 0 && progCityGroupHidden(g.id)) skip = true; });
+    if (!skip) give('t:' + t, X.newType(L));
+  });
+  steps('n:', X.total, st.total);
+  steps('h:', X.houses, st.houses);
+  steps('d:', X.deco, st.deco);
+  Object.keys(st.groups).forEach(function (gid) {
+    if (progCityGroupHidden(gid)) return;
+    X.group.at.forEach(function (n, i) { if (st.groups[gid] >= n) give('g:' + gid + ':' + n, X.group.xp[i]); });
+  });
+  return gain;
+}
+// 城建經驗累計(每秒輪詢 / 升級前呼叫);只在城建專注模式、且資料已載入時運作;回傳本次新增經驗
+function progCityCheck() {
+  var p, gain, objs;
+  if (!progCityActive() || !progFtueReady() || typeof estateObjects !== 'function') return 0;
+  p = progGet();
+  if (p.lv >= PROG_LV_MAX) return 0;
+  objs = estateObjects();
+  gain = progCityGrant(p, progCityStats(objs));
+  if (gain > 0) {
+    p.xp += gain;
+    p.city.gained += gain;
+    progSave();
+  }
+  return gain;
+}
+function progCityQuestDone(q, st, p) {
+  if (q.kind === 'houses') return st.houses >= q.n;
+  if (q.kind === 'deco') return st.deco >= q.n;
+  if (q.kind === 'lv') return p.lv >= q.n;
+  if (q.kind === 'anyType') return q.types.some(function (t) { return !!st.types[t]; });
+  return false;
+}
+// 城建任務偵測:完成的步驟記入 p.ftue.done(只增不減);回傳本次新完成的步驟 id
+function progCityQuestCheck() {
+  var p, st, got = [];
+  if (!progFtueReady()) return got;
+  p = progGet();
+  st = progCityStats(typeof estateObjects === 'function' ? estateObjects() : []);
+  PROG_CITY_QUEST.forEach(function (q) {
+    if (!p.ftue.done[q.id] && progCityQuestDone(q, st, p)) { p.ftue.done[q.id] = true; got.push(q.id); }
+  });
+  if (got.length) progSave();
+  return got;
+}
+
 function progFtueDone(id) {
   var p = progGet(), sig;
   if (id === 'houses2') return progHouseCount() >= PROG_TUT_HOUSES;
@@ -387,6 +474,7 @@ function progFtueDone(id) {
 function progFtueCheck() {
   var p, cur, base, got = [], changed = false;
   if (!progFtueReady()) return got;
+  if (progCityActive()) { progCityCheck(); return progCityQuestCheck(); }   // 城建專注模式:不跑戰鬥教學,改跑城建經驗與城建任務
   p = progGet();
   cur = PROG_FTUE_REQ[p.lv];
   if (!cur || p.ftue.done[cur]) return got;

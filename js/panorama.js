@@ -3,8 +3,8 @@ const PANO_PAD = 8, PANO_TOP = MAX_H * HL + 64, PANO_BOTTOM = HL + 8;
 const pano = { open: false, busy: false, token: 0, blob: null, file: null, url: '', mode: '', w: 0, h: 0, ms: 0, encMs: 0 };
 
 function panoBounds() {
-  const left = isoX(0, MAP_H) - PANO_PAD, right = isoX(MAP_W, 0) + PANO_PAD;
-  const top = isoY(0, 0, 0) - PANO_TOP, bottom = isoY(MAP_W, MAP_H, 0) + PANO_BOTTOM;
+  const left = isoX(0, boardH()) - PANO_PAD, right = isoX(boardW(), 0) + PANO_PAD;
+  const top = isoY(0, 0, 0) - PANO_TOP, bottom = isoY(boardW(), boardH(), 0) + PANO_BOTTOM;
   return { cx: (left + right) / 2, cy: (top + bottom) / 2, w: right - left, h: bottom - top };
 }
 

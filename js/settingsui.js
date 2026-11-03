@@ -275,6 +275,8 @@ function stBgmCard() {
   return stCard('🎼', '背景音樂曲目', '每個場景可選曲目,或自動輪播', 'fold', stBgmOpen, function () { stBgmOpen = !stBgmOpen; stRender(); }, stBgmOpen ? body : null);
 }
 
+let stAcMsg = '';
+
 function stSoundSec() {
   const cfg = settingsGet();
   const nodes = [
@@ -293,11 +295,34 @@ function stSoundSec() {
       stRender();
     }))
   );
+  if (typeof acClear === 'function') {
+    const cb = stEl('button', 'st-sw', stAcMsg || '清除');
+    cb.setAttribute('aria-label', '清除音效快取');
+    cb.addEventListener('click', function () {
+      acClear().then(function (ok) {
+        stAcMsg = ok ? '已清除' : '清除失敗';
+        stRender();
+      });
+    });
+    nodes.push(stRow('音效快取(下次啟動重新合成)', cb));
+  }
   return stSec('聲音', nodes.concat(stExtraNodes('聲音')));
 }
 
+function stCityOn() { return typeof isCityOnly === 'function' && isCityOnly(); }
+
 function stDisplaySec() {
   const nodes = [];
+  if (typeof setCityOnly === 'function') {
+    nodes.push(stRow('城建專注模式', stSwitch(stCityOn(), function (v) {
+      setCityOnly(v);
+      if (typeof buildToolbar === 'function') buildToolbar();
+      if (typeof syncSideBar === 'function') syncSideBar();
+      if (typeof progUiRefresh === 'function') progUiRefresh();
+      stRender();
+    })));
+    nodes.push(stEl('p', 'st-hint', '隱藏釣魚、仙獸、戰鬥,專心蓋城。升級改靠蓋出新種類建築、擴大城市,不需要材料與首領營;關閉後恢復原本規則(已累積的經驗保留)。'));
+  }
   if (typeof artSetOn === 'function') {
     const artOn = typeof ART_ON !== 'undefined' ? !!ART_ON : true;
     nodes.push(stRow('新美術與光暈', stSwitch(artOn, function (v) {
@@ -320,10 +345,12 @@ function stDisplaySec() {
   }
   if (typeof perfSetFps === 'function') {
     const ps = isPowerSave();
-    nodes.push(stRow('畫面幀率', stSeg([[30, '30'], [60, '60']], ps ? 30 : perfGetFps(), function (v) {
+    nodes.push(stRow('畫面幀率(60 較耗電)', stSeg([[30, '30'], [60, '60']], ps ? 30 : perfGetFps(), function (v) {
       perfSetFps(v);
+      if (v === 60 && typeof showToast === 'function') showToast('60 fps 較順,但耗電較多、手機容易發燙;預設 30 就是為了省電');
       stRender();
     })));
+    if (!ps && perfGetFps() === 60) nodes.push(stEl('p', 'st-hint', '目前為 60 fps:畫面每秒重畫的次數是 30 的兩倍,會更耗電、更容易發燙。平常看城市建議用 30,拖曳地圖時才有感差別。'));
     nodes.push(stRow('省電模式(較不順但較不燙)', stSwitch(ps, function (v) {
       perfSetPowerSave(v);
       stRender();
@@ -426,10 +453,10 @@ let stIconOpen = false;
 let stHowtoOpen = false;
 const ST_ICON_LEGEND = [
   { icon: '🔨', name: '草稿布置(右側欄):另開一份草稿來設計,改完 💾 儲存到版面格,不影響正在用的城;平時直接點下方建築蓋即可(即時生效)' },
-  { icon: '🏘', name: '經營 / 戰鬥(右側欄第一個):打開 3 格版面小面板,點一格把整座城 / 整個戰陣換成那一格;「空」= 還沒存,點了可把目前版面存進去;面板不會自動關閉,再點一次該鈕才收起' },
+  { icon: '🏘', city: '版面選擇(右側欄第一個):打開 3 格版面小面板,點一格把整座城換成那一格;「空」= 還沒存,點了可把目前版面存進去;面板不會自動關閉,再點一次該鈕才收起', name: '經營 / 戰鬥(右側欄第一個):打開 3 格版面小面板,點一格把整座城 / 整個戰陣換成那一格;「空」= 還沒存,點了可把目前版面存進去;面板不會自動關閉,再點一次該鈕才收起' },
   { icon: '📋', name: '任務(右側欄):打開全畫面任務清單,並讓左上任務提示條重新顯示(提示條上的 ✕ 可再收起)' },
   { icon: '📋', name: '範本(設定→畫面):選了範本會載入到草稿,不會直接蓋掉你正在用的版面' },
-  { icon: '⚔', name: '戰鬥選單(左下;內含 📜 戰報／錄影)' },
+  { icon: '⚔', hideInCity: true, name: '戰鬥選單(左下;內含 📜 戰報／錄影)' },
   { icon: '👁', name: '隱藏建築(整地用,H)' },
   { icon: '↻', name: '旋轉建築:虛影旁的浮動圖示 ↻(電腦可按 R);已蓋建築按住約半秒拿起,拖曳到想要的位置放開即落地,不拖曳放開則出現 ↻ 🗑 ✓ ✕;頂列已無旋轉鈕' },
   { icon: '🎣', name: '釣魚', feat: 'fishing' },
@@ -463,7 +490,8 @@ function stIconCard() {
   if (stIconOpen) {
     ST_ICON_LEGEND.forEach(function (it) {
       if (it.feat && !isUnlocked('feature', it.feat)) return;
-      list.appendChild(stEl('li', '', it.icon + '  ' + it.name));
+      if (it.hideInCity && stCityOn()) return;
+      list.appendChild(stEl('li', '', it.icon + '  ' + (it.city && stCityOn() ? it.city : it.name)));
     });
   }
   return stCard('🧭', '頂列圖示說明', '各個圖示按鈕是做什麼的', 'fold', stIconOpen, function () { stIconOpen = !stIconOpen; stRender(); }, stIconOpen ? list : null);
@@ -491,7 +519,9 @@ function stHowtoCard() {
 function stHelpSec() {
   const nodes = [];
   if (typeof guideListOpen === 'function') nodes.push(stGuideCard());
-  nodes.push(stIconCard(), stDexCard(), stHowtoCard());
+  nodes.push(stIconCard());
+  if (!stCityOn()) nodes.push(stDexCard());   // 兵種圖鑑:城建專注模式隱藏
+  nodes.push(stHowtoCard());
   return stSec('說明', nodes.concat(stExtraNodes('說明')));
 }
 

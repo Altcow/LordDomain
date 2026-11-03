@@ -608,7 +608,7 @@ function ambGetBuf(id) {
   if (AMB.buf[id]) return AMB.buf[id];
   const def = AMB_DEFS[id];
   if (!def || !AU.ctx) return null;
-  const pcm = ambNorm(def.render(), 0.7);
+  const pcm = auCached('am:' + id, AU_SR, function () { return ambNorm(def.render(), 0.7); }, String(def.render));
   const buf = AU.ctx.createBuffer(1, pcm.length, AU_SR);
   buf.getChannelData(0).set(pcm);
   AMB.buf[id] = buf;
@@ -773,16 +773,16 @@ function ambCenterCell() {
   } catch (e) {
     c = null;
   }
-  return c || { x: Math.floor(MAP_W / 2), y: Math.floor(MAP_H / 2) };
+  return c || { x: Math.floor(boardW() / 2), y: Math.floor(boardH() / 2) };
 }
 
 // 掃描中心附近 R 格:地形 / 樹 / 竹 / 田 計數,以及運作中的物件候選(取最近 2 個)
 function ambScan(cell, R, tod) {
   const cx = cell.x, cy = cell.y;
   const res = { near: [], trees: 0, bamboo: 0, fields: 0, water: 0 };
-  for (let y = Math.max(0, cy - R); y <= Math.min(MAP_H - 1, cy + R); y++) {
-    for (let x = Math.max(0, cx - R); x <= Math.min(MAP_W - 1, cx + R); x++) {
-      const t = world.terrain[y * MAP_W + x];
+  for (let y = Math.max(0, cy - R); y <= Math.min(boardH() - 1, cy + R); y++) {
+    for (let x = Math.max(0, cx - R); x <= Math.min(boardW() - 1, cx + R); x++) {
+      const t = world.terrain[idx(x, y)];
       if (t === T_LAKE || t === T_RIVER) res.water++;
     }
   }

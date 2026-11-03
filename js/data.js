@@ -1,5 +1,9 @@
 const TW = 64, TH = 32, HL = 16;
 const MAP_W = 56, MAP_H = 56, MAX_H = 2;
+// 板子尺寸(PLAN_BIGMAP B3):MAP_W/MAP_H = 戰陣/戰鬥板標準邊長(永遠 56,戰鬥檔案不動);
+// 經營板邊長 EST_W/EST_H 由 BIGMAP_SIZE 決定(112 = 全開;可改 84 或 56 回退,56 = 與舊版相同)。經營路徑一律讀 world.W / world.H。
+const BIGMAP_SIZE = 112;
+const EST_W = BIGMAP_SIZE, EST_H = BIGMAP_SIZE;
 
 const T_GRASS = 0, T_LAKE = 1, T_RIVER = 2, T_ROAD = 3;
 // 純視覺地形:沙地 / 裂地(乾旱龜裂)/ 雪地。玩法一律等同草地(可走、可蓋、高度規則相同)。

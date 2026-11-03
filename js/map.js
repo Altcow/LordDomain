@@ -1,4 +1,6 @@
 const SAVE_KEY = 'lorddomain.save.v1';
+const SAVE_PRE_KEY = 'lorddomain.save.pre112.v1';        // 舊(56×56)存檔遷移到大地圖前的原樣備份(只留第一份,不覆蓋)
+const SAVE_BAD_KEY = 'lorddomain.save.corrupt.v1';        // 讀不出來的存檔副本(不當新玩家直接覆蓋)
 const ID_KEY = 'lorddomain.id.v1';
 
 // 暫態（不存檔）。mode 名與棋盤名（world.board）不同
@@ -15,13 +17,15 @@ const BOARD_KEYS = ['terrain', 'height', 'flow', 'block', 'zone', 'objects', 'ma
 const OBJ_KEEP = ['facing', 'dev', 'trig', 'mimic', 'skin'];   // skin = 外觀皮膚 id(wallskin.js),純外觀
 
 const world = {
-  terrain: new Uint8Array(MAP_W * MAP_H),
-  height: new Uint8Array(MAP_W * MAP_H),
-  flow: new Uint8Array(MAP_W * MAP_H),
-  block: new Uint8Array(MAP_W * MAP_H),
-  zone: new Uint8Array(MAP_W * MAP_H),
+  terrain: new Uint8Array(EST_W * EST_H),
+  height: new Uint8Array(EST_W * EST_H),
+  flow: new Uint8Array(EST_W * EST_H),
+  block: new Uint8Array(EST_W * EST_H),
+  zone: new Uint8Array(EST_W * EST_H),
   marks: newMarks(),
-  occ: new Int16Array(MAP_W * MAP_H),
+  occ: new Int16Array(EST_W * EST_H),
+  get W() { return boardW(); },                  // 現役棋盤邊長(經營板 EST_W、戰陣板 MAP_W;由 terrain 長度推得,換板自動跟著)
+  get H() { return boardW(); },
   objects: [],
   objDiag: [],
   board: 'estate',
@@ -38,8 +42,16 @@ const world = {
 };
 let dealCache = null;
 
-const idx = (x, y) => y * MAP_W + x;
-const inBounds = (x, y) => x >= 0 && y >= 0 && x < MAP_W && y < MAP_H;
+// 板子永遠是正方形:邊長由現役 terrain 長度推得並快取(switchBoard / boardBackup / layoutInstall 換掉陣列即自動更新)
+let _bdT = null, _bdW = 0;
+function boardW() {
+  const t = world.terrain;
+  if (t !== _bdT) { _bdT = t; _bdW = Math.round(Math.sqrt(t.length)); }
+  return _bdW;
+}
+function boardH() { return boardW(); }
+const idx = (x, y) => y * boardW() + x;
+const inBounds = (x, y) => { const w = boardW(); return x >= 0 && y >= 0 && x < w && y < w; };
 
 function footprint(type, rot) {
   const d = OBJECTS[type];
@@ -50,7 +62,8 @@ function footprint(type, rot) {
 let objHold = null;
 
 function rebuildOcc() {
-  world.occ.fill(0);
+  if (world.occ.length !== world.terrain.length) world.occ = new Int16Array(world.terrain.length);
+  else world.occ.fill(0);
   world.objDiag = [];
   world.objects.forEach((o, n) => {
     if (o === objHold) return;
@@ -69,8 +82,8 @@ function hasType(type) { return Object.prototype.hasOwnProperty.call(OBJECTS, ty
 
 function newMarks() { return { deploy: [], rally: [], aiEntry: [] }; }
 
-function newBoard() {
-  const N = MAP_W * MAP_H;
+function newBoard(side) {
+  const N = (side || MAP_W) * (side || MAP_W);
   return {
     terrain: new Uint8Array(N), height: new Uint8Array(N), flow: new Uint8Array(N),
     block: new Uint8Array(N), zone: new Uint8Array(N),
@@ -97,7 +110,7 @@ function clearBoard() {
 function switchBoard(to) {
   if (to !== 'estate' && to !== 'camp') return;
   if (game.backup || world.board === to) return;
-  if (world.stash === null) world.stash = newBoard();
+  if (world.stash === null) world.stash = newBoard(to === 'estate' ? EST_W : MAP_W);
   BOARD_KEYS.forEach(k => { const t = world[k]; world[k] = world.stash[k]; world.stash[k] = t; });
   world.board = to;
   rebuildOcc();
@@ -118,11 +131,18 @@ function campObjects() { const b = campBoard(); return b ? b.objects : []; }
 function boardBackup() {
   if (game.backup) return;
   game.backup = { board: world.board, active: liveBoard(), stash: world.stash };
-  const nb = newBoard();
+  const nb = newBoard(MAP_W);   // 備份中的棋盤(進攻 / 回放 / 參觀 / 草稿)先給戰陣標準尺寸;經營草稿由 boardReset('estate') 換成經營尺寸
   BOARD_KEYS.forEach(k => { world[k] = nb[k]; });
   world.board = 'estate';
   world.stash = null;
   pendClear();
+  rebuildOcc();
+}
+
+// 現役(空白)棋盤換成 type 的標準尺寸(經營 EST_W、戰陣 MAP_W);草稿環境用,內容全清
+function boardReset(type) {
+  const nb = newBoard(type === 'estate' ? EST_W : MAP_W);
+  BOARD_KEYS.forEach(k => { world[k] = nb[k]; });
   rebuildOcc();
 }
 
@@ -145,14 +165,92 @@ function objSave(o, keep) {
   return r;
 }
 
+// ───── 圖層 RLE 與物件扁平化(經營大板存檔用;沿用 mapio 'v*n' 文字格式,map.js 先載入故自帶一份)─────
+function layerRle(arr) {
+  const parts = [];
+  let i = 0;
+  while (i < arr.length) {
+    const v = arr[i];
+    let n = 1;
+    while (i + n < arr.length && arr[i + n] === v) n++;
+    parts.push(n === 1 ? String(v) : v + '*' + n);
+    i += n;
+  }
+  return parts.join(',');
+}
+// 圖層讀入:數字陣列(舊格式)或 RLE 字串 → Uint8Array(n);格式或長度不符丟例外
+function layerIn(v, n) {
+  if (Array.isArray(v)) {
+    if (v.length !== n) throw new Error('layer length');
+    return Uint8Array.from(v);
+  }
+  if (typeof v !== 'string') throw new Error('layer type');
+  const out = new Uint8Array(n);
+  let pos = 0;
+  if (v) {
+    const segs = v.split(',');
+    for (let k = 0; k < segs.length; k++) {
+      const m = /^(\d+)(?:\*(\d+))?$/.exec(segs[k]);
+      if (!m) throw new Error('RLE format');
+      const val = +m[1], cnt = m[2] ? +m[2] : 1;
+      if (val > 255 || pos + cnt > n) throw new Error('RLE range');
+      if (val) out.fill(val, pos, pos + cnt);
+      pos += cnt;
+    }
+  }
+  if (pos !== n) throw new Error('RLE length');
+  return out;
+}
+// 物件扁平化:ot = 型別表,op = [型別索引, x, y, rot*4+facing, ...](保留順序),ox = [[序號, {其餘欄位}]...]
+function objPack(list) {
+  const ot = [], tix = {}, op = [], ox = [];
+  list.forEach((o, n) => {
+    if (tix[o.type] === undefined) { tix[o.type] = ot.length; ot.push(o.type); }
+    op.push(tix[o.type], o.x, o.y, ((o.rot | 0) & 3) * 4 + ((o.facing != null ? o.facing : o.rot | 0) & 3));
+    let ex = null;
+    for (const k in o) if (k !== 'type' && k !== 'x' && k !== 'y' && k !== 'rot' && k !== 'facing') { ex = ex || {}; ex[k] = o[k]; }
+    if (ex) ox.push([n, ex]);
+  });
+  const r = { ot: ot, op: op };
+  if (ox.length) r.ox = JSON.parse(JSON.stringify(ox));
+  return r;
+}
+function objUnpack(j) {
+  if (!Array.isArray(j.ot) || !Array.isArray(j.op) || j.op.length % 4 !== 0) throw new Error('objects pack');
+  const out = [];
+  for (let k = 0; k < j.op.length; k += 4) {
+    const t = j.ot[j.op[k]], f = j.op[k + 3];
+    if (typeof t !== 'string') throw new Error('objects type');
+    out.push({ type: t, x: j.op[k + 1], y: j.op[k + 2], rot: (f >> 2) & 3, facing: f & 3 });
+  }
+  (Array.isArray(j.ox) ? j.ox : []).forEach(e => {
+    if (!Array.isArray(e) || !out[e[0]] || !e[1] || typeof e[1] !== 'object') return;
+    for (const k in e[1]) if (k !== 'type' && k !== 'x' && k !== 'y' && k !== 'rot' && k !== 'facing') out[e[0]][k] = e[1][k];
+  });
+  return out;
+}
+
+// 棋盤 → JSON。戰陣標準尺寸(MAP_W)維持舊格式(數字陣列 + objects);其他尺寸(經營大板)帶 w/h,圖層 RLE、物件扁平(on = 件數)
 function boardToJSON(bd) {
-  return {
-    v: 1,
-    terrain: Array.from(bd.terrain), height: Array.from(bd.height), flow: Array.from(bd.flow),
-    block: Array.from(bd.block), zone: Array.from(bd.zone),
-    objects: bd.objects.map(o => objSave(o, true)),
-    marks: JSON.parse(JSON.stringify(bd.marks))
+  const side = Math.round(Math.sqrt(bd.terrain.length));
+  if (side === MAP_W) {
+    return {
+      v: 1,
+      terrain: Array.from(bd.terrain), height: Array.from(bd.height), flow: Array.from(bd.flow),
+      block: Array.from(bd.block), zone: Array.from(bd.zone),
+      objects: bd.objects.map(o => objSave(o, true)),
+      marks: JSON.parse(JSON.stringify(bd.marks))
+    };
+  }
+  const j = {
+    v: 1, w: side, h: side,
+    terrain: layerRle(bd.terrain), height: layerRle(bd.height), flow: layerRle(bd.flow),
+    block: layerRle(bd.block), zone: layerRle(bd.zone),
+    on: bd.objects.length
   };
+  Object.assign(j, objPack(bd.objects.map(o => objSave(o, true))));
+  j.marks = JSON.parse(JSON.stringify(bd.marks));
+  return j;
 }
 
 function normMarks(v) {
@@ -161,27 +259,47 @@ function normMarks(v) {
   return { deploy: arr(m.deploy), rally: arr(m.rally), aiEntry: arr(m.aiEntry) };
 }
 
-// 失敗回 null
-function boardFromJSON(j) {
+// 失敗回 null。kind:'estate' = 經營板(邊長 <= EST_W 的方形 JSON 一律置中放進 EST_W 板,舊 56 版面 / 草稿 / 存檔用);
+// 'camp' 或省略 = 戰陣板(必須 MAP_W,與舊行為相同),但帶 w = EST_W 的大板 JSON(boardToJSON 產出)省略 kind 時視為經營板
+function boardFromJSON(j, kind) {
   try {
     if (!j || typeof j !== 'object' || j.v !== 1) return null;
-    const N = MAP_W * MAP_H, b = newBoard();
+    const first = j.terrain;
+    const n0 = Array.isArray(first) ? first.length : (typeof first === 'string' && Number.isInteger(j.w) ? j.w * j.w : -1);
+    const side = Math.round(Math.sqrt(n0));
+    if (n0 <= 0 || side * side !== n0) return null;
+    if (j.w !== undefined && j.w !== side) return null;
+    let W;
+    if (kind === 'estate') { if (side > EST_W) return null; W = EST_W; }
+    else if (kind === undefined || kind === 'camp') {
+      if (side === MAP_W) W = MAP_W;
+      else if (kind === undefined && j.w === side && side === EST_W) W = EST_W;
+      else return null;
+    } else return null;
+    const b = newBoard(W), N = W * W, off = (W - side) >> 1;
     ['terrain', 'height', 'flow', 'block', 'zone'].forEach(k => {
-      if (!Array.isArray(j[k]) || j[k].length !== N) throw new Error('layer ' + k);
-      b[k] = Uint8Array.from(j[k]);
+      const a = layerIn(j[k], side * side);
+      if (side === W) { b[k] = a; return; }
+      for (let y = 0; y < side; y++) b[k].set(a.subarray(y * side, y * side + side), (y + off) * W + off);
     });
     for (let i = 0; i < N; i++) if (b.terrain[i] > T_SNOW) b.terrain[i] = T_GRASS;   // 未知的大值當草地,不崩潰
-    b.objects = (Array.isArray(j.objects) ? j.objects : [])
+    const src = j.op !== undefined ? objUnpack(j) : (Array.isArray(j.objects) ? j.objects : []);
+    b.objects = src
       .filter(o => o && typeof o.type === 'string' && hasType(o.type) && Number.isInteger(o.x) && Number.isInteger(o.y) &&
-        o.x >= 0 && o.y >= 0 && o.x < MAP_W && o.y < MAP_H)
+        o.x >= 0 && o.y >= 0 && o.x < side && o.y < side)
       .map(o => {
-        const r = { type: o.type, x: o.x, y: o.y, rot: (o.rot | 0) & 3 };
+        const r = { type: o.type, x: o.x + off, y: o.y + off, rot: (o.rot | 0) & 3 };
         OBJ_KEEP.forEach(k => { if (k !== 'facing' && o[k] !== undefined) r[k] = o[k]; });
         r.facing = o.facing != null ? (o.facing & 3) : r.rot;
         if (typeof r.skin !== 'string' || !r.skin) delete r.skin;
         return r;
       });
     b.marks = normMarks(j.marks);
+    if (off) {
+      b.marks.deploy.forEach(d => { if (d && d.r) { d.r[0] += off; d.r[1] += off; } });
+      b.marks.rally.forEach(p => { if (p && typeof p.x === 'number') { p.x += off; p.y += off; } });
+      b.marks.aiEntry.forEach(a => { if (a && a.r) { a.r[0] += off; a.r[1] += off; } });
+    }
     return b;
   } catch (e) {
     return null;
@@ -192,9 +310,27 @@ function boardFromJSON(j) {
 function copyEstateToCamp() {
   if (world.board !== 'camp') return false;
   const e = estateBoard();
-  world.terrain.set(e.terrain); world.height.set(e.height); world.flow.set(e.flow);
-  world.block.fill(0); world.zone.fill(0);
-  world.objects = e.objects.filter(o => sideOf(o.type) === 'both').map(o => objSave(o, true));
+  const eS = Math.round(Math.sqrt(e.terrain.length)), S = boardW();
+  if (eS === S) {
+    world.terrain.set(e.terrain); world.height.set(e.height); world.flow.set(e.flow);
+    world.block.fill(0); world.zone.fill(0);
+    world.objects = e.objects.filter(o => sideOf(o.type) === 'both').map(o => objSave(o, true));
+  } else {
+    // 經營板比戰陣板大:取以城主府(沒有則板子中心)為中心、S×S 的視窗(貼邊夾住);只帶完整落在視窗內的 both 物件
+    const pal = e.objects.find(o => o.type === 'palace');
+    const pfp = pal ? footprint('palace', pal.rot) : null;
+    const cx = pal ? pal.x + (pfp[0] >> 1) : eS >> 1, cy = pal ? pal.y + (pfp[1] >> 1) : eS >> 1;
+    const x0 = Math.max(0, Math.min(eS - S, cx - (S >> 1))), y0 = Math.max(0, Math.min(eS - S, cy - (S >> 1)));
+    ['terrain', 'height', 'flow'].forEach(k => {
+      for (let y = 0; y < S; y++) world[k].set(e[k].subarray((y + y0) * eS + x0, (y + y0) * eS + x0 + S), y * S);
+    });
+    world.block.fill(0); world.zone.fill(0);
+    world.objects = e.objects.filter(o => {
+      if (sideOf(o.type) !== 'both') return false;
+      const fp = footprint(o.type, o.rot);
+      return o.x >= x0 && o.y >= y0 && o.x + fp[0] <= x0 + S && o.y + fp[1] <= y0 + S;
+    }).map(o => { const r = objSave(o, true); r.x -= x0; r.y -= y0; return r; });
+  }
   world.marks = newMarks();
   rebuildOcc();
   return true;
@@ -202,6 +338,7 @@ function copyEstateToCamp() {
 
 // 解鎖閘門（PLAN_TD_MASTER §3.6；PLAN_PROGRESSION §2.5）：開放等級由 progUnlockLv 查表；表中沒有的 id 或 prog 未載入一律開放
 function isUnlocked(kind, id) {
+  if (kind === 'feature' && typeof cityOnlyHides === 'function' && cityOnlyHides(id)) return false;   // 城建專注模式(js/cityonly.js):釣魚 / 仙獸 / 戰鬥相關功能一律視為未開放
   if (typeof progUnlockLv !== 'function' || typeof prog === 'undefined' || !prog) return true;
   const lv = progUnlockLv(kind, id);
   return lv === null || prog.lv >= lv;
@@ -217,7 +354,8 @@ function progRulesOn() {
 // 土地遮罩：以地圖中心為準的正方形，邊長 progLandSide(lv)；未載入或 Lv25 = 全開。(x,y,w,h) 是否整個在土地內
 function inLandRect(x, y, w, h) {
   if (typeof prog === 'undefined' || !prog || typeof progLandSide !== 'function' || prog.lv >= PROG_LV_MAX) return true;
-  const side = progLandSide(prog.lv), x0 = (MAP_W - side) >> 1, y0 = (MAP_H - side) >> 1;
+  const W = boardW();
+  const side = Math.min(W, world.board === 'camp' && typeof progCoreSide === 'function' ? progCoreSide(prog.lv) : progLandSide(prog.lv)), x0 = (W - side) >> 1, y0 = x0;   // 戰陣板仍用舊公式(56);經營板用大地圖曲線
   return x >= x0 && y >= y0 && x + w <= x0 + side && y + h <= y0 + side;
 }
 function inLand(x, y) { return inLandRect(x, y, 1, 1); }
@@ -258,7 +396,7 @@ function canPlace(type, x, y, rot) {
   const cap = capOf(type);
   if (cap !== null && countObjects(type) >= cap) return false;
   const [w, h] = footprint(type, rot);
-  if (x < 0 || y < 0 || x + w > MAP_W || y + h > MAP_H) return false;
+  if (x < 0 || y < 0 || x + w > boardW() || y + h > boardH()) return false;
   if (!landFits(x, y, w, h)) return false;
   const h0 = world.height[idx(x, y)];
   for (let yy = y; yy < y + h; yy++) {
@@ -461,28 +599,39 @@ function normDeals(v) {
   return { day: v.day, bought: bought };
 }
 
-// 存檔一律經 estateBoard() / campBoard() 取資料，任何模式下都安全
+// 主存檔內容(物件)。經營板為標準 MAP_W 時維持 v1 舊格式(數字陣列 + objects,舊版 App 讀得懂);
+// 經營大板用 v2:size = 邊長、圖層 RLE 字串(objects 維持物件陣列,與舊格式同形)
+function saveWorldObj() {
+  const eb = estateBoard(), cb = campBoard();
+  const side = Math.round(Math.sqrt(eb.terrain.length));
+  const o = {};
+  if (side === MAP_W) {
+    o.terrain = Array.from(eb.terrain); o.height = Array.from(eb.height); o.flow = Array.from(eb.flow);
+  } else {
+    o.v = 2; o.size = side;
+    o.terrain = layerRle(eb.terrain); o.height = layerRle(eb.height); o.flow = layerRle(eb.flow);
+  }
+  o.objects = eb.objects.map(ob => objSave(ob, false));
+  o.camp = cb ? boardToJSON(cb) : null;
+  o.res = world.res; o.lastTs = world.lastTs; o.season = currentSeason; o.deals = world.deals; o.tech = world.tech;
+  o.record = world.record; o.npcBest = world.npcBest; o.raid = world.raid;
+  o.layoutSlots = world.layoutSlots; o.layoutActive = world.layoutActive;
+  return o;
+}
+
+// 存檔保護(PLAN_SAVES SV0):寫入失敗(多半是 localStorage 配額)時不動舊的好存檔(setItem 失敗不會改原值)、保留記憶體狀態並 toast 一次;
+// 讀檔失敗而且連損毀副本都存不下時 saveBlocked = true,本次不再寫入,以免用新玩家狀態覆蓋原檔
+let saveBlocked = false, saveFailShown = false;
+function saveNotice(msg) { if (typeof showToast === 'function') { try { showToast(msg); } catch (e) { /* 略過 */ } } }
 function saveWorld() {
-  try {
-    const eb = estateBoard(), cb = campBoard();
-    localStorage.setItem(SAVE_KEY, JSON.stringify({
-      terrain: Array.from(eb.terrain),
-      height: Array.from(eb.height),
-      flow: Array.from(eb.flow),
-      objects: eb.objects.map(o => objSave(o, false)),
-      camp: cb ? boardToJSON(cb) : null,
-      res: world.res,
-      lastTs: world.lastTs,
-      season: currentSeason,
-      deals: world.deals,
-      tech: world.tech,
-      record: world.record,
-      npcBest: world.npcBest,
-      raid: world.raid,
-      layoutSlots: world.layoutSlots,
-      layoutActive: world.layoutActive
-    }));
-  } catch (e) { /* 儲存空間不可用時略過 */ }
+  if (!saveBlocked) {
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(saveWorldObj()));
+      saveFailShown = false;
+    } catch (e) {
+      if (!saveFailShown) { saveFailShown = true; saveNotice('存檔空間不足,進度尚未寫入(舊存檔保留)'); }
+    }
+  }
   draftPersist();
 }
 
@@ -497,24 +646,63 @@ function hasSavedWorld() {
   try { return localStorage.getItem(SAVE_KEY) !== null; } catch (e) { return false; }
 }
 
-function loadWorldSave() {
+// 讀不出來的存檔:把原字串另存損毀副本並提示;副本也存不下就封鎖寫入(saveBlocked),保住原檔
+function saveKeepBad(raw, why) {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return false;
-    const s = JSON.parse(raw);
-    const len = s.terrain ? s.terrain.length : 0;
-    const side = Math.round(Math.sqrt(len));
-    if (!len || side * side !== len || side > MAP_W || side > MAP_H) return false;
-    if (!s.height || s.height.length !== len || !s.flow || s.flow.length !== len) return false;
-    const ox = (MAP_W - side) >> 1, oy = (MAP_H - side) >> 1;
+    localStorage.setItem(SAVE_BAD_KEY, raw);
+    saveNotice('存檔讀取失敗(' + why + '),已保留損毀副本');
+  } catch (e) {
+    saveBlocked = true;
+    saveNotice('存檔讀取失敗且空間不足無法備份,為保護原檔本次不會寫入存檔');
+  }
+}
+
+// 舊(較小)存檔遷移到大板前,把原字串備份一份(只留第一份;空間不足只提示)
+function savePreBackup(raw) {
+  try {
+    if (localStorage.getItem(SAVE_PRE_KEY) === null) localStorage.setItem(SAVE_PRE_KEY, raw);
+  } catch (e) {
+    saveNotice('存檔空間不足,略過舊存檔備份');
+  }
+}
+
+function loadWorldSave() {
+  let raw = null;
+  try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { return false; }
+  if (!raw) return false;
+  try {
+    let s;
+    try { s = JSON.parse(raw); } catch (e) { saveKeepBad(raw, 'JSON 損毀'); return false; }
+    if (!s || typeof s !== 'object') { saveKeepBad(raw, '格式不符'); return false; }
+    const W = EST_W, N = W * W;
+    let side, tIn, hIn, fIn, objs;
+    if (typeof s.terrain === 'string') {   // v2
+      side = s.size;
+      if (!Number.isInteger(side) || side < 1 || side > W) { saveKeepBad(raw, '尺寸 ' + side + ' 不支援'); return false; }
+      tIn = layerIn(s.terrain, side * side); hIn = layerIn(s.height, side * side); fIn = layerIn(s.flow, side * side);
+      objs = s.objects || [];
+    } else {
+      const len = s.terrain ? s.terrain.length : 0;
+      side = Math.round(Math.sqrt(len));
+      if (!len || side * side !== len || side > W) { saveKeepBad(raw, '地圖尺寸不符'); return false; }
+      if (!s.height || s.height.length !== len || !s.flow || s.flow.length !== len) { saveKeepBad(raw, '圖層長度不符'); return false; }
+      tIn = s.terrain; hIn = s.height; fIn = s.flow;
+      objs = s.objects || [];
+    }
+    if (side < W) savePreBackup(raw);
+    const ox = (W - side) >> 1, oy = ox;
+    if (world.terrain.length !== N) {
+      const nb = newBoard(W);
+      ['terrain', 'height', 'flow', 'block', 'zone'].forEach(k => { world[k] = nb[k]; });
+    }
     world.terrain.fill(0); world.height.fill(0); world.flow.fill(0);
     world.block.fill(0); world.zone.fill(0);
     for (let y = 0; y < side; y++)
       for (let x = 0; x < side; x++) {
         const j = y * side + x, i = idx(x + ox, y + oy);
-        world.terrain[i] = s.terrain[j] > T_SNOW ? T_GRASS : s.terrain[j]; world.height[i] = s.height[j]; world.flow[i] = s.flow[j];
+        world.terrain[i] = tIn[j] > T_SNOW ? T_GRASS : tIn[j]; world.height[i] = hIn[j]; world.flow[i] = fIn[j];
       }
-    world.objects = (s.objects || []).filter(o => o && OBJECTS[o.type])
+    world.objects = objs.filter(o => o && OBJECTS[o.type])
       .map(o => {
         const r = { type: o.type, x: o.x + ox, y: o.y + oy, rot: o.rot || 0, facing: objFacing({ facing: o.facing, rot: o.rot || 0 }) };
         if (typeof o.skin === 'string' && o.skin) r.skin = o.skin;
@@ -522,7 +710,7 @@ function loadWorldSave() {
       });
     world.marks = newMarks();
     world.board = 'estate';
-    world.stash = s.camp ? boardFromJSON(s.camp) : null;
+    world.stash = s.camp ? boardFromJSON(s.camp, 'camp') : null;
     world.res = Object.assign({}, START_RES, s.res);
     world.deals = normDeals(s.deals); dealCache = null;
     world.tech = normTech(s.tech); techRebuild();
@@ -533,9 +721,11 @@ function loadWorldSave() {
     world.layoutActive = normLayoutActive(s.layoutActive, world.layoutSlots);
     world.lastTs = s.lastTs || Date.now();
     if (s.season && PALETTES[s.season]) setSeason(s.season);
+    saveBlocked = false;
     rebuildOcc();
     return true;
   } catch (e) {
+    saveKeepBad(raw, '讀取錯誤');
     return false;
   }
 }
@@ -656,13 +846,13 @@ function tplRun(fn) {
 // 回傳 { placed, failed, ox, oy }；找不到範本或範本大於地圖回傳 null（世界不變）
 function applyTemplate(id) {
   const t = TEMPLATES.find(v => v.id === id);
-  if (!t || t.w > MAP_W || t.h > MAP_H) return null;
+  if (!t || t.w > boardW() || t.h > boardH()) return null;
   const kind = t.kind || 'estate';
   // 範本只能套用到同種現役棋盤；備份中（world 是別人的地圖）不套用
   if ((game.backup && !game.backup.draft) || kind !== world.board) return null;
   if (t.legacy === 'demo' && world.board !== 'estate') return null;
   const estate = world.board === 'estate';
-  const ox = (MAP_W - t.w) >> 1, oy = (MAP_H - t.h) >> 1;
+  const ox = (boardW() - t.w) >> 1, oy = (boardH() - t.h) >> 1;
   const keep = Object.assign({}, world.res);
   let failed = 0, lvSkip = 0;
   tplRun(() => {
@@ -734,6 +924,12 @@ function applyTemplate(id) {
   return { placed: world.objects.length, failed: failed, skipLv: lvSkip, ox: ox, oy: oy };
 }
 
+// 範本是否放得進它那種板子(經營 EST_W、戰陣 MAP_W)
+function tplFitsBoard(t) {
+  const S = (t.kind || 'estate') === 'camp' ? MAP_W : EST_W;
+  return t.w <= S && t.h <= S;
+}
+
 // 預設範本（templates.js 的 isDefault）；kind 為 'estate' 或 'camp'，沒有則回 null
 function defaultTemplate(kind) {
   return TEMPLATES.find(v => v.isDefault && (v.kind || 'estate') === kind) || null;
@@ -774,9 +970,20 @@ function newLayoutSlots() {
   return { estate: [null, null, null], camp: [null, null, null] };
 }
 
-function layoutBoardOk(j) {
-  const N = MAP_W * MAP_H;
-  return !!j && typeof j === 'object' && j.v === 1 && ['terrain', 'height', 'flow', 'block', 'zone'].every(k => Array.isArray(j[k]) && j[k].length === N);
+// 版面 / 草稿 JSON 是否可用:戰陣 = MAP_W 方形數字陣列;經營 = MAP_W(舊版,讀入時置中)或 EST_W(大板 RLE)
+function layoutBoardOk(j, kind) {
+  if (!j || typeof j !== 'object' || j.v !== 1) return false;
+  const L = ['terrain', 'height', 'flow', 'block', 'zone'];
+  let side;
+  if (Array.isArray(j.terrain)) {
+    const n = j.terrain.length;
+    side = Math.round(Math.sqrt(n));
+    if (side * side !== n || !L.every(k => Array.isArray(j[k]) && j[k].length === n)) return false;
+  } else {
+    side = j.w;
+    if (!Number.isInteger(side) || side < 1 || !L.every(k => typeof j[k] === 'string')) return false;
+  }
+  return kind === 'estate' ? (side === MAP_W || side === EST_W) : side === MAP_W;
 }
 
 function normLayoutSlots(v) {
@@ -786,7 +993,7 @@ function normLayoutSlots(v) {
     const a = Array.isArray(v[t]) ? v[t] : [];
     for (let n = 0; n < LAYOUT_SLOTS; n++) {
       const s = a[n];
-      if (!s || typeof s !== 'object' || !layoutBoardOk(s.board)) continue;
+      if (!s || typeof s !== 'object' || !layoutBoardOk(s.board, t)) continue;
       out[t][n] = {
         name: typeof s.name === 'string' && s.name ? s.name.slice(0, 20) : layoutDefaultName(t, n),
         savedAt: typeof s.savedAt === 'number' && isFinite(s.savedAt) ? s.savedAt : 0,
@@ -812,7 +1019,7 @@ function layoutSlot(type, n) {
   const a = world.layoutSlots[type];
   return a && n >= 0 && n < LAYOUT_SLOTS && a[n] ? a[n] : null;
 }
-function layoutObjCount(bj) { return bj && Array.isArray(bj.objects) ? bj.objects.length : 0; }
+function layoutObjCount(bj) { return bj && typeof bj.on === 'number' ? bj.on : (bj && Array.isArray(bj.objects) ? bj.objects.length : 0); }
 // 棋盤是否有內容(任一物件或地形 / 高度 / 河流 / 標記)
 function boardHasContent(bd) {
   if (!bd) return false;
@@ -875,7 +1082,7 @@ function layoutActivate(type, n) {
   if (type !== 'estate' && type !== 'camp') return { ok: false, reason: '類型錯誤' };
   const s = layoutSlot(type, n);
   if (!s) return { ok: false, reason: '該格是空的' };
-  const bd = boardFromJSON(s.board);
+  const bd = boardFromJSON(s.board, type);
   if (!bd) return { ok: false, reason: '該格資料損壞' };
   if (type === 'camp') {
     const why = layoutCampCheck(bd);
@@ -900,7 +1107,7 @@ function draftRead() {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (!raw) return null;
     const d = JSON.parse(raw);
-    if (!d || (d.type !== 'estate' && d.type !== 'camp') || !layoutBoardOk(d.board)) return null;
+    if (!d || (d.type !== 'estate' && d.type !== 'camp') || !layoutBoardOk(d.board, d.type)) return null;
     return { type: d.type, board: d.board, from: typeof d.from === 'string' ? d.from : 'blank', savedAt: +d.savedAt || 0 };
   } catch (e) { return null; }
 }
@@ -936,7 +1143,8 @@ function draftPersist(force) {
 const PEND_MAX = 200;
 // list: [{type,x,y,rot}]；occ: 待購佔格（索引+1）；diag: 依遠角對角線分組（同 world.objDiag）
 // sel: 選取中的待購索引（-1 無）；moving: 選取物件是否在「等待點選新位置」
-const pend = { list: [], occ: new Int16Array(MAP_W * MAP_H), diag: [], sel: -1, moving: false };
+const PEND_CELLS = Math.max(MAP_W * MAP_H, EST_W * EST_H);   // 待購 / 隱藏標紅陣列取兩種板子中較大者(idx 依現役板邊長,小板只用前段)
+const pend = { list: [], occ: new Int16Array(PEND_CELLS), diag: [], sel: -1, moving: false };
 
 function pendRebuild() {
   pend.occ.fill(0);
@@ -1026,13 +1234,13 @@ function pendCommit() {
 }
 
 // 隱藏建築（PLAN 12.17）：不存檔。bad = 位置不合法的已建物件索引；badCell = 其佔格（渲染標紅用）
-const hide = { on: false, bad: [], badCell: new Uint8Array(MAP_W * MAP_H) };
+const hide = { on: false, bad: [], badCell: new Uint8Array(PEND_CELLS) };
 
 // 已建物件 n（0 起）在目前地形上是否合法：canPlace 的規則但排除自己、不計數量上限
 function objValidAt(n) {
   const o = world.objects[n], d = OBJECTS[o.type];
   const [w, h] = footprint(o.type, o.rot);
-  if (o.x < 0 || o.y < 0 || o.x + w > MAP_W || o.y + h > MAP_H) return false;
+  if (o.x < 0 || o.y < 0 || o.x + w > boardW() || o.y + h > boardH()) return false;
   const h0 = world.height[idx(o.x, o.y)];
   for (let yy = o.y; yy < o.y + h; yy++) {
     for (let xx = o.x; xx < o.x + w; xx++) {
@@ -1050,7 +1258,7 @@ function objFitAt(n, x, y, rot) {
   if (!o) return false;
   const d = OBJECTS[o.type];
   const [w, h] = footprint(o.type, rot);
-  if (x < 0 || y < 0 || x + w > MAP_W || y + h > MAP_H) return false;
+  if (x < 0 || y < 0 || x + w > boardW() || y + h > boardH()) return false;
   if (!landFits(x, y, w, h)) return false;
   const h0 = world.height[idx(x, y)];
   for (let yy = y; yy < y + h; yy++) {

@@ -10,7 +10,14 @@ const PROG_LV_MAX = 25;
 const PROG_FREE_BUILD = true;   // 經營建築免費(PLAN_PROGRESSION §2.6 方案 A;使用者已定案 Q1)。false = 維持現行收費
 
 // ───────── 1. 等級曲線(PLACEHOLDER:全部用簡單公式產生,日後換成逐級表只改這裡)─────────
-function progLandSide(lv) { return 20 + Math.floor(1.5 * (lv - 1)); }           // 結構:Lv1 20×20 → Lv25 56×56 全開(端點固定,中間 PLACEHOLDER)
+function progCoreSide(lv) { return 20 + Math.floor(1.5 * (lv - 1)); }           // 城郭/戰陣土地(舊公式):Lv1 20×20 → Lv25 56×56;範本、戰陣(camp)用
+// 經營土地(PLAN_BIGMAP §5.1 α 曲線):Lv1 20 → Lv25 = EST_W(112);不小於 progCoreSide(Lv3 起保證放得下對應等級範本)。EST_W <= 56 時等同 progCoreSide
+function progLandSide(lv) {
+  const core = progCoreSide(lv);
+  if (typeof EST_W === 'undefined' || EST_W <= 56) return core;
+  const t = Math.max(0, Math.min(1, (lv - 1) / (PROG_LV_MAX - 1)));
+  return Math.max(core, 20 + Math.round((EST_W - 20) * Math.pow(t, 1.5)));
+}
 function progPopCap(lv) { return 40 + Math.round((lv - 1) * 160 / 24); }        // PLACEHOLDER:Lv1 40 → Lv25 200(端點 200 = TD_POP_CAP,固定)
 function progCampCp(lv) { return 24 + Math.round((lv - 1) * 142 / 24); }        // PLACEHOLDER:Lv1 24 → Lv25 166
 function progCampTier(lv) { return lv <= 5 ? 1 : lv <= 10 ? 2 : lv <= 17 ? 3 : lv <= 22 ? 4 : 5; } // 對應既有 CAMP_CAPS 的 5 欄(PLACEHOLDER 分段)
@@ -36,6 +43,10 @@ function progUpgradeCost(lv) {
   if (band[1]) mats[band[1]] = 1 + Math.floor(lv / 2);
   if (lv >= 4 && band[2]) mats[band[2]] = 1 + Math.floor(lv / 8);               // 良材料
   if (PROG_RARE_REQ[lv]) mats[PROG_RARE_REQ[lv]] = 1;                           // 珍材料(里程碑)
+  // 城建專注模式(js/cityonly.js):免材料、免首領營、免戰鬥教學,經驗改用 PROG_CITY_NEED;資源需求不變。關閉模式後回到原規則
+  if (typeof isCityOnly === 'function' && isCityOnly()) {
+    return { res: { coin: 500 * k, wood: 150 * k, stone: 100 * k }, xp: PROG_CITY_NEED(lv), mats: {}, boss: null, ftue: null };
+  }
   return {
     res: { coin: 500 * k, wood: 150 * k, stone: 100 * k },
     xp: 60 * k,
@@ -44,6 +55,28 @@ function progUpgradeCost(lv) {
     ftue: PROG_FTUE_REQ[lv] || null
   };
 }
+// ───────── 2b. 城建專注模式的經驗(全部 PLACEHOLDER;只在 isCityOnly() 時由 prog.js progCityCheck 累計)─────────
+// 每個里程碑只給一次(記在 prog.city.done);刪除建築不會扣、重蓋不會再給。經驗直接加進 prog.xp(與戰鬥經驗同一個池)。
+function PROG_CITY_NEED(lv) { return 40 + 18 * lv + lv * lv; }   // PLACEHOLDER:L → L+1 所需經驗;Lv1 59 → Lv24 1048,累計 Lv25 約 11 千
+const PROG_CITY_XP = {
+  newType: function (unlockLv) { return 12 + 2 * unlockLv; },   // PLACEHOLDER:首次擁有某種經營建築(unlockLv = 該建築的開放等級)
+  total:  { at: [10, 20, 30, 45, 60, 80, 100, 125, 150, 180, 210, 250, 290, 330, 380, 430], xp: function (n) { return 20 + 2 * n; } },   // PLACEHOLDER:建築總件數
+  houses: { at: [4, 6, 8, 10, 13, 16, 20, 25, 30, 36, 42, 50, 58, 66, 76], xp: function (n) { return 20 + 6 * n; } },                   // PLACEHOLDER:民房數(人口)
+  deco:   { at: [5, 10, 20, 35, 50, 75, 100, 140, 180, 230], xp: function (n) { return 20 + 2 * n; } },                                // PLACEHOLDER:裝飾件數(無生產的建築)
+  group:  { at: [3, 6, 10, 15], xp: [20, 40, 70, 100] },                                                                               // PLACEHOLDER:每個建築分類擁有幾種不同建築(分類見 ui.js BUILD_GROUPS)
+  noCount: ['tree', 'stone', 'wall', 'wall_courtyard', 'fence_wood', 'fence_bamboo']  // 結構:可無限量種植,不計入件數與裝飾
+};
+// 城建任務條 / 任務清單(城建專注模式取代 PROG_FTUE_REQ 的戰鬥教學;全部由 prog.js progCityQuestDone 即時偵測,不卡升級)。結構 = 白話步驟
+// kind:houses = 民房數 ≥ n;anyType = 擁有 types 其中一種;deco = 裝飾件數 ≥ n;lv = 城市等級 ≥ n
+const PROG_CITY_QUEST = [
+  { id: 'cq_house3', text: '① 再蓋 1 座民房', hint: '選建築 → 點地面 → ✓', go: '下方建築列', kind: 'houses', n: 3 },
+  { id: 'cq_lumber', text: '② 蓋 1 座伐木場或採石場', hint: '分類選「產業」,蓋好會自己生產木頭或石頭', go: '下方建築列 → 產業', kind: 'anyType', types: ['lumber', 'quarry'] },
+  { id: 'cq_house4', text: '③ 民房蓋到 4 座', hint: '民房會自己生產金幣;目前最多蓋 4 座', go: '下方建築列', kind: 'houses', n: 4 },
+  { id: 'cq_deco5', text: '④ 擺 5 件裝飾', hint: '樹、花圃、水井、石桌都算,讓小村熱鬧起來', go: '下方建築列', kind: 'deco', n: 5 },
+  { id: 'cq_lv2', text: '⑤ 點頂列 Lv,升到 Lv2', hint: '資源與經驗都夠就能升級;升級後土地會變大', go: '頂列 Lv', kind: 'lv', n: 2 },
+  { id: 'cq_house7', text: '⑥ 趁土地變大,民房蓋到 7 座', hint: '人口越多,生產越多,經驗也越多', go: '下方建築列', kind: 'houses', n: 7 },
+  { id: 'cq_lv3', text: '⑦ 再升一級到 Lv3', hint: '蓋出更多種類的建築、擴大規模就能累積經驗', go: '頂列 Lv', kind: 'lv', n: 3 }
+];
 // 升 L+1 之前必須在首領營拿到 ≥1★ 的 NPC id(結構)
 const PROG_BOSS_REQ = { 5: 'huangjin', 8: 'shankou', 12: 'shuizhai', 14: 'jun', 17: 'shanyue', 20: 'hulao', 22: 'chanyu', 24: 'luoyang' };
 // 新手教學條件(結構;只在 Lv1~4)

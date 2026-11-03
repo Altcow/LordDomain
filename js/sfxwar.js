@@ -323,7 +323,9 @@ function sfxwarInit() {
   try {
     const c = AU.ctx;
     for (const name in SFXW_REC) {
-      const pcm = sfxwRenderRec(SFXW_REC[name]);
+      const pcm = typeof auCached === 'function'
+        ? auCached('sw:' + name, SFXW_SR, function () { return sfxwRenderRec(SFXW_REC[name]); }, JSON.stringify(SFXW_REC[name]))
+        : sfxwRenderRec(SFXW_REC[name]);
       const buf = c.createBuffer(1, pcm.length, SFXW_SR);
       buf.getChannelData(0).set(pcm);
       SFXW.bufs[name] = buf;

@@ -1131,7 +1131,7 @@ function artFacing(o) { return (o.facing != null ? o.facing : o.rot) || 0; }
 // 城牆相鄰判定:x 軸向 / y 軸向是否有城牆或城門,回傳 'x'、'y'、'xy' 或 ''(含門的佔格)
 function artWallConn(o) {
   var hit = function (x, y) {
-    if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return false;
+    if (x < 0 || y < 0 || x >= boardW() || y >= boardH()) return false;
     var n = world.occ[idx(x, y)];
     if (!n) return false;
     var p = world.objects[n - 1];

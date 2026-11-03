@@ -20,6 +20,7 @@ const BG_HEAVY = { pozhen: 1, tieqi: 1, gongcheng: 1, fenghuo: 1, juezhan: 1, ye
 const BG_PHRASE = 32;
 const BG_TRACK_GAIN = 0.8;
 const BG_WARM_MS = 6;
+const BG_WARM_MAX = 8; // 快取命中很快,另限每 tick 建立的 AudioBuffer 張數
 const BG_FADE_OUT_QUICK = 0.05;
 const BG_PICK_KEY = 'lorddomain.bgm.pick';
 const BG_ROT_KEY = 'lorddomain.bgm.rot';
@@ -436,7 +437,7 @@ function bgStingerScore(kind) {
 
 function bgBuf(key) {
   if (BG.bufs[key]) return BG.bufs[key];
-  const pcm = bgRender(key);
+  const pcm = auCached('bg:' + key, AU_SR, function () { return bgRender(key); }, key + JSON.stringify(BG_BUF_DUR));
   const buf = AU.ctx.createBuffer(1, pcm.length, AU_SR);
   buf.getChannelData(0).set(pcm);
   BG.bufs[key] = buf;
@@ -1113,7 +1114,8 @@ function bgKeysOf(inst, pcs) {
 // 預渲染佇列:每個 tick 最多用 ms 毫秒,避免一次渲染造成卡頓
 function bgWarm(ms) {
   const t0 = auNow();
-  while (BG.queue.length && auNow() - t0 < ms / 1000) {
+  let nBuf = 0;
+  while (BG.queue.length && nBuf++ < BG_WARM_MAX && auNow() - t0 < ms / 1000) {
     const k = BG.queue.shift();
     BG.queued[k] = false;
     if (!BG.bufs[k]) bgBuf(k);

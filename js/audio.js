@@ -122,13 +122,18 @@ function auRenderRecipe(layers) {
   return out;
 }
 
+// 取樣本 PCM:有持久快取(audiocache.js)就走快取,否則直接合成;sig 為配方簽章(進雜湊)
+function auCached(key, sr, fn, sig) {
+  return typeof acPcm === 'function' ? acPcm(key, sr, fn, sig) : fn();
+}
+
 function auBuildBuffers() {
   const c = AU.ctx;
   for (const id in AUDIO_DEFS) {
     const def = AUDIO_DEFS[id];
     const layers = AUDIO_SYNTH[def.recipe];
     if (!layers) continue;
-    const pcm = auRenderRecipe(layers);
+    const pcm = auCached('au:' + id, AU_SR, function () { return auRenderRecipe(layers); }, JSON.stringify(layers));
     const buf = c.createBuffer(1, pcm.length, AU_SR);
     buf.getChannelData(0).set(pcm);
     AU.buffers[id] = buf;

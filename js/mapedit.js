@@ -504,12 +504,15 @@ function cornerHidden() {
   return !!cls || (typeof game !== 'undefined' && (game.mode === 'fishing' || game.mode === 'attack' || game.mode === 'replay'));
 }
 
+function cityOnlyOn() { return typeof isCityOnly === 'function' && isCityOnly(); }
+
 function cornerSync() {
   const off = cornerHidden();
   ['modeBtn', 'seasonBtn'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.hidden = off || (id === 'modeBtn' && !!ui.editing);   // 草稿中不能切經營 / 戰鬥畫面
+    if (el) el.hidden = off || (id === 'modeBtn' && (!!ui.editing || cityOnlyOn()));   // 草稿中不能切經營 / 戰鬥畫面;城建專注模式不顯示切換鈕
   });
+  if (cityOnlyOn() && typeof cityOnlySync === 'function') cityOnlySync();   // 若還停在戰鬥布置就切回經營
   layoutPickSync();
   if (off) {
     cornerFightClose();
@@ -678,6 +681,7 @@ function cornerSeasonToggle() {
 
 // 切換棋盤名與模式。戰鬥陣尚未建立(campBoard() 為 null)時先開三選一
 function setBoardMode(to) {
+  if (to === 'camp' && cityOnlyOn()) return;   // 城建專注模式:不進戰鬥布置
   if (game.backup || (game.mode !== 'estate' && game.mode !== 'battleDesign')) return;
   if (to !== 'estate' && to !== 'camp') return;
   if (to === 'camp' && game.mode === 'battleDesign') return;
@@ -1052,6 +1056,7 @@ function draftBegin(type, from, src, tplId, unsaved) {
   boardBackup();
   game.backup.draft = { type: type, from: from, prevMode: prevMode };
   world.board = type;
+  boardReset(type);   // 備份出來的空白板是戰陣尺寸;依草稿類型換成該類型的標準邊長(經營 EST_W / 戰陣 MAP_W)
   game.mode = type === 'camp' ? 'battleDesign' : 'estate';
   let ok = true, tpl = null, r = null;
   if (src) {
@@ -1082,7 +1087,7 @@ function draftBeginFrom(type, from) {
     if (!src) { showToast('沒有使用中的' + layoutTypeName(type) + '版面可載入'); return false; }
   } else if (from.indexOf('slot:') === 0) {
     const s = layoutSlot(type, +from.slice(5));
-    src = s ? boardFromJSON(s.board) : null;
+    src = s ? boardFromJSON(s.board, type) : null;
     if (!src) { showToast('該格是空的'); return false; }
   } else if (from.indexOf('tpl:') === 0) {
     const id = from.slice(4);
@@ -1094,7 +1099,7 @@ function draftBeginFrom(type, from) {
 }
 
 function draftResume(saved) {
-  const src = boardFromJSON(saved.board);
+  const src = boardFromJSON(saved.board, saved.type);
   if (!src) { draftStoreClear(); showToast('草稿暫存損壞,已清除'); return false; }
   return draftBegin(saved.type, saved.from, src, null, true);
 }
@@ -1105,6 +1110,7 @@ function draftStartOpen(opt) {
   if (ui.editing) { showToast('已在草稿布置中'); return; }
   if (game.backup || (game.mode !== 'estate' && game.mode !== 'battleDesign')) { showToast('目前無法進入草稿布置'); return; }
   const st = { type: opt.type || (game.mode === 'battleDesign' ? 'camp' : 'estate'), tpl: opt.tpl || null, view: 'main' };
+  if (cityOnlyOn() && st.type === 'camp') st.type = 'estate';   // 城建專注模式:草稿只做經營
   const saved = draftRead();
   if (saved) draftResumeAsk(st, saved);
   else draftStartNext(st);
@@ -1136,6 +1142,7 @@ function draftStartRender(st) {
   tlab.textContent = '要設計:';
   trow.appendChild(tlab);
   [['estate', '🏘 經營'], ['camp', '⚔ 戰鬥']].forEach(a => {
+    if (cityOnlyOn() && a[0] === 'camp') return;   // 城建專注模式:隱藏戰鬥草稿
     ldBtn(h, trow, 'type:' + a[0], a[1], () => { st.type = a[0]; draftStartRender(st); }, type === a[0] ? 'on' : '');
   });
   ldMsg(h, '選一份當起點,之後可以隨意修改,不會動到使用中的版面');
@@ -1196,11 +1203,11 @@ function draftTplRender(st) {
   const col = ldRow(h, 'ld-col ld-scroll');
   cityAll.forEach(t => {
     const lock = tplCityLv(t) > city.my;
-    ldBtn(h, col, 'tpl:' + t.id, lock ? '🔒 Lv ' + tplCityLv(t) : t.name + (t.isDefault ? ' ★預設' : ''), () => draftBeginFrom(type, 'tpl:' + t.id), lock ? 'empty locked' : '', lock || t.w > MAP_W || t.h > MAP_H,
+    ldBtn(h, col, 'tpl:' + t.id, lock ? '🔒 Lv ' + tplCityLv(t) : t.name + (t.isDefault ? ' ★預設' : ''), () => draftBeginFrom(type, 'tpl:' + t.id), lock ? 'empty locked' : '', lock || !tplFitsBoard(t),
       lock ? '升到 Lv ' + tplCityLv(t) + ' 後可載入 ' + t.w + '×' + t.h : (t.desc || '') + ' ' + t.w + '×' + t.h);
   });
   ordered.forEach(t => {
-    ldBtn(h, col, 'tpl:' + t.id, t.name + (t.isDefault ? ' ★預設' : ''), () => draftBeginFrom(type, 'tpl:' + t.id), '', t.w > MAP_W || t.h > MAP_H, (t.desc || '') + ' ' + t.w + '×' + t.h);
+    ldBtn(h, col, 'tpl:' + t.id, t.name + (t.isDefault ? ' ★預設' : ''), () => draftBeginFrom(type, 'tpl:' + t.id), '', !tplFitsBoard(t), (t.desc || '') + ' ' + t.w + '×' + t.h);
   });
   const foot = ldRow(h, 'ld-foot');
   ldBtn(h, foot, 'back', '返回', () => { st.view = 'main'; draftStartRender(st); }, '');
@@ -1485,7 +1492,7 @@ function layoutPickClick(n) {
     return 'empty';
   }
   if (type === 'camp') {
-    const bd = boardFromJSON(s.board);
+    const bd = boardFromJSON(s.board, 'camp');
     const why = bd ? layoutCampCheck(bd) : '資料損壞';
     if (why) { showToast('無法設為使用中:' + why); return 'blocked'; }
   }

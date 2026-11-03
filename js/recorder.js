@@ -263,7 +263,7 @@ function recApplyRes(quality) {
 
 // 自動運鏡的圓心:城主府(與 main.js boot 置中相同),沒有就地圖中央
 function recOrbitCenter() {
-  let gx = MAP_W >> 1, gy = MAP_H >> 1;
+  let gx = boardW() >> 1, gy = boardH() >> 1;
   const palace = world.objects ? world.objects.find(function (o) { return o.type === 'palace'; }) : null;
   if (palace) { gx = palace.x + 2; gy = palace.y + 2; }
   const h = world.height ? (world.height[idx(gx, gy)] || 0) : 0;
@@ -484,7 +484,7 @@ function recOverviewPoints() {
     pts.push({ x: isoX(o.x + 0.5, o.y + 0.5), y: isoY(o.x + 0.5, o.y + 0.5, h), palace: o.type === 'palace' });
   });
   if (!pts.length) {
-    pts.push({ x: isoX(0, MAP_H), y: isoY(0, 0, 0) }, { x: isoX(MAP_W, 0), y: isoY(MAP_W, MAP_H, 0) });
+    pts.push({ x: isoX(0, boardH()), y: isoY(0, 0, 0) }, { x: isoX(boardW(), 0), y: isoY(boardW(), boardH(), 0) });
   }
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   pts.forEach(function (p) {

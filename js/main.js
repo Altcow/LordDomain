@@ -28,7 +28,7 @@ function boot() {
   applyStartZoom();
   const palace = world.objects.find(o => o.type === 'palace');
   if (palace) centerOnCell(palace.x + 2, palace.y + 2);
-  else centerOnCell(MAP_W >> 1, MAP_H >> 1);
+  else centerOnCell(boardW() >> 1, boardH() >> 1);
   saveWorld();
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {

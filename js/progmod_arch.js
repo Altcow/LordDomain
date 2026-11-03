@@ -10,7 +10,7 @@ const PROGMOD_ARCH = (function () {
 
   const GAME = {
     OBJECTS: function () { return OBJECTS; },
-    progLandSide: function (lv) { return progLandSide(lv); },
+    progLandSide: function (lv) { return progCoreSide(lv); },
     progWallCap: function (lv) { return progWallCap(lv); },
     progFenceCap: function (lv) { return progFenceCap(lv); },
     progGateCap: function (lv) { return progGateCap(lv); },

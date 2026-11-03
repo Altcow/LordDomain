@@ -313,6 +313,10 @@ function featNameOf(id) {
 // 入口防呆:未開放回 false 並 toast
 function featGuard(id) {
   if (isUnlocked('feature', id)) return true;
+  if (typeof cityOnlyHides === 'function' && cityOnlyHides(id)) {
+    showToast('城建專注模式中已隱藏' + featNameOf(id) + '(設定可關閉此模式)');
+    return false;
+  }
   showToast('城市 ' + progUnlockLv('feature', id) + ' 級才開放' + featNameOf(id));
   return false;
 }
@@ -662,8 +666,13 @@ const ESTATE_MENU = {
 function menuSrc() {
   return game.mode === 'battleDesign' && typeof CAMP_MENU !== 'undefined' ? CAMP_MENU : ESTATE_MENU;
 }
+// 頂層分類清單(城建專注模式隱藏軍事建築)
+function menuTopList(M) {
+  return M.list.filter(t => !(typeof cityOnlyTopHidden === 'function' && cityOnlyTopHidden(t.id)));
+}
 function menuTopEntry(M) {
-  return M.list.find(t => t.id === M.getTop()) || M.list.find(t => t.id === M.defTop) || M.list[0];
+  const L = menuTopList(M);
+  return L.find(t => t.id === M.getTop()) || L.find(t => t.id === M.defTop) || L[0];
 }
 
 function buildTopToolbar(bar) {
@@ -731,7 +740,7 @@ function buildTopMenu() {
   const M = menuSrc();
   box.hidden = !(topMenuOpen && (game.mode === 'estate' || game.mode === 'battleDesign'));
   box.textContent = '';
-  M.list.forEach(t => {
+  menuTopList(M).forEach(t => {
     const b = document.createElement('button');
     b.setAttribute('data-top', t.id);
     if (t.id === M.getTop()) b.classList.add('on');
@@ -1172,7 +1181,7 @@ function placeFailReason(type, x, y, rot) {
   const cap = capOf(type);
   if (cap !== null && countObjects(type) >= cap) return OBJECTS[type].name + '最多只能蓋 ' + cap + ' 座';
   const [w, h] = footprint(type, rot);
-  if (x < 0 || y < 0 || x + w > MAP_W || y + h > MAP_H) return '超出邊界';
+  if (x < 0 || y < 0 || x + w > boardW() || y + h > boardH()) return '超出邊界';
   if (!landFits(x, y, w, h)) return '超出城市土地範圍';
   const h0 = world.height[idx(x, y)];
   for (let yy = y; yy < y + h; yy++) {
@@ -1193,7 +1202,7 @@ function pendFailReason(type, x, y, rot, skip) {
   const cap = capOf(type);
   if (cap !== null && countObjects(type) + pendCount(type, skip) >= cap) return d.name + '最多只能蓋 ' + cap + ' 座（含待購）';
   const [w, h] = footprint(type, rot);
-  if (x < 0 || y < 0 || x + w > MAP_W || y + h > MAP_H) return '超出邊界';
+  if (x < 0 || y < 0 || x + w > boardW() || y + h > boardH()) return '超出邊界';
   if (!landFits(x, y, w, h)) return '超出城市土地範圍';
   for (let yy = y; yy < y + h; yy++)
     for (let xx = x; xx < x + w; xx++) {
@@ -1871,7 +1880,7 @@ function buildTplMenu() {
       const small = document.createElement('small');
       small.textContent = lock ? '升到 Lv ' + tplCityLv(t) + ' 後可載入　' + t.w + '×' + t.h : t.desc + '　' + t.w + '×' + t.h;
       btn.appendChild(small);
-      btn.disabled = lock || t.w > MAP_W || t.h > MAP_H;
+      btn.disabled = lock || !tplFitsBoard(t);
       menu.appendChild(btn);
     });
   }
@@ -1894,7 +1903,7 @@ function buildTplMenu() {
     const small = document.createElement('small');
     small.textContent = t.desc + '　' + t.w + '×' + t.h;
     btn.appendChild(small);
-    btn.disabled = t.w > MAP_W || t.h > MAP_H;
+    btn.disabled = !tplFitsBoard(t);
     menu.appendChild(btn);
   }
 }
@@ -2187,7 +2196,7 @@ function holdEligible() {
 function objFailReason(n, x, y, rot) {
   const o = world.objects[n], d = OBJECTS[o.type];
   const [w, h] = footprint(o.type, rot);
-  if (x < 0 || y < 0 || x + w > MAP_W || y + h > MAP_H) return '超出土地範圍';
+  if (x < 0 || y < 0 || x + w > boardW() || y + h > boardH()) return '超出土地範圍';
   if (!landFits(x, y, w, h)) return '超出土地範圍';
   const h0 = world.height[idx(x, y)];
   for (let yy = y; yy < y + h; yy++) {
