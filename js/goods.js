@@ -31,6 +31,7 @@ function goodsNormCity(v) {
     }
     c.coinFrac = Math.min(0.9999, goodsNum(v.coinFrac));
     if (v.adv && typeof advNormSave === 'function') c.adv = advNormSave(v.adv);   // 顧問已完成 / 已忽略 id(cityadvisor.js)
+    if (v.cards && typeof cardsNormSave === 'function') { var cd = cardsNormSave(v.cards); if (cd) c.cards = cd; }   // 酒館 / 名冊(cards.js)
   }
   return c;
 }

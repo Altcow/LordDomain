@@ -118,7 +118,9 @@ function talentPatrolLoad(d) {
 // ---- 遊戲接線 ----
 function tpEnv() {
   const city = typeof world !== 'undefined' && world && world.city;
+  if (typeof cardsSyncTalents === 'function') cardsSyncTalents();   // 名冊 → world.city.talents(cards.js);名冊空時沿用占位
   if (!city || !city.talents || !city.talents.length) return null;
+  const roster = typeof cardsPatrolTalents === 'function' ? cardsPatrolTalents() : null;   // 名冊人物 at = 'type@x,y' → bids
   const pass = (x, y) => x >= 0 && y >= 0 && x < boardW() && y < boardH() && world.terrain[idx(x, y)] === T_ROAD && !world.occ[idx(x, y)];
   const bld = bid => {
     const o = world.objects[bid - 1];
@@ -128,7 +130,7 @@ function tpEnv() {
   };
   return {
     powerSave: typeof isPowerSave === 'function' && isPowerSave(),
-    talents: city.talents,
+    talents: roster || city.talents,
     passable: pass,
     building: bld,
     // 出發點:人才自訂 home,否則取名下第一棟建築周圍(半徑 3 內)第一個道路格

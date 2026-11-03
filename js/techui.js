@@ -1,8 +1,8 @@
-// js/techui.js — 科技樹頁(PLAN_NOLEVEL NL2):分支分頁、節點卡、研發 / 研發到這裡、研發序列、研究院狀態;並提供「需研發〈X〉」鎖頭文案。
+// js/techui.js — 科技樹頁(PLAN_NOLEVEL NL2):每分支一棵由左到右的樹(欄 = 前置鏈深度,SVG 連線)、點選節點看詳情 / 研發 / 研發到這裡、研發序列、研究院狀態;並提供「需研發〈X〉」鎖頭文案。
 // 全域名稱:techPanelOpen(nodeId?) techPanelClose techPanelToggle techPanelIsOpen techUiHtml techUiAct techUiState techUiUnlockNames
-//          techObjLockText techFeatLockText techFeatLockGo techLockedNames techCancelHint
+//          techUiLayout techUiAncestors techUiSuccessors techUiHighlight techUiFirstReady techUiEraText techObjLockText techFeatLockText techFeatLockGo techLockedNames techCancelHint
 // 依賴(皆 typeof 守衛):citytech.js、techtree_data.js、nolevel_data.js、panelmgr.js、goods.js。ES2017;不用 ?. ??。
-var tu = { el: null, open: false, branch: 'ag', focus: '', confirm: '', sig: '', timer: 0, msg: '', bodyEl: null, headEl: null };
+var tu = { el: null, open: false, branch: 'ag', focus: '', sel: '', zoom: 1, confirm: '', sig: '', qSig: '', treeKey: '', builds: 0, last: {}, dragged: 0, timer: 0, msg: '', bodyEl: null, headEl: null, topEl: null, resEl: null, warnEl: null, qEl: null, tabsEl: null, eraEl: null, scEl: null, cvEl: null, detEl: null };
 var TU_STATE_TXT = { done: '已研', cur: '研發中', queued: '排隊中', ready: '可研', req: '前置未滿', era: '本時代未開', mega: '里程碑' };
 
 function tuEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -103,19 +103,137 @@ function techCancelHint(id) {
   return '從序列移除(尚未扣費)';
 }
 
+// ───────── 版面:由左到右的科技樹(欄 = 分支內最長前置鏈長度;時代不參與版面分組) ─────────
+var TU_ZOOMS = [{ n: '小', w: 96, h: 44, gx: 36, gy: 8, fs: 11 }, { n: '中', w: 124, h: 48, gx: 46, gy: 10, fs: 12 }, { n: '大', w: 156, h: 56, gx: 56, gy: 12, fs: 13 }];
+var TU_CN = ['', '一', '二', '三', '四', '五'];
+var TU_BADGE_H = 17;
+var tuLayoutCache = {};
+
+function techUiParents(n) {   // req + reqOr(去重)
+  var out = [];
+  (n.req || []).concat(n.reqOr || []).forEach(function (r) { if (out.indexOf(r) < 0) out.push(r); });
+  return out;
+}
+function techUiBranchName(b) {
+  var i, nm = b;
+  for (i = 0; i < TECH_BRANCHES.length; i++) if (TECH_BRANCHES[i].id === b) nm = TECH_BRANCHES[i].name;
+  return nm;
+}
+// 回傳 { pos:{id:{x,y,w,h,col}}, cols:[[id…]], depth:{id:欄}, edges:[{from,to,key,or}], ext:{id:[{id,branch,or}]}, w, h, Z };結果依 (分支, 縮放) 快取、決定性
+function techUiLayout(branch, zoom) {
+  var key = branch + ':' + zoom, Z = TU_ZOOMS[zoom] || TU_ZOOMS[1], nodes, byId = {}, idx = {}, depth = {}, busy = {}, cols = [], pos = {}, edges = [], ext = {}, maxD = 0, c, w, hgt = 0;
+  if (tuLayoutCache[key]) return tuLayoutCache[key];
+  nodes = CITY_TECHS.filter(function (n) { return n.branch === branch; });
+  nodes.forEach(function (n, i) { byId[n.id] = n; idx[n.id] = i; });
+  function inPar(n) { return techUiParents(n).filter(function (r) { return !!byId[r]; }); }
+  function dep(id) {
+    var d = 0;
+    if (depth[id] !== undefined) return depth[id];
+    if (busy[id]) return 0;
+    busy[id] = 1;
+    inPar(byId[id]).forEach(function (r) { d = Math.max(d, dep(r) + 1); });
+    busy[id] = 0; depth[id] = d;
+    return d;
+  }
+  nodes.forEach(function (n) {
+    var d = dep(n.id), orFlag = !!(n.reqOr && n.reqOr.length);
+    if (d > maxD) maxD = d;
+    (cols[d] = cols[d] || []).push(n);
+    inPar(n).forEach(function (r) { edges.push({ from: r, to: n.id, key: r + '>' + n.id, or: orFlag }); });
+    techUiParents(n).forEach(function (r) {
+      var rn = byId[r] ? null : techNode(r);
+      if (rn) (ext[n.id] = ext[n.id] || []).push({ id: r, branch: rn.branch, or: orFlag });
+    });
+  });
+  for (c = 0; c <= maxD; c++) {
+    var list = cols[c] || [], cursor = Z.gy;
+    var keyed = list.map(function (n) {
+      var ps = inPar(n), k, sum = 0;
+      if (!ps.length) k = n.era * 100000 + idx[n.id];
+      else { ps.forEach(function (r) { sum += pos[r].y + Z.h / 2; }); k = sum / ps.length; }
+      return { n: n, k: k, ps: ps.length };
+    });
+    keyed.sort(function (a, b) { return a.k - b.k || idx[a.n.id] - idx[b.n.id]; });
+    cols[c] = keyed.map(function (o) { return o.n.id; });
+    keyed.forEach(function (o) {
+      var bh = Z.h + (ext[o.n.id] ? ext[o.n.id].length * TU_BADGE_H : 0), y = o.ps ? Math.max(cursor, Math.round(o.k - Z.h / 2)) : cursor;
+      pos[o.n.id] = { x: Z.gx + c * (Z.w + Z.gx), y: y, w: Z.w, h: Z.h, bh: bh, col: c };
+      cursor = y + bh + Z.gy;
+    });
+    if (cursor > hgt) hgt = cursor;
+  }
+  w = Z.gx + (maxD + 1) * (Z.w + Z.gx);
+  return (tuLayoutCache[key] = { branch: branch, zoom: zoom, Z: Z, pos: pos, cols: cols, depth: depth, edges: edges, ext: ext, w: w, h: hgt + Z.gy });
+}
+
+// 祖先(遞移,含跨分支)/ 直接後繼 / 高亮集合
+function techUiAncestors(id) {
+  var out = {}, st = [id];
+  while (st.length) {
+    var n = techNode(st.pop());
+    if (!n) continue;
+    techUiParents(n).forEach(function (r) { if (!out[r]) { out[r] = 1; st.push(r); } });
+  }
+  delete out[id];
+  return Object.keys(out);
+}
+function techUiSuccessors(id) { return CITY_TECHS.filter(function (n) { return techUiParents(n).indexOf(id) >= 0; }).map(function (n) { return n.id; }); }
+function techUiHighlight(id) {
+  var anc = techUiAncestors(id), nodes = {}, edges = {};
+  nodes[id] = 1;
+  anc.forEach(function (a) { nodes[a] = 1; });
+  techUiSuccessors(id).forEach(function (s) { nodes[s] = 1; });
+  CITY_TECHS.forEach(function (n) {
+    techUiParents(n).forEach(function (r) { if (n.id === id || anc.indexOf(n.id) >= 0 || r === id) edges[r + '>' + n.id] = 1; });
+  });
+  return { nodes: nodes, edges: edges };
+}
+// 本分支(依欄、同欄由上到下)第一個可研節點;本分支沒有則找其他分支;皆無回 ''
+function techUiFirstReady(branch) {
+  var order = [branch].concat(TECH_BRANCHES.map(function (b) { return b.id; }).filter(function (b) { return b !== branch; })), i, j, lay, ids, k;
+  for (i = 0; i < order.length; i++) {
+    lay = techUiLayout(order[i], 1);
+    for (j = 0; j < lay.cols.length; j++) {
+      ids = lay.cols[j] || [];
+      for (k = 0; k < ids.length; k++) if (techUiState(ids[k]).k === 'ready') return ids[k];
+    }
+  }
+  return '';
+}
+// 時代閘文字:取自 NL_ERA_RULE(techEraNeed)
+function techUiEraText(e) {
+  var need = techEraNeed(e), t = '第 ' + e + ' 時代尚未開放:需先研完第 ' + (e - 1) + ' 時代' + (tuEraName(e - 1) ? '〈' + tuEraName(e - 1) + '〉' : '') + ' ' + need.k + ' 項(目前 ' + techEraDoneCount(e - 1) + '/' + need.k + ')';
+  if (need.groups) t += ';並完成大工程:' + need.groups.map(function (g) { return g.map(tuNodeName).join(' + '); }).join(' 或 ');
+  return t;
+}
+
 // ───────── 繪製 ─────────
-function tuHeadHtml() {
+function tuSet(el, k, html) { if (!el) return; if (tu.last[k] !== html) { tu.last[k] = html; el.innerHTML = html; } }
+function tuTopHtml() {
+  return '<b>📜 科技樹</b><span class="tu-sp"></span><button data-tu="locate">定位可研</button><button data-tu="zoom">縮放:' + TU_ZOOMS[tu.zoom].n + '</button><button class="tu-x" data-tu="close">✕</button>';
+}
+function tuResHtml() {
   var s = techState(), labs = techLabCount(), cap = techLabCap(), slots = techSlots(), coin = (typeof world !== 'undefined' && world.res && world.res.coin) || 0, e = techEra();
-  var h = '<div class="tu-top"><b>📜 科技樹</b><span class="tu-sp"></span><button class="tu-x" data-tu="close">✕</button></div>';
-  h += '<div class="tu-res"><span>金 ' + Math.floor(coin) + '</span><span>學識 ' + Math.floor(s.xue) + '</span><span>時代 ' + e + (tuEraName(e) ? '〈' + tuEraName(e) + '〉' : '') + '</span><span>研究院 ' + labs + '/' + cap + '　槽位 ' + slots + '</span></div>';
+  return '<div class="tu-res"><span>金 ' + Math.floor(coin) + '</span><span>學識 ' + Math.floor(s.xue) + '</span><span>時代 ' + e + (tuEraName(e) ? '〈' + tuEraName(e) + '〉' : '') + '</span><span>研究院 ' + labs + '/' + cap + '　槽位 ' + slots + '</span></div>';
+}
+function tuWarnHtml() {
+  var s = techState(), labs = techLabCount(), slots = techSlots(), h = '';
   if (labs <= 0) h += '<div class="tu-warn">需建研究院才能研發<button data-tu="buildlab">去建研究院</button></div>';
   else if (slots < s.cur.length + 1 && !s.cur.length) h += '<div class="tu-warn">研究院槽位 0,請檢查研究院數量上限</div>';
   if (tu.msg) h += '<div class="tu-msg">' + tuEsc(tu.msg) + '</div>';
-  h += '<div class="tu-qh">研發序列(進行中 ' + s.cur.length + '/' + Math.max(slots, s.cur.length) + ',排隊 ' + s.queue.length + '/' + TECH_QUEUE_MAX + ')</div>';
-  if (!s.cur.length && !s.queue.length) h += '<div class="tu-empty">序列是空的。到下方挑一項點「研發」。</div>';
+  return h;
+}
+function tuQueueSig() {
+  var s = techState();
+  return [s.cur.map(function (c) { return c.id; }).join(','), s.queue.join(','), tu.confirm, techSlots()].join('|');
+}
+function tuQueueHtml() {
+  var s = techState(), slots = techSlots(), h;
+  h = '<div class="tu-qh">研發序列(進行中 ' + s.cur.length + '/' + Math.max(slots, s.cur.length) + ',排隊 ' + s.queue.length + '/' + TECH_QUEUE_MAX + ')</div>';
+  if (!s.cur.length && !s.queue.length) h += '<div class="tu-empty">序列是空的。點樹上節點,在下方詳情按「研發」。</div>';
   s.cur.forEach(function (c) {
     var n = techNode(c.id), pct = c.total > 0 ? Math.max(0, Math.min(100, Math.round((1 - c.left / c.total) * 100))) : 0;
-    h += '<div class="tu-q cur"><div class="tu-qn">⏳ ' + tuEsc(n ? n.name : c.id) + '<small> 剩 ' + techFmtTime(c.left) + '</small></div><div class="tu-bar"><i style="width:' + pct + '%"></i></div>';
+    h += '<div class="tu-q cur"><div class="tu-qn">⏳ ' + tuEsc(n ? n.name : c.id) + '<small class="tu-left" data-left="' + c.id + '"> 剩 ' + techFmtTime(c.left) + '</small></div><div class="tu-bar"><i data-bar="' + c.id + '" style="width:' + pct + '%"></i></div>';
     if (tu.confirm === c.id) h += '<div class="tu-cf">' + tuEsc(techCancelHint(c.id)) + '<button data-tu="cancelyes" data-id="' + c.id + '">確定取消</button><button data-tu="cancelno">不取消</button></div>';
     else h += '<button data-tu="cancel" data-id="' + c.id + '">取消</button>';
     h += '</div>';
@@ -129,64 +247,169 @@ function tuHeadHtml() {
   });
   return h;
 }
-
-function tuCardHtml(n) {
-  var st = techUiState(n.id), h, un = techUiUnlockNames(n), act = '', cls = 'tu-n ' + st.k + (tu.focus === n.id ? ' focus' : '');
-  h = '<div class="' + cls + '" data-node="' + n.id + '"><div class="tu-nh"><b>' + tuEsc(n.name) + '</b><span class="tu-era">第' + n.era + '階</span><span class="tu-st ' + st.k + '">' + TU_STATE_TXT[st.k] + '</span></div>';
-  if (n.desc) h += '<div class="tu-d">' + tuEsc(n.desc) + '</div>';
-  if (st.k === 'mega') {
-    h += '<div class="tu-c">條件:' + tuEsc((n.cost && n.cost.goodsText) || '大工程達成') + '</div><div class="tu-d">里程碑不走研發序列,由大工程完成後記入。</div>';
-  } else {
-    h += '<div class="tu-c">' + tuEsc(tuCostText(n.id)) + '　時長 ' + tuDurText(techDurationOf(n.id)) + '</div>';
-  }
-  if (un.length) h += '<div class="tu-u">解鎖:' + tuEsc(un.join('、')) + '</div>';
-  if (st.k === 'req') h += '<div class="tu-lk">前置未滿:' + tuEsc(st.miss.join('、')) + '</div>';
-  if (st.k === 'era') h += '<div class="tu-lk">第 ' + n.era + ' 時代尚未開放(需前一時代研完 ' + techEraNeed(n.era).k + ' 項' + (techEraNeed(n.era).groups ? ' 與里程碑' : '') + ')</div>';
-  if (st.k === 'ready') act = '<button data-tu="add" data-id="' + n.id + '">研發</button>';
-  else if (st.k === 'req') act = '<button data-tu="addto" data-id="' + n.id + '">研發到這裡</button>';
-  h += act + '</div>';
-  return h;
+// 每秒只更新倒數文字與進度條,不重建序列區(按鈕不被換掉)
+function tuTickQueue() {
+  var s = techState(), L, B;
+  if (!tu.qEl || !tu.qEl.querySelectorAll) return;
+  s.cur.forEach(function (c) {
+    var pct = c.total > 0 ? Math.max(0, Math.min(100, Math.round((1 - c.left / c.total) * 100))) : 0, t = ' 剩 ' + techFmtTime(c.left);
+    L = tu.qEl.querySelector('[data-left="' + c.id + '"]'); B = tu.qEl.querySelector('[data-bar="' + c.id + '"]');
+    if (L && L.textContent !== t) L.textContent = t;
+    if (B && B.style) B.style.width = pct + '%';
+  });
 }
-function tuBodyHtml() {
-  var h = '<div class="tu-tabs">', list, e, any;
+function tuHeadHtml() { return tuTopHtml() + tuResHtml() + tuWarnHtml() + tuQueueHtml(); }
+
+function tuTabsHtml() {
+  var h = '';
   TECH_BRANCHES.forEach(function (b) {
     var done = 0, tot = 0;
     CITY_TECHS.forEach(function (n) { if (n.branch === b.id) { tot++; if (techDone(n.id)) done++; } });
     h += '<button class="tu-tab' + (tu.branch === b.id ? ' on' : '') + '" data-tu="tab" data-id="' + b.id + '">' + tuEsc(b.name) + '<small> ' + done + '/' + tot + '</small></button>';
   });
-  h += '</div><div class="tu-list">';
-  list = CITY_TECHS.filter(function (n) { return n.branch === tu.branch; });
-  for (e = 1; e <= 5; e++) {
-    var cards = list.filter(function (n) { return n.era === e; });
-    if (!cards.length) continue;
-    h += '<div class="tu-eh">第 ' + e + ' 時代' + (tuEraName(e) ? '〈' + tuEraName(e) + '〉' : '') + (techEraOpen(e) ? '' : '(未開放)') + '</div>';
-    cards.forEach(function (n) { h += tuCardHtml(n); });
-    any = true;
-  }
-  if (!any) h += '<div class="tu-empty">此分支沒有節點</div>';
-  return h + '</div>';
+  return h;
 }
-function techUiHtml() { return tuHeadHtml() + tuBodyHtml(); }
+// 時代僅作為頂部參考色帶(階別顏色對照),不參與節點分組
+function tuEraHtml() {
+  var h = '', e;
+  for (e = 1; e <= 5; e++) h += '<span class="tu-ec e' + e + (techEraOpen(e) ? '' : ' off') + '">第' + TU_CN[e] + '時代' + (tuEraName(e) ? '〈' + tuEraName(e) + '〉' : '') + (techEraOpen(e) ? '' : '🔒') + '</span>';
+  return h + '<span class="tu-ecn">色條 = 節點階別(僅供參考)</span>';
+}
+
+function tuNodeClass(id, hs, st) {
+  var n = techNode(id), s = st || techUiState(id), lk = s.k !== 'done' && s.k !== 'mega' && !techEraOpen(n.era);
+  return 'tu-n e' + n.era + ' ' + s.k + (lk ? ' lk' : '') + (tu.focus === id ? ' focus' : '') + (tu.sel === id ? ' sel' : '') + (hs ? (hs.nodes[id] ? ' hl' : ' dim') : '');
+}
+function tuEdgeStatus(e) { return techDone(e.from) ? (techDone(e.to) ? 'done' : 'ready') : 'todo'; }
+function tuEdgeClass(e, hs) { return 'tu-e ' + tuEdgeStatus(e) + (e.or ? ' or' : '') + (hs ? (hs.edges[e.key] ? ' hl' : ' dim') : ''); }
+
+function tuTreeInner(branch, zoom) {
+  var lay = techUiLayout(branch, zoom), Z = lay.Z, hs = tu.sel ? techUiHighlight(tu.sel) : null, h;
+  h = '<svg class="tu-svg" width="' + lay.w + '" height="' + lay.h + '" xmlns="http://www.w3.org/2000/svg">';
+  lay.edges.forEach(function (e) {
+    var a = lay.pos[e.from], b = lay.pos[e.to], x1 = a.x + Z.w, y1 = a.y + Z.h / 2, x2 = b.x, y2 = b.y + Z.h / 2, dx = (x2 - x1) / 2;
+    h += '<g class="' + tuEdgeClass(e, hs) + '" data-e="' + e.key + '"><path d="M' + x1 + ' ' + y1 + 'C' + (x1 + dx) + ' ' + y1 + ',' + (x2 - dx) + ' ' + y2 + ',' + x2 + ' ' + y2 + '"/>' +
+      (e.or ? '<text x="' + Math.round((x1 + x2) / 2) + '" y="' + (Math.round((y1 + y2) / 2) - 3) + '">或</text>' : '') + '</g>';
+  });
+  h += '</svg>';
+  CITY_TECHS.forEach(function (n) {
+    if (n.branch !== branch) return;
+    var p = lay.pos[n.id], st = techUiState(n.id);
+    h += '<div class="tu-nw" style="left:' + p.x + 'px;top:' + p.y + 'px;width:' + Z.w + 'px"><div class="' + tuNodeClass(n.id, hs, st) + '" data-tu="sel" data-id="' + n.id + '" data-node="' + n.id + '" style="height:' + Z.h + 'px">' +
+      '<span class="tu-nm">' + tuEsc(n.name) + '</span><span class="tu-nf"><span class="tu-era">第' + n.era + '階</span><i class="tu-lock">🔒</i><span class="tu-st ' + st.k + '">' + TU_STATE_TXT[st.k] + '</span></span></div>';
+    (lay.ext[n.id] || []).forEach(function (x) {
+      h += '<span class="tu-xb" data-tu="goto" data-id="' + x.id + '" style="height:' + (TU_BADGE_H - 1) + 'px">' + (x.or ? '或 ' : '') + '← ' + tuEsc(techUiBranchName(x.branch)) + '·' + tuEsc(tuNodeName(x.id)) + '</span>';
+    });
+    h += '</div>';
+  });
+  return h;
+}
+function tuBuildTree(force) {
+  var key = tu.branch + ':' + tu.zoom, lay;
+  if (!tu.cvEl || (!force && tu.treeKey === key)) return;
+  lay = techUiLayout(tu.branch, tu.zoom);
+  tu.cvEl.innerHTML = tuTreeInner(tu.branch, tu.zoom);
+  if (tu.cvEl.style) { tu.cvEl.style.width = lay.w + 'px'; tu.cvEl.style.height = lay.h + 'px'; tu.cvEl.style.fontSize = lay.Z.fs + 'px'; }
+  tu.treeKey = key; tu.builds++;
+}
+// 狀態變化只改 class / 文字(不重建節點)
+function tuApply() {
+  var hs = tu.sel ? techUiHighlight(tu.sel) : null, els, i, el, id, st, c, s, t, e, lay;
+  if (!tu.cvEl || !tu.cvEl.querySelectorAll) return;
+  els = tu.cvEl.querySelectorAll('[data-node]');
+  for (i = 0; i < els.length; i++) {
+    el = els[i]; id = el.getAttribute('data-node'); st = techUiState(id); c = tuNodeClass(id, hs, st);
+    if (el.getAttribute('class') !== c) el.setAttribute('class', c);
+    s = el.querySelector ? el.querySelector('.tu-st') : null; t = TU_STATE_TXT[st.k];
+    if (s && s.textContent !== t) { s.textContent = t; s.setAttribute('class', 'tu-st ' + st.k); }
+  }
+  lay = techUiLayout(tu.branch, tu.zoom);
+  els = tu.cvEl.querySelectorAll('[data-e]');
+  for (i = 0; i < els.length; i++) {
+    el = els[i]; id = el.getAttribute('data-e');
+    for (t = 0; t < lay.edges.length; t++) if (lay.edges[t].key === id) { e = lay.edges[t]; break; }
+    if (!e) continue;
+    c = tuEdgeClass(e, hs);
+    if (el.getAttribute('class') !== c) el.setAttribute('class', c);
+  }
+}
+
+function tuDetailHtml() {
+  var n = tu.sel ? techNode(tu.sel) : null, st, h, un, c, pr;
+  if (!n) return '<div class="tu-hint">點選節點看條件、成本與解鎖內容;選取後會高亮它的前置路徑與後繼,其餘淡化。</div>';
+  st = techUiState(n.id); un = techUiUnlockNames(n);
+  h = '<div class="tu-dt"><b>' + tuEsc(n.name) + '</b><span class="tu-era">第' + n.era + '階</span><span class="tu-st ' + st.k + '">' + TU_STATE_TXT[st.k] + '</span><span class="tu-sp"></span><button data-tu="desel">收起</button></div>';
+  if (n.desc) h += '<div class="tu-d">' + tuEsc(n.desc) + '</div>';
+  if (st.k === 'mega') h += '<div class="tu-c">條件:' + tuEsc((n.cost && n.cost.goodsText) || '大工程達成') + '</div><div class="tu-d">里程碑不走研發序列,由大工程完成後記入。</div>';
+  else h += '<div class="tu-c">' + tuEsc(tuCostText(n.id)) + '　時長 ' + tuDurText(techDurationOf(n.id)) + '</div>';
+  if (un.length) h += '<div class="tu-u">解鎖:' + tuEsc(un.join('、')) + '</div>';
+  pr = function (r) { return '<button class="tu-pr ' + (techDone(r) ? 'ok' : 'no') + '" data-tu="goto" data-id="' + r + '">' + (techDone(r) ? '✓ ' : '✗ ') + tuEsc(tuNodeName(r)) + '</button>'; };
+  if (n.req && n.req.length) h += '<div class="tu-pq">前置:' + n.req.map(pr).join('') + (n.reqOr && n.reqOr.length ? ' <b>或</b> ' + n.reqOr.map(pr).join('') : '') + '</div>';
+  if (st.k === 'req') h += '<div class="tu-lk">前置未滿:' + tuEsc(st.miss.join('、')) + (n.reqOr && n.reqOr.length ? '(或 ' + tuEsc(n.reqOr.map(tuNodeName).join('、')) + ')' : '') + '</div>';
+  if (st.k !== 'done' && st.k !== 'mega' && !techEraOpen(n.era)) h += '<div class="tu-lk">🔒 ' + tuEsc(techUiEraText(n.era)) + '</div>';
+  c = '';
+  if (st.k === 'ready') c = '<button data-tu="add" data-id="' + n.id + '">研發</button>';
+  else if (st.k === 'req') c = '<button data-tu="addto" data-id="' + n.id + '">研發到這裡</button>';
+  return h + c;
+}
+function techUiHtml() {
+  return tuHeadHtml() + '<div class="tu-tabs">' + tuTabsHtml() + '</div><div class="tu-es">' + tuEraHtml() + '</div><div class="tu-cv">' + tuTreeInner(tu.branch, tu.zoom) + '</div><div class="tu-det">' + tuDetailHtml() + '</div>';
+}
 
 function tuSig() {
   var s = techState();
-  return [Object.keys(s.done).length, s.cur.map(function (c) { return c.id; }).join(','), s.queue.join(','), techEra(), techLabCount(), tu.branch, tu.confirm, tu.msg, tu.focus].join('|');
+  return [Object.keys(s.done).length, s.cur.map(function (c) { return c.id; }).join(','), s.queue.join(','), techEra(), techLabCount(), tu.branch, tu.zoom, tu.confirm, tu.msg, tu.focus, tu.sel].join('|');
 }
-function tuRender(force) {
+function tuRender(rebuild) {
+  var qs;
   if (!tu.el) return;
-  var sg = tuSig();
-  if (tu.headEl) tu.headEl.innerHTML = tuHeadHtml();
-  if (tu.bodyEl && (force || sg !== tu.sig)) tu.bodyEl.innerHTML = tuBodyHtml();
-  tu.sig = sg;
+  tuSet(tu.topEl, 'top', tuTopHtml()); tuSet(tu.resEl, 'res', tuResHtml()); tuSet(tu.warnEl, 'warn', tuWarnHtml());
+  qs = tuQueueSig();
+  if (tu.qEl && (rebuild || qs !== tu.qSig)) { tu.qSig = qs; tu.qEl.innerHTML = tuQueueHtml(); }
+  tuTickQueue();
+  tuSet(tu.tabsEl, 'tabs', tuTabsHtml()); tuSet(tu.eraEl, 'era', tuEraHtml());
+  tuBuildTree(rebuild === 'tree');
+  tuApply();
+  tuSet(tu.detEl, 'det', tuDetailHtml());
+  tu.sig = tuSig();
+}
+// 每秒:只更新資源數字與倒數;只有序列 / 已研 / 時代 等簽章改變才局部刷新(節點不重建)
+function tuTick() {
+  if (!tu.el) return;
+  tuSet(tu.resEl, 'res', tuResHtml());
+  tuTickQueue();
+  if (tuSig() !== tu.sig) tuRender(false);
+}
+function tuScrollTo(id) {
+  var lay = techUiLayout(tu.branch, tu.zoom), p = lay.pos[id], vw, vh;
+  if (!p || !tu.scEl) return;
+  vw = tu.scEl.clientWidth || 320; vh = tu.scEl.clientHeight || 300;
+  tu.scEl.scrollLeft = Math.max(0, Math.round(p.x - vw / 2 + lay.Z.w / 2));
+  tu.scEl.scrollTop = Math.max(0, Math.round(p.y - vh / 2 + lay.Z.h / 2));
 }
 
 // ───────── 動作 ─────────
 var TU_WHY = { full: '序列已滿', era: '該時代尚未開放', mega: '里程碑不能研發', done: '已經研完', unknown: '找不到該科技', cycle: '科技資料有誤', nostate: '尚未就緒' };
+function tuGoto(id) {
+  var n = techNode(id);
+  if (!n) return;
+  tu.branch = n.branch; tu.sel = id; tu.focus = id;
+  tuRender(false); tuScrollTo(id);
+}
 function techUiAct(act, id) {
   var r, n;
   tu.msg = '';
   if (act === 'close') { techPanelClose(); return; }
-  if (act === 'tab') { tu.branch = id; tu.focus = ''; tuRender(true); return; }
+  if (act === 'tab') { tu.branch = id; tu.focus = ''; tu.sel = ''; tuRender(false); if (tu.scEl) { tu.scEl.scrollLeft = 0; tu.scEl.scrollTop = 0; } return; }
+  if (act === 'sel') { tu.sel = tu.sel === id ? '' : id; tuRender(false); return; }
+  if (act === 'desel') { tu.sel = ''; tuRender(false); return; }
+  if (act === 'goto') { tuGoto(id); return; }
+  if (act === 'zoom') { tu.zoom = (tu.zoom + 1) % TU_ZOOMS.length; tuRender(false); if (tu.sel) tuScrollTo(tu.sel); return; }
+  if (act === 'locate') {
+    id = techUiFirstReady(tu.branch);
+    if (id) tuGoto(id); else { tu.msg = '目前沒有可研的節點(前置未滿或該時代尚未開放)'; tuRender(false); }
+    return;
+  }
   if (act === 'add' || act === 'addto') {
     r = act === 'add' ? techQueueAdd(id) : techQueueAddTo(id);
     n = tuNodeName(id);
@@ -214,30 +437,63 @@ function techUiAct(act, id) {
 function tuOnClick(e) {
   var b = e.target && e.target.closest ? e.target.closest('[data-tu]') : null;
   if (!b) return;
+  if (tu.dragged && Date.now() - tu.dragged < 300) return;   // 滑鼠拖曳捲動結束的那一下不算點擊
   techUiAct(b.getAttribute('data-tu'), b.getAttribute('data-id') || '');
+}
+function tuBindDrag(sc) {   // 桌機滑鼠拖曳捲動;觸控交給原生捲動
+  var d = null;
+  if (!sc.addEventListener || typeof document === 'undefined' || !document.addEventListener) return;
+  sc.addEventListener('mousedown', function (e) { if (e.button) return; d = { x: e.clientX, y: e.clientY, l: sc.scrollLeft, t: sc.scrollTop, m: false }; });
+  document.addEventListener('mousemove', function (e) {
+    if (!d) return;
+    var dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (!d.m && Math.abs(dx) + Math.abs(dy) > 5) d.m = true;
+    if (d.m) { sc.scrollLeft = d.l - dx; sc.scrollTop = d.t - dy; }
+  });
+  document.addEventListener('mouseup', function () { if (d && d.m) tu.dragged = Date.now(); d = null; });
 }
 
 // ───────── 面板 ─────────
-var TU_CSS = '#techTreePanel{position:fixed;left:50%;top:6%;transform:translateX(-50%);width:min(560px,96vw);max-height:88vh;display:flex;flex-direction:column;background:rgba(24,20,14,.97);color:#f1e6cf;border:1px solid #8a6d3b;border-radius:10px;z-index:41;font-size:13px}' +
-  '#techTreePanel[hidden]{display:none}#techTreePanel button{background:#4a3a20;color:#f1e6cf;border:1px solid #8a6d3b;border-radius:6px;padding:4px 8px;margin:2px;font-size:12px}' +
-  '#techTreePanel .tu-head{padding:8px 10px;border-bottom:1px solid #5a4727;max-height:38vh;overflow:auto}#techTreePanel .tu-body{flex:1;overflow:auto;padding:6px 8px;-webkit-overflow-scrolling:touch}' +
-  '.tu-top{display:flex;align-items:center}.tu-sp{flex:1}.tu-res{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0}.tu-warn{color:#ffb4a0;margin:4px 0}.tu-msg{color:#9fe0a0;margin:4px 0}' +
-  '.tu-qh{margin-top:6px;font-weight:bold}.tu-q{display:flex;flex-wrap:wrap;align-items:center;gap:4px;border-top:1px dashed #5a4727;padding:3px 0}.tu-qn{flex:1;min-width:140px}.tu-bar{width:100%;height:5px;background:#3a2f1a;border-radius:3px}.tu-bar i{display:block;height:100%;background:#f0b45a;border-radius:3px}.tu-cf{color:#ffd9a0;width:100%}.tu-empty{opacity:.7;padding:6px 0}' +
-  '.tu-tabs{display:flex;overflow-x:auto;white-space:nowrap;gap:2px;position:sticky;top:0;background:rgba(24,20,14,.97);padding-bottom:4px}.tu-tab.on{background:#8a6d3b!important}.tu-tab small{opacity:.7}' +
-  '.tu-eh{margin:8px 0 2px;color:#f0b45a;font-weight:bold}.tu-n{border:1px solid #5a4727;border-radius:8px;padding:6px 8px;margin:4px 0;background:rgba(255,255,255,.04)}.tu-n.done{opacity:.55}.tu-n.focus{outline:2px solid #f0b45a}' +
-  '.tu-nh{display:flex;align-items:center;gap:6px}.tu-nh b{flex:1}.tu-era{opacity:.7;font-size:11px}.tu-st{font-size:11px;border-radius:8px;padding:0 6px;background:#3a2f1a}.tu-st.ready{background:#2f5a2f}.tu-st.done{background:#2a4a6a}.tu-st.cur,.tu-st.queued{background:#6a5a1a}' +
-  '.tu-d,.tu-c,.tu-u,.tu-lk{margin-top:2px;opacity:.9}.tu-lk{color:#ffb4a0}.tu-u{color:#cfe3ff}';
+var TU_CSS = '#techTreePanel{position:fixed;left:50%;top:3%;transform:translateX(-50%);width:min(1000px,98vw);height:94vh;height:94dvh;display:flex;flex-direction:column;background:rgba(24,20,14,.97);color:#f1e6cf;border:1px solid #8a6d3b;border-radius:10px;z-index:41;font-size:13px}' +
+  '#techTreePanel[hidden]{display:none}#techTreePanel button{background:#4a3a20;color:#f1e6cf;border:1px solid #8a6d3b;border-radius:6px;padding:4px 8px;margin:2px;font-size:12px;min-height:34px}' +
+  '#techTreePanel .tu-topbar{display:flex;align-items:center;gap:2px;padding:6px 8px;border-bottom:1px solid #5a4727;flex:none}#techTreePanel .tu-x{min-width:44px;min-height:44px;font-size:16px}' +
+  '#techTreePanel .tu-head{padding:4px 10px;border-bottom:1px solid #5a4727;max-height:24vh;overflow:auto;flex:none;-webkit-overflow-scrolling:touch}' +
+  '#techTreePanel .tu-body{flex:1;min-height:0;display:flex;flex-direction:column}' +
+  '#techTreePanel .tu-sc{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-x pan-y;position:relative;cursor:grab}' +
+  '#techTreePanel .tu-det{flex:none;max-height:34vh;overflow:auto;border-top:1px solid #8a6d3b;padding:6px 10px;background:rgba(40,32,20,.98)}' +
+  '.tu-sp{flex:1}.tu-res{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0}.tu-warn{color:#ffb4a0;margin:2px 0}.tu-msg{color:#9fe0a0;margin:2px 0}' +
+  '.tu-qh{margin-top:4px;font-weight:bold}.tu-q{display:flex;flex-wrap:wrap;align-items:center;gap:4px;border-top:1px dashed #5a4727;padding:2px 0}.tu-qn{flex:1;min-width:140px}.tu-bar{width:100%;height:5px;background:#3a2f1a;border-radius:3px}.tu-bar i{display:block;height:100%;background:#f0b45a;border-radius:3px}.tu-cf{color:#ffd9a0;width:100%}.tu-empty{opacity:.7;padding:4px 0}' +
+  '.tu-tabs{display:flex;overflow-x:auto;white-space:nowrap;gap:2px;padding:4px 8px 2px;flex:none}.tu-tab.on{background:#8a6d3b!important}.tu-tab small{opacity:.7}' +
+  '.tu-es{display:flex;overflow-x:auto;white-space:nowrap;gap:4px;padding:2px 8px 4px;flex:none;align-items:center;font-size:11px}.tu-ec{padding:1px 8px;border-radius:9px;color:#111;opacity:.9}.tu-ec.off{opacity:.45}.tu-ecn{opacity:.55;margin-left:4px}' +
+  '.tu-n.e1{--ec:#6aa86a}.tu-n.e2{--ec:#5aa0c8}.tu-n.e3{--ec:#c8a24a}.tu-n.e4{--ec:#c8704a}.tu-n.e5{--ec:#a86ac8}' +
+  '.tu-ec.e1{background:#6aa86a}.tu-ec.e2{background:#5aa0c8}.tu-ec.e3{background:#c8a24a}.tu-ec.e4{background:#c8704a}.tu-ec.e5{background:#a86ac8}' +
+  '.tu-cv{position:relative}.tu-svg{position:absolute;left:0;top:0;pointer-events:none}.tu-nw{position:absolute}' +
+  '.tu-n{box-sizing:border-box;border:1px solid #5a4727;border-left:5px solid var(--ec,#888);border-radius:8px;padding:3px 5px;background:#2b2418;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;cursor:pointer;min-height:44px}' +
+  '.tu-nm{font-weight:bold;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.tu-nf{display:flex;align-items:center;gap:4px;font-size:.85em}.tu-era{opacity:.7}.tu-lock{display:none;font-style:normal}.tu-n.lk .tu-lock{display:inline}' +
+  '.tu-st{font-size:.85em;border-radius:8px;padding:0 6px;background:#3a2f1a}.tu-st.ready{background:#2f5a2f}.tu-st.done{background:#2a4a6a}.tu-st.cur,.tu-st.queued{background:#6a5a1a}.tu-st.mega{background:#5a3a5a}.tu-st.era{background:#444}' +
+  '.tu-n.ready{background-color:#294a29;border-color:#7fd37f}.tu-n.done{background-color:#1f3550}.tu-n.cur,.tu-n.queued{background-color:#52461a;border-color:#f0b45a}.tu-n.req{background-color:#2b2418;opacity:.85}.tu-n.era{background-color:#2a2a2a;opacity:.75}.tu-n.mega{background-color:#4a2f4a;border-color:#c89ac8}' +
+  '.tu-n.focus{outline:2px solid #f0b45a}.tu-n.sel{outline:3px solid #fff}.tu-n.dim{opacity:.25}.tu-n.hl{opacity:1}' +
+  '.tu-xb{display:block;box-sizing:border-box;width:100%;font-size:10px;line-height:16px;color:#cfe3ff;background:#2a3a55;border-radius:8px;margin-top:1px;padding:0 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}' +
+  '.tu-e path{fill:none;stroke-width:2}.tu-e text{fill:#e8c6ff;font-size:11px;text-anchor:middle}.tu-e.done path{stroke:#f0b45a}.tu-e.ready path{stroke:#7fd37f}.tu-e.todo path{stroke:#6c675c;stroke-dasharray:5 4}.tu-e.or path{stroke-dasharray:7 3}.tu-e.or.todo path{stroke:#9a7ab0}.tu-e.dim{opacity:.1}.tu-e.hl path{stroke-width:3}' +
+  '.tu-dt{display:flex;align-items:center;gap:6px}.tu-d,.tu-c,.tu-u,.tu-lk,.tu-pq,.tu-hint{margin-top:3px;opacity:.92}.tu-hint{opacity:.7}.tu-lk{color:#ffb4a0}.tu-u{color:#cfe3ff}#techTreePanel .tu-pr.ok{border-color:#7fd37f}#techTreePanel .tu-pr.no{border-color:#c0705a}';
 function tuEnsure() {
-  var st, el;
+  var st, el, mk;
   if (tu.el) return tu.el;
   if (typeof document === 'undefined' || !document.createElement) return null;
+  mk = function (cls) { var d = document.createElement('div'); d.className = cls; return d; };
   st = document.createElement('style'); st.id = 'techuiCss'; st.textContent = TU_CSS;
   if (document.head && document.head.appendChild) document.head.appendChild(st);
   el = document.createElement('div'); el.id = 'techTreePanel'; el.hidden = true;
-  tu.headEl = document.createElement('div'); tu.headEl.className = 'tu-head';
-  tu.bodyEl = document.createElement('div'); tu.bodyEl.className = 'tu-body';
-  el.appendChild(tu.headEl); el.appendChild(tu.bodyEl);
+  tu.topEl = mk('tu-topbar'); tu.headEl = mk('tu-head');
+  tu.resEl = document.createElement('div'); tu.warnEl = document.createElement('div'); tu.qEl = document.createElement('div');
+  tu.headEl.appendChild(tu.resEl); tu.headEl.appendChild(tu.warnEl); tu.headEl.appendChild(tu.qEl);
+  tu.bodyEl = mk('tu-body'); tu.tabsEl = mk('tu-tabs'); tu.eraEl = mk('tu-es'); tu.scEl = mk('tu-sc'); tu.cvEl = mk('tu-cv');
+  tu.scEl.appendChild(tu.cvEl);
+  tu.bodyEl.appendChild(tu.tabsEl); tu.bodyEl.appendChild(tu.eraEl); tu.bodyEl.appendChild(tu.scEl);
+  tu.detEl = mk('tu-det');
+  el.appendChild(tu.topEl); el.appendChild(tu.headEl); el.appendChild(tu.bodyEl); el.appendChild(tu.detEl);
   el.addEventListener('click', tuOnClick);
+  tuBindDrag(tu.scEl);
   if (document.body && document.body.appendChild) document.body.appendChild(el);
   tu.el = el;
   if (typeof panelRegister === 'function') panelRegister('techtree', { kind: 'big', el: el, close: tuHide });
@@ -253,16 +509,13 @@ function techPanelOpen(nodeId) {
   var el = tuEnsure(), n = nodeId ? techNode(nodeId) : null;
   if (typeof CITY_TECHS === 'undefined' || typeof techState !== 'function') return false;
   tu.msg = ''; tu.confirm = '';
-  if (n) { tu.branch = n.branch; tu.focus = nodeId; } else tu.focus = '';
+  if (n) { tu.branch = n.branch; tu.focus = nodeId; tu.sel = nodeId; } else tu.focus = '';
   if (el && typeof panelOpen === 'function') panelOpen('techtree');
   tu.open = true;
   if (el) el.hidden = false;
-  tuRender(true);
-  if (n && tu.bodyEl && tu.bodyEl.querySelector) {
-    var c = tu.bodyEl.querySelector('[data-node="' + nodeId + '"]');
-    if (c && c.scrollIntoView) { try { c.scrollIntoView({ block: 'center' }); } catch (e) { /* 略過 */ } }
-  }
-  if (!tu.timer && typeof setInterval === 'function') tu.timer = setInterval(function () { if (tu.open) tuRender(false); }, 1000);
+  tuRender(false);
+  if (n) tuScrollTo(nodeId);
+  if (!tu.timer && typeof setInterval === 'function') tu.timer = setInterval(function () { if (tu.open) tuTick(); }, 1000);
   return true;
 }
 function techPanelClose() {

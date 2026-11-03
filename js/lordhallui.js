@@ -57,6 +57,7 @@ function lordhallOverview() {
 // 派工:建築清單與人才
 function lordhallTalents() {
   var c = (typeof world !== 'undefined' && world) ? world.city : null;
+  if (typeof cardsSyncTalents === 'function' && cardsSyncTalents()) c = world.city;   // 名冊(cards.js)優先;名冊空時沿用占位 talents
   return (c && Array.isArray(c.talents)) ? c.talents : [];
 }
 function lordhallJobSites() {

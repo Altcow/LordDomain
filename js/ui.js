@@ -1714,6 +1714,7 @@ function tapObjectAt(sx, sy) {
   if (!n) return;
   const o = world.objects[n - 1];
   if (typeof lordhallTap === 'function' && lordhallTap(o)) return;
+  if (typeof cardsUiTap === 'function' && cardsUiTap(o)) return;
   if (o.type === LAB_TYPE) {
     toggleTechPanel(true);
     return;
