@@ -633,3 +633,14 @@ function sfxwarDeploy(unitId, count, gx, gy) {
 if (typeof setInterval === 'function') {
   SFXW.timer = setInterval(sfxwTick, SFXW_STEP_MS);
 }
+
+// 切到背景:停掉戰場音效計時器;回前景恢復
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      if (SFXW.timer) { clearInterval(SFXW.timer); SFXW.timer = null; }
+    } else if (!SFXW.timer && typeof setInterval === 'function') {
+      SFXW.timer = setInterval(sfxwTick, SFXW_STEP_MS);
+    }
+  }, false);
+}

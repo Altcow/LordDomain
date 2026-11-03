@@ -952,3 +952,16 @@ function ambWatch() {
 }
 
 if (typeof setInterval === 'function') AMB.watch = setInterval(ambWatch, 1000);
+
+// 切到背景:停掉輪詢與監看計時器;回前景恢復(手動停止 AMB.manual 時不自動重啟)
+function ambOnVisibility() {
+  if (typeof document === 'undefined') return;
+  if (document.hidden) {
+    if (AMB.timer != null) { clearInterval(AMB.timer); AMB.timer = null; }
+    if (AMB.watch != null) { clearInterval(AMB.watch); AMB.watch = null; }
+  } else {
+    if (!AMB.manual && AMB.timer == null && typeof AU === 'object' && AU.ready) ambStart();
+    if (AMB.watch == null && typeof setInterval === 'function') AMB.watch = setInterval(ambWatch, 1000);
+  }
+}
+if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', ambOnVisibility, false);

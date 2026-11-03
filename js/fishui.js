@@ -1,7 +1,7 @@
 // fishui.js — 釣魚覆蓋層(F0 + 彩頭 + 直橫版):頂列 🎣 鈕、全螢幕場景、指標輸入、安全區按鈕(↩ 📖)、左上 HUD、面板(開始 / 結算 / 清單 / 排行榜)、進出流程。內部函式皆以 fu 開頭。
 var fuLayer = null, fuStage = null, fuCv = null, fuCtx = null, fuMain = null, fuDex = null, fuDexRows = [], fuDexTitles = null,
   fuTop = null, fuHud = null, fuHudEls = null, fuHudKey = '', fuSheet = null, fuSheetBody = null, fuSheetKind = '', fuSel = null,
-  fuRaf = 0, fuLast = 0, fuPaused = false, fuDrag = null, fuLabel = '', fuTopTimer = 0, fuResShown = false, fuBoardFrom = 'start',
+  fuRaf = 0, fuLast = 0, fuGate = null, fuPaused = false, fuDrag = null, fuLabel = '', fuTopTimer = 0, fuResShown = false, fuBoardFrom = 'start',
   fuView = null, fuExitB = null, fuDexB = null, fuAngL = null, fuAngR = null, fuHint = null, fuProbe = null;
 
 // 按鈕的停用樣式:只換 class(.fu-dis 灰階半透明),位置與尺寸永遠不動。
@@ -579,9 +579,12 @@ function fuFrame(now) {
   var dt;
   fuRaf = 0;
   if (!fuLayer || fuPaused) return;
-  dt = Math.min(1 / 30, Math.max(0, (now - fuLast) / 1000));
+  // 幀率上限(perf.js):跳過的 rAF 不更新 fuLast,下一個繪製幀把累積時間分段推進(每段 ≤ 1/30 s)
+  if (typeof perfGateOk === 'function' && !perfGateOk(fuGate || (fuGate = perfGateNew()), now)) { fuRaf = requestAnimationFrame(fuFrame); return; }
+  dt = Math.min(0.1, Math.max(0, (now - fuLast) / 1000));
   fuLast = now;
-  fishStep(dt);
+  const fuN = Math.max(1, Math.ceil(dt * 30 - 0.15));
+  for (let fuI = 0; fuI < fuN; fuI++) fishStep(dt / fuN);
   fishDrawFrame(fuCtx, fs.t);
   fuSyncUI();
   fuSyncHud();

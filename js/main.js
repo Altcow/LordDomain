@@ -2,6 +2,7 @@ let canvas, ctx;
 let lastFrameMs = 0;
 let resBarTimer = 0;
 let saveTimer = 0;
+let drawGate = null; // 幀率上限閘(perf.js);只管 draw,模擬 / 資源 tick 每個 rAF 照跑
 
 // 城市等級存檔與舊存檔遷移(PLAN_PROGRESSION §8.2):必須在 loadWorld / saveWorld 之前
 function progBoot() {
@@ -73,7 +74,8 @@ function frame(nowMs) {
   }
   if (typeof battleUiTick === 'function') battleUiTick(dt);
   if (typeof game !== 'undefined' && game.mode === 'fishing') { requestAnimationFrame(frame); return; }
-  if (!pano.open) draw(ctx, nowMs / 1000);
+  // 繪製幀率上限(預設 30 fps,設定可選 60;省電固定 30);未達間隔的 rAF 只跑上面的模擬 / tick,不畫
+  if (!pano.open && (typeof perfGateOk !== 'function' || perfGateOk(drawGate || (drawGate = perfGateNew()), nowMs))) draw(ctx, nowMs / 1000);
   requestAnimationFrame(frame);
 }
 

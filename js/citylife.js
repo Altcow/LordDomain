@@ -19,8 +19,14 @@ const LIFE = {
   lastT: null, clock: 0, sigT: 0, spawnT: 0.5, chatT: 0, sprT: 0, statT: 0, tod: 'noon',
   bfsBudget: 1, dots: 0, pairCmp: 0, chatHead: null, chatNext: null, tradeAt: new Map(),
   portT: 0, portTarget: 0, xT: 0, xSeed: 6, xCd: {}, xTarget: null, dockRes: new Map(), spotRes: new Set(), lowEnd: undefined, drawAcc: 0, wallT: -1, fps: 0, perfLog: false, sprBytes: 0, specs: {}, variantIds: {},
-  perf: { ms: 0 }, card: null, cardFor: null
+  perf: { ms: 0 }, card: null, cardFor: null, psFlip: false, psAcc: 0
 };
+
+// 省電模式(perf.js isPowerSave)時密度降一級,只在運算時換算,不改使用者存的 LIFE.density
+const LIFE_PS_STEP = { off: 'off', low: 'low', mid: 'low', high: 'mid', crowd: 'high' };
+function lifeEffDensity() {
+  return (typeof isPowerSave === 'function' && isPowerSave()) ? (LIFE_PS_STEP[LIFE.density] || LIFE.density) : LIFE.density;
+}
 
 function lifeNow() {
   return (typeof performance !== 'undefined') ? performance.now() : Date.now();
@@ -540,7 +546,7 @@ function lifeSpawnPatrol() {
 
 // 目標人數 = 密度基礎 × 時段 × 季節,再受道路格數(÷3)與目的地數量上限約束;自適應降載只乘在上面,最低 12 人
 function lifeTarget() {
-  const base = LIFE_DENSITY[LIFE.density] || 0;
+  const base = LIFE_DENSITY[lifeEffDensity()] || 0;
   const R = LIFE.road;
   if (!LIFE.on || !base || !R) return 0;
   const seasonMul = lifeSeason() === 'winter' ? LIFE_WINTER_MUL : 1;
@@ -575,7 +581,7 @@ function lifeShed(k) {
 
 // 港口苦力目標數:有門格的港口設施數 × per(進位),受 max 與密度(low 12→2、mid 60→12)約束,再乘時段與季節倍率;沒有就 0
 function lifePortTarget() {
-  const R = LIFE.road, base = LIFE_DENSITY[LIFE.density] || 0;
+  const R = LIFE.road, base = LIFE_DENSITY[lifeEffDensity()] || 0;
   if (!LIFE.on || !base || !R || !R.port.length) return 0;
   const cap = Math.min(LIFE_PORT.max, Math.max(2, Math.round(base / 5)));
   const raw = Math.min(cap, Math.ceil(R.port.length * LIFE_PORT.per));
@@ -938,11 +944,18 @@ function lifeStats() {
 function lifeFrame(time) {
   const t0 = lifeNow();
   if (!LIFE.inited) lifeInit();
-  const dt = LIFE.lastT === null ? 0 : Math.min(0.1, Math.max(0, time - LIFE.lastT));
+  let dt = LIFE.lastT === null ? 0 : Math.min(0.1, Math.max(0, time - LIFE.lastT));
   LIFE.lastT = time;
   LIFE.placing = typeof ui !== 'undefined' && ui.tool !== null && ui.tool !== undefined;
   LIFE.dots = 0;
   LIFE.bfsBudget = 1;
+  // 省電模式:居民邏輯與走路動畫每 2 幀更新一次(中間幀沿用上次位置與分桶,只重畫),dt 累積補上
+  if (typeof isPowerSave === 'function' && isPowerSave() && LIFE.active) {
+    LIFE.psFlip = !LIFE.psFlip;
+    if (LIFE.psFlip) { LIFE.psAcc += dt; return; }
+    dt = Math.min(0.2, dt + LIFE.psAcc);
+    LIFE.psAcc = 0;
+  } else LIFE.psAcc = 0;
   if (!lifeActive()) {
     LIFE.active = false;
     LIFE.drawAcc = 0;

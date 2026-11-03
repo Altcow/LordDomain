@@ -1,4 +1,4 @@
-const VERSION = 'v25';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v26';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const PRECACHE = [
@@ -25,6 +25,7 @@ const PRECACHE = [
   './js/path.js',
   './js/hazards.js',
   './js/td.js',
+  './js/perf.js',
   './js/art.js',
   './js/art_objects.js',
   './js/art_units.js',

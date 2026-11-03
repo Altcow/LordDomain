@@ -187,7 +187,7 @@ function lifeXRoadOk() {
 
 // 各類目標人數 = min(上限, 原始需求) × 密度倍率 × 自適應 ×(低階機 0.5)× 時段 / 季節;至少 1(有條件時)
 function lifeXTargets(cnt) {
-  const R = LIFE.road, X = R && R.x, d = LIFE.density, mul = LIFE_XMUL[d] || 0;
+  const R = LIFE.road, X = R && R.x, d = lifeEffDensity(), mul = LIFE_XMUL[d] || 0;
   const tg = { peddler: 0, wagon: 0, rider: 0, guard_post: 0, guard_patrol: 0, hawker: 0, onlooker: 0 };
   if (!LIFE.on || mul <= 0 || !X) return tg;
   const eff = mul * Math.max(0.35, LIFE.adj) * (lifeLowEnd() ? 0.5 : 1);
@@ -280,7 +280,7 @@ function lifeXSpawnWagon(mid) {
 // 車停穩後,偶有車夫 / 苦力站在車旁(停靠期間才在,車一走就淡出)
 function lifeTrafficParked(n) {
   if (n.role !== 'wagon' || Math.random() > LIFE_PARK.handChance) return;
-  const mul = LIFE_XMUL[LIFE.density] || 0;
+  const mul = LIFE_XMUL[lifeEffDensity()] || 0;
   let hands = 0;
   for (let i = 0; i < LIFE.npcs.length; i++) if (LIFE.npcs[i].role === 'hand' && !LIFE.npcs[i].dead) hands++;
   if (hands >= Math.max(1, Math.round(LIFE_XCAP.hand * mul))) return;
@@ -496,7 +496,7 @@ function lifeTrafficTick(dt) {
   }
   const tg = lifeXTargets(cnt);
   LIFE.xTarget = tg;
-  const allMax = Math.floor((LIFE_ALL_MAX[LIFE.density] || 0) * (lifeLowEnd() ? 0.5 : 1));
+  const allMax = Math.floor((LIFE_ALL_MAX[lifeEffDensity()] || 0) * (lifeLowEnd() ? 0.5 : 1));
   let budget = allMax - (LIFE.live + port + ext);
   if (budget < 0) {
     // 全體超過上限:依優先序反向縮減街景角色

@@ -14,6 +14,9 @@ const BG_MIN_DWELL = 8;
 const BG_FADE = 1.5;
 const BG_FADE_HARD = 0.6;
 const BG_MAX_VOICES = 8;
+const BG_MAX_VOICES_LITE = 4;
+// 省電模式(perf.js isPowerSave)避開的重音色曲目(預渲染樣本多、聲部密);只在選曲時換掉,不改玩家存的選曲設定
+const BG_HEAVY = { pozhen: 1, tieqi: 1, gongcheng: 1, fenghuo: 1, juezhan: 1, yexi: 1 };
 const BG_PHRASE = 32;
 const BG_TRACK_GAIN = 0.8;
 const BG_WARM_MS = 6;
@@ -688,7 +691,8 @@ function bgVoices(t) {
 // 單發音:先過聲部上限(旋律留一格給鼓),再建 BufferSource + 包絡增益
 function bgPlay(tr, t, inst, midi, vel, dur) {
   const melodic = BG_PITCHED[inst] === 1;
-  if (bgVoices(t) >= (melodic ? BG_MAX_VOICES - 1 : BG_MAX_VOICES)) {
+  const maxV = bgMaxVoices();
+  if (bgVoices(t) >= (melodic ? maxV - 1 : maxV)) {
     BG.stats.dropped[inst] = (BG.stats.dropped[inst] || 0) + 1;
     return false;
   }
@@ -870,19 +874,37 @@ function bgBossId() {
   }
 }
 
+function bgLite() {
+  return typeof isPowerSave === 'function' && isPowerSave();
+}
+
+function bgMaxVoices() {
+  return bgLite() ? BG_MAX_VOICES_LITE : BG_MAX_VOICES;
+}
+
+// 省電模式下把重音色曲目換成該群組的 classic(沒有就第一首非重音色曲)
+function bgLiteTrack(group, id) {
+  if (!bgLite() || !BG_HEAVY[id]) return id;
+  if (bgTrackById(group, 'classic')) return 'classic';
+  const list = BG_TRACKS[group] || [];
+  for (let i = 0; i < list.length; i++) if (!BG_HEAVY[list[i].id]) return list[i].id;
+  return id;
+}
+
 // 該群組這次進場景要播哪一首:指定曲目 > 首領營預設 > 自動輪播(依序往下一首,不會連兩次同一首)
 function bgChooseTrack(group) {
   const list = BG_TRACKS[group];
   if (!list) return null;
   const pick = bgmPickGet(group);
-  if (pick !== 'auto') return pick;
+  if (pick !== 'auto') return bgLiteTrack(group, pick);
   if (group === 'battle') {
     const boss = bgBossId();
-    if (boss && BG_BOSS_IDS[boss] && bgTrackById(group, 'juezhan')) return 'juezhan';
+    if (boss && BG_BOSS_IDS[boss] && bgTrackById(group, 'juezhan')) return bgLiteTrack(group, 'juezhan');
   }
   if (!BG.rot) BG.rot = bgLoadJson(BG_ROT_KEY);
   const last = typeof BG.rot[group] === 'number' ? BG.rot[group] : -1;
-  const idx = (((last + 1) % list.length) + list.length) % list.length;
+  let idx = (((last + 1) % list.length) + list.length) % list.length;
+  if (bgLite()) for (let k = 0; k < list.length && BG_HEAVY[list[idx].id]; k++) idx = (idx + 1) % list.length;
   BG.rot[group] = idx;
   bgSaveJson(BG_ROT_KEY, BG.rot);
   return list[idx].id;
@@ -1317,6 +1339,23 @@ function bgmStats() {
     buffers: Object.keys(BG.bufs).length
   };
 }
+
+// 切到背景:停掉 100 ms 排程與 500 ms 輪詢計時器(AudioContext 的 suspend 由 audio.js 負責);回前景再恢復
+function bgmOnVisibility() {
+  if (typeof document === 'undefined') return;
+  if (document.hidden) {
+    if (BG.pollTimer) clearInterval(BG.pollTimer);
+    if (BG.schedTimer) clearInterval(BG.schedTimer);
+    BG.pollTimer = null;
+    BG.schedTimer = null;
+    BG.pollMs = 0;
+  } else if (BG.want) {
+    if (!BG.schedTimer && typeof setInterval === 'function') BG.schedTimer = setInterval(bgmTick, BG_TICK_MS);
+    bgSetPollMs(BG_WAIT_MS);
+    bgmPoll();
+  }
+}
+if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', bgmOnVisibility, false);
 
 // 載入即啟動等待:音訊解鎖(第一次觸控)後,輪詢會自動開始播放
 bgmStart();

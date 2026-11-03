@@ -318,6 +318,18 @@ function stDisplaySec() {
       stRender();
     })));
   }
+  if (typeof perfSetFps === 'function') {
+    const ps = isPowerSave();
+    nodes.push(stRow('畫面幀率', stSeg([[30, '30'], [60, '60']], ps ? 30 : perfGetFps(), function (v) {
+      perfSetFps(v);
+      stRender();
+    })));
+    nodes.push(stRow('省電模式(較不順但較不燙)', stSwitch(ps, function (v) {
+      perfSetPowerSave(v);
+      stRender();
+    })));
+    nodes.push(stEl('p', 'st-hint', '幀率不影響畫質(清晰度、解析度),只影響動作順不順:30 在拖曳地圖時略不如 60 流暢,但手機比較不燙。省電模式固定 30、居民少一級且動作較稀、水面靜止、背景音樂較簡單。'));
+  }
   if (typeof uiSetMode === 'function') {
     const curMode = typeof uiGetMode === 'function' ? uiGetMode() : 'normal';
     nodes.push(stRow('介面模式', stSeg([['normal', '正常'], ['compact', '精簡']].concat(isUnlocked('feature', 'photo') ? [['photo', '拍照']] : []), curMode, function (v) {

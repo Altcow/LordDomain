@@ -1143,10 +1143,35 @@ function artWallConn(o) {
   return s;
 }
 
+// sprite 快取鍵含 seed:逐格 seed 會讓同種物件每格各占一張圖(Lv25 全城 834 張、超過 48MB 上限而每幀重建)。
+// 改為「每種物件的外觀變化數」資料表;未列 = 1 種(seed 固定 0,快取鍵不含格位);大量重複者列 2~4 種。鍵為 ART 定義名(artTypeOf)。
+var ART_SEED_VARIANTS = {
+  // 4 種:民房 / 住宅類,以及全城動輒上百件的大宗裝飾
+  house: 4, hut_ruin: 4, hut_mud: 4, hut_plank: 4, hut_collapsed: 4, shack_lean: 4, cave_dwelling: 4, bamboo_house: 4, house_tile: 4, yard_poor: 4,
+  tree_willow: 4, tree_cypress: 4, tree_pine: 4, haystack: 4, deco_rocks: 4, rocks: 4,
+  // 2 種:數量多但單件不顯眼(其餘樹種、灌木、籬笆、牆、田地、地攤、水草等)
+  tree: 2, tree_mulberry: 2, tree_peach: 2, tree_maple: 2, tree_sakura: 2, tree_dead: 2, bush: 2, deco_bush: 2, bamboo: 2, deco_bamboo: 2,
+  fence: 2, fence_wood: 2, fence_bamboo: 2, ranch_fence: 2, fence_broken: 2, wall_courtyard: 2, wallseg: 2, wall_ruin: 2,
+  field: 2, field_millet: 2, field_sprout: 2, field_wheat: 2, vegetable_plot: 2, granary_round: 2, grain_sacks: 2, reeds: 2, lotus: 2,
+  flower_bed: 2, woodpile: 2, junk_pile: 2, potted_plant: 2,
+  ground_veg: 2, ground_sandal: 2, ground_goods: 2, ground_bamboo: 2, ground_pottery: 2, ground_cloth: 2, ground_iron: 2, ground_old: 2
+};
+var ART_SEED_TAB = [1, 2, 3, 4];
+var ART_SEED_Q = true; // false = 回到逐格 seed(除錯 / 回退)
+function artSeedVariants(t) {
+  var n = ART_SEED_VARIANTS[t];
+  return n > 0 ? n : 1;
+}
+function artSeedFor(t, seed) {
+  if (!ART_SEED_Q) return seed;
+  var n = artSeedVariants(t);
+  return n <= 1 ? 0 : ART_SEED_TAB[(seed >>> 9) % n];
+}
+
 function artVariant(o) {
   var seed = typeof cellHash === 'function' ? cellHash(o.x, o.y) : ((o.x * 73856093) ^ (o.y * 19349663)) >>> 0;
   var season = (typeof currentSeason !== 'undefined' && currentSeason) ? currentSeason : 'spring';
-  var v = { season: season, tod: artTodKey(), seed: seed, level: o.level || 0, skin: '' };
+  var v = { season: season, tod: artTodKey(), seed: artSeedFor(artTypeOf(o), seed), level: o.level || 0, skin: '' };
   if (o.type === 'hospital') v.skin = 'herb';
   if (o.type === 'wall') v.skin = artWallConn(o);
   if (o.type === 'tree') v.kind = ART_TREE_KINDS[seed % ART_TREE_KINDS.length];

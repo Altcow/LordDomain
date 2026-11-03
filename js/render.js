@@ -563,8 +563,10 @@ function drawTile(ctx, x, y, time) {
     ctx.stroke();
   }
 
-  if (t === T_RIVER) drawRiver(ctx, x, y, h, time);
-  else if (t === T_LAKE) drawLake(ctx, x, y, h, time);
+  // 省電模式:水面改為靜態(略過河流流線的 clip + 描邊與湖面閃光,這兩者是水格最貴的部分)
+  const still = wet && typeof isPowerSave === 'function' && isPowerSave();
+  if (t === T_RIVER) { if (!still) drawRiver(ctx, x, y, h, time); }
+  else if (t === T_LAKE) { if (!still) drawLake(ctx, x, y, h, time); }
   else if (t >= T_SAND && t <= T_SNOW && view.zoom >= G2_DETAIL_ZOOM) drawGround2(ctx, x, y, h, t);
 }
 

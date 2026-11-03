@@ -63,7 +63,7 @@ var PU_CSS = '' +
 
 var puLayer = null, puCv = null, puCtx = null, puView = null, puPanelEl = null, puBackEl = null, puGearEl = null, puBalEl = null,
   puTabEls = [], puDockEl = null, puCardEl = null, puModalEl = null, puMsgEl = null, puStickEl = null, puPlateEl = null,
-  puFlashEl = null, puProbe = null, puRaf = 0, puLast = 0, puT = 0, puPaused = false, puTab = 'climb', puSub = 'brew',
+  puFlashEl = null, puProbe = null, puRaf = 0, puLast = 0, puGate = null, puT = 0, puPaused = false, puTab = 'climb', puSub = 'brew',
   puSel = null, puDetail = null, puAnim = null, puFx = null, puState = 'idle', puDexCvs = [], puDetCtx = null, puDetId = '',
   puHoldT = 0, puHoldI = 0, puHolding = false, puHidden = [], puLastGain = 0, puDockKey = '', puBalTxt = '', puDpr = 1,
   puConvInfo = null, puMsgUntil = 0, puFlashUntil = 0, puDetCv = null, puStyled = false, puTopTimer = 0;
@@ -1443,7 +1443,9 @@ function puFrame(now) {
   var dt;
   puRaf = 0;
   if (!puLayer || puPaused) return;
-  dt = Math.min(1 / 30, Math.max(0, (now - puLast) / 1000));
+  // 幀率上限(perf.js):跳過的 rAF 不更新 puLast,下一個繪製幀一次補上累積時間
+  if (typeof perfGateOk === 'function' && !perfGateOk(puGate || (puGate = perfGateNew()), now)) { puRaf = requestAnimationFrame(puFrame); return; }
+  dt = Math.min(0.05, Math.max(0, (now - puLast) / 1000));
   puLast = now;
   puT += dt;
   puAnimStep(dt);

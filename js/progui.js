@@ -497,6 +497,7 @@ function initProgUI() {
 // 每秒一次:偵測新手教學進度(progFtueCheck)、完成時 toast、全部完成後計時收起;晶片與(開啟時)抽屜跟著變化。
 function progUiTick() {
   if (!pui.inited) return;
+  if (typeof document !== 'undefined' && document.hidden) return;
   if (typeof progNeedsMigrate === 'function' && progNeedsMigrate()) return;
   puiFtueWatch();
   progUiRefresh();

@@ -252,6 +252,7 @@ function uiSideAct(key) {
 
 // 邊欄按鈕跟隨原按鈕的隱藏與狀態(定時同步;行為仍由原按鈕負責)
 function syncSideBar() {
+  if (document.hidden) return;
   syncFeatureGate();
   editSyncUi();
   const side = document.getElementById('sideBar');
