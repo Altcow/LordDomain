@@ -6,17 +6,38 @@
 // 對齊:圖中建築地基「最下方的角」(anchor,圖寬高比例)對齊該物件佔地 fw×fd 的地基最下角 ((fw-fd)*32, (fw+fd)*16);
 //   縮放 = (fw+fd)*32 / (圖寬 * base) × scale(base = 圖中地基寬佔整張圖寬的估算比例);dx、dy 為世界像素微調。
 // 快取:沿用 ART.cache(key 以 'ext|' 開頭,含 side / 佔地 / tod / res),受 48MB 上限與 res 分級管理。時段乘色沿用 ART.TOD[tod].mul;季節不上色。
-// 全域名稱:EXT_SPRITES extSpriteGet extSpriteLayout extSpritesOn extSpritesSetOn extSpriteState。外部全域一律 typeof 守衛。ES2017;不用 ?. ??
+// 全域名稱:EXT_SPRITES EXT_SPRITES_TUNE extSpriteGet extSpriteLayout extSpritesOn extSpritesSetOn extSpriteState。外部全域一律 typeof 守衛。ES2017;不用 ?. ??
 var EXT_SPRITES_KEY = 'lorddomain.extsprites';
-// anchor = 地基最下角在圖中的位置(圖寬高比例,初值為目測估算);base = 圖中地基寬 / 圖寬(估算);scale / dx / dy 使用者實機回報後微調
-var EXT_SPRITES = {
-  wanghuo_lou: { L: 'assets/buildings/wanghuo_lou_L.webp', anchor: { x: 0.45, y: 0.93 }, base: 0.62, scale: 1, dx: 0, dy: 0 },
-  house_tile:  { L: 'assets/buildings/house_tile_L.webp',  anchor: { x: 0.62, y: 0.84 }, base: 0.86, scale: 1, dx: 0, dy: 0 },
-  ting_she:    { L: 'assets/buildings/ting_she_L.webp',    anchor: { x: 0.45, y: 0.93 }, base: 0.80, scale: 1, dx: 0, dy: 0 },
-  post_station: { L: 'assets/buildings/post_station_L.webp', anchor: { x: 0.55, y: 0.92 }, base: 0.90, scale: 1, dx: 0, dy: 0 },
-  xian_ya:     { L: 'assets/buildings/xian_ya_L.webp',     anchor: { x: 0.52, y: 0.93 }, base: 0.86, scale: 1, dx: 0, dy: 0 },
-  xue_gong:    { L: 'assets/buildings/xue_gong_L.webp',    anchor: { x: 0.60, y: 0.90 }, base: 0.86, scale: 1, dx: 0, dy: 0 }
+// 資料來源:js/ext_sprites_data.js(tools/ext_anchor.py 由 alpha 自動估的 anchor / base,所有 assets/buildings 圖都有)+ 下方 EXT_SPRITES_TUNE 手調覆寫(同 id 以手調優先)。
+// anchor = 地基最下角在圖中的位置(圖寬高比例);base = 圖中地基寬 / 圖寬;scale / dx / dy 使用者實機回報後微調(預設 1 / 0 / 0)
+var EXT_SPRITES_TUNE = {
+  wanghuo_lou: { anchor: { x: 0.45, y: 0.93 }, base: 0.62 },
+  house_tile:  { anchor: { x: 0.62, y: 0.84 }, base: 0.86 },
+  ting_she:    { anchor: { x: 0.45, y: 0.93 }, base: 0.80 },
+  post_station: { anchor: { x: 0.55, y: 0.92 }, base: 0.90 },
+  xian_ya:     { anchor: { x: 0.52, y: 0.93 }, base: 0.86 },
+  xue_gong:    { anchor: { x: 0.60, y: 0.90 }, base: 0.86 },
+  // 自動估 base 偏窄(底面細腳 / 底板窄)而放大過頭者,改手調 base(見 tools/ext_compare.html 對照截圖)
+  tbl_wood:    { base: 0.92 },
+  tbl_big:     { base: 0.95 },
+  plaza_earth: { base: 0.95 },
+  plaza_stone: { base: 0.95 },
+  road_stone:  { base: 0.95 },
+  s5_adobe_yard: { base: 0.97 },
+  s3_stilt:    { base: 0.95 }
 };
+var EXT_SPRITES = {};
+(function () {
+  var data = (typeof EXT_SPRITES_DATA !== 'undefined') ? EXT_SPRITES_DATA : {}, ids = Object.keys(data), id, d, t, k, e;
+  Object.keys(EXT_SPRITES_TUNE).forEach(function (x) { if (ids.indexOf(x) < 0) ids.push(x); });
+  for (var i = 0; i < ids.length; i++) {
+    id = ids[i]; d = data[id] || {}; t = EXT_SPRITES_TUNE[id] || {};
+    if (!data[id] && !t.anchor) continue;   // 無資料檔紀錄又沒有完整手調值者不登錄
+    e = { L: 'assets/buildings/' + id + '_L.webp', anchor: d.anchor || { x: 0.5, y: 0.95 }, base: d.base || 0.85, scale: 1, dx: 0, dy: 0 };
+    for (k in t) if (Object.prototype.hasOwnProperty.call(t, k)) e[k] = t[k];
+    EXT_SPRITES[id] = e;
+  }
+})();
 var extSpriteSt = { on: null, imgs: {} };   // imgs[url] = { img, state: 'loading' | 'ok' | 'fail' }
 
 function extSpritesOn() {

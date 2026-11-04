@@ -325,6 +325,7 @@ function nlFeatureOpen(id) {
   return null;
 }
 function nlUnlocked(objId) {
+  if (typeof objPackOk === 'function' && typeof OBJECTS !== 'undefined' && OBJECTS[objId] && OBJECTS[objId].pack) return objPackOk(objId);   // 風格件:風格相符即起手開放,不符不可建
   if (typeof NL_OBJ_TECH === 'undefined' || typeof CITY_TECHS === 'undefined') return null;
   if (typeof NL_START_OBJS !== 'undefined' && NL_START_OBJS.indexOf(objId) >= 0) return true;
   var src = nlObjTech(objId);

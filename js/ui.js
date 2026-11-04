@@ -618,7 +618,7 @@ function buildCatIds(catId, top) {
 
 // 經營建築分類的完整清單(不看等級開放,供鎖頭提示計數);經營側判定同 sideOk
 function buildCatAllIds(catId, top) {
-  const ok = k => hasType(k) && !OBJECTS[k].retired && (sideOf(k) === 'estate' || sideOf(k) === 'both') && !varIsFollower(k);
+  const ok = k => hasType(k) && !OBJECTS[k].retired && (sideOf(k) === 'estate' || sideOf(k) === 'both') && !varIsFollower(k) && (typeof objPackOk !== 'function' || objPackOk(k));   // 風格件不符目前城市風格者不列入(不算鎖頭提示)
   const t = top || (topIsBuild(ui.top) ? ui.top : null);
   if (catId === 'combo') return t === BUILD_TOP.combo && typeof comboAllIds === 'function' ? comboAllIds() : [];
   if (catId === 'all') {
@@ -1046,6 +1046,10 @@ function addToolButton(bar, id, icon, name, def) {
     if (def.prod) title += ' 產出 ' + prodText(def.prod);
     if (def.max) title += ' (上限 ' + def.max + ' 座)';
     if (def.unit && CAMP_POP[def.unit]) title += ' 出征容量 +' + CAMP_POP[def.unit];
+  }
+  if (def && def.pack) {   // 風格件:選單標示「風格」
+    html += '<span class="cost" style="color:#e3b95c">風格</span>';
+    title += ' 〔風格件〕';
   }
   btn.innerHTML = html;
   btn.title = title;

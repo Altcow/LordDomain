@@ -379,6 +379,7 @@ function sideOk(type) {
   const d = OBJECTS[type];
   if (game.mode === 'estate' || game.mode === 'battleDesign') {
     if (d.retired) return false;
+    if (game.mode === 'estate' && typeof objPackOk === 'function' && !objPackOk(type)) return false;   // 風格件(pack)只在對應城市風格可建
     const s = sideOf(type);
     if (game.mode === 'estate' ? (s !== 'estate' && s !== 'both') : (s !== 'camp' && s !== 'both')) return false;
     if (progRulesOn() && !isUnlocked(game.mode === 'estate' ? 'estate' : 'camp', type)) return false;

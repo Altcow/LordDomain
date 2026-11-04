@@ -1,6 +1,8 @@
-const VERSION = 'v35';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v36';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
+const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits):第一次載入後存起來,離線可用;版本遞增換新桶
+const RUNTIME_PATHS = ['/assets/buildings/', '/assets/portraits/'];
 const PRECACHE = [
   './',
   './index.html',
@@ -52,6 +54,7 @@ const PRECACHE = [
   './js/art_traffic.js',
   './js/art_wallskin.js',
   './js/art_theme.js',
+  './js/ext_sprites_data.js',
   './js/ext_sprites.js',
   './js/render.js',
   './js/tddraw.js',
@@ -82,6 +85,7 @@ const PRECACHE = [
   './js/recorder.js',
   './js/ui.js',
   './js/nl_objects.js',
+  './js/nl_style_objects.js',
   './js/art_card.js',
   './js/panelmgr.js',
   './js/buildpreview.js',
@@ -125,7 +129,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(
-        keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE_NAME).map((k) => caches.delete(k))
+        keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE_NAME && k !== IMG_CACHE).map((k) => caches.delete(k))
       ))
       .then(() => self.clients.claim())
   );
@@ -146,6 +150,17 @@ self.addEventListener('fetch', (event) => {
         cache.match(req, { ignoreSearch: true }).then((hit) =>
           hit || fetch(req).catch(() => cache.match('./index.html'))
         )
+      )
+    );
+    return;
+  }
+  if (RUNTIME_PATHS.some((p) => url.pathname.indexOf(p) >= 0)) {   // 圖片:cache-first,沒有才抓網路並存進執行期桶(只存成功的回應)
+    event.respondWith(
+      caches.open(IMG_CACHE).then((cache) =>
+        cache.match(req).then((hit) => hit || fetch(req).then((res) => {
+          if (res && res.ok) cache.put(req, res.clone());
+          return res;
+        }))
       )
     );
     return;
