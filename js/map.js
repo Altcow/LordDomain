@@ -634,8 +634,10 @@ function saveWorldObj() {
 // 存檔保護(PLAN_SAVES SV0):寫入失敗(多半是 localStorage 配額)時不動舊的好存檔(setItem 失敗不會改原值)、保留記憶體狀態並 toast 一次;
 // 讀檔失敗而且連損毀副本都存不下時 saveBlocked = true,本次不再寫入,以免用新玩家狀態覆蓋原檔
 let saveBlocked = false, saveFailShown = false;
+let saveSuspend = false;   // 讀檔 / 重新開始(saveslots.js)寫回 localStorage 後到 reload 前:所有存檔寫入一律略過,避免記憶體舊狀態覆蓋;頁面重載後自然消失
 function saveNotice(msg) { if (typeof showToast === 'function') { try { showToast(msg); } catch (e) { /* 略過 */ } } }
 function saveWorld() {
+  if (saveSuspend) return;
   if (!saveBlocked) {
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(saveWorldObj()));
@@ -1144,6 +1146,7 @@ function draftStoreClear() {
   try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* 略過 */ }
 }
 function draftWrite(type, boardJson, from) {
+  if (saveSuspend) return;
   try {
     const str = JSON.stringify({ type: type, board: boardJson, from: from, savedAt: Date.now() });
     localStorage.setItem(DRAFT_KEY, str);

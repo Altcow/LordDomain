@@ -121,6 +121,7 @@ function progLoad() {
 
 function progSave() {
   if (!prog) return false;
+  if (typeof saveSuspend !== 'undefined' && saveSuspend) return false;
   try { localStorage.setItem(PROG_KEY, JSON.stringify(prog)); return true; } catch (e) { return false; }
 }
 

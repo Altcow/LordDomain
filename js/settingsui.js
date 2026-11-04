@@ -540,33 +540,30 @@ function stAboutSec() {
   return stSec('關於', [ver, credit]);
 }
 
+// 存檔與重新開始:存檔管理面板 / 復原上一步 / 清除陣地 / 清空領地 / 重新開始(邏輯在 saveslots.js、savesui.js;每個動作先彈說明確認並自動備份到復原槽)
+function stSaveBtn(label, sub, onclick, danger) {
+  const b = stEl('button', danger ? 'st-btn-danger' : 'st-link', label + (sub ? ' — ' + sub : ''));
+  b.style.minHeight = '44px';
+  b.style.display = 'block';
+  b.style.width = '100%';
+  b.style.textAlign = 'left';
+  b.addEventListener('click', onclick);
+  return b;
+}
+
 function stDangerSec() {
-  const wrap = stEl('div', 'st-danger');
-  if (!stDangerOpen) {
-    const btn = stEl('button', 'st-btn-danger', '清空領地…');
-    btn.addEventListener('click', function () {
-      stDangerOpen = true;
-      stRender();
-    });
-    wrap.appendChild(btn);
-  } else {
-    wrap.appendChild(stEl('p', 'st-ask', '清空領地上的所有建築與地形?資源與科技進度不會改變。'));
-    const yes = stEl('button', 'st-btn-danger', '確定清空');
-    yes.addEventListener('click', function () {
-      stDangerOpen = false;
-      stClosePanel();
-      const b = document.getElementById('btnClear');
-      if (b) b.click();
-    });
-    const no = stEl('button', '', '取消');
-    no.addEventListener('click', function () {
-      stDangerOpen = false;
-      stRender();
-    });
-    wrap.appendChild(yes);
-    wrap.appendChild(no);
+  const nodes = [];
+  const ok = typeof savesAvailable === 'function' && savesAvailable();
+  if (typeof savesUiOpen === 'function') {
+    nodes.push(stSaveBtn('存檔管理', ok ? '20 個存檔槽' : '此裝置無法使用多存檔', function () { stClosePanel(); savesUiOpen(); }));
+    nodes.push(stSaveBtn('復原上一步', ok ? '還原到最近一次自動備份' : '此裝置無法使用', function () { stClosePanel(); savesUiUndo(); }));
   }
-  return stSec('危險區', [wrap]);
+  if (typeof savesDoAction === 'function') {
+    nodes.push(stSaveBtn('清除陣地…', '只清戰鬥陣,其餘不動', function () { stClosePanel(); savesDoAction('camp'); }, true));
+    nodes.push(stSaveBtn('清空領地…', '清建築與地形,資源與科技保留', function () { stClosePanel(); savesDoAction('estate'); }, true));
+    nodes.push(stSaveBtn('重新開始…', '全部重頭,偏好設定保留', function () { stClosePanel(); savesDoAction('all'); }, true));
+  }
+  return stSec('存檔與重新開始', nodes);
 }
 
 function stRender() {
@@ -574,7 +571,7 @@ function stRender() {
   stBodyEl.innerHTML = '';
   const battle = stInBattle();
   stBodyEl.appendChild(stSoundSec());
-  const builtin = ['聲音', '畫面', '說明', '關於', '危險區'];
+  const builtin = ['聲音', '畫面', '說明', '關於', '危險區', '存檔與重新開始'];
   stExtraRows.forEach(function (r) {
     if (builtin.indexOf(r.group) >= 0) return;
     const nodes = stExtraNodes(r.group);

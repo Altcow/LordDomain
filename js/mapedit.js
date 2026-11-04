@@ -746,7 +746,8 @@ function mapeditCopyEstate() {
 
 // 戰陣模式的清空:只清戰陣棋盤,不動資源、科技與兵力
 function mapeditClear() {
-  if (!confirm('清空戰鬥陣？' + pendWarnText())) return;
+  if (!confirm('清空戰鬥陣？可從設定「復原上一步」找回。' + pendWarnText())) return;
+  if (typeof savesBackupUndo === 'function') savesBackupUndo('清除陣地');
   pendClear();
   hideReset();
   clearBoard();

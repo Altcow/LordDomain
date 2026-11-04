@@ -22,6 +22,7 @@ function boot() {
   initUI(canvas);
   if (migr.migrated && typeof showToast === 'function') showToast('舊領地已備份,從 1 級重新開始(設定可還原備份)');
   if (typeof initBattleUI === 'function') initBattleUI();
+  if (typeof savesConsumeNoOffline === 'function') savesConsumeNoOffline();   // 讀檔後第一次啟動:跳過離線結算
   const before = Object.assign({}, world.res);
   const sec = applyOfflineGains();
   if (sec > 0) reportOffline(sec, before);

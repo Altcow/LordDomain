@@ -451,7 +451,8 @@ function bindEvents(canvas) {
       mapeditClear();
       return;
     }
-    if (!confirm('清空領地上的所有建築與地形？資源與科技進度不會改變。' + pendWarnText())) return;
+    if (!confirm('清空領地上的所有建築與地形？資源與科技進度不會改變。可從設定「復原上一步」找回。' + pendWarnText())) return;
+    if (typeof savesBackupUndo === 'function') savesBackupUndo('清空領地');
     draftDiscard();
     pendClear();
     hideReset();
