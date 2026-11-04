@@ -48,7 +48,7 @@ function crowdHash(s) {
 function crowdVariant(job, seed) { return crowdHash(job + '|' + seed) % CROWD_VARIANTS; }
 
 // 純函式:(職業, 種子) → 外觀 spec。未知職業回 null。
-function crowdLook(job, seed) {
+function crowdLook(job, seed, ethnic) {
   const J = CROWD_JOBS[job];
   if (!J) return null;
   const v = crowdVariant(job, seed), jh = crowdHash(job);
@@ -70,7 +70,41 @@ function crowdLook(job, seed) {
   if (J.whiteHair || ((job === 'scholar' || job === 'official') && v % 4 === 3)) spec.beard = true;
   const p = J.props[accI];
   if (p) { spec.prop = p; if (p === 'staff') spec.staffCol = CROWD_ACCCOL[v]; }
+  if (ethnic && ethnic !== 'han') crowdEthnicApply(spec, job, J, jh, v, ethnic); // 缺 ETHNIC_LOOK / 不在白名單時原樣回漢外觀
   return spec;
+}
+
+// 色值明暗微調(f>1 變亮、f<1 變暗)
+function crowdShade(hex, f) {
+  let o = '#';
+  for (let i = 1; i < 7; i += 2) { const c = Math.max(0, Math.min(255, Math.round(parseInt(hex.substr(i, 2), 16) * f))); o += (c < 16 ? '0' : '') + c.toString(16); }
+  return o;
+}
+
+// 第三參數:非漢族別覆寫外觀(變體降為 4:v4 = v & 3,id 為 cp_<職業>_<v4>_<族別>)。族別不存在 / 不進池 / 職業不在該族白名單 => 不動(退回漢)
+function crowdEthnicApply(spec, job, J, jh, v, ethnic) {
+  if (typeof ETHNIC_LOOK === 'undefined') return;
+  const L = ETHNIC_LOOK[ethnic];
+  if (!L || !L.pool || !L.jobs || L.jobs.indexOf(job) < 0) return;
+  const v4 = v & 3;
+  spec.id = 'cp_' + job + '_' + v4 + '_' + ethnic; spec.v = v4; spec.eth = ethnic; spec.robeKind = L.robeKind;
+  if (L.pattern) spec.pat = L.pattern;
+  const c1 = L.cloth1, c2 = L.cloth2;
+  const tun = [[c1, c2], [c2, c1], [crowdShade(c1, 1.12), c2], [crowdShade(c2, 0.88), c1]][v4];
+  if (!J.rich && !J.ragged) { spec.tunic = tun[0]; spec.trim = tun[1]; }
+  spec.pants = L.leather;
+  const hairI = (v4 * 3 + (jh >>> 3)) % 8;
+  if (!J.whiteHair) spec.hair = CROWD_HAIR[hairI];
+  if (J.heads[v % 4] !== 'woman' && J.heads[v % 4] !== 'kid') {
+    const h = L.heads[v4];
+    spec.head = (typeof ETHNIC_HEAD_DRAW !== 'undefined' && h in ETHNIC_HEAD_DRAW) ? ETHNIC_HEAD_DRAW[h] : h;
+    spec.headCol = [L.accent, c2, c1, L.leather][v4];
+  }
+  const p = L.props[v4];
+  spec.prop = p || undefined; if (!p) delete spec.prop;
+  delete spec.staffCol;
+  if (p === 'staff') spec.staffCol = CROWD_ACCCOL[v4];
+  spec.dims = { hue: v4, hair: hairI, hat: v4, acc: v4 };
 }
 
 // 行為腳本掛點:走路速度倍率、駐足秒數範圍、工作動作標籤
@@ -95,12 +129,12 @@ const CROWD_ROLE_JOBS = {
   hawker: ['vendor'], peddler: ['vendor', 'porter']
 };
 const CROWD_SPECS = {};
-function crowdSpecFor(role, base, rnd) {
+function crowdSpecFor(role, base, rnd, ethnic) {
   const jobs = CROWD_ROLE_JOBS[role];
   if (!jobs || !base || base.draw || base.mount || base.fierce) return null;
   const r = rnd === undefined ? Math.random() : rnd;
   const job = jobs[Math.floor(r * jobs.length) % jobs.length];
-  const L = crowdLook(job, Math.floor((r * 1e6) % 1e6));
+  const L = crowdLook(job, Math.floor((r * 1e6) % 1e6), ethnic);
   if (!L) return null;
   const keep = role !== 'onlooker'; // 挑擔 / 托盤 / 推車沿用舊外觀的形狀,只換服色髮色
   const id = keep ? L.id + '_' + base.id : L.id;

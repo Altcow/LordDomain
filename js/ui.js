@@ -87,6 +87,7 @@ function initUI(canvas) {
   updateResBar();
   if (typeof initMapEdit === 'function') initMapEdit();
   if (typeof settingsAddRow === 'function') settingsAddRow('📋 範本…', openTemplatesFromSettings, '畫面');
+  if (typeof settingsAddRow === 'function' && typeof themeIds === 'function') settingsAddRow('🏘️ 城市風格…', cycleThemeFromSettings, '畫面');
 }
 
 // 介面模式(lorddomain.ui.mode):normal 正常 / compact 精簡 / photo 拍照。
@@ -2828,6 +2829,13 @@ function editSideAct() {
   }
   if (typeof draftStartOpen === 'function') draftStartOpen();
   else showToast('草稿布置尚未載入');
+}
+// 設定「城市風格」列(theme_skin.js):依主題表輪替下一個風格(漢 → 北方 → 西域 → 南方 → 羌氐),純外觀
+function cycleThemeFromSettings() {
+  const ids = themeIds(), cur = themeGet();
+  const next = ids[(ids.indexOf(cur) + 1) % ids.length];
+  if (!themeSet(next)) { showToast('目前無法切換城市風格'); return; }
+  showToast('城市風格:' + THEME_SKINS[next].icon + THEME_SKINS[next].name + '(' + THEME_SKINS[next].desc + ')');
 }
 // 設定「範本」列:打開範本選單;選了範本 → 載入到草稿(不直接蓋掉使用中的版面)
 function openTemplatesFromSettings() {

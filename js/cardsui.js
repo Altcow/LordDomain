@@ -162,6 +162,7 @@ function cuRowHtml(e, wait, wander) {
 function cuDetailHtml(cs, f) {
   var e = f.e, h = '<button class="cub" data-a="back">‹ 返回名冊</button>', k, chk, sl = cardsJobSlots(e);
   h += cardsUiHtmlCard(e, { full: true, stats: cardsStats(e), extra: '<div class="cusub cuink">出身:' + (e.org.k === 'pin' ? '縣試 ' + CARD_PIN[e.org.v] : CARD_VENUES[e.pool].orgName) + ' · 招募序 ' + e.no + (e.tok ? ' · 信物 ' + e.tok : '') + ' · 職業槽 ' + sl.used + '/' + sl.cap + '</div>' });
+  if (e.fig && typeof ethnicOfFig === 'function' && typeof ETHNIC_LOOK !== 'undefined') { var eo = ethnicOfFig(e.fig); if (eo && ETHNIC_LOOK[eo.eth]) h += '<div class="cusub cuink">族別:' + cuEsc(ETHNIC_LOOK[eo.eth].name) + '(服飾與髮式參考)</div>'; } // 缺資料不顯示
   h += '<div class="cusec">職業專精</div>';
   for (k in e.ja) {
     var j = CARD_JOB_BY_ID[k], t = e.ja[k];

@@ -1211,6 +1211,11 @@ function artTypeOf(o) {
     var s = wallSkinArt(o.type, o.skin);
     if (s && ART.OBJ[s]) return s;
   }
+  // 城市風格(theme_skin.js / art_theme.js):物件未指定 skin 時依 world.city.theme 取主題變體;漢 / 無變體回原定義
+  if (!o.skin && typeof themeSkinOf === 'function' && typeof ART !== 'undefined' && ART.OBJ) {
+    var th = themeSkinOf(o.type, themeGet());
+    if (th && ART.OBJ[th]) return th;
+  }
   return t;
 }
 function artFacing(o) { return (o.facing != null ? o.facing : o.rot) || 0; }

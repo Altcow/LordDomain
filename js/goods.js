@@ -30,6 +30,7 @@ function goodsNormCity(v) {
       for (k in v.debt) if (GOODS[k] && GOODS[k].res) c.debt[k] = Math.min(0.9999, goodsNum(v.debt[k]));
     }
     c.coinFrac = Math.min(0.9999, goodsNum(v.coinFrac));
+    if (typeof themeSkinHas === 'function' && themeSkinHas(v.theme) && v.theme !== 'han') c.theme = v.theme;   // 城市風格(theme_skin.js);預設漢不存
     if (v.adv && typeof advNormSave === 'function') c.adv = advNormSave(v.adv);   // 顧問已完成 / 已忽略 id(cityadvisor.js)
     if (v.cards && typeof cardsNormSave === 'function') { var cd = cardsNormSave(v.cards); if (cd) c.cards = cd; }   // 酒館 / 名冊(cards.js)
   }
