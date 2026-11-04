@@ -627,6 +627,7 @@ function saveWorldObj() {
   o.res = world.res; o.lastTs = world.lastTs; o.season = currentSeason; o.deals = world.deals; o.tech = world.tech;
   o.record = world.record; o.npcBest = world.npcBest; o.raid = world.raid;
   if (world.city) o.city = world.city;   // 庫房(goods.js)
+  if (typeof worldsStamp === 'function') worldsStamp(o);   // 世界編號 / 名稱(saveslots.js):存檔自己知道屬於哪個世界
   o.layoutSlots = world.layoutSlots; o.layoutActive = world.layoutActive;
   return o;
 }

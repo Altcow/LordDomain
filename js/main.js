@@ -22,10 +22,9 @@ function boot() {
   initUI(canvas);
   if (migr.migrated && typeof showToast === 'function') showToast('舊領地已備份,從 1 級重新開始(設定可還原備份)');
   if (typeof initBattleUI === 'function') initBattleUI();
-  if (typeof savesConsumeNoOffline === 'function') savesConsumeNoOffline();   // 讀檔後第一次啟動:跳過離線結算
   const before = Object.assign({}, world.res);
   const sec = applyOfflineGains();
-  if (sec > 0) reportOffline(sec, before);
+  if (!(typeof worldsArrivalToast === 'function' && worldsArrivalToast(sec, before)) && sec > 0) reportOffline(sec, before);   // 切換世界後:優先顯示「平行世界 NN 離開多久、補發了什麼」
   flushTechDone();
   updateResBar();
   applyStartZoom();
@@ -103,8 +102,10 @@ function reportOffline(sec, before) {
   showToast('離線 ' + (h > 0 ? h + ' 小時 ' : '') + m + ' 分，獲得 ' + gained.join(' '));
 }
 
-if (document.readyState !== 'loading') boot();
-else document.addEventListener('DOMContentLoaded', boot);
+// 啟動入口:先讓 saveslots.js 處理被打斷的世界切換(pending)再開機
+function bootWorlds() { if (typeof worldsStartup === 'function') worldsStartup(boot); else boot(); }
+if (document.readyState !== 'loading') bootWorlds();
+else document.addEventListener('DOMContentLoaded', bootWorlds);
 
 // 關閉瀏覽器原生行為(長按選字/選單/翻譯提示/拖曳/iOS 捏合縮放),讓畫面像原生遊戲
 (function lockBrowserUi() {

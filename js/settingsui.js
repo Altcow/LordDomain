@@ -540,7 +540,7 @@ function stAboutSec() {
   return stSec('關於', [ver, credit]);
 }
 
-// 存檔與重新開始:存檔管理面板 / 復原上一步 / 清除陣地 / 清空領地 / 重新開始(邏輯在 saveslots.js、savesui.js;每個動作先彈說明確認並自動備份到復原槽)
+// 世界與重新開始 / 目前世界的陣地:我的世界面板 / 復原上一步 / 重新開始 / 清除陣地 / 清空領地(邏輯在 saveslots.js、savesui.js;每個動作先彈說明確認並自動備份到復原槽)
 function stSaveBtn(label, sub, onclick, danger) {
   const b = stEl('button', danger ? 'st-btn-danger' : 'st-link', label + (sub ? ' — ' + sub : ''));
   b.style.minHeight = '44px';
@@ -554,16 +554,27 @@ function stSaveBtn(label, sub, onclick, danger) {
 function stDangerSec() {
   const nodes = [];
   const ok = typeof savesAvailable === 'function' && savesAvailable();
+  if (typeof worldTitle === 'function') {
+    const w = worldsGet();
+    nodes.push(stEl('div', 'st-hint', '目前:' + worldTitle(w.active, w.names[w.active])));
+  }
   if (typeof savesUiOpen === 'function') {
-    nodes.push(stSaveBtn('存檔管理', ok ? '20 個存檔槽' : '此裝置無法使用多存檔', function () { stClosePanel(); savesUiOpen(); }));
-    nodes.push(stSaveBtn('復原上一步', ok ? '還原到最近一次自動備份' : '此裝置無法使用', function () { stClosePanel(); savesUiUndo(); }));
+    nodes.push(stSaveBtn('我的世界(' + WORLD_COUNT + ')', ok ? '切換 / 重新開始 / 改名 / 回溯點' : '此裝置無法多世界', function () { stClosePanel(); savesUiOpen(); }));
+    nodes.push(stSaveBtn('復原上一步', ok ? '救回剛被重新開始 / 刪除 / 切換前的內容' : '此裝置無法使用', function () { stClosePanel(); savesUiUndo(); }));
+    nodes.push(stSaveBtn('世界小標籤:' + (worldTagOn() ? '顯示' : '隱藏'), '頂列的「世 NN」,點它開啟我的世界', function () { try { localStorage.setItem(WORLD_TAG_KEY, worldTagOn() ? '0' : '1'); } catch (e) { /* 略過 */ } if (typeof svTagSync === 'function') svTagSync(); stRender(); }));
   }
+  if (typeof savesDoAction === 'function') nodes.push(stSaveBtn('重新開始目前世界…', '只影響目前這個世界,偏好設定保留', function () { stClosePanel(); savesDoAction('all'); }, true));
+  return stSec('世界與重新開始', nodes);
+}
+
+// 目前世界的陣地:經營 / 戰陣兩塊地圖板(與平行世界無關),只影響目前這個世界
+function stCampSec() {
+  const nodes = [stEl('div', 'st-hint', '只影響目前這個世界;不影響其他世界。')];
   if (typeof savesDoAction === 'function') {
-    nodes.push(stSaveBtn('清除陣地…', '只清戰鬥陣,其餘不動', function () { stClosePanel(); savesDoAction('camp'); }, true));
-    nodes.push(stSaveBtn('清空領地…', '清建築與地形,資源與科技保留', function () { stClosePanel(); savesDoAction('estate'); }, true));
-    nodes.push(stSaveBtn('重新開始…', '全部重頭,偏好設定保留', function () { stClosePanel(); savesDoAction('all'); }, true));
+    if (!stCityOn()) nodes.push(stSaveBtn('清除陣地…', '只清目前世界的戰陣板,其餘不動', function () { stClosePanel(); savesDoAction('camp'); }, true));
+    nodes.push(stSaveBtn('清空領地…', '只清目前世界的領地建築與地形,資源與科技保留', function () { stClosePanel(); savesDoAction('estate'); }, true));
   }
-  return stSec('存檔與重新開始', nodes);
+  return stSec('目前世界的陣地', nodes);
 }
 
 function stRender() {
@@ -571,7 +582,7 @@ function stRender() {
   stBodyEl.innerHTML = '';
   const battle = stInBattle();
   stBodyEl.appendChild(stSoundSec());
-  const builtin = ['聲音', '畫面', '說明', '關於', '危險區', '存檔與重新開始'];
+  const builtin = ['聲音', '畫面', '說明', '關於', '危險區', '世界與重新開始', '目前世界的陣地'];
   stExtraRows.forEach(function (r) {
     if (builtin.indexOf(r.group) >= 0) return;
     const nodes = stExtraNodes(r.group);
@@ -584,6 +595,7 @@ function stRender() {
   stBodyEl.appendChild(stHelpSec());
   stBodyEl.appendChild(stAboutSec());
   stBodyEl.appendChild(stDangerSec());
+  stBodyEl.appendChild(stCampSec());
 }
 
 function stOpenPanel() {

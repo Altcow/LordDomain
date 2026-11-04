@@ -296,8 +296,8 @@ function drawRiver(ctx, x, y, h, time) {
     const s = p - 0.5, q = (k - 1) * 0.25;
     const cx = x + 0.5 + dx * s - dy * q;
     const cy = y + 0.5 + dy * s + dx * q;
-    const a = gpt(cx - dx * 0.125, cy - dy * 0.125, hp);
-    const b = gpt(cx + dx * 0.125, cy + dy * 0.125, hp);
+    const a = gpt(wCellClamp(cx - dx * 0.125, x), wCellClamp(cy - dy * 0.125, y), hp);
+    const b = gpt(wCellClamp(cx + dx * 0.125, x), wCellClamp(cy + dy * 0.125, y), hp);
     ctx.beginPath();
     ctx.moveTo(a[0], a[1]);
     ctx.lineTo(b[0], b[1]);
@@ -312,7 +312,7 @@ function drawLake(ctx, x, y, h, time) {
   let b = Math.pow(Math.max(0, Math.sin(time * 2 + hs)), 4);
   if (currentSeason === 'winter') b *= 0.5;
   if (b < 0.02) return;
-  const px = x + ((hs >>> 3) % 10) / 10, py = y + ((hs >>> 7) % 10) / 10;
+  const px = wCellClamp(x + ((hs >>> 3) % 10) / 10, x, 0.1), py = wCellClamp(y + ((hs >>> 7) % 10) / 10, y, 0.1);
   const hp = h * HL - 3, s = 0.08;
   const a1 = gpt(px - s, py, hp), a2 = gpt(px + s, py, hp);
   const b1 = gpt(px, py - s, hp), b2 = gpt(px, py + s, hp);
@@ -1260,6 +1260,12 @@ function terrTint() {
   return [parseInt(m.substr(1, 2), 16) / 255, parseInt(m.substr(3, 2), 16) / 255, parseInt(m.substr(5, 2), 16) / 255];
 }
 
+// 水波座標夾在本格內(留 m 邊距):線段不得越過格界,否則會畫到鄰格(碼頭 / 岸邊陸地 / 較小 d 的水上建築)之上
+function wCellClamp(v, c, m) {
+  const e = m === undefined ? 0.04 : m;
+  return Math.max(c + e, Math.min(c + 1 - e, v));
+}
+
 // 水面動態(GL):河流流線 / 湖面閃光畫成細長四邊形,深度 = 該格 d;縮放 < 0.5 或省電模式時靜態(不畫)。有物件佔用的格(橋等)略過
 function terrWaterGl(ctx, x, y, t, time) {
   const h = world.height[idx(x, y)];
@@ -1270,7 +1276,7 @@ function terrWaterGl(ctx, x, y, t, time) {
       p -= Math.floor(p);
       const s = p - 0.5, q = (k - 1) * 0.25;
       const cx = x + 0.5 + dx * s - dy * q, cy = y + 0.5 + dy * s + dx * q;
-      const a = gpt(cx - dx * 0.125, cy - dy * 0.125, hp), b = gpt(cx + dx * 0.125, cy + dy * 0.125, hp);
+      const a = gpt(wCellClamp(cx - dx * 0.125, x), wCellClamp(cy - dy * 0.125, y), hp), b = gpt(wCellClamp(cx + dx * 0.125, x), wCellClamp(cy + dy * 0.125, y), hp);
       rqLine(ctx, a[0], a[1], b[0], b[1], 1.5, PAL.waterHi, 0.5);
     }
   } else {
@@ -1279,7 +1285,7 @@ function terrWaterGl(ctx, x, y, t, time) {
     let b = Math.pow(Math.max(0, Math.sin(time * 2 + hs)), 4);
     if (currentSeason === 'winter') b *= 0.5;
     if (b < 0.02) return;
-    const px = x + ((hs >>> 3) % 10) / 10, py = y + ((hs >>> 7) % 10) / 10, hp = h * HL - 3, s = 0.08;
+    const px = wCellClamp(x + ((hs >>> 3) % 10) / 10, x, 0.1), py = wCellClamp(y + ((hs >>> 7) % 10) / 10, y, 0.1), hp = h * HL - 3, s = 0.08;
     const a1 = gpt(px - s, py, hp), a2 = gpt(px + s, py, hp), b1 = gpt(px, py - s, hp), b2 = gpt(px, py + s, hp);
     rqLine(ctx, a1[0], a1[1], a2[0], a2[1], 1.5, PAL.waterHi, b);
     rqLine(ctx, b1[0], b1[1], b2[0], b2[1], 1.5, PAL.waterHi, b);
@@ -1299,7 +1305,7 @@ function terrGl(ctx, landOn, lm, time) {
       if (!w) continue;
       for (let k = 0; k < w.length; k += 2) {
         const x = w[k], y = w[k + 1], i = idx(x, y), t = world.terrain[i];
-        if ((t !== T_RIVER && t !== T_LAKE) || world.occ[i] || !cellVisible(x, y)) continue;
+        if ((t !== T_RIVER && t !== T_LAKE) || world.occ[i] || pend.occ[i] || !cellVisible(x, y)) continue;
         rqDepth(ctx, x + y);
         terrWaterGl(ctx, x, y, t, time);
       }

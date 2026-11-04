@@ -1,7 +1,7 @@
-// savesui.js — 存檔管理面板(20 槽清單 + 復原點)與設定頁「存檔與重新開始」區塊的節點。邏輯在 saveslots.js。
+// savesui.js — 世界管理面板「我的世界(N)」(每世界:進入 / 重新開始 / 改名 / 刪除 + 回溯點)、頂列世界小標籤、設定頁「世界與重新開始」用的函式。邏輯在 saveslots.js。
 // 面板走 panelmgr.js(panelRegister / panelOpen kind:'big');沒有 panelmgr 時自管顯示 / 關閉。ES2017,載入時只宣告。
 
-var svEl = null, svListEl = null, svInfoEl = null, svMsgEl = null, svBusy = false, svOpen = false;
+var svEl = null, svListEl = null, svInfoEl = null, svMsgEl = null, svBusy = false, svOpen = false, svRbOpen = {};
 
 function svCss() {
   if (typeof document === 'undefined' || !document.head || document.getElementById('svCss')) return;
@@ -26,7 +26,20 @@ function svCss() {
     '#svPanel .svb button{flex:1 1 0;min-width:0;min-height:44px;padding:0 4px}' +
     '#svPanel .svb button.danger{background:#6b2b2b;border-color:#c96a5f}' +
     '#svPanel .svsec{margin:14px 0 2px;font-size:13px;opacity:.75;font-weight:bold}' +
-    '#svPanel.busy .svlist{pointer-events:none;opacity:.6}';
+    '#svPanel .svrow.active{border-color:#f0b45a;background:rgba(240,180,90,.12)}' +
+    '#svPanel .svbadge{flex:0 0 auto;font-size:11px;padding:1px 6px;border-radius:8px;background:#f0b45a;color:#1b222d}' +
+    '#svPanel .svb{flex-wrap:wrap}' +
+    '#svPanel .svb button{flex:1 1 72px}' +
+    '#svPanel .svb button:disabled{opacity:.6}' +
+    '#svPanel .svtog{width:100%;margin-top:6px;min-height:36px;text-align:left}' +
+    '#svPanel .svrbs{margin-top:6px;min-width:0}' +
+    '#svPanel .svrb{margin:6px 0 0;padding:6px;border-left:3px solid rgba(240,180,90,.5);background:rgba(0,0,0,.18);min-width:0}' +
+    '#svPanel .svrb.empty{opacity:.7}' +
+    '#svPanel .svrbt{display:flex;gap:8px;align-items:baseline;min-width:0}' +
+    '#svPanel.busy .svlist{pointer-events:none;opacity:.6}' +
+    '#worldTag{flex:0 0 auto;box-sizing:border-box;max-width:3.6em;overflow:hidden;white-space:nowrap;font-size:10px;line-height:1;padding:3px 4px;border:1px solid rgba(255,255,255,.28);border-radius:6px;opacity:.8;cursor:pointer;color:#f0e6cf}' +
+    '#worldTag[hidden]{display:none}' +
+    'body.sandbox #worldTag,body.atk-mode #worldTag,body.replay-mode #worldTag{display:none}';
   document.head.appendChild(st);
 }
 
@@ -61,9 +74,9 @@ function svEnsure() {
   el.id = 'svPanel';
   el.hidden = true;
   el.setAttribute('role', 'dialog');
-  el.setAttribute('aria-label', '存檔管理');
+  el.setAttribute('aria-label', '我的世界');
   var h = svNode('div', 'svh');
-  h.appendChild(svNode('b', '', '存檔管理'));
+  h.appendChild(svNode('b', '', '我的世界(' + WORLD_COUNT + ')'));
   var x = svBtn('✕', svClose, 'svx');
   x.setAttribute('aria-label', '關閉');
   h.appendChild(x);
@@ -83,54 +96,93 @@ function svEnsure() {
 function svSay(msg) { if (svMsgEl) svMsgEl.textContent = msg || ''; }
 
 function svStats(m) {
-  var s = [savesTimeText(m.ts)];
+  var s = [];
   if (m.lv) s.push('Lv' + m.lv);
   s.push('人口 ' + m.pop);
   s.push('科技 ' + m.techN);
-  s.push(m.kb + ' KB' + (m.enc === 'raw' ? '(未壓縮)' : ''));
+  if (m.kb) s.push(m.kb + ' KB' + (m.enc === 'raw' ? '(未壓縮)' : ''));
   return s.join(' · ');
 }
 
-function svRow(id, m) {
-  var row = svNode('div', 'svrow' + (m ? '' : ' empty')), t = svNode('div', 'svt'), b = svNode('div', 'svb');
-  t.appendChild(svNode('span', 'svn', typeof id === 'number' ? '#' + id : (id === 'undo1' ? '復原 1' : '復原 2')));
+function svAway(ts) {
+  var sec = Math.max(0, (Date.now() - ts) / 1000);
+  return sec < 60 ? '剛離開' : '離開 ' + savesAwayText(sec);
+}
+
+function svRbRow(n, k, m, isActive) {
+  var row = svNode('div', 'svrb' + (m ? '' : ' empty')), t = svNode('div', 'svrbt'), b = svNode('div', 'svb');
+  t.appendChild(svNode('span', 'svn', '回溯點 ' + k));
   t.appendChild(svNode('span', 'svnm', m ? m.name : '空'));
   row.appendChild(t);
-  if (m) row.appendChild(svNode('div', 'svs', svStats(m)));
-  if (typeof id === 'number') {
-    b.appendChild(svBtn('存', function () { svDoSave(id); }));
-    if (m) {
-      b.appendChild(svBtn('讀', function () { svDoLoad(id); }));
-      b.appendChild(svBtn('改名', function () { svDoRename(id, m); }));
-      b.appendChild(svBtn('刪', function () { svDoDelete(id); }, 'danger'));
-    }
-  } else if (m) {
-    b.appendChild(svBtn('還原到此', function () { svDoLoad(id); }));
+  if (m) row.appendChild(svNode('div', 'svs', savesTimeText(m.ts) + ' · ' + svStats(m)));
+  b.appendChild(svBtn(m ? '覆蓋' : '建立', function () { svDoRbSave(n, k, m); }));
+  if (m) {
+    b.appendChild(svBtn('回到此點', function () { svDoRbRestore(n, k, m, isActive); }));
+    b.appendChild(svBtn('改名', function () { svDoRbRename(n, k, m); }));
+    b.appendChild(svBtn('刪除', function () { svDoRbDelete(n, k); }, 'danger'));
   }
   row.appendChild(b);
   return row;
 }
 
+// 一個世界一列:標題 = 平行世界 NN · 名稱;進入 / 重新開始 / 改名 / 刪除;可展開回溯點
+function svRow(n, m, w, list, live) {
+  var isActive = w.active === n, name = w.names[n] || '', row = svNode('div', 'svrow' + (isActive ? ' active' : '') + (m || isActive ? '' : ' empty')), t = svNode('div', 'svt'), b = svNode('div', 'svb'), i, box, cur, open;
+  t.appendChild(svNode('span', 'svn', worldLabel(n)));
+  t.appendChild(svNode('span', 'svnm', name || (m || isActive ? '' : '空世界')));
+  if (isActive) t.appendChild(svNode('span', 'svbadge', '使用中'));
+  row.appendChild(t);
+  if (isActive) row.appendChild(svNode('div', 'svs', '目前世界 · ' + svStats(live)));
+  else if (m) row.appendChild(svNode('div', 'svs', svAway(w.lastActive[n] || m.ts) + ' · ' + svStats(m)));
+  else row.appendChild(svNode('div', 'svs', '空世界:進入後從頭開始'));
+  if (isActive) { cur = svBtn('目前世界', function () {}); cur.disabled = true; b.appendChild(cur); }
+  else b.appendChild(svBtn(m ? '進入' : '建立新世界', function () { svDoEnter(n, m); }));
+  if (m || isActive) b.appendChild(svBtn('重新開始', function () { svDoRemove(n, 'restart'); }, 'danger'));
+  b.appendChild(svBtn('改名', function () { svDoRename(n, name); }));
+  if (m && !isActive) b.appendChild(svBtn('刪除', function () { svDoRemove(n, 'delete'); }, 'danger'));
+  row.appendChild(b);
+  if (m || isActive) {
+    open = !!svRbOpen[n];
+    row.appendChild(svBtn((open ? '▾ ' : '▸ ') + '回溯點(' + SNAPSHOTS_PER_WORLD + ')', function () { svRbOpen[n] = !svRbOpen[n]; svRender(); }, 'svtog'));
+    if (open) {
+      box = svNode('div', 'svrbs');
+      for (i = 1; i <= SNAPSHOTS_PER_WORLD; i++) box.appendChild(svRbRow(n, i, list[savesRbId(n, i)], isActive));
+      row.appendChild(box);
+    }
+  }
+  return row;
+}
+
+function svUndoRow(id, m) {
+  var row = svNode('div', 'svrow' + (m ? '' : ' empty')), t = svNode('div', 'svt');
+  t.appendChild(svNode('span', 'svn', id === 'undo1' ? '復原 1' : '復原 2'));
+  t.appendChild(svNode('span', 'svnm', m ? m.name : '空'));
+  row.appendChild(t);
+  if (m) row.appendChild(svNode('div', 'svs', svStats(m) + (m.wid ? ' · ' + worldLabel(m.wid) : '')));
+  return row;
+}
+
 async function svRender() {
-  var list, u, mb;
+  var list, u, w, i, live, snap;
   if (!svListEl) return;
   svListEl.innerHTML = '';
   if (!savesAvailable()) {
-    svInfoEl.textContent = '此裝置無法使用多存檔(瀏覽器未提供儲存空間,可能是隱私模式)。遊戲本身的自動存檔不受影響。';
+    svInfoEl.textContent = '此裝置無法多世界(瀏覽器未提供儲存空間,可能是隱私模式)。目前世界照常可玩,自動儲存不受影響。';
     return;
   }
   try { list = await savesListMeta(); u = await savesUsage(); } catch (e) {
-    svInfoEl.textContent = '此裝置無法使用多存檔(讀取失敗)。遊戲本身的自動存檔不受影響。';
+    svInfoEl.textContent = '此裝置無法多世界(讀取失敗)。目前世界照常可玩,自動儲存不受影響。';
     return;
   }
-  mb = Math.round(u.totalKb / 102.4) / 10;
-  svInfoEl.textContent = '已用 ' + u.slotsUsed + ' / ' + SAVE_SLOT_COUNT + ' 槽 · 多存檔共 ' + u.totalKb + ' KB' +
-    (u.hasEstimate ? ' · 瀏覽器儲存 ' + Math.round(u.usage / 1048576 * 10) / 10 + ' / ' + Math.round(u.quota / 1048576) + ' MB' : '') + ' · 此裝置可存 ' + u.canSlots + ' 槽';
-  var i;
-  for (i = 1; i <= SAVE_SLOT_COUNT; i++) svListEl.appendChild(svRow(i, list[i]));
-  svListEl.appendChild(svNode('div', 'svsec', '復原點(重大操作前自動備份,最近 2 份)'));
-  SAVE_UNDO_IDS.forEach(function (id) { svListEl.appendChild(svRow(id, list[id])); });
-  void mb;
+  w = worldsGet();
+  savesFlush();
+  snap = savesCapture();
+  live = savesSummarize(snap, savesLivePop());
+  svInfoEl.textContent = '每個世界各自獨立、資源不互通;切走的世界不會運作,切回時會補算離開期間的離線進度。 多世界共用 ' + u.totalKb + ' KB' +
+    (u.hasEstimate ? ' · 瀏覽器儲存 ' + Math.round(u.usage / 1048576 * 10) / 10 + ' / ' + Math.round(u.quota / 1048576) + ' MB' : '') + '。';
+  for (i = 1; i <= WORLD_COUNT; i++) svListEl.appendChild(svRow(i, list[i], w, list, live));
+  svListEl.appendChild(svNode('div', 'svsec', '復原點(重新開始 / 刪除 / 切換前自動備份,最近 2 份;用設定的「復原上一步」救回)'));
+  SAVE_UNDO_IDS.forEach(function (id) { svListEl.appendChild(svUndoRow(id, list[id])); });
 }
 
 async function svWrap(fn) {
@@ -145,42 +197,67 @@ async function svWrap(fn) {
 
 function svConfirm(msg) { return typeof confirm === 'function' ? confirm(msg) : false; }
 
-function svDoSave(id) {
+function svReasonText(r) {
+  var t = { busy: '另一個分頁正在操作世界', write: '寫入失敗,未變更', nobackup: '無法建立復原點,未執行', mismatch: '內容的世界編號不符,已拒絕', newer: '內容來自較新版本,請先更新 App', corrupt: '內容損毀', idb: '儲存空間無法使用', unavailable: '此裝置無法多世界', active: '使用中的世界不能刪除', declined: '已取消', empty: '空世界' };
+  return t[r] || ('失敗(' + r + ')');
+}
+
+function svDoEnter(n, m) {
+  var w = worldsGet();
+  if (!svConfirm('進入 ' + worldTitle(n, w.names[n]) + (m ? '' : '(新世界)') + '?\n\n目前的 ' + worldTitle(w.active, w.names[w.active]) + ' 會先存回它自己的位置(不會被覆蓋或倒轉),並備份到復原點。' + (m ? '\n離開期間會補算離線進度。' : '\n新世界會從頭開始。') + '\n進入後頁面會重新載入。')) return;
   return svWrap(async function () {
-    var r = await savesSave(id, { confirm: svConfirm, name: '' });
-    if (r.ok) svSay('已存入第 ' + id + ' 槽');
-    else if (r.reason === 'write') svSay('寫入失敗,第 ' + id + ' 槽維持原內容');
-    else if (r.reason === 'declined') svSay('已取消');
-    else svSay('無法存檔');
+    var r = await worldsEnter(n);
+    svSay(r.ok ? '切換中…' : svReasonText(r.reason));
   });
 }
 
-function svDoLoad(id) {
-  var m = savesMetaCache[id];
-  if (!m) return;
-  if (!svConfirm('讀取' + (typeof id === 'number' ? '第 ' + id + ' 槽' : '復原點') + '「' + m.name + '」?\n(' + savesTimeText(m.ts) + ')\n\n目前進度會先自動備份到復原點,可從「復原」找回;讀檔後頁面會重新載入。')) return;
+function svDoRemove(n, kind) {
   return svWrap(async function () {
-    var r = await savesLoad(id);
-    if (r.ok) svSay('讀取中…');
-    else if (r.reason === 'newer') svSay('此存檔來自較新版本,請先更新 App');
-    else if (r.reason === 'nobackup') svSay('無法建立復原點,未讀檔');
-    else svSay('讀檔失敗(' + r.reason + ')');
+    var r = await worldsRemove(n, kind, { confirm: svConfirm });
+    if (r.ok) svSay(kind === 'delete' ? '已刪除 ' + worldLabel(n) + '(可從「復原上一步」救回)' : (n === worldsGet().active ? '重新開始中…' : '已重新開始 ' + worldLabel(n) + '(可從「復原上一步」救回)'));
+    else svSay(svReasonText(r.reason));
   });
 }
 
-function svDoRename(id, m) {
-  var nm = typeof prompt === 'function' ? prompt('第 ' + id + ' 槽新名稱', m.name) : null;
+function svDoRename(n, cur) {
+  var nm = typeof prompt === 'function' ? prompt(worldLabel(n) + ' 的新名稱', cur || '') : null;
   if (nm === null) return;
   return svWrap(async function () {
-    var r = await savesRename(id, nm);
+    var r = await worldsRename(n, nm);
+    svSay(r.ok ? '已改名' : '名稱不可為空');
+    svTagSync();
+  });
+}
+
+function svDoRbSave(n, k) {
+  return svWrap(async function () {
+    var r = await worldsRbSave(n, k, { confirm: svConfirm });
+    svSay(r.ok ? '已建立 ' + worldLabel(n) + ' 的回溯點 ' + k : svReasonText(r.reason));
+  });
+}
+
+function svDoRbRestore(n, k, m, isActive) {
+  if (!svConfirm('回到 ' + worldLabel(n) + ' 的回溯點 ' + k + '「' + m.name + '」?\n(' + savesTimeText(m.ts) + ')\n\n只倒轉這個世界,不影響其他世界;目前狀態會先備份到復原點。回到之後不會補發離線進度。' + (isActive ? '\n完成後頁面會重新載入。' : ''))) return;
+  return svWrap(async function () {
+    var r = await worldsRbRestore(n, k);
+    svSay(r.ok ? (isActive ? '回溯中…' : '已回到回溯點(進入該世界即可看到)') : svReasonText(r.reason));
+  });
+}
+
+function svDoRbRename(n, k, m) {
+  var nm = typeof prompt === 'function' ? prompt('回溯點 ' + k + ' 新名稱', m.name) : null;
+  if (nm === null) return;
+  return svWrap(async function () {
+    var r = await savesRename(savesRbId(n, k), nm);
     svSay(r.ok ? '已改名' : '名稱不可為空');
   });
 }
 
-function svDoDelete(id) {
+function svDoRbDelete(n, k) {
+  if (!svConfirm('刪除 ' + worldLabel(n) + ' 的回溯點 ' + k + '?刪除後無法復原。')) return;
   return svWrap(async function () {
-    var r = await savesDelete(id, { confirm: svConfirm });
-    svSay(r.ok ? '已刪除第 ' + id + ' 槽' : '已取消');
+    var r = await worldsRbDelete(n, k);
+    svSay(r.ok ? '已刪除回溯點 ' + k : svReasonText(r.reason));
   });
 }
 
@@ -195,14 +272,39 @@ function savesUiOpen() {
   return true;
 }
 
-// 設定頁「復原上一步」:讀 undo1 的摘要、確認後還原(讀檔流程會先把目前狀態再備份)
+// 設定頁「復原上一步」:讀 undo1 的摘要、確認後救回(套回目前世界時,目前狀態會先再備份,可來回)
 async function savesUiUndo() {
-  var list, m;
-  if (!savesAvailable()) { savesToast('此裝置無法使用多存檔,沒有復原點'); return; }
+  var list, m, r;
+  if (!savesAvailable()) { savesToast('此裝置無法多世界,沒有復原點'); return; }
   try { list = await savesListMeta(); } catch (e) { savesToast('讀取復原點失敗'); return; }
   m = list.undo1;
   if (!m) { savesToast('目前沒有可復原的備份'); return; }
-  if (!svConfirm('復原到「' + m.name + '」?\n(' + savesTimeText(m.ts) + ' · 人口 ' + m.pop + ')\n\n目前狀態會先備份,可再復原回來;完成後頁面會重新載入。')) return;
-  var r = await savesLoad('undo1');
-  if (!r.ok && r.reason === 'nobackup') savesToast('無法建立復原點,未復原');
+  if (!svConfirm('復原到「' + m.name + '」?\n(' + savesTimeText(m.ts) + ' · 人口 ' + m.pop + (m.wid ? ' · ' + worldLabel(m.wid) : '') + ')\n\n目前狀態會先備份,可再復原回來。' + (m.wid && m.wid !== worldsActive() ? '這份屬於其他世界,會救回到它自己的位置,不會動到目前世界。' : '完成後頁面會重新載入。'))) return;
+  r = await savesUndo();
+  if (!r.ok) savesToast(svReasonText(r.reason));
+}
+
+// ───────── 頂列世界小標籤(「世 07」) ─────────
+function svTagSync() {
+  if (typeof document === 'undefined' || !document.getElementById) return null;
+  var bar = document.getElementById('topbar'), tag = document.getElementById('worldTag'), w = worldsGet(), after;
+  if (!bar) return null;
+  svCss();
+  if (!tag) {
+    tag = svNode('span', '', '');
+    tag.id = 'worldTag';
+    tag.setAttribute('role', 'button');
+    tag.addEventListener('click', function () { savesUiOpen(); });
+    after = document.getElementById('title');
+    if (after && after.nextSibling) bar.insertBefore(tag, after.nextSibling); else bar.appendChild(tag);
+  }
+  tag.textContent = worldTagText(w.active);
+  tag.title = worldTitle(w.active, w.names[w.active]) + '(點一下開啟我的世界)';
+  tag.setAttribute('aria-label', tag.title);
+  tag.hidden = !worldTagOn();
+  return tag;
+}
+if (typeof document !== 'undefined' && document.addEventListener) {
+  if (document.readyState !== 'loading') { try { svTagSync(); } catch (e) { /* 略過 */ } }
+  else document.addEventListener('DOMContentLoaded', function () { try { svTagSync(); } catch (e) { /* 略過 */ } });
 }
