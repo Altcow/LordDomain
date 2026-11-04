@@ -1,4 +1,4 @@
-const VERSION = 'v38';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v39';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -8,6 +8,7 @@ const PRECACHE = [
   './index.html',
   './manifest.webmanifest',
   './css/style.css',
+  './css/cardsreveal.css',
   './js/data.js',
   './js/units.js',
   './js/unitinfo.js',
@@ -111,6 +112,8 @@ const PRECACHE = [
   './js/cards.js',
   './js/cardsui.js',
   './js/cardsui_named.js',
+  './js/cardsui_bag.js',
+  './js/cardsreveal.js',
   './js/npcdata.js',
   './js/famous_lines.js',
   './js/npcinteract.js',

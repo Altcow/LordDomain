@@ -3,7 +3,7 @@
 // 驗證:node tools/test_cards.js(含名人表 lint)。不寫 DOM、不讀時間。ES2017;不用 ?. ??。
 // 【占位,待手填】名人的職業欄位(CARD_FIGS 無 ja/main)目前由五維自動推導(cards.js cardFigJobs);之後可逐位寫入 CARD_FIG_JOB_OVERRIDE 覆寫,不必改 CARD_FIGS。
 // 全域名稱:CARD_GRADE CARD_STATS CARD_LEARN CARD_FAC CARD_ROWS CARD_JOB_TIERPCT CARD_JOBS CARD_JOB_BY_ID CARD_JOB_PORTRAIT CARD_POST_GROUP CARD_VENUE_ORDER CARD_VENUES
-//          CARD_EXAM_SUBJECTS CARD_COST CARD_WINE CARD_CFG CARD_UPGRADE CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_SKILLS CARD_SKILL_BY_ID CARD_SKILL_BY_ROW CARD_FIGS CARD_FIG_BY_ID CARD_FIG_JOB_OVERRIDE
+//          CARD_EXAM_SUBJECTS CARD_COST CARD_WINE CARD_CFG CARD_BAG CARD_FIG_WEIGHT CARD_UPGRADE CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_SKILLS CARD_SKILL_BY_ID CARD_SKILL_BY_ROW CARD_FIGS CARD_FIG_BY_ID CARD_FIG_JOB_OVERRIDE
 
 // 品階(§3A.1):lo/hi 生成參數;stCap 單項基礎上限;tai 才帶;jobSlots 職業詞條槽;jobMax 職業最高階;learn 學養型分布(通才/偏才/專才/宗師 %);trN 一般詞條數;skn 技能數(第一階段只記數量)
 var CARD_GRADE = [
@@ -87,9 +87,9 @@ var CARD_POST_GROUP = { '農': '工', '工': '工', '商': '商', '文': '文', 
 var CARD_VENUE_ORDER = ['T', 'E', 'G'];
 var CARD_VENUES = {
   T: { id: 'T', name: '酒館', alias: '招賢酒肆', periodMs: 3600000, cap: 48, batch: 7, gr: [65, 30, 5, 0, 0], floor: 1, upper: { gr: 2, zhuan: 0 }, gate: 'tavern', org: 'bu', orgName: '布衣', bFig: 0, aFig: 0, theme: 'wind', unit: '1 歲' },
-  E: { id: 'E', name: '縣試', alias: '九品中正考課', periodMs: 14400000, cap: 12, batch: 7, gr: [30, 40, 24, 6, 0], floor: 2, upper: { gr: 3, zhuan: 0 }, gate: 'exam', org: 'pin', orgName: '縣試', bFig: 0.1, aFig: 0, theme: 'subject', unit: '4 歲',
+  E: { id: 'E', name: '縣試', alias: '九品中正考課', periodMs: 14400000, cap: 12, batch: 7, gr: [30, 40, 24, 6, 0], floor: 2, upper: { gr: 3, zhuan: 0 }, gate: 'exam', org: 'pin', orgName: '縣試', bFig: 0.16, aFig: 0, theme: 'subject', unit: '4 歲',
        starGr: { 2: [24.6, 40, 27.6, 7.8, 0], 3: [19.2, 40, 31.2, 9.6, 0] } },
-  G: { id: 'G', name: '殿試', alias: '天子親策', periodMs: 86400000, cap: 2, batch: 7, gr: [10, 30, 38, 20, 2], floor: 3, upper: { gr: 3, zhuan: 1 }, gate: 'dianshi', org: 'dian', orgName: '徵辟', bFig: 0.1, aFig: 1, theme: 'faction', unit: '1 日' }
+  G: { id: 'G', name: '殿試', alias: '天子親策', periodMs: 86400000, cap: 2, batch: 7, gr: [6, 30, 38, 20, 6], floor: 3, upper: { gr: 3, zhuan: 1 }, gate: 'dianshi', org: 'dian', orgName: '徵辟', bFig: 0.16, aFig: 1, theme: 'faction', unit: '1 日' }
 };
 // 縣試科目(§2.3):依期輪替;該科職業權重 ×3(jobs 指定職業,rows 指定整行)
 var CARD_EXAM_SUBJECTS = [
@@ -103,7 +103,7 @@ var CARD_EXAM_SUBJECTS = [
   { id: 'litian', name: '力田', rows: ['農'] }
 ];
 
-// 酒令成本與經濟(§2.2、§3A.1、§2.3;PLACEHOLDER)。延請費 = CARD_GRADE[gr].cost,宗師型 +4
+// 酒令成本與經濟(§2.2、§3A.1、§2.3;PLACEHOLDER)。酒令 = 『任用成本』(從卡包任用到名冊時花費)= CARD_GRADE[gr].cost,宗師型 +4;開批本身免費
 var CARD_COST = { zongBonus: 4 };
 var CARD_WINE = {
   startGift: 6,                    // 開館禮(PLACEHOLDER,待使用者決定)
@@ -116,11 +116,11 @@ var CARD_WINE = {
 };
 var CARD_CFG = {
   capBase: 14,             // 名額基數:缺官階模組(lordhallui)時的退路(§7A.1 Lv10 = 14);可由 cardsCapBonus() 追加
-  capRank0: 10, capPerRank: 2, capMax: 40,   // 無等級版名額 = 10 + 官階等級 × 2,上限 40(官階等級 = lordhallui 官階表序號 1~);官階降低不踢人,只是不能再延請
-  waitSeats: 5,            // 待定席
+  capRank0: 10, capPerRank: 2, capMax: 40,   // 無等級版名額 = 10 + 官階等級 × 2,上限 40(官階等級 = lordhallui 官階表序號 1~);官階降低不踢人,只是不能再任用
+  waitSeats: 5,            // 待定席(卡包上線後任用不再進待定席;只保留舊存檔既有的待定席人物)
   tokMax: 5,               // 名人信物上限
   paceMin: 10,             // 時鐘回撥容忍(分鐘)
-  fameAfter: 20, fameStep: 0.2, goldMax: 4,   // 殿試名人緣(百分點)
+  fameAfter: 20, fameStep: 0.2, goldMax: 8,   // 殿試名人緣(百分點);goldMax = 金階機率上限(基礎 6 + 最多再加 2,原 2 + 2 = 4 同幅度)
   pityBatches: 9,          // 連續 9 批無上等 → 第 10 批保底
   upMax: 2, privStCap: 92  // 升階次數、路人基礎單項上限
 };
@@ -309,6 +309,29 @@ var CARD_FIGS = [
 ];
 // 名人職業覆寫表(之後逐位手填;cards.js 的 cardFigJobs 優先讀此表,查無才由五維推導):{ 名人id: { ja: { 職業id: 階(1~4) }, main: '主職業id' } }。目前為空。
 var CARD_FIG_JOB_OVERRIDE = {};
+// 名人抽取權重(獨立欄位好微調;抽金 / 抽紫名人與指名池皆依此加權,數字越大越容易抽到;缺項視為 金 10 / 紫 6):
+//   金階:主公級 曹操 / 劉備 / 孫權 = 1;頂級 10 人 = 3;其餘 = 10。紫階:較有名者 10 人 = 3;其餘 = 6。
+// 指名池(陣營模式)只在該陣營名人內加權。
+var CARD_FIG_WEIGHT = {
+  caocao: 1, liubei: 1, sunquan: 1,
+  lvbu: 3, guanyu: 3, zhangfei: 3, zhugeliang: 3, simayi: 3, zhouyu: 3, zhaoyun: 3, sunce: 3, machao: 3, zhangjiao: 3,
+  xunyu: 10, guojia: 10, jiaxu: 10, dianwei: 10, xiahoudun: 10, zhangliao: 10, xunyou: 10,
+  pangtong: 10, fazheng: 10, weiyan: 10,
+  sunjian: 10, lusu: 10, ganning: 10, luxun: 10, lvmeng: 10, zhangzhao: 10,
+  zhangbao: 10, zhangliang: 10, zhangniujiao: 10, zhangmancheng: 10, mayuanyi: 10, guanhai: 10, zhanglu: 10, guotai: 10,
+  dongzhuo: 10, yuanshao: 10, huangfusong: 10, luzhi: 10, gongsunzan: 10, zhujun: 10, zhengxuan: 10, mateng: 10,
+  xuchu: 3, caoren: 3, xiahouyuan: 3, xuhuang: 3, huangzhong: 3, xushu: 3, taishici: 3, huanggai: 3, huatuo: 3, caiyong: 3,
+  zhongyao: 6, mizhu: 6, maliang: 6, shamoke: 6, zhoutai: 6, chengpu: 6, shixie: 6,
+  boca: 6, zhangyan: 6, liupi: 6, yudu: 6, yuji: 6, xurong: 6, youtu: 6, yufuluo: 6
+};
+// 卡包(PLAN_CARDS 第四批決議;數字多為 PLACEHOLDER)。開批的卡直接進卡包 cs.bag;卡包不佔名冊名額。
+var CARD_BAG = {
+  capBase: 100, capPerRank: 80, capMax: 500,   // 容量 = 100 + (官階等級 − 1) × 80,上限 500(官階表 6 階:100/180/260/340/420/500;缺官階資料 = 100)
+  batchNeed: 7,                // 開一批需要的空位(一批 7 張;空位不足則該批暫存不開)
+  autoDefault: 0,              // 自動分解預設:品階 ≤ 白(0);-1 = 關
+  autoMax: 2,                  // 自動分解最高可設到藍(紫以上不提供自動)
+  figDupShard: { 3: 8, 4: 16 } // 名人重複且信物已滿(CARD_CFG.tokMax)時轉成的碎片數(= 同品階任用成本)
+};
 var CARD_FIG_BY_ID = {};
 CARD_FIGS.forEach(function (f) { CARD_FIG_BY_ID[f.id] = f; });
 if (typeof module !== 'undefined' && module.exports) module.exports = { CARD_GRADE: CARD_GRADE, CARD_JOBS: CARD_JOBS, CARD_TRAITS: CARD_TRAITS, CARD_FIGS: CARD_FIGS, CARD_VENUES: CARD_VENUES };
