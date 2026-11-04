@@ -2,7 +2,7 @@
 // 純資料邏輯,不寫 DOM;時間一律由呼叫端傳入 now(毫秒),模擬層不讀 Date.now()。資料表在 js/carddata.js,介面在 js/cardsui.js。
 // 存檔:world.city.cards(goods.js goodsNormCity 帶過 cardsNormSave);名冊 roster 即派工用的 world.city.talents(同一批物件,不可列舉,不重複存檔)。
 // 第一階段刻意未做:名冊人物/小兵卡/人物圈、取捨詞條 §4.4A、戰場技能內容(只記數量 skn)、記名簿、快速模式、文鬥小遊戲(星數固定 1)、結義。
-// 全域名稱:cardHash cardRng cardsStateNew cardsGet cardsNormSave cardsPeriodNo cardsSync cardsNextIn cardsVenueOpen cardsVenueTheme cardsGenBatch cardsOpenBatch
+// 全域名稱:cardsSkillList cardHash cardRng cardsStateNew cardsGet cardsNormSave cardsPeriodNo cardsSync cardsNextIn cardsVenueOpen cardsVenueTheme cardsGenBatch cardsOpenBatch
 //          cardsDiscardBatch cardsCost cardsCap cardsHire cardsClaimGift cardsRelease cardsUndoRelease cardsRecall cardsUpgradeCheck cardsUpgrade cardsStats cardsJobSlots
 //          cardsFind cardsSyncTalents cardsTalents cardsPatrolTalents cardsAccept cardsJobLine cardsAddTokens CARD_PIN
 
@@ -303,6 +303,17 @@ function cardsRefreshEntry(e) {
   e.grade = e.gr;
   e.job = j ? CARD_POST_GROUP[j.row] : '工';
   return e;
+}
+// 戰場技能清單:依職業行(主職優先)逐張取用,不足以通用技補滿 skn 張;回傳 CARD_SKILLS 項目(尚無獨立存檔欄位,由職業推導)
+function cardsSkillList(c) {
+  var rows = [], out = [], ids = Object.keys(c.ja || {}), n = Math.max(0, c.skn | 0), i, j, k;
+  if (c.main && ids.indexOf(c.main) > 0) { ids.splice(ids.indexOf(c.main), 1); ids.unshift(c.main); }
+  for (i = 0; i < ids.length; i++) { j = CARD_JOB_BY_ID[ids[i]]; if (j && rows.indexOf(j.row) < 0) rows.push(j.row); }
+  for (i = 0; i < n; i++) {
+    k = CARD_SKILL_BY_ROW[rows[i]] || CARD_SKILL_BY_ROW['通'];
+    out.push(k);
+  }
+  return out;
 }
 function cardsStats(e) { var t = e.tok || 0; return e.st.map(function (v) { return v + t; }); }
 function cardsJobSlots(e) {

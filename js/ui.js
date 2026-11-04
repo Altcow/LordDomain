@@ -28,13 +28,15 @@ const TERRAIN_TOOLS = {
   erase: { name: '拆除', icon: '🧹', drag: true }
 };
 
-// 頂層分類(底部列最左的選擇器):瀏覽 / 地形 / 一般建築 / 軍事建築。BUILD_TOP:BUILD_GROUPS 群組 id → 建築頂層(misc = 不在任何群組者);
+// 頂層分類(底部列最左的選擇器):瀏覽 / 地形 / 經濟建築 / 擺設品 / 軍事建築。經濟 / 擺設由 objcat.js 的 objCatOf(物件 id)決定(OBJ_CAT_OVERRIDE 可覆寫),
+// 兩者共用同一組子分類(BUILD_GROUPS,只列該頂層內有物件的群組);BUILD_TOP 只用來標示 mil 群組與 combo / misc 的所屬頂層(非 mil 群組一律 'eco' 代表「經營側」);
 // 軍事建築 = 軍事與營地(mil);城牆、城門、階梯、斜坡等雖有防禦用途,留在「城牆與道路」(一般建築),不重複放。
-const BUILD_TOP = { combo: 'gen', live: 'gen', table: 'gen', town: 'gen', bazaar: 'gen', shop: 'gen', farm: 'gen', ind: 'gen', port: 'gen', mil: 'mil', garden: 'gen', rite: 'gen', road: 'gen', misc: 'gen' };
+const BUILD_TOP = { combo: 'eco', live: 'eco', table: 'eco', town: 'eco', bazaar: 'eco', shop: 'eco', farm: 'eco', ind: 'eco', port: 'eco', mil: 'mil', garden: 'eco', rite: 'eco', road: 'eco', misc: 'eco' };
 const TOP_LIST = [
   { id: 'browse', kind: 'browse', icon: '✋', name: '瀏覽', short: '瀏覽' },
   { id: 'terrain', kind: 'terrain', icon: '⛰', name: '地形', short: '地形' },
-  { id: 'gen', kind: 'build', icon: '🏠', name: '一般建築', short: '一般' },
+  { id: 'eco', kind: 'build', icon: '🏠', name: '經濟建築', short: '經濟' },
+  { id: 'deco', kind: 'build', icon: '🌳', name: '擺設品', short: '擺設' },
   { id: 'mil', kind: 'build', icon: '⚔', name: '軍事建築', short: '軍事' }
 ];
 // 地形頂層內容(不含拆除:拆除只在建築頂層出現)
@@ -50,7 +52,7 @@ const UI_CAMPCAT_KEY = 'lorddomain.ui.campcat';
 const UI_VAR_KEY = 'lorddomain.ui.variant';
 const UI_SKIN_KEY = 'lorddomain.ui.wallskin';   // 城牆外觀皮膚偏好(per-viewer,id 見 wallskin.js WALL_SKINS)
 
-const ui = { tool: null, editing: false, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco', buildCat: 'all', top: 'gen', campTop: 'cbuild', campCat: 'all', variant: {}, wallSkin: '', objSel: null, comboSkip: false };
+const ui = { tool: null, editing: false, rot: 0, shopOpen: false, dealDay: '', tplOpen: false, techOpen: false, techTab: 'eco', buildCat: 'all', top: 'eco', campTop: 'cbuild', campCat: 'all', variant: {}, wallSkin: '', objSel: null, comboSkip: false };
 let topMenuOpen = false;
 // 組合模組(combos.js):工具 id 為 'combo:<id>';combos.js 未載入時恆為 false
 function uiIsCombo(t) { return typeof comboIs === 'function' && comboIs(t); }
@@ -526,6 +528,7 @@ function buildToolbar() {
 function uiMenuLoad() {
   const t = uiStorageGet(UI_TOP_KEY);
   if (TOP_LIST.some(x => x.id === t)) ui.top = t;
+  else if (t === 'gen') ui.top = 'eco';   // 舊版「一般建築」→ 經濟建築
   const c = uiStorageGet(UI_CAT_KEY);
   if (c) ui.buildCat = c;
   const ct = uiStorageGet(UI_CAMPTOP_KEY);
@@ -556,7 +559,7 @@ function uiMenuSave() {
   uiStorageSet(UI_VAR_KEY, JSON.stringify(ui.variant));
   uiStorageSet(UI_SKIN_KEY, ui.wallSkin || '');
 }
-function topIsBuild(top) { return top === 'gen' || top === 'mil'; }
+function topIsBuild(top) { return top === 'eco' || top === 'deco' || top === 'mil'; }
 
 // 變體:代表(群組第一個)與其餘變體;t 為 null 時原樣回傳
 function varLeader(t) {
@@ -579,16 +582,13 @@ function varResolve(leader) {
   return want && varList(leader).indexOf(want) >= 0 ? want : leader;
 }
 
-// 物件所屬建築頂層(未列入任何群組者視為 misc)
-let topOfMap = null;
+// 物件所屬建築頂層:在 mil 群組 → 'mil';其餘依 objcat.js 的 objCatOf 分 'eco' / 'deco'(objcat.js 未載入時一律 'eco')
 function topOfItem(k) {
-  if (!topOfMap) {
-    topOfMap = {};
-    BUILD_GROUPS.forEach(g => g.items.forEach(i => { topOfMap[i] = BUILD_TOP[g.id] || 'gen'; }));
-  }
-  return topOfMap[k] || BUILD_TOP.misc;
+  const mg = BUILD_GROUPS.find(g => g.id === 'mil');
+  if (mg && mg.items.indexOf(k) >= 0) return 'mil';
+  return typeof objCatOf === 'function' && objCatOf(k) === 'deco' ? 'deco' : 'eco';
 }
-function topOfGroup(gid) { return BUILD_TOP[gid] || 'gen'; }
+function topOfGroup(gid) { return BUILD_TOP[gid] || 'eco'; }
 
 // 分類內容(sideOk 為真、變體只留代表):
 // all = 該頂層全部(群組合併、不重複)/ 常用 / 各群組 / misc(不在任何群組者)。top 省略時用目前頂層
@@ -598,19 +598,19 @@ function buildCatIds(catId, top) {
   if (catId === 'combo') return game.mode === 'estate' && t === BUILD_TOP.combo && typeof comboMenuIds === 'function' ? comboMenuIds() : [];
   if (catId === 'all') {
     const seen = {}, out = [];
-    const add = k => { if (!seen[k] && ok(k)) { seen[k] = true; out.push(k); } };
-    BUILD_GROUPS.forEach(g => { if (topOfGroup(g.id) === t) g.items.forEach(add); });
-    if (BUILD_TOP.misc === t) buildCatIds('misc').forEach(add);
+    const add = k => { if (!seen[k] && ok(k) && t && topOfItem(k) === t) { seen[k] = true; out.push(k); } };
+    BUILD_GROUPS.forEach(g => g.items.forEach(add));
+    buildCatIds('misc', t).forEach(add);
     return out;
   }
   if (catId === '常用') return BUILD_FAVS.filter(k => ok(k) && (!t || topOfItem(k) === t));
   if (catId === 'misc') {
     const listed = {};
     BUILD_GROUPS.forEach(g => g.items.forEach(k => { listed[k] = true; }));
-    return Object.keys(OBJECTS).filter(k => !listed[k] && ok(k));
+    return Object.keys(OBJECTS).filter(k => !listed[k] && ok(k) && (!t || topOfItem(k) === t));
   }
   const g = BUILD_GROUPS.find(x => x.id === catId);
-  return g ? g.items.filter(ok) : [];
+  return g ? g.items.filter(k => ok(k) && (!t || topOfItem(k) === t)) : [];
 }
 
 // 經營建築分類的完整清單(不看等級開放,供鎖頭提示計數);經營側判定同 sideOk
@@ -620,19 +620,19 @@ function buildCatAllIds(catId, top) {
   if (catId === 'combo') return t === BUILD_TOP.combo && typeof comboAllIds === 'function' ? comboAllIds() : [];
   if (catId === 'all') {
     const seen = {}, out = [];
-    const add = k => { if (!seen[k] && ok(k)) { seen[k] = true; out.push(k); } };
-    BUILD_GROUPS.forEach(g => { if (topOfGroup(g.id) === t) g.items.forEach(add); });
-    if (BUILD_TOP.misc === t) buildCatAllIds('misc').forEach(add);
+    const add = k => { if (!seen[k] && ok(k) && t && topOfItem(k) === t) { seen[k] = true; out.push(k); } };
+    BUILD_GROUPS.forEach(g => g.items.forEach(add));
+    buildCatAllIds('misc', t).forEach(add);
     return out;
   }
   if (catId === '常用') return BUILD_FAVS.filter(k => ok(k) && (!t || topOfItem(k) === t));
   if (catId === 'misc') {
     const listed = {};
     BUILD_GROUPS.forEach(g => g.items.forEach(k => { listed[k] = true; }));
-    return Object.keys(OBJECTS).filter(k => !listed[k] && ok(k));
+    return Object.keys(OBJECTS).filter(k => !listed[k] && ok(k) && (!t || topOfItem(k) === t));
   }
   const g = BUILD_GROUPS.find(x => x.id === catId);
-  return g ? g.items.filter(ok) : [];
+  return g ? g.items.filter(k => ok(k) && (!t || topOfItem(k) === t)) : [];
 }
 
 // 底部列:[頂層選擇器] + 對應內容(瀏覽=提示、地形=地形工具、建築=小分類內容 + 鎖頭提示 + 拆除固定在最右)
@@ -640,7 +640,7 @@ function buildCatAllIds(catId, top) {
 // 共用 buildTopToolbar / buildTopMenu / buildCatBar / topSet。kind:browse / terrain / build(build 才有小分類 chips)
 const ESTATE_MENU = {
   list: TOP_LIST,
-  defTop: 'gen',
+  defTop: 'eco',
   getTop: function () { return ui.top; },
   setTop: function (v) { ui.top = v; },
   getCat: function () { return ui.buildCat; },
@@ -706,6 +706,7 @@ function buildTopToolbar(bar) {
     return;
   }
   if (uiIsCompact()) addCatMenuBtn(bar);
+  if (M === ESTATE_MENU && typeof bpvAddToggle === 'function') bpvAddToggle(bar);
   if (!M.catList(cur.id).some(c => c.id === M.getCat())) M.setCat('all');
   M.ids(M.getCat(), cur.id).forEach(id => M.addItem(bar, id));
   M.lockHint(bar, M.getCat());
@@ -725,6 +726,7 @@ function topSet(top) {
   uiCatOpen = false;
   uiMenuSave();
   if (!topOwnsTool(ui.tool, top)) setTool(null);
+  if (typeof bpvClose === 'function' && !topIsBuild(top)) bpvClose();
   buildToolbar();
   updateResBar();
 }
@@ -919,10 +921,10 @@ function buildCatList(top) {
   const out = [{ id: 'all', name: '全部', n: buildCatIds('all', top).length }];
   const fav = buildCatIds('常用', top).length;
   if (fav) out.push({ id: '常用', name: '常用', n: fav });
-  BUILD_GROUPS.forEach(g => { if (topOfGroup(g.id) === top) out.push({ id: g.id, name: g.name, n: buildCatIds(g.id).length }); });
+  BUILD_GROUPS.forEach(g => { if ((topOfGroup(g.id) === 'mil') === (top === 'mil') && buildCatAllIds(g.id, top).length > 0) out.push({ id: g.id, name: g.name, n: buildCatIds(g.id, top).length }); });
   if (BUILD_TOP.combo === top && game.mode === 'estate' && typeof comboAllIds === 'function' && comboAllIds().length) out.push({ id: 'combo', name: '組合', n: buildCatIds('combo', top).length });
-  if (BUILD_TOP.misc === top) {
-    const misc = buildCatIds('misc').length;
+  if (top !== 'mil') {
+    const misc = buildCatIds('misc', top).length;
     if (misc) out.push({ id: 'misc', name: '其他', n: misc });
   }
   return out;
@@ -1045,6 +1047,7 @@ function addToolButton(bar, id, icon, name, def) {
   btn.innerHTML = html;
   btn.title = title;
   btn.addEventListener('click', () => {
+    if (typeof bpvIntercept === 'function' && bpvIntercept(id)) return;   // 預覽勾選時:只顯示放大預覽浮卡,不選工具
     if (isCampTool(id) && CAMP_TOOLS[id].act) {
       CAMP_TOOLS[id].act();
       return;
@@ -1460,11 +1463,20 @@ function applyOne(x, y) {
     return false;
   }
   if (t in TERRAIN_OF) {
-    if (world.occ[i]) {
-      warnOnce('請先拆除該格物件');
-      return false;
-    }
     const target = TERRAIN_OF[t];
+    if (world.occ[i]) {
+      // 物件允許新地形(如燈在草地改鋪道路)→ 保留物件只改地形;不允許才要求先拆除
+      if (!terrainOkUnder(x, y, target)) {
+        warnOnce('請先拆除該格物件');
+        return false;
+      }
+      if (world.terrain[i] === target && (target !== T_RIVER || world.flow[i] === ui.rot)) return false;
+      if (!paintTerrainKeep(x, y, target, ui.rot)) {
+        warnOnce('超出城市土地範圍');
+        return false;
+      }
+      return true;
+    }
     if (world.terrain[i] === target && (target !== T_RIVER || world.flow[i] === ui.rot)) return false;
     if (!paintTerrain(x, y, target, ui.rot)) {
       warnOnce('超出城市土地範圍');

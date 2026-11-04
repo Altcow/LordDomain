@@ -342,7 +342,7 @@
     tbl_wood: item('空木桌', '🟫', 1, 1, 20, { drag: true }),
     tbl_stone: item('空石桌', '⬜', 1, 1, 25, { drag: true }),
     tbl_low: item('矮几', '🟤', 1, 1, 15, { drag: true }),
-    tbl_long: item('空長案', '▭', 2, 1, 35),
+    tbl_long: item('空長案', '🪑', 2, 1, 35),
     tbl_big: item('大方桌', '🔲', 2, 2, 70),
     tbl_round: item('大圓桌', '⭕', 2, 2, 80),
     tbl_tea: item('茶桌(擺茶具)', '🫖', 1, 1, 35, { drag: true }),

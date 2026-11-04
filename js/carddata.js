@@ -2,7 +2,7 @@
 // 數字多為 PLACEHOLDER。戰、統、謀與名人專屬詞條資料保留但第一階段不啟用(CARD_TRAITS.cls / card.trn 標示)。
 // 驗證:node tools/test_cards.js(含名人表 lint)。不寫 DOM、不讀時間。ES2017;不用 ?. ??。
 // 全域名稱:CARD_GRADE CARD_STATS CARD_LEARN CARD_FAC CARD_ROWS CARD_JOB_TIERPCT CARD_JOBS CARD_JOB_BY_ID CARD_POST_GROUP CARD_VENUE_ORDER CARD_VENUES
-//          CARD_EXAM_SUBJECTS CARD_COST CARD_WINE CARD_CFG CARD_UPGRADE CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_FIGS CARD_FIG_BY_ID
+//          CARD_EXAM_SUBJECTS CARD_COST CARD_WINE CARD_CFG CARD_UPGRADE CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_SKILLS CARD_SKILL_BY_ID CARD_SKILL_BY_ROW CARD_FIGS CARD_FIG_BY_ID
 
 // 品階(§3A.1):lo/hi 生成參數;stCap 單項基礎上限;tai 才帶;jobSlots 職業詞條槽;jobMax 職業最高階;learn 學養型分布(通才/偏才/專才/宗師 %);trN 一般詞條數;skn 技能數(第一階段只記數量)
 var CARD_GRADE = [
@@ -185,6 +185,20 @@ var CARD_TRAITS = [
 ];
 var CARD_TRAIT_BY_ID = {};
 CARD_TRAITS.forEach(function (t) { CARD_TRAIT_BY_ID[t.id] = t; });
+
+// 戰場技能(PLACEHOLDER;品階 skn 決定張數,依職業行取用,不足以通用技補;戰事重開後生效,城建專注模式不啟用)。type:主動 / 被動 / 光環;cd 秒(被動、光環為 0);d 內 {v} 取 v 值,改 v 說明自動更新
+var CARD_SKILLS = [
+  { id: 'sk_nong', row: '農', n: '開倉賑軍', type: '光環', cd: 0, v: 5, d: '3 格內友軍補給消耗 −{v} %' },
+  { id: 'sk_gong', row: '工', n: '連夜趕工', type: '被動', cd: 0, v: 15, d: '工兵施工速度 +{v} %' },
+  { id: 'sk_shang', row: '商', n: '軍市互易', type: '被動', cd: 0, v: 10, d: '戰後繳獲金幣 +{v} %' },
+  { id: 'sk_wen', row: '文', n: '傳檄動搖', type: '主動', cd: 75, v: 8, d: '敵軍士氣 −{v} %,持續 15 秒' },
+  { id: 'sk_yi', row: '醫', n: '戰地療傷', type: '主動', cd: 60, v: 10, d: '友軍恢復 {v} % 兵力' },
+  { id: 'sk_zheng', row: '政', n: '號令三軍', type: '主動', cd: 90, v: 10, d: '全軍攻擊 +{v} %,持續 10 秒' },
+  { id: 'sk_wu', row: '武', n: '衝鋒陷陣', type: '主動', cd: 45, v: 20, d: '下一次接戰傷害 +{v} %' },
+  { id: 'sk_gen', row: '通', n: '臨陣應變', type: '被動', cd: 0, v: 5, d: '部隊受傷 −{v} %' }
+];
+var CARD_SKILL_BY_ID = {}, CARD_SKILL_BY_ROW = {};
+CARD_SKILLS.forEach(function (k) { CARD_SKILL_BY_ID[k.id] = k; CARD_SKILL_BY_ROW[k.row] = k; });
 
 // 名人 70 位(PLAN_CARDS §5.4,由表格轉出,不另編造):id、名、字、陣營(0 魏 1 蜀 2 吳 3 黃巾 4 中立)、籍貫、五維[統武智政魅]、才、
 // tr = [詞條名, 專屬(1/0), 說明]、bio 史實依據(簡)、fb 陣營依據、gr 品階(4 = A 級名人 金、3 = B 級名人 紫)、birth 生卒。職業欄由引擎依五維自動推導(未於 §5.4 手填)。

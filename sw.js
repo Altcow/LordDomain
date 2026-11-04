@@ -1,4 +1,4 @@
-const VERSION = 'v29';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v30';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const PRECACHE = [
@@ -62,6 +62,7 @@ const PRECACHE = [
   './js/talentpatrol.js',
   './js/cityfx_data.js',
   './js/cityfx.js',
+  './js/objcat.js',
   './js/cityadvisor_data.js',
   './js/cityadvisor.js',
   './js/panorama.js',
@@ -77,6 +78,7 @@ const PRECACHE = [
   './js/nl_objects.js',
   './js/art_card.js',
   './js/panelmgr.js',
+  './js/buildpreview.js',
   './js/techui.js',
   './js/settingsui.js',
   './js/progui.js',

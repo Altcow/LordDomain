@@ -553,7 +553,7 @@
     sawbench: item('鋸台', '🪚', 1, 1, 40),
     lograft: item('流送木排', '🌲', 1, 2, 60, { on: WATER() }),
     post_station: item('驛站', '🏘️', 3, 2, 220),
-    toll_gate: item('關津稅卡', '💰', 3, 1, 180),
+    toll_gate: item('關津稅卡', '🚧', 3, 1, 180),
     dock: item('碼頭', '⚓', 1, 1, 40, { on: WATER() }),
     boat_small: item('渡船', '⛵', 1, 2, 90, { on: WATER() }),
     warship: item('戰船', '🚢', 2, 3, 350, { on: WATER() }),
