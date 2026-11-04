@@ -1,6 +1,6 @@
 // 全景離屏繪製（PLAN 11.3）：全景預覽入口與 DOM 已移除；保留 renderPanorama 與 pano 物件（pano.open 恆為 false，citylife.js / render.js / recorder.js 仍以它判斷）
 const PANO_PAD = 8, PANO_TOP = MAX_H * HL + 64, PANO_BOTTOM = HL + 8;
-const pano = { open: false, busy: false, token: 0, blob: null, file: null, url: '', mode: '', w: 0, h: 0, ms: 0, encMs: 0 };
+const pano = { open: false, busy: false, rend: false, token: 0, blob: null, file: null, url: '', mode: '', w: 0, h: 0, ms: 0, encMs: 0 };
 
 function panoBounds() {
   const left = isoX(0, boardH()) - PANO_PAD, right = isoX(boardW(), 0) + PANO_PAD;
@@ -20,6 +20,7 @@ function renderPanorama(maxSide) {
   if (!c) throw new Error('2d context unavailable');
   const saved = { x: view.x, y: view.y, zoom: view.zoom, w: viewport.w, h: viewport.h, dpr: viewport.dpr, pv: preview.visible };
   const t0 = performance.now();
+  pano.rend = true;
   try {
     view.x = b.cx;
     view.y = b.cy;
@@ -30,6 +31,7 @@ function renderPanorama(maxSide) {
     preview.visible = false;
     draw(c, performance.now() / 1000);
   } finally {
+    pano.rend = false;
     view.x = saved.x;
     view.y = saved.y;
     view.zoom = saved.zoom;

@@ -1,5 +1,5 @@
 // js/cardsui.js — 卡牌與酒館 第一階段介面(PLAN_CARDS §2.3 名帖、§3A.6 卡面、§4.13.8 職業條、§7A 名額與請辭):招募頁(酒館 / 縣試 / 殿試三分頁)+ 名冊頁(列表 + 詳情)。
-// 文字卡 v1:品階用「色(--gr0~--gr4)+ 品字 + 角飾數」三重表示;陣營字用墨色;頭像 = 中性人物剪影(依品階上色)+ 職業名;名人用 assets/portraits/<id>.webp,路人預留 assets/portraits/generic/<職業id>_<品階0-3>_<變體a-d>.webp(缺圖回退剪影)。詞條 / 技能 / 職業 / 圖例可點,彈出說明浮層(面板內自管:panelmgr 規定 card 不能與大面板並開)。
+// 文字卡 v1:品階用「色(--gr0~--gr4)+ 品字 + 角飾數」三重表示;陣營字用墨色;頭像 = 中性人物剪影(依品階上色)+ 職業名;名人用 assets/portraits/<id>.webp,路人用 assets/portraits/generic/<職業id>_<變體a-c>.webp(不分品階;舊命名 <職業id>_<品階0-3>_<a-d>.webp 次選;缺圖回退剪影)。詞條 / 技能 / 職業 / 圖例可點,彈出說明浮層(面板內自管:panelmgr 規定 card 不能與大面板並開)。
 // 入口:點酒館 / 考場 / 殿試台建築(ui.js tapObjectAt → cardsUiTap);或 cardsUiOpen(tab)。面板走 panelmgr('cards');引擎在 cards.js,資料在 carddata.js。
 // 不發聲、不推播、不紅點。ES2017;不用 ?. ??。
 // 全域名稱:cardsUiOpen cardsUiClose cardsUiToggle cardsUiTap cardsUiRender cardsUiHtmlCard cardsUiCtx cardsUiFmtCd cardsUiInfo cardsUiInfoHtml cardsUiAvatarVar
@@ -95,17 +95,33 @@ function cuTraitsHtml(c, full) {
   return h;
 }
 function cardsUiAvatarVar(c) {
-  var s = String(c.name) + '|' + c.main + '|' + c.gr + '|' + (c.slot === undefined ? '' : c.slot), h = 7, i;
+  var s = String(c.name) + '|' + c.main + '|' + (c.slot === undefined ? '' : c.slot), h = 7, i;
   for (i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) >>> 0;
-  return 'abcd'.charAt(h % 4);
+  return 'abc'.charAt(h % 3);
 }
-function cuImgFail(img) { var m = img.getAttribute('src'); if (m) cuMiss[m] = 1; img.remove(); }
+// 卡片主職業(職業詞條最高階者)→ 頭像職業 id;沒有職業詞條回 null(回退剪影)
+function cardsUiPortraitJob(c) {
+  var best = null, bt = 0, id;
+  if (c.main && CARD_JOB_PORTRAIT[c.main]) return CARD_JOB_PORTRAIT[c.main];
+  for (id in (c.ja || {})) if (CARD_JOB_PORTRAIT[id] && c.ja[id] > bt) { bt = c.ja[id]; best = id; }
+  return best ? CARD_JOB_PORTRAIT[best] : null;
+}
+function cuImgFail(img) {
+  var m = img.getAttribute('src'), a = img.getAttribute('data-alt');
+  if (m) cuMiss[m] = 1;
+  if (a && !cuMiss[a]) { img.removeAttribute('data-alt'); img.setAttribute('src', a); return; }
+  img.remove();
+}
 function cuAvatarHtml(c) {
-  var j = CARD_JOB_BY_ID[c.main], G = CARD_GRADE[c.gr], corner = '', i, src = '', img = '';
+  var j = CARD_JOB_BY_ID[c.main], G = CARD_GRADE[c.gr], corner = '', i, src = '', alt = '', img = '', pj;
   for (i = 0; i < G.corner; i++) corner += '◆';
   if (c.fig) src = 'assets/portraits/' + cuEsc(c.fig) + '.webp';
-  else if (j && c.gr <= 3) src = 'assets/portraits/generic/' + j.id + '_' + c.gr + '_' + cardsUiAvatarVar(c) + '.webp';
-  if (src && !cuMiss[src]) img = '<img alt="" src="' + src + '" onerror="cuImgFail(this)">';
+  else if ((pj = cardsUiPortraitJob(c))) {
+    src = 'assets/portraits/generic/' + pj + '_' + cardsUiAvatarVar(c) + '.webp';
+    if (c.gr <= 3) alt = 'assets/portraits/generic/' + pj + '_' + c.gr + '_' + cardsUiAvatarVar(c) + '.webp';
+    if (cuMiss[src] && alt) { src = alt; alt = ''; }
+  }
+  if (src && !cuMiss[src]) img = '<img alt="" src="' + src + '"' + (alt ? ' data-alt="' + alt + '"' : '') + ' onerror="cuImgFail(this)">';
   return '<div class="cuavw"><div class="cuav"><svg class="cusil" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="14" r="7.5"/><path d="M5 40c0-9 6-14.5 15-14.5S35 31 35 40z"/></svg>' + img + '<span class="cuavc">' + corner + '</span></div><span class="cuavj">' + (j ? cuEsc(j.name) : '') + '</span></div>';
 }
 function cardsUiHtmlCard(c, opt) {

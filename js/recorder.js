@@ -869,7 +869,7 @@ function recPrepare() {
   R.note = '';
   R.spdPct = -1;
   if (!R.opts.camOnly) recApplyRes(R.plan.quality);
-  document.body.classList.add('shooting');
+  document.body.classList.add('shooting'); if (typeof updateZoomMin === 'function') updateZoomMin(true);
 }
 
 function recUnprepare() {
@@ -977,7 +977,7 @@ function recEnterRun(camOnly) {
   recUpdateMarkBtns();
   recUpdateSpeedBar(0);
   recSetHudOff(!R.opts.hud);
-  document.body.classList.add('shooting');
+  document.body.classList.add('shooting'); if (typeof updateZoomMin === 'function') updateZoomMin(true);
   recShowRoot('hud');
   recHudTick();
 }
@@ -1200,7 +1200,7 @@ function recPlanOpen() {
   if (err) { recSetMsg(err); return; }
   R.saved = { x: view.x, y: view.y, zoom: view.zoom };
   R.state = 'plan';
-  document.body.classList.add('shooting');
+  document.body.classList.add('shooting'); if (typeof updateZoomMin === 'function') updateZoomMin(true);
   recUpdateMarkBtns();
   recShowRoot('plan');
 }

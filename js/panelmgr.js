@@ -253,7 +253,7 @@ function panelRestoreState() {
     }
     c = s.cam;
     if (c && typeof view !== 'undefined' && view && (view.x !== c.x || view.y !== c.y || view.zoom !== c.zoom)) {
-      view.x = c.x; view.y = c.y; view.zoom = c.zoom;
+      view.x = c.x; view.y = c.y; view.zoom = typeof clampZoom === 'function' ? clampZoom(c.zoom) : c.zoom;
     }
   } catch (e) { /* 略過 */ }
 }

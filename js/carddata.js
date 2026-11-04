@@ -1,7 +1,7 @@
 // js/carddata.js — 卡牌與酒館 第一階段純資料(PLAN_CARDS.md v3:§2.2~2.6、§3A、§3.5、§4.4、§4.13、§5.4、§7.1;城建專注模式)。
 // 數字多為 PLACEHOLDER。戰、統、謀與名人專屬詞條資料保留但第一階段不啟用(CARD_TRAITS.cls / card.trn 標示)。
 // 驗證:node tools/test_cards.js(含名人表 lint)。不寫 DOM、不讀時間。ES2017;不用 ?. ??。
-// 全域名稱:CARD_GRADE CARD_STATS CARD_LEARN CARD_FAC CARD_ROWS CARD_JOB_TIERPCT CARD_JOBS CARD_JOB_BY_ID CARD_POST_GROUP CARD_VENUE_ORDER CARD_VENUES
+// 全域名稱:CARD_GRADE CARD_STATS CARD_LEARN CARD_FAC CARD_ROWS CARD_JOB_TIERPCT CARD_JOBS CARD_JOB_BY_ID CARD_JOB_PORTRAIT CARD_POST_GROUP CARD_VENUE_ORDER CARD_VENUES
 //          CARD_EXAM_SUBJECTS CARD_COST CARD_WINE CARD_CFG CARD_UPGRADE CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_SKILLS CARD_SKILL_BY_ID CARD_SKILL_BY_ROW CARD_FIGS CARD_FIG_BY_ID
 
 // 品階(§3A.1):lo/hi 生成參數;stCap 單項基礎上限;tai 才帶;jobSlots 職業詞條槽;jobMax 職業最高階;learn 學養型分布(通才/偏才/專才/宗師 %);trN 一般詞條數;skn 技能數(第一階段只記數量)
@@ -49,6 +49,35 @@ var CARD_JOBS = [
 ];
 var CARD_JOB_BY_ID = {};
 CARD_JOBS.forEach(function (j) { CARD_JOB_BY_ID[j.id] = j; });
+// 路人頭像檔名對照:職業 id → assets/portraits/generic/<此值>_<a|b|c>.webp(26 職業 × 3 變體 = 78 張)
+var CARD_JOB_PORTRAIT = {
+  nongshi: 'nongshi',
+  xumu: 'xumu',
+  yulie: 'yulie',
+  linmu: 'linmu',
+  zhishui: 'zhishui',
+  yingzao: 'yingzao',
+  yetie: 'yetie',
+  taoci: 'taoci',
+  fangzhi: 'fangzhi',
+  niangzao: 'niangzao',
+  jiqiao: 'jiqiao',
+  caishi: 'caishi',
+  zaozhi: 'zaozhi',
+  shangcai: 'shangcai',
+  jisuan: 'jisuan',
+  zhouche: 'zhouche',
+  ciling: 'ciling',
+  wenshu: 'wenshu',
+  jiaohua: 'jiaohua',
+  yuewu: 'yuewu',
+  tianwen: 'tianwen',
+  lvfa: 'lvfa',
+  yishu: 'yishu',
+  paochu: 'paochu',
+  lizhi: 'lizhi',
+  bingshi: 'bingshi'
+};
 // 派工頁(lordhallui LH_SLOTS 的 grp:文 / 商 / 工)對照:職業行 → 群組字
 var CARD_POST_GROUP = { '農': '工', '工': '工', '商': '商', '文': '文', '醫': '文', '政': '文', '武': '工' };
 

@@ -8,6 +8,9 @@ function setSeason(name) {
 
 const view = { x: 0, y: 0, zoom: 1 };
 const ZOOM_ABS_MIN = 0.35, ZOOM_MIN_CAP = 1.5, ZOOM_MAX = 2.5;
+// 一般遊玩縮放範圍(降低最壞繪製成本與記憶體):手機 / 觸控 0.55~1.6;桌機大視窗(窗寬 >= 1000 且非觸控)0.45~2.0。
+// 拍照 / 錄影運鏡 / 全景一律用寬範圍(zoomAbsMin()~ZOOM_MAX)。所有設定 view.zoom 的路徑都經 clampZoom() / zoomLimits()
+const ZOOM_PLAY_MIN = 0.55, ZOOM_PLAY_MAX = 1.6, ZOOM_PLAY_MIN_WIDE = 0.45, ZOOM_PLAY_MAX_WIDE = 2.0, ZOOM_DESKTOP_W = 1000;
 const ZOOM_ABS_MIN_BIG = 0.15;   // 經營大板(邊長 > MAP_W)的全景縮放下限(PLAN_BIGMAP §7.1);戰陣 / 戰鬥板維持 ZOOM_ABS_MIN
 function zoomAbsMin() { return boardW() > MAP_W ? ZOOM_ABS_MIN_BIG : ZOOM_ABS_MIN; }
 // 視圖範圍(格座標 [x0, y0, x1, y1],x1 / y1 不含):大板的經營模式在土地未全開時限制在「土地外框 + 6 格」,其餘為整張板子
@@ -22,7 +25,39 @@ function viewCells() {
 }
 // 縮放低於此值:不畫地格邊線(細線會閃爍)、建築改畫色塊
 const TILE_EDGE_MIN_ZOOM = 0.35, OBJ_BLOB_ZOOM = 0.35;
-let zoomMin = ZOOM_ABS_MIN;
+let zoomMin = ZOOM_ABS_MIN, zoomMax = ZOOM_MAX;
+let zoomLimKey = '';   // 目前生效的縮放範圍簽名(模式 / 視窗改變時重算 zoomMin、zoomMax)
+// 拍照 / 錄影 / 全景(含離屏渲染中)為寬範圍模式
+function zoomWideMode() {
+  try {
+    if (typeof document !== 'undefined' && document.body && document.body.classList) {
+      const cl = document.body.classList;
+      if (cl.contains('shooting') || cl.contains('photo-mode')) return true;
+    }
+    if (typeof REC === 'object' && REC && REC.state && REC.state !== 'idle') return true;
+    if (typeof pano === 'object' && pano && (pano.open || pano.busy || pano.rend)) return true;
+  } catch (e) { /* 載入順序未就緒:視為一般模式 */ }
+  return false;
+}
+// 回傳目前模式的縮放上下限(未含「整圖塞進視窗」的 fit 下限;fit 見 updateZoomMin)
+function zoomLimits() {
+  if (zoomWideMode()) return { min: zoomAbsMin(), max: ZOOM_MAX, wide: true };
+  const desk = viewport.w >= ZOOM_DESKTOP_W && !(typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+  return desk ? { min: ZOOM_PLAY_MIN_WIDE, max: ZOOM_PLAY_MAX_WIDE, wide: false } : { min: ZOOM_PLAY_MIN, max: ZOOM_PLAY_MAX, wide: false };
+}
+// 所有「設定縮放」的統一夾限(含 fit 下限);模式若剛切換先同步 zoomMin / zoomMax
+function clampZoom(z) {
+  const L = zoomLimits(), key = L.min + '|' + L.max + '|' + viewport.w;
+  if (key !== zoomLimKey) updateZoomMin(true);
+  return Math.max(zoomMin, Math.min(zoomMax, z));
+}
+// 每幀:縮放超出目前範圍(離開拍照 / 錄影、或任何繞過夾限的路徑)時平順拉回
+function zoomEase() {
+  const z = view.zoom, t = Math.max(zoomMin, Math.min(zoomMax, z));
+  if (t === z) return;
+  view.zoom = Math.abs(t - z) < 0.004 ? t : z + (t - z) * 0.2;
+  clampView();
+}
 let viewKey = null;   // 板子邊長 + 視圖範圍;改變(換板 / 升級擴地)時重算 zoomMin 與視圖夾限
 const viewport = { w: 0, h: 0, dpr: 1 };
 const preview = { visible: false, x: 0, y: 0, tool: null, rot: 0, ok: true };
@@ -37,11 +72,14 @@ function resizeCanvas(canvas) {
 }
 
 // 縮放下限 = 視圖範圍(整張地圖或大板的土地外框)剛好塞進視窗(寬高取較嚴者),上限 ZOOM_MIN_CAP;所有地圖共用
-function updateZoomMin() {
+function updateZoomMin(soft) {
   const b = viewCells(), n = (b[2] - b[0]) + (b[3] - b[1]);
   const fit = Math.min(viewport.w / (n * TW / 2), viewport.h / (n * TH / 2 + MAX_H * HL + 64));
-  zoomMin = Math.max(zoomAbsMin(), Math.min(ZOOM_MIN_CAP, fit));
-  if (view.zoom < zoomMin) view.zoom = zoomMin;
+  const L = zoomLimits();
+  zoomMax = L.max;
+  zoomMin = Math.min(L.max, Math.max(L.min, Math.min(ZOOM_MIN_CAP, fit)));
+  zoomLimKey = L.min + '|' + L.max + '|' + viewport.w;
+  if (!soft) view.zoom = Math.max(zoomMin, Math.min(zoomMax, view.zoom));   // soft = 模式切換:交給 zoomEase 平順拉回
   viewKey = boardW() + '|' + b.join(',');
 }
 // 每幀檢查:換板或土地擴張後視圖範圍變了才重算(第一次只記錄,不動視圖)
@@ -49,6 +87,10 @@ function syncBoardView() {
   const key = boardW() + '|' + viewCells().join(',');
   if (viewKey === null) { viewKey = key; return; }
   if (key !== viewKey) { updateZoomMin(); clampView(); }
+  if (typeof pano === 'object' && pano.rend) return;   // 全景離屏渲染中:view.zoom 是暫代值,不得動
+  const L = zoomLimits();
+  if (L.min + '|' + L.max + '|' + viewport.w !== zoomLimKey) updateZoomMin(true);
+  zoomEase();
 }
 
 // 手機(窗寬 <= 600 或觸控裝置)開機時的預設縮放:可視面積約 1.6 倍;不小於 zoomMin。僅開機套用一次,使用者手動縮放不受影響
@@ -58,7 +100,7 @@ function isMobileLayout() {
 }
 function applyStartZoom() {
   if (!isMobileLayout()) return;
-  view.zoom = Math.max(zoomMin, view.zoom * MOBILE_START_ZOOM);
+  view.zoom = Math.max(zoomMin, Math.min(zoomMax, view.zoom * MOBILE_START_ZOOM));   // main.js 於 resizeCanvas 之後呼叫,zoomMin / zoomMax 已就緒
 }
 
 function isoX(gx, gy) { return (gx - gy) * TW / 2; }
@@ -92,7 +134,7 @@ function panBy(dsx, dsy) {
 
 function zoomAt(sx, sy, factor) {
   const before = screenToWorld(sx, sy);
-  view.zoom = Math.max(zoomMin, Math.min(ZOOM_MAX, view.zoom * factor));
+  view.zoom = clampZoom(view.zoom * factor);
   const after = screenToWorld(sx, sy);
   view.x += before[0] - after[0];
   view.y += before[1] - after[1];
