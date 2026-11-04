@@ -3,7 +3,7 @@
 // 驗證:node tools/test_cards.js(含名人表 lint)。不寫 DOM、不讀時間。ES2017;不用 ?. ??。
 // 【占位,待手填】名人的職業欄位(CARD_FIGS 無 ja/main)目前由五維自動推導(cards.js cardFigJobs);之後可逐位寫入 CARD_FIG_JOB_OVERRIDE 覆寫,不必改 CARD_FIGS。
 // 全域名稱:CARD_GRADE CARD_STATS CARD_LEARN CARD_FAC CARD_ROWS CARD_JOB_TIERPCT CARD_JOBS CARD_JOB_BY_ID CARD_JOB_PORTRAIT CARD_POST_GROUP CARD_VENUE_ORDER CARD_VENUES
-//          CARD_EXAM_SUBJECTS CARD_COST CARD_WINE CARD_CFG CARD_BAG CARD_FIG_WEIGHT CARD_UPGRADE CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_SKILLS CARD_SKILL_BY_ID CARD_SKILL_BY_ROW CARD_FIGS CARD_FIG_BY_ID CARD_FIG_JOB_OVERRIDE
+//          CARD_EXAM_SUBJECTS CARD_COST CARD_WINE CARD_CFG CARD_BAG CARD_FIG_WEIGHT CARD_UPGRADE CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_SKILLS CARD_SKILL_BY_ID CARD_SKILL_BY_ROW CARD_FIGS CARD_FIG_BY_ID CARD_FIG_JOB_OVERRIDE CARD_VISIT
 
 // 品階(§3A.1):lo/hi 生成參數;stCap 單項基礎上限;tai 才帶;jobSlots 職業詞條槽;jobMax 職業最高階;learn 學養型分布(通才/偏才/專才/宗師 %);trN 一般詞條數;skn 技能數(第一階段只記數量)
 var CARD_GRADE = [
@@ -131,6 +131,29 @@ var CARD_UPGRADE = [
   { from: 2, to: 3, route: '縣試品評', academy: 4, lv: 0,  jobMin: 3, xue: 500,  coin: 12000, lessons: 0, cityLv: 15, flag: 'pinping' },
   { from: 3, to: 4, route: '立傳',     academy: 0, lv: 20, jobMin: 4, xue: 1500, coin: 30000, lessons: 0, flag: 'lizhuan' }
 ];
+// 學院(§7B;數值皆 PLACEHOLDER,集中於此)。院級 = 學舍 / 學宮 / 精舍建築數 + 科技(academyLevel);進修花費以『碎片』與金幣為主
+// (碎片 = 卡包分解所得;cs.shards 滿 5 碎會自動轉酒令,故以『碎』計價,付費時先扣碎片零頭再拆酒令,1 令 = CARD_WINE.shardPerToken 碎)
+var CARD_ACADEMY = {
+  lessonSec: 300,      // 1 課 = 遊玩中 300 秒(離線 / 分頁關閉不推進,尚無『旬報』時的替代;之後接旬報再改)
+  rushRate: 0.5,       // 速成:剩餘課數立即結業,額外花 原碎片 × 此值
+  quitRefund: 0.5,     // 退學:退還已付碎片 / 金幣的比例
+  seats: [0, 2, 3, 4, 5, 6],   // 進修席(依院級 0~5)
+  // 院級條件:tech 科技、school 學舍 + 學宮數、jing 精舍數、gong 學宮數(逐級累積判定,取連續達成的最高級)
+  levels: [null,
+    { name: '庠舍', tech: 'ed_xuexiao', school: 1, jing: 0, gong: 0 },
+    { name: '縣學', tech: 'ed_xuexiao', school: 2, jing: 0, gong: 0 },
+    { name: '書院', tech: 'wr_jingshe', school: 2, jing: 1, gong: 0 },
+    { name: '郡學', tech: 'e_dongguan', school: 3, jing: 1, gong: 0 },
+    { name: '太學', tech: 'ed_taixue',  school: 3, jing: 1, gong: 1 }],
+  learn: { academy: 1, shards: 10, coin: 300, lessons: 1 },   // 習藝:新增一個職業 I 階(需空槽)
+  adv: [null,                                                    // 精進:依『目前階』1/2/3 → +1 階;gr = 最低品階,tenure = 派駐年資(天)
+    { academy: 2, gr: 1, shards: 20,  coin: 600,  lessons: 2, tenure: 0 },
+    { academy: 3, gr: 2, shards: 60,  coin: 2000, lessons: 3, tenure: 0 },
+    { academy: 5, gr: 3, shards: 150, coin: 8000, lessons: 4, tenure: 8 }],
+  up: [                                                          // 升階:依目前品階 0(白→青)/ 1(青→藍);院級與職業階條件沿用 CARD_UPGRADE
+    { shards: 40,  coin: 1500, lessons: 2 },
+    { shards: 100, coin: 5000, lessons: 3 }]
+};
 
 // 路人姓名(占位字表,非史實人物)
 var CARD_NAME_SUR = ['趙', '錢', '孫', '李', '周', '吳', '鄭', '王', '馮', '陳', '褚', '衛', '蔣', '沈', '韓', '楊', '朱', '秦', '尤', '許', '何', '呂', '施', '張', '孔', '曹', '嚴', '華', '金', '魏', '陶', '姜', '戚', '謝', '鄒', '喻', '柏', '竇', '章', '雲', '蘇', '潘', '葛', '范', '彭', '郎', '魯', '韋', '昌', '馬', '苗', '鳳', '花', '方', '俞', '任', '袁', '柳', '鮑', '史', '唐', '費', '廉', '岑', '薛', '雷', '賀', '倪', '湯', '滕', '殷', '羅', '畢', '郝', '安', '常', '樂', '時', '傅', '皮', '卞', '齊', '康', '伍', '余', '元', '顧', '孟', '平', '黃', '穆', '蕭', '尹'];
@@ -323,6 +346,14 @@ var CARD_FIG_WEIGHT = {
   xuchu: 3, caoren: 3, xiahouyuan: 3, xuhuang: 3, huangzhong: 3, xushu: 3, taishici: 3, huanggai: 3, huatuo: 3, caiyong: 3,
   zhongyao: 6, mizhu: 6, maliang: 6, shamoke: 6, zhoutai: 6, chengpu: 6, shixie: 6,
   boca: 6, zhangyan: 6, liupi: 6, yudu: 6, yuji: 6, xurong: 6, youtu: 6, yufuluo: 6
+};
+// 在野名人路過(js/npcvisit.js;使用者決議,數值皆 PLACEHOLDER)。名人來源 CARD_FIGS(金 / 紫階),依上面 CARD_FIG_WEIGHT 加權(缺項 金 10 / 紫 6),已在名冊 / 卡包的不來。
+//   countW = 每日 0 / 1 / 2 位的權重;startMin~endMin = 一天中可抵達的時段(分鐘,本機時間,白天);windowMin = 預定抵達後多久內才演(過了不補演);
+//   stops = 逛的停點數範圍;standSec = 每站停留秒數範圍;maxLifeSec = 單次停留上限(超過就離城);cap / capLow = 同時最多幾位(一般 / 省電或低階機);
+//   rewardDayMax = 每日小獎勵次數上限;reward = 依品階(3 紫 / 4 金)首次點擊的小獎勵(tok 酒令、shards 碎片;不碰抽卡機率與卡包);aura = 光環 / 小星顏色
+var CARD_VISIT = {
+  on: true, countW: [30, 45, 25], startMin: 420, endMin: 1110, windowMin: 45, stops: [3, 6], standSec: [6, 10], maxLifeSec: 300,
+  cap: 2, capLow: 1, rewardDayMax: 2, reward: { 3: { tok: 1 }, 4: { tok: 1, shards: 3 } }, aura: { 3: '#b48cf0', 4: '#f0c850' }
 };
 // 卡包(PLAN_CARDS 第四批決議;數字多為 PLACEHOLDER)。開批的卡直接進卡包 cs.bag;卡包不佔名冊名額。
 var CARD_BAG = {

@@ -400,7 +400,7 @@ function cardsNamedTick(dt) {
   cardsNamedClock += dt || 0;
   if (cardsNamedClock < 5) return 0;
   cardsNamedClock = 0;
-  try { if (typeof npcTick === 'function') npcTick(5); cs = cardsGet(); return cs ? cardsNamedRankCheck(cs) : 0; } catch (e) { return 0; }   // npcTick:人物互動(親近年資 / 請託)
+  try { if (typeof academyTick === 'function') academyTick(5); if (typeof npcTick === 'function') npcTick(5); cs = cardsGet(); return cs ? cardsNamedRankCheck(cs) : 0; } catch (e) { return 0; }   // npcTick:人物互動(親近年資 / 請託)
 }
 
 // ───────── 名冊 / 任用 / 請辭 ─────────
@@ -627,6 +627,7 @@ function cardsRelease(cs, id, opts) {
   if (!f || f.list === 'wander') return { ok: false, reason: 'none' };
   e = f.e;
   if (e.star) return { ok: false, reason: 'locked' };
+  if (e.study) return { ok: false, reason: 'study' };   // 進修中(academy.js)不可請辭
   if (e.at && !o.unassign) return { ok: false, reason: 'busy' };
   cs[f.list].splice(f.idx, 1);
   e.at = null;
@@ -746,6 +747,13 @@ function cardNormCard(c, isEntry, isBag) {
     o.id = String(c.id || ''); if (!o.id) return null;
     o.no = cardNum(c.no, 0, 1e9, 0) | 0; o.pool = (c.pool === 'T' || c.pool === 'E' || c.pool === 'G') ? c.pool : 'T'; o.key = String(c.key || '').slice(0, 20);
     o.at = (typeof c.at === 'string' && c.at) ? c.at.slice(0, 40) : null; o.star = c.star ? 1 : 0; o.tok = cardNum(c.tok, 0, CARD_CFG.tokMax, 0) | 0;
+    if (cardNum(c.sn, 0, 9999, 0) | 0) o.sn = cardNum(c.sn, 0, 9999, 0) | 0;   // 學院進修次數(有值才寫)
+    if (!o.fig && c.study && typeof c.study === 'object' && (c.study.k === 'up' || c.study.k === 'learn' || c.study.k === 'adv') && (c.study.k === 'up' || CARD_JOB_BY_ID[c.study.j])) {   // 進修中(academy.js):k 類別 j 職業 n 課數 l 已完成 p 本課已累積秒 cs/cc 已付碎片 / 金幣
+      o.study = { k: c.study.k, n: cardNum(c.study.n, 1, 9, 1) | 0, l: 0, p: Math.round(cardNum(c.study.p, 0, 1e5, 0)), cs: cardNum(c.study.cs, 0, 1e6, 0) | 0, cc: cardNum(c.study.cc, 0, 1e9, 0) | 0 };
+      o.study.l = Math.min(o.study.n - 1, cardNum(c.study.l, 0, 9, 0) | 0);
+      if (c.study.k !== 'up') o.study.j = c.study.j;
+      o.at = null;
+    }
     o.up = cardNum(c.up, 0, CARD_CFG.upMax, 0) | 0; o.cost = cardNum(c.cost, 0, 99, CARD_GRADE[o.gr].cost) | 0;
     if (cardNum(c.fav, 0, 5, 0) | 0) o.fav = cardNum(c.fav, 0, 5, 0) | 0; if (c.gift) o.gift = 1; if (typeof c.favDay === 'number' && isFinite(c.favDay)) o.favDay = c.favDay | 0; if (typeof c.since === 'number' && isFinite(c.since)) o.since = c.since | 0;   // 人物互動(npcinteract.js):親近 / 小禮旗標 / 最近加親近日 / 派駐起始日
     cardsRefreshEntry(o);
@@ -814,7 +822,7 @@ function cardsNormSave(v) {
     if (!n.cur[x]) return;
     cardsBagCommit(n, x, { noAuto: true });
   });
-  if (Array.isArray(v.errand)) n.errand = v.errand.slice(0, 4).filter(function (q) { return q && typeof q.id === 'string' && typeof q.eid === 'string' && (q.kind === 'goods' || q.kind === 'build'); }).map(function (q) {   // 人物請託(npcinteract.js)
+  if (Array.isArray(v.errand)) n.errand = v.errand.slice(0, 4).filter(function (q) { return q && typeof q.id === 'string' && typeof q.eid === 'string' && (q.kind === 'goods' || q.kind === 'build' || q.kind === 'study'); }).map(function (q) {   // 人物請託(npcinteract.js)
     return { id: q.id.slice(0, 12), eid: q.eid.slice(0, 12), kind: q.kind, text: String(q.text || '').slice(0, 60), day: cardNum(q.day, 0, 1e9, 0) | 0, goods: q.goods ? String(q.goods).slice(0, 24) : undefined, n: cardNum(q.n, 0, 999, 0) | 0, type: q.type ? String(q.type).slice(0, 32) : undefined, base: cardNum(q.base, 0, 9999, 0) | 0 };
   });
   if (cardNum(v.errDay, -1, 1e9, -1) > -1) n.errDay = cardNum(v.errDay, -1, 1e9, -1) | 0;

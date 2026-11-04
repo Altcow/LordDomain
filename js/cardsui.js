@@ -68,7 +68,8 @@ function cuCs() {
 }
 function cardsUiCtx() {
   var res = (typeof world !== 'undefined' && world && world.res) || {};
-  return { coin: res.coin || 0, xue: res.xue || 0 };   // academy / lessons 等:學院系統尚未實作,缺值即「尚未開放」
+  if (typeof academyCtx === 'function') return academyCtx();   // 學院系統(academy.js):院級 / 資源
+  return { coin: res.coin || 0, xue: res.xue || 0 };   // 無學院系統時 academy 缺值即「尚未開放」
 }
 
 // ---------- 卡面(文字卡 v1) ----------
@@ -252,7 +253,7 @@ function cuRowHtml(e, wait, wander) {
   var G = CARD_GRADE[e.gr], j = CARD_JOB_BY_ID[e.main], corner = '', i;
   for (i = 0; i < G.corner; i++) corner += '◆';
   return '<div class="cur" data-a="detail" data-id="' + e.id + '" style="border-left:5px solid var(--gr' + e.gr + ');padding-left:6px;min-height:44px;cursor:pointer"><span><b>' + G.ch + corner + '</b> ' + cuEsc(e.name) + ' ' + (e.star ? '🔒' : '') +
-    '<span class="cusub"> ' + (j ? j.t[(e.ja[e.main] || 1) - 1] : '') + (e.at ? ' · 派駐' : '') + '</span></span><span class="cusub">才 ' + e.tai + (wait ? ' · 待定' : '') + (wander ? ' · 流浪' : '') + '</span></div>';
+    '<span class="cusub"> ' + (j ? j.t[(e.ja[e.main] || 1) - 1] : '') + (e.at ? ' · 派駐' : '') + (e.study ? ' · 進修中' : '') + '</span></span><span class="cusub">才 ' + e.tai + (wait ? ' · 待定' : '') + (wander ? ' · 流浪' : '') + '</span></div>';
 }
 function cuDetailHtml(cs, f) {
   var e = f.e, h = '<button class="cub" data-a="back">‹ 返回名冊</button>', k, chk, sl = cardsJobSlots(e);
@@ -264,7 +265,8 @@ function cuDetailHtml(cs, f) {
     h += '<div class="cusub" style="opacity:1;cursor:pointer" data-a="info" data-k="job" data-key="' + k + ':' + t + '">' + cuEsc(j.name) + ':' + j.t.map(function (n, i) { return i < t ? '<b>' + n + '</b>' : n; }).join(' → ') + '<br>對口 ' + cuEsc(j.post) + ' · 加成 +' + CARD_JOB_TIERPCT[t] + ' %(' + cuEsc(j.eff) + ')' + (t === 4 ? ' · 宗師舞台:' + cuEsc(j.stage) : '') + '</div>';
   }
   chk = cardsUpgradeCheck(e, cardsUiCtx());
-  h += '<div class="cusec">升階</div><div class="cusub" style="opacity:1">' + (chk.ok ? '條件已達' : cuEsc(chk.reasons.join(';'))) + '</div>';
+  if (typeof cuAcademyHtml === 'function' && f.list === 'roster') h += cuAcademyHtml(cs, e);   // 學院進修 / 升階(academyui.js)
+  else h += '<div class="cusec">升階</div><div class="cusub" style="opacity:1">' + (chk.ok ? '條件已達' : cuEsc(chk.reasons.join(';'))) + '</div>';
   if (typeof cuNpcDetailHtml === 'function') h += cuNpcDetailHtml(cs, e, f);   // 親近 / 所在 / 請託 / 升階(npcui.js)
   h += '<div class="cusec">管理</div>';
   if (f.list === 'wait') h += '<button class="cub" data-a="accept" data-id="' + e.id + '"' + (cs.roster.length >= cardsCap() ? ' disabled' : '') + '>收入名冊</button>';

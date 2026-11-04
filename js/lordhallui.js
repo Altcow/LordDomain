@@ -83,6 +83,7 @@ function lordhallAssign(tid, siteId) {
   if (siteId === null || siteId === undefined || siteId === '') { t.at = null; delete t.since; lhStaffDirty(); return true; }
   lordhallJobSites().forEach(function (s) { if (s.id === siteId) site = s; });
   if (!site) return false;
+  if (t.study) return false;   // 進修中(academy.js)不能派駐
   if (site.who.length >= site.slots && site.who.indexOf(t) < 0) return false;
   if (site.post && typeof npcCanAssign === 'function' && t.at !== siteId && !npcCanAssign(t, siteId)) return false;   // 職司席位已滿
   t.at = siteId;
@@ -100,7 +101,7 @@ function lordhallAssignPost(tid, postId) {
 // 全部自動分派:閒置人才優先給職司對口(t.job === site.grp)的建築,其次任何有空位者;有職司表時改以個人人事值最高的職司為先
 function lordhallAutoAssign() {
   var ts = lordhallTalents(), n = 0;
-  var idle = ts.filter(function (t) { return !t.at; });
+  var idle = ts.filter(function (t) { return !t.at && !t.study; });
   if (!idle.length) return 0;
   idle.sort(function (a, b) { return (b.star ? 1 : 0) - (a.star ? 1 : 0); });
   idle.forEach(function (t) {
@@ -201,7 +202,7 @@ function lhHtmlJobs() {
   var ts = lordhallTalents(), sites = lordhallJobSites(), h = '';
   if (!ts.length) return '<div class="lhr"><span>尚無人才,招募後可派工</span></div>';
   if (typeof npcStaffInfo === 'function' && typeof NPC_TYPE_POST !== 'undefined') return lhHtmlPosts(ts, sites);
-  var idle = ts.filter(function (t) { return !t.at; });
+  var idle = ts.filter(function (t) { return !t.at && !t.study; });
   h += '<div class="lhr"><span>人才 ' + ts.length + '(閒置 ' + idle.length + ')</span><button class="lhb" data-lh="auto"' + (idle.length && sites.length ? '' : ' disabled') + '>全部自動分派</button></div>';
   if (!sites.length) return h + '<div class="lhr"><span>城中尚無可派駐的建築</span></div>';
   sites.forEach(function (s) {

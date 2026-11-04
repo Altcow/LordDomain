@@ -986,6 +986,7 @@ function lifeFrame(time) {
   lifePortTick(dt);
   if (typeof lifeTrafficTick === 'function') lifeTrafficTick(dt);
   if (typeof npcHeroTick === 'function') npcHeroTick(dt);   // 名冊人物 hero(npcinteract.js)
+  if (typeof npcVisitTick === 'function') npcVisitTick(dt);   // 在野名人路過(npcvisit.js)
   if (typeof caravanVisTick === 'function') caravanVisTick(dt);   // 走鏢車隊視覺(caravan_vis.js)
   LIFE.chatT -= dt;
   if (LIFE.chatT <= 0) { LIFE.chatT = 0.5; lifeChatCheck(); }
@@ -1097,6 +1098,7 @@ function lifeDrawDiag(ctx, d, time) {
     const n = list[k];
     const alpha = n.alpha * mult;
     if (alpha <= 0) continue;
+    if (n.vis && npcVisitHidden()) continue;   // 在野名人:縮放 < 0.5 / 拍照 / 錄影不畫(照常走)
     if (dots) {
       if (LIFE.dots >= LIFE_DOT_MAX) continue;
       LIFE.dots++;
@@ -1118,7 +1120,9 @@ function lifeDrawDiag(ctx, d, time) {
       }
       continue;
     }
+    if (n.vis) npcVisitHalo(ctx, n, alpha);   // 在野名人光環(npcvisit.js)
     lifeDrawOne(ctx, n, res, tod, season, useArt, alpha);
+    if (n.vis) npcVisitStar(ctx, n, alpha);
     if (useArt && n.spec && ART.bubble) {
       if (n.st === 'act' && n.act === 'trade') {
         ART.bubble(ctx, n.px, n.py, 'trade', LIFE.clock, res, n.spec.scale || 1);
@@ -1146,6 +1150,7 @@ function lifeTap(sx, sy) {
   for (let i = 0; i < LIFE.npcs.length; i++) {
     const n = LIFE.npcs[i];
     if (n.dead || n.alpha < 0.5 || n.st === 'enter' || n.st === 'exit' || n.st === 'fade') continue;
+    if (n.vis && npcVisitHidden()) continue;
     const h = worldToScreen(n.px, n.py - 20);
     const dx = sx - h[0], dy = sy - h[1], dd = dx * dx + dy * dy;
     if (dd < bd) { bd = dd; best = n; }
@@ -1196,6 +1201,8 @@ function lifeCardMake() {
 }
 
 function lifeCardShow(n) {
+  if (n.role === 'visitor' && typeof npcVisitCardShow === 'function' && npcVisitCardShow(n)) return;   // 在野名人:專屬小卡(npcvisit.js)
+  if (typeof npcVisitCardHide === 'function') npcVisitCardHide();
   if (n.role === 'hero' && typeof npcHeroCardShow === 'function' && npcHeroCardShow(n)) return;   // 名冊人物:專屬小卡(npcui.js)
   if (typeof npcHeroCardHide === 'function') npcHeroCardHide();
   const c = LIFE.card || lifeCardMake();
@@ -1210,5 +1217,6 @@ function lifeCardShow(n) {
 function lifeCardHide() {
   LIFE.cardFor = null;
   if (typeof npcHeroCardHide === 'function') npcHeroCardHide();
+  if (typeof npcVisitCardHide === 'function') npcVisitCardHide();
   if (LIFE.card) LIFE.card.box.style.display = 'none';
 }

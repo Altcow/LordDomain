@@ -4,7 +4,7 @@
 // 繪製:背景(地板、牆、不動的家具)進場時烘進離屏畫布一次(≤ 8MB,DPR ≤ 2);每幀只畫「會動 / 有深度關係」的東西(桌椅、櫃台、客人、NPC、燈火、對話泡)。
 // 美術:家具先用程式畫的簡單等角方塊(INTERIOR_KINDS);預留外部圖掛點:INTERIOR_EXT_BG[場景id] = true 且 assets/interior/<場景id>_bg.webp 載入成功時改用該圖當背景,缺圖回退程式繪製。
 // 資料表格式(interiorDefine):{ id, name, tile:[TW,TH], wallH, floors:[{id,label,grid:[cols,rows]}], props:[{id,floor,kind,at:[c,r],size:[w,h],dyn:bool,...}],
-//   seats:[{floor,at,face,prop?}], npcs:[{id,floor,at,act}], lights:[{floor,at,z}], pal(S), makeGuests(S), makeNpcs(S), onAct(S,spot), onEnter(S), onLeave(S), title(S), sub(S) }
+//   seats:[{floor,at,face,prop?}], npcs:[{id,floor,at,act}], lights:[{floor,at,z}], pal(S), makeGuests(S), makeNpcs(S), onAct(S,spot), onEnter(S), onLeave(S), title(S), sub(S), closeSub() }
 // 不發聲、不新增音檔。ES2017;不用 ?. ??。
 // 全域名稱:INTERIOR_DEFS INTERIOR_KINDS INTERIOR_EXT_BG interiorDefine interiorLint interiorLayout interiorEnter interiorLeave interiorActive interiorHash interiorRng interiorState interiorHitTest interiorStats
 
@@ -464,6 +464,7 @@ function itrOnKey(e) {
 }
 // 子面板(招募介面)開著時,返回 / Esc 先關子面板
 function itrCloseSub() {
+  if (itr.def && itr.def.closeSub) { try { if (itr.def.closeSub()) return true; } catch (e) { /* 略過 */ } }   // 場景自帶的子面板(城主府 / 科技樹 / 庫房)
   if (typeof cu !== 'undefined' && cu && cu.open && typeof cardsUiClose === 'function') { cardsUiClose(); return true; }
   return false;
 }
@@ -657,6 +658,7 @@ function interiorLeave(immediate, fromPop) {
     try { history.back(); } catch (e) { itr.histSkip = false; }
   }
   itr.histOn = false;
+  if (def && def.closeSub) { try { def.closeSub(); } catch (e) { /* 略過 */ } }
   if (typeof cardsUiClose === 'function') { try { cardsUiClose(); } catch (e) { /* 略過 */ } }
   if (typeof panelCloseAll === 'function') { try { panelCloseAll(); } catch (e) { /* 略過 */ } }
   if (def && def.onLeave) { try { def.onLeave(S); } catch (e) { /* 略過 */ } }

@@ -1807,6 +1807,7 @@ function tapObjectAt(sx, sy) {
   const n = world.occ[idx(c.x, c.y)];
   if (!n) return;
   const o = world.objects[n - 1];
+  if (typeof interiorPackTap === 'function' && interiorPackTap(o)) return;   // 室內第一批:議事廳 / 研究院 / 工坊 / 客棧 / 縣衙(不可用時退回下面原行為)
   if (typeof lordhallTap === 'function' && lordhallTap(o)) return;
   if (typeof cardsUiTap === 'function' && cardsUiTap(o)) return;
   if (o.type === LAB_TYPE) {

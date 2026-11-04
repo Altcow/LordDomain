@@ -70,7 +70,7 @@ function npcHeroCardRender() {
   h += '<div style="margin:8px 0;min-height:1.5em">「' + npcEsc(npcCard.line ? npcCard.line.text : '') + '」' + (npcCard.line && npcCard.line.priv ? ' <span style="color:#e6b84a;font-size:12px">(私話)</span>' : '') + '</div>';
   q = (typeof npcErrandOf === 'function') ? npcErrandOf(cs, e.id) : null;
   if (q) {
-    st = npcErrandState(cs, { kind: q.kind, id: q.goods, n: q.n, type: q.type, base: q.base });
+    st = npcErrandState(cs, { kind: q.kind, id: q.goods, n: q.n, type: q.type, base: q.base, eid: q.eid });
     h += '<div style="border-top:1px solid rgba(255,255,255,.15);padding-top:6px;margin-bottom:6px;font-size:13px"><b style="color:#e6b84a">請託</b> ' + npcEsc(q.text) +
       (q.kind === 'goods' ? ' <span style="opacity:.7">(' + st.have + '/' + st.need + ')</span>' : '') +
       ' <span data-a="err" data-q="' + npcEsc(q.id) + '" style="cursor:pointer;color:' + (st.ok ? '#7dff8a' : '#888') + ';white-space:nowrap">' + (q.kind === 'goods' ? '[交付]' : '[已完成?]') + '</span></div>';
@@ -147,16 +147,17 @@ function cuNpcDetailHtml(cs, e, f) {
   h += '</div>';
   q = npcErrandOf(cs, e.id);
   if (q) {
-    st = npcErrandState(cs, { kind: q.kind, id: q.goods, n: q.n, type: q.type, base: q.base });
+    st = npcErrandState(cs, { kind: q.kind, id: q.goods, n: q.n, type: q.type, base: q.base, eid: q.eid });
     h += '<div class="cusec">請託</div><div class="cusub" style="opacity:1">' + npcEsc(q.text) + (q.kind === 'goods' ? '(' + st.have + '/' + st.need + ')' : '') +
       '<br><button class="cub" data-a="npcerr" data-id="' + e.id + '" data-q="' + npcEsc(q.id) + '"' + (st.ok ? '' : ' disabled') + '>' + (q.kind === 'goods' ? '交付' : '確認完成') + '</button></div>';
   }
   chk = (typeof cardsUpgradeCheck === 'function' && typeof cardsUiCtx === 'function') ? cardsUpgradeCheck(e, cardsUiCtx()) : null;
-  if (chk && chk.ok) h += '<div class="cusec">升階</div><button class="cub" data-a="npcup" data-id="' + e.id + '">執行升階(學識 ' + chk.cost.xue + '、金幣 ' + chk.cost.coin + ')</button>';
+  if (chk && chk.ok && typeof academyStart !== 'function') h += '<div class="cusec">升階</div><button class="cub" data-a="npcup" data-id="' + e.id + '">執行升階(學識 ' + chk.cost.xue + '、金幣 ' + chk.cost.coin + ')</button>';
   return h;
 }
 function cuNpcClick(a, b, cs) {
   var id = b.getAttribute('data-id'), f = id ? cardsFind(cs, id) : null, d, chk, res, ctx;
+  if (typeof cuAcademyClick === 'function' && cuAcademyClick(a, b, cs, f)) return true;   // 學院進修 / 升階(academyui.js)
   if (a === 'npcgoto') {
     if (f && npcGoto(f.e)) { if (typeof cardsUiClose === 'function') cardsUiClose(); } else if (typeof cu !== 'undefined') cu.msg = '找不到目標';
     return true;

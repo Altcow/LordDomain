@@ -208,7 +208,12 @@ function npcTalkNext(e) {
 // ───────── P6 請託(同時最多 2 件,無期限) ─────────
 function npcErrandOf(cs, eid) { var l = cs.errand || [], i; for (i = 0; i < l.length; i++) if (l[i].eid === eid) return l[i]; return null; }
 function npcErrandState(cs, q) {
-  var have = 0, need = 1;
+  var have = 0, need = 1, f;
+  if (q.kind === 'study') {   // 送學院進修:該人 entry.sn 超過請託建立時的基準 = 已送去進修
+    f = cardsFind(cs, q.eid);
+    have = (f && ((f.e.sn | 0) > (q.base | 0))) ? 1 : 0;
+    return { ok: have >= 1, have: have, need: 1 };
+  }
   if (q.kind === 'goods') {
     need = q.n; have = (typeof cityGoodsHave === 'function') ? cityGoodsHave(q.id) : 0;
     return { ok: have >= need, have: Math.min(have, need), need: need };
@@ -233,8 +238,9 @@ function npcErrandTick(cs, now) {
   tpls = NPC_ERRANDS[row] || NPC_ERRANDS['農'];
   t = tpls[Math.floor(h / 7) % tpls.length];
   if (t.kind === 'build' && (typeof OBJECTS === 'undefined' || !OBJECTS[t.type])) t = tpls[0];
+  if (typeof academyErrandOk === 'function' && typeof NPC_ERRAND_STUDY !== 'undefined' && (Math.floor(h / 11) % 3) === 0 && academyErrandOk(cs, e)) t = NPC_ERRAND_STUDY;   // 學院開放且此人可進修:約 1/3 機率改成『送學院進修』
   q = { id: 'q' + (cs.errSeq = (cs.errSeq | 0) + 1), eid: e.id, kind: t.kind, text: t.text, day: day };
-  if (t.kind === 'goods') { q.goods = t.id; q.n = t.n; } else { q.type = t.type; q.base = npcCountType(t.type); }
+  if (t.kind === 'goods') { q.goods = t.id; q.n = t.n; } else if (t.kind === 'study') q.base = e.sn | 0; else { q.type = t.type; q.base = npcCountType(t.type); }
   list.push(q);
   if (typeof showToast === 'function') showToast(e.name + ' 有事相求');
   return q;
@@ -247,7 +253,7 @@ function npcErrandDone(cs, qid, now) {
   e = null;
   cs.roster.forEach(function (x) { if (x.id === q.eid) e = x; });
   if (!e) return { ok: false, reason: 'none' };
-  st = npcErrandState(cs, { kind: q.kind, id: q.goods, n: q.n, type: q.type, base: q.base });
+  st = npcErrandState(cs, { kind: q.kind, id: q.goods, n: q.n, type: q.type, base: q.base, eid: q.eid });
   if (!st.ok) return { ok: false, reason: 'notyet' };
   if (q.kind === 'goods') {
     if (typeof cityGoodsSpend !== 'function' || !cityGoodsSpend((function () { var o = {}; o[q.goods] = q.n; return o; })())) return { ok: false, reason: 'notyet' };
