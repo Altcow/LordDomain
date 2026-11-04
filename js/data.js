@@ -9,9 +9,46 @@ const T_GRASS = 0, T_LAKE = 1, T_RIVER = 2, T_ROAD = 3;
 // 純視覺地形:沙地 / 裂地(乾旱龜裂)/ 雪地。玩法一律等同草地(可走、可蓋、高度規則相同)。
 // 判斷「是否為陸地草地類」一律用下列輔助函式,不要自行比對 T_GRASS;未知的大值(>= T_SAND)也當草地類,讀檔不崩潰。
 const T_SAND = 4, T_CRACK = 5, T_SNOW = 6;
-function isGroundTerrain(t) { return t === T_GRASS || t >= T_SAND; }
-function terrainBase(t) { return t >= T_SAND ? T_GRASS : t; }               // 規則用地形(沙/裂/雪 → 草地)
-function terrainOn(d, t) { return d.on.indexOf(terrainBase(t)) >= 0; }      // 物件定義 d.on 是否允許放在地形 t
+function isGroundTerrain(t) { return t === T_GRASS || (t >= T_SAND && t !== T_OCEAN); }   // 海洋(T_OCEAN)不是陸地
+function terrainBase(t) { return t === T_OCEAN ? T_LAKE : (t >= T_SAND ? T_GRASS : t); }               // 規則用地形(沙/裂/雪 → 草地;海洋 → 湖,水上物件規則同湖)
+// 人工地面(石板 / 夯土 / 水泥 / 鋼鐵 / 木棧板 / 木紋地板):id 只附加在 T_SNOW 之後,舊編號不動;玩法同草地(isGroundTerrain),
+// 另有:可走路面(isPavedTerrain)、道路暢通指標(isRoadLikeTerrain)、物件白名單例外(農田類一律不可、自然類不可蓋在鋼鐵 / 水泥 / 木紋 / 木棧板)。
+// 木棧板可鋪在湖 / 河上:鋪在水格上時 world.flow = T_PLANK_WET(水面在其下,只影響繪圖),其餘人工地面 flow 恆 0。
+const T_STONEPAVE = 7, T_RAMMED = 8, T_CONCRETE = 9, T_STEEL = 10, T_PLANKDECK = 11, T_WOODFLOOR = 12;
+const T_ART_LAST = T_WOODFLOOR, T_PLANK_WET = 1;   // T_ART_LAST = 人工地面最後一個 id
+// 自然地面 13~18(純視覺,玩法同草地、不算人工 / 路面):泥土 / 岩地 / 裂土 / 黑土 / 叢林地面 / 紅土;只附加在人工地面之後,舊編號不動。
+// 岩地不可種田(農田類白名單例外,見 terrainOn);黑土地耕作加成尚未實作。冬季:岩地不積雪(維持灰岩色),其餘同草地冷色。舊 App 讀到未知 id 視為草地。
+const T_DIRT = 13, T_ROCK = 14, T_CRACKSOIL = 15, T_BLACKSOIL = 16, T_JUNGLE = 17, T_REDSOIL = 18;
+const T_LAST = T_REDSOIL;
+// 活的地形 19~21(有動畫,見 js/terrain_live.js):海洋(水,不可走,水上物件規則同湖)/ 沼澤(可走較慢、可蓋、不可種田)/ 火山灰(可走、可蓋、不可種樹 / 農田)。
+// 只附加在自然地面之後;T_LAST 仍是「自然地面」最後 id,存檔 id 上限改看 T_MAXID;舊 App 讀到未知 id 視為草地。
+const T_OCEAN = 19, T_SWAMP = 20, T_ASHLAND = 21, T_MAXID = T_ASHLAND;
+function isLiveTerrain(t) { return t >= T_OCEAN && t <= T_MAXID; }
+function isWaterTerrain(t) { return t === T_LAKE || t === T_RIVER || t === T_OCEAN; }
+function isNaturalGround(t) { return t >= T_DIRT && t <= T_LAST; }
+function isArtificialTerrain(t) { return t >= T_STONEPAVE && t <= T_ART_LAST; }
+function isPavedTerrain(t) { return t === T_ROAD || (t >= T_STONEPAVE && t <= T_ART_LAST); }          // 路人 / 車輛可走
+function isRoadLikeTerrain(t) { return t === T_ROAD || t === T_STONEPAVE || t === T_RAMMED || t === T_CONCRETE; }   // cityfx 路指標 / goods 路網(鋼鐵、木棧板、木紋地板不算)
+// 物件白名單例外:farm(農田類,只能在草 / 道路外的農耕土壤)不可蓋在任何人工地面;nature(自然類植物)不可種在鋼鐵 / 水泥 / 木紋地板 / 木棧板
+const TERRAIN_FARM_RE = /^field_|^vegetable_|^herb_garden$|^orchard$|^mulberry_grove$|^tea_garden$|^saltfield$|^beehive$/;
+const TERRAIN_NATURE_RE = /^tree(_|$)|^deco_bamboo$|^deco_bush$|^flower_bed$|^ground_bamboo$/;
+const TERRAIN_NO_NATURE = [T_CONCRETE, T_STEEL, T_PLANKDECK, T_WOODFLOOR];
+function objTerrainClass(d) {
+  if (d._tcls !== undefined) return d._tcls;
+  let c = '', k;
+  for (k in OBJECTS) if (OBJECTS[k] === d) { c = TERRAIN_FARM_RE.test(k) ? 'farm' : (TERRAIN_NATURE_RE.test(k) ? 'nature' : ''); break; }
+  Object.defineProperty(d, '_tcls', { value: c, enumerable: false, writable: true });
+  return c;
+}
+function terrainOn(d, t) {
+  if (t >= T_STONEPAVE && t <= T_LAST) {
+    const c = objTerrainClass(d);
+    if (c === 'farm' && (t <= T_ART_LAST || t === T_ROCK)) return false;   // 農田類不可蓋在人工地面與岩地
+    if (c === 'nature' && TERRAIN_NO_NATURE.indexOf(t) >= 0) return false;
+  }
+  if (t > T_LAST && typeof liveTerrainOn === 'function' && liveTerrainOn(d, t) === false) return false;   // 活地形的額外限制(terrain_live.js)
+  return d.on.indexOf(terrainBase(t)) >= 0;      // 物件定義 d.on 是否允許放在地形 t
+}
 
 // 方向索引: 0=(-1,0) 1=(0,-1) 2=(+1,0) 3=(0,+1)
 const DIRS = [[-1, 0], [0, -1], [1, 0], [0, 1]];

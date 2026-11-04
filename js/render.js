@@ -377,7 +377,21 @@ function drawLake(ctx, x, y, h, time) {
 const GROUND2 = {
   4: { base: ['#ecd9a0', '#e6d195', '#f0dfab'], cold: ['#dcd7bf', '#d6d2bb', '#e2decb'], mark: '#d2ba7c', dot: '#c2a562', lite: '#f8ecc6' },
   5: { base: ['#c9a66b', '#c19e62', '#d0ad74'], cold: ['#b9ab91', '#b2a48a', '#c0b49b'], mark: '#6b4a27', dot: '#a68a3c', lite: '#e0c48e' },
-  6: { base: ['#f2f8fd', '#e8f1f9', '#f8fbfe'], cold: ['#f0f6fc', '#e6eff8', '#f7fbfe'], mark: '#c3d6ea', dot: '#aebfd6', lite: '#ffffff' }
+  6: { base: ['#f2f8fd', '#e8f1f9', '#f8fbfe'], cold: ['#f0f6fc', '#e6eff8', '#f7fbfe'], mark: '#c3d6ea', dot: '#aebfd6', lite: '#ffffff' },
+  // 人工地面 7~12(四季同色,cold = base):石板 / 夯土 / 水泥 / 鋼鐵 / 木棧板 / 木紋地板。地形色票不跟城市風格主題變色
+  7: { base: ['#b9bbbd', '#b2b5b8', '#c0c2c4'], cold: ['#b9bbbd', '#b2b5b8', '#c0c2c4'], mark: '#7b7f85', dot: '#8f9399', lite: '#dcdee0' },
+  8: { base: ['#cdad6f', '#c6a668', '#d3b578'], cold: ['#cdad6f', '#c6a668', '#d3b578'], mark: '#9c7d44', dot: '#8a7650', lite: '#e4cb92' },
+  9: { base: ['#c8c9ca', '#c2c3c5', '#cecfd0'], cold: ['#c8c9ca', '#c2c3c5', '#cecfd0'], mark: '#8f9296', dot: '#7f8184', lite: '#e6e7e8' },
+  10: { base: ['#4b5766', '#455060', '#515d6e'], cold: ['#4b5766', '#455060', '#515d6e'], mark: '#27303b', dot: '#8f5a38', lite: '#8796ac' },
+  11: { base: ['#a67c4e', '#9d7447', '#ae8556'], cold: ['#a67c4e', '#9d7447', '#ae8556'], mark: '#5c4023', dot: '#4a3320', lite: '#cb9f6c' },
+  12: { base: ['#c08a52', '#b78248', '#c8935c'], cold: ['#c08a52', '#b78248', '#c8935c'], mark: '#7a5230', dot: '#6b4526', lite: '#e0b284' },
+  // 自然地面 13~18(貼圖缺失時的回退:底色 + 雜點;冬季 cold = 淡雪色調,岩地不積雪 cold = base)
+  13: { base: ['#8a6a46', '#826140', '#927250'], cold: ['#b4a692', '#ac9e8a', '#bcae9a'], mark: '#5e4529', dot: '#6e5232', lite: '#a98a62' },
+  14: { base: ['#8d9094', '#868a8e', '#94979b'], cold: ['#8d9094', '#868a8e', '#94979b'], mark: '#5f6368', dot: '#6f7378', lite: '#b4b7bb' },
+  15: { base: ['#a78a62', '#9f825a', '#af9269'], cold: ['#bdb09b', '#b5a893', '#c4b8a3'], mark: '#5b4126', dot: '#7a5e38', lite: '#c6ac84' },
+  16: { base: ['#3d352f', '#382f29', '#433a34'], cold: ['#72706e', '#6b6968', '#797674'], mark: '#231d19', dot: '#544a40', lite: '#5e544a' },
+  17: { base: ['#4f7a3a', '#497335', '#568241'], cold: ['#7f9a74', '#78946d', '#87a17c'], mark: '#2f5226', dot: '#3b6430', lite: '#73a05a' },
+  18: { base: ['#a4523a', '#9b4b35', '#ac5a42'], cold: ['#b88478', '#b07c70', '#c08c80'], mark: '#6b3022', dot: '#7a3a28', lite: '#c47658' }
 };
 const G2_DETAIL_ZOOM = 0.5;   // 縮放低於此值只畫底色與接縫,不畫紋路
 // 龜裂紋:座標為格內 (u,v) 0~1 的折線;使用時依雜湊翻轉 / 對調,5 款 x 8 = 40 種
@@ -421,7 +435,8 @@ function groundTileCol(t, hs) {
 
 // 該地形的代表色(接縫混色用,不分格)
 function g2Flat(t) {
-  if (t === T_GRASS || t > T_SNOW) return PAL.grass[0];
+  if (t > T_LAST && typeof liveFlat === 'function') return liveFlat(t);
+  if (t === T_GRASS || t > T_LAST || !GROUND2[t]) return PAL.grass[0];
   return (currentSeason === 'winter' ? GROUND2[t].cold : GROUND2[t].base)[0];
 }
 
@@ -555,11 +570,247 @@ function drawGround2(ctx, x, y, h, t) {
   ctx.restore();
 }
 
+// ===== 人工地面:石板 / 夯土 / 水泥 / 鋼鐵 / 木棧板 / 木紋地板(T_STONEPAVE..T_WOODFLOOR,玩法等同草地;見 data.js)=====
+// 與沙 / 裂 / 雪相同:只依 (x, y, 高度, 地形, 鄰格) 繪製,四季與時間皆無差異(冬季不積雪);時段乘色沿用 artTile / terrTint。
+// 木棧板鋪在水格上(flow === T_PLANK_WET)時:底下先畫水面(低 3px),棧板面在 h 高度,右 / 前緣畫 4px 樑側面,水面動態不畫在這格(只有 T_LAKE / T_RIVER 才畫水波)。
+function g2Quad(ctx, P, u0, v0, u1, v1, col, a) {
+  const q0 = P(u0, v0), q1 = P(u1, v0), q2 = P(u1, v1), q3 = P(u0, v1);
+  ctx.beginPath();
+  ctx.moveTo(q0[0], q0[1]); ctx.lineTo(q1[0], q1[1]); ctx.lineTo(q2[0], q2[1]); ctx.lineTo(q3[0], q3[1]);
+  ctx.closePath();
+  ctx.fillStyle = g2Tint(col);
+  ctx.globalAlpha = a;
+  ctx.fill();
+}
+function g2Seg(ctx, P, u0, v0, u1, v1) {
+  const a = P(u0, v0), b = P(u1, v1);
+  ctx.moveTo(a[0], a[1]);
+  ctx.lineTo(b[0], b[1]);
+}
+function g2Stroke(ctx, col, lw, a) {
+  ctx.strokeStyle = g2Tint(col);
+  ctx.lineWidth = lw;
+  ctx.globalAlpha = a;
+  ctx.stroke();
+}
+function g2Dot(ctx, q, rx, ry, col, a) {
+  ctx.beginPath();
+  g2Ellipse(ctx, q, rx, ry);
+  ctx.fillStyle = g2Tint(col);
+  ctx.globalAlpha = a;
+  ctx.fill();
+}
+
+// 木棧板板條走向:沿鄰接棧板較多的軸(步道方向)排列,板條接縫垂直於步道;0 = 接縫為定 u 線,1 = 定 v 線
+function deckAxis(x, y) {
+  const pd = (a, b) => (inBounds(a, b) && world.terrain[idx(a, b)] === T_PLANKDECK ? 1 : 0);
+  return pd(x, y - 1) + pd(x, y + 1) > pd(x - 1, y) + pd(x + 1, y) ? 1 : 0;
+}
+function deckWet(x, y) { return world.terrain[idx(x, y)] === T_PLANKDECK && world.flow[idx(x, y)] === T_PLANK_WET; }
+
+// 水上棧板的樑側面(右前兩面,深木色);p 為本格頂面四角
+function drawDeckSkirt(ctx, p) {
+  const g = GROUND2[T_PLANKDECK], th = 4;
+  poly(ctx, [p[1], p[2], [p[2][0], p[2][1] + th], [p[1][0], p[1][1] + th]], g2Tint(shade(g.mark, 0.85)));
+  poly(ctx, [p[3], p[2], [p[2][0], p[2][1] + th], [p[3][0], p[3][1] + th]], g2Tint(shade(g.mark, 1.1)));
+}
+
+function drawArtGround(ctx, x, y, h, t, edgesOnly) {
+  const hs = g2Hash(x, y, t), hp = h * HL, g = GROUND2[t];
+  const P = (u, v) => gpt(x + u, y + v, hp);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (t === T_STONEPAVE) {
+    // 石板:上排 2 塊、下排 3 塊錯縫(跨格連續),每塊微幅明暗不同;偶爾缺角與細裂
+    const tone = [(hs >>> 2) & 3, (hs >>> 4) & 3, (hs >>> 6) & 3, (hs >>> 8) & 3, (hs >>> 10) & 3];
+    const segs = [[0, 0, 0.5, 0.5], [0.5, 0, 1, 0.5], [0, 0.5, 0.25, 1], [0.25, 0.5, 0.75, 1], [0.75, 0.5, 1, 1]];
+    for (let k = 0; k < 5; k++) {
+      if (tone[k] === 0) continue;
+      g2Quad(ctx, P, segs[k][0], segs[k][1], segs[k][2], segs[k][3], tone[k] === 1 ? g.lite : g.mark, tone[k] === 1 ? 0.22 : 0.12);
+    }
+    ctx.beginPath();
+    g2Seg(ctx, P, 0, 0.5, 1, 0.5); g2Seg(ctx, P, 0.5, 0, 0.5, 0.5); g2Seg(ctx, P, 0.25, 0.5, 0.25, 1); g2Seg(ctx, P, 0.75, 0.5, 0.75, 1);
+    ctx.save(); ctx.translate(0, 1); g2Stroke(ctx, g.lite, 1, 0.4); ctx.restore();
+    g2Stroke(ctx, g.mark, 1.1, 0.8);
+    if ((hs >>> 12) % 6 === 0) {
+      const c = (hs >>> 15) & 3, cu = c & 1 ? 1 : 0, cv = c & 2 ? 1 : 0, du = cu ? -0.16 : 0.16, dv = cv ? -0.16 : 0.16;
+      const a = P(cu, cv), b = P(cu + du, cv), d = P(cu, cv + dv);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(d[0], d[1]); ctx.closePath();
+      ctx.fillStyle = g2Tint('#7d8186'); ctx.globalAlpha = 0.8; ctx.fill();
+    }
+    if ((hs >>> 18) % 7 === 0) {
+      ctx.beginPath();
+      g2Poly(ctx, P, G2_CRACKS[(hs >>> 21) % G2_CRACKS.length][0], (hs >>> 24) & 7);
+      g2Stroke(ctx, g.dot, 0.9, 0.55);
+    }
+  } else if (t === T_RAMMED) {
+    // 夯土:3 道水平夯層淡紋、小碎石與土屑
+    ctx.beginPath();
+    for (let k = 1; k <= 3; k++) {
+      const v = 0.25 * k + (((hs >>> (k * 3)) & 7) - 3) / 60, a = P(0.02, v), m = P(0.5, v + (k % 2 ? 0.04 : -0.04)), b = P(0.98, v);
+      ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(m[0], m[1], b[0], b[1]);
+    }
+    g2Stroke(ctx, g.mark, 1, 0.3);
+    ctx.beginPath();
+    for (let k = 1; k <= 3; k++) { const v = 0.25 * k + (((hs >>> (k * 3)) & 7) - 3) / 60; g2Seg(ctx, P, 0.04, v + 0.03, 0.96, v + 0.03); }
+    g2Stroke(ctx, g.lite, 1, 0.18);
+    g2Dot(ctx, P(0.3 + ((hs >>> 12) & 7) / 20, 0.3 + ((hs >>> 15) & 7) / 20), 9, 4.2, g.mark, 0.07);
+    const np = 2 + ((hs >>> 5) % 3);
+    for (let k = 0; k < np; k++) {
+      const q = P(0.12 + ((hs >>> (18 + k * 3)) & 7) / 10, 0.12 + ((hs >>> (21 + k * 2)) & 7) / 10);
+      g2Dot(ctx, q, 1.5 + (k % 2) * 0.6, 0.9 + (k % 2) * 0.3, k % 2 ? g.lite : g.dot, 0.9);
+    }
+    ctx.fillStyle = g2Tint(g.mark);
+    ctx.globalAlpha = 0.5;
+    for (let k = 0; k < 5; k++) {
+      const q = P(0.08 + ((hs >>> (k * 5)) & 15) / 17.5, 0.08 + ((hs >>> (k * 5 + 2)) & 15) / 17.5);
+      ctx.fillRect(q[0], q[1], 1.2, 1);
+    }
+  } else if (t === T_CONCRETE) {
+    // 水泥:每格一塊方板(上 / 左接縫畫在格緣,相鄰格拼成方格),細裂紋、污漬與氣孔
+    ctx.beginPath();
+    g2Seg(ctx, P, 0, 0, 1, 0); g2Seg(ctx, P, 0, 0, 0, 1);
+    ctx.save(); ctx.translate(0, 1); g2Stroke(ctx, g.lite, 1, 0.55); ctx.restore();
+    g2Stroke(ctx, g.mark, 1.2, 0.75);
+    if ((hs >>> 3) % 4 === 0) g2Dot(ctx, P(0.3 + ((hs >>> 6) & 7) / 16, 0.3 + ((hs >>> 9) & 7) / 16), 10, 4.6, g.dot, 0.16);
+    if ((hs >>> 12) % 5 === 0) {
+      ctx.beginPath();
+      g2Poly(ctx, P, G2_CRACKS[(hs >>> 15) % G2_CRACKS.length][0], (hs >>> 18) & 7);
+      g2Stroke(ctx, g.dot, 0.9, 0.7);
+    }
+    ctx.fillStyle = g2Tint(g.dot);
+    ctx.globalAlpha = 0.5;
+    for (let k = 0; k < 4; k++) {
+      const q = P(0.1 + ((hs >>> (k * 5)) & 15) / 19, 0.1 + ((hs >>> (k * 5 + 3)) & 15) / 19);
+      ctx.fillRect(q[0], q[1], 1.1, 1);
+    }
+  } else if (t === T_STEEL) {
+    // 鋼鐵:每格一塊鋼板,內縮接縫(暗)+ 上緣亮線,四角鉚釘,斜向拉絲高光,少量鏽斑
+    g2Quad(ctx, P, 0.03, 0.03, 0.97, 0.97, g.lite, 0.07);
+    const a = P(0.03, 0.03), b = P(0.97, 0.03), c = P(0.97, 0.97), d = P(0.03, 0.97);
+    ctx.beginPath();
+    ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.closePath();
+    g2Stroke(ctx, g.mark, 1.3, 0.95);
+    ctx.beginPath();
+    ctx.moveTo(d[0], d[1] + 1); ctx.lineTo(a[0], a[1] + 1); ctx.lineTo(b[0], b[1] + 1);
+    g2Stroke(ctx, g.lite, 1, 0.5);
+    ctx.beginPath();
+    g2Seg(ctx, P, 0.25, 0.9, 0.9, 0.25); g2Seg(ctx, P, 0.1, 0.62, 0.62, 0.1);
+    g2Stroke(ctx, g.lite, 1, 0.12);
+    const rv = [[0.13, 0.13], [0.87, 0.13], [0.13, 0.87], [0.87, 0.87]];
+    for (let k = 0; k < 4; k++) {
+      const q = P(rv[k][0], rv[k][1]);
+      g2Dot(ctx, [q[0], q[1] + 0.8], 1.5, 0.9, g.mark, 0.9);
+      g2Dot(ctx, q, 1.4, 0.8, g.lite, 0.85);
+    }
+    if ((hs >>> 5) % 4 === 0) {
+      const q = P(0.15 + ((hs >>> 8) & 7) / 12, 0.15 + ((hs >>> 11) & 7) / 12);
+      g2Dot(ctx, q, 7, 3.2, g.dot, 0.32);
+      g2Dot(ctx, [q[0] + 2, q[1] - 0.5], 3, 1.4, '#b87040', 0.4);
+    } else if ((hs >>> 14) % 5 === 0) {
+      g2Dot(ctx, P(0.08 + ((hs >>> 16) & 7) / 10, 0.08 + ((hs >>> 19) & 7) / 10), 2.4, 1.2, g.dot, 0.45);
+    }
+  } else if (t === T_PLANKDECK) {
+    // 木棧板:4 條板,接縫沿格軸;水上時縫隙透出水色,沿水緣的邊畫木樁頭與樑頭
+    const ax = deckAxis(x, y), wet = deckWet(x, y), n = 4;
+    const Q = (u, v) => (ax === 0 ? P(u, v) : P(v, u));
+    for (let k = 0; k < n && !edgesOnly; k++) {   // edgesOnly:頂面已貼圖,只畫水緣樑頭 / 木樁
+      const tn = (hs >>> (k * 3)) & 7;
+      if (tn < 2) g2Quad(ctx, Q, k / n, 0, (k + 1) / n, 1, g.lite, 0.26);
+      else if (tn < 4) g2Quad(ctx, Q, k / n, 0, (k + 1) / n, 1, g.mark, 0.2);
+    }
+    ctx.beginPath();
+    for (let k = 1; k < n && !edgesOnly; k++) g2Seg(ctx, Q, k / n, 0.01, k / n, 0.99);
+    g2Stroke(ctx, wet ? shade(PAL.water, 0.5) : g.mark, wet ? 1.6 : 1.2, 0.9);
+    ctx.fillStyle = g2Tint(g.dot);
+    ctx.globalAlpha = 0.65;
+    for (let k = 0; k < n && !edgesOnly; k++) {
+      const c = (k + 0.5) / n, q1 = Q(c, 0.08), q2 = Q(c, 0.92);
+      ctx.fillRect(q1[0] - 0.5, q1[1] - 0.5, 1.2, 1);
+      ctx.fillRect(q2[0] - 0.5, q2[1] - 0.5, 1.2, 1);
+    }
+    if (wet) {
+      // 水緣:朝向湖 / 河的邊畫樑頭(端面)與角落木樁頂;每項 [鄰格 dx, dy, 邊起點 u, v, 終點 u, v]
+      const nb = [[0, -1, 0, 0, 1, 0], [1, 0, 1, 0, 1, 1], [0, 1, 0, 1, 1, 1], [-1, 0, 0, 0, 0, 1]];
+      for (let e = 0; e < 4; e++) {
+        const nx = x + nb[e][0], ny = y + nb[e][1];
+        if (!inBounds(nx, ny)) continue;
+        const nt = world.terrain[idx(nx, ny)];
+        if (nt !== T_LAKE && nt !== T_RIVER) continue;
+        const e0 = [nb[e][2], nb[e][3]], e1 = [nb[e][4], nb[e][5]];
+        const lerp = s => [e0[0] + (e1[0] - e0[0]) * s, e0[1] + (e1[1] - e0[1]) * s];
+        const inwU = e === 1 ? -0.07 : (e === 3 ? 0.07 : 0), inwV = e === 2 ? -0.07 : (e === 0 ? 0.07 : 0);
+        for (let k = 0; k < 2; k++) {
+          const c = lerp(k ? 0.72 : 0.28), q = P(c[0] + inwU, c[1] + inwV);
+          g2Dot(ctx, q, 1.8, 1, g.mark, 0.95);
+          g2Dot(ctx, [q[0], q[1] - 0.4], 0.8, 0.45, g.lite, 0.7);
+        }
+        for (let k = 0; k < 2; k++) {
+          const c = lerp(k ? 0.96 : 0.04), q = P(c[0] + inwU * 0.6, c[1] + inwV * 0.6);
+          g2Dot(ctx, [q[0], q[1] + 0.6], 2.4, 1.4, '#3a2819', 0.95);
+          g2Dot(ctx, q, 2.1, 1.1, '#6f5233', 1);
+          g2Dot(ctx, [q[0] - 0.3, q[1] - 0.3], 1, 0.5, '#a88458', 0.8);
+        }
+      }
+    }
+  } else {
+    // 木紋地板:5 條沿 x 軸的長板(跨格連續,板長約 3 格、各列錯開接頭),每塊板色階不同,細木紋
+    const nS = 5;
+    ctx.beginPath();
+    for (let j = 1; j < nS; j++) g2Seg(ctx, P, 0, j / nS, 1, j / nS);
+    g2Stroke(ctx, g.mark, 1, 0.55);
+    for (let j = 0; j < nS; j++) {
+      const r = y * nS + j, off = (g2Hash(r, 0, 31) >>> 5) % 300 / 100, b0 = Math.floor((x + off) / 3), b1 = Math.floor((x + 1 + off) / 3);
+      const ju = b1 > b0 ? (b0 + 1) * 3 - off - x : 1;
+      for (let s = 0; s < 2; s++) {
+        const u0 = s ? ju : 0, u1 = s ? 1 : ju;
+        if (u1 - u0 <= 0.001) continue;
+        const bh = g2Hash(b0 + s, r, 33), tn = bh % 4, v0 = j / nS, v1 = (j + 1) / nS;
+        if (tn === 1) g2Quad(ctx, P, u0, v0, u1, v1, g.lite, 0.28);
+        else if (tn === 2) g2Quad(ctx, P, u0, v0, u1, v1, g.mark, 0.22);
+        else if (tn === 3) g2Quad(ctx, P, u0, v0, u1, v1, g.lite, 0.1);
+        if (((bh >>> 3) & 3) !== 0) {
+          const gv = v0 + (v1 - v0) * (0.35 + ((bh >>> 6) & 3) / 8), gu0 = u0 + (u1 - u0) * 0.1, gu1 = u0 + (u1 - u0) * (0.5 + ((bh >>> 9) & 3) / 8);
+          ctx.beginPath(); g2Seg(ctx, P, gu0, gv, gu1, gv);
+          g2Stroke(ctx, g.dot, 0.8, 0.22);
+        }
+      }
+      if (b1 > b0 && ju < 1) {
+        ctx.beginPath(); g2Seg(ctx, P, ju, j / nS, ju, (j + 1) / nS);
+        g2Stroke(ctx, g.mark, 1, 0.7);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+// 自然地面 13~18 的程式繪製(底色已填;貼圖缺失 / 關閉時的回退,只畫簡單雜點與少量明暗斑):泥土 / 岩地 / 裂土 / 黑土 / 叢林 / 紅土
+function drawNaturalGround(ctx, x, y, h, t) {
+  const hs = g2Hash(x, y, t), hp = h * HL, g = GROUND2[t];
+  const P = (u, v) => gpt(x + u, y + v, hp);
+  ctx.save();
+  g2Dot(ctx, P(0.2 + (hs & 7) / 14, 0.2 + ((hs >>> 3) & 7) / 14), 9, 4.2, g.lite, 0.2);
+  g2Dot(ctx, P(0.2 + ((hs >>> 6) & 7) / 14, 0.2 + ((hs >>> 9) & 7) / 14), 7, 3.2, g.mark, 0.14);
+  ctx.fillStyle = g2Tint(g.dot);
+  ctx.globalAlpha = 0.5;
+  for (let k = 0; k < 6; k++) {
+    const q = P(0.08 + ((hs >>> (k * 4)) & 15) / 18, 0.08 + ((hs >>> (k * 4 + 2)) & 15) / 18);
+    if (t === T_JUNGLE) { ctx.beginPath(); g2Ellipse(ctx, q, 2.2, 1.1); ctx.fill(); } else ctx.fillRect(q[0], q[1], 1.4, 1.1);
+  }
+  if (t === T_CRACKSOIL || t === T_ROCK) {
+    ctx.beginPath();
+    g2Poly(ctx, P, G2_CRACKS[(hs >>> 12) % G2_CRACKS.length][0], (hs >>> 16) & 7);
+    g2Stroke(ctx, g.mark, 0.9, t === T_ROCK ? 0.45 : 0.7);
+  }
+  ctx.restore();
+}
+
 // 與不同陸地類地形(草 / 沙 / 裂 / 雪)或水岸的接縫:格內側一條混色窄帶 + 幾點鄰格色的點綴。
 // p 為本格頂面四角,e 為 drawTile 的邊定義 [起點索引, 終點索引, 鄰格 x, 鄰格 y];t 為本格地形,nt 為鄰格地形(兩者至少一個 >= T_SAND)
 function g2EdgeBlend(ctx, p, e, t, nt, x, y) {
-  if (nt === t) return;
-  const wetN = nt === T_LAKE || nt === T_RIVER;
+  if (nt === t || isArtificialTerrain(t) || isArtificialTerrain(nt)) return;   // 人工地面與鄰格是硬邊(drawTile 畫細邊線),不混色
+  const wetN = isWaterTerrain(nt);
   if (nt === T_ROAD || (wetN && t < T_SAND)) return;
   const a = p[e[0]], b = p[e[1]];
   const cx = (p[0][0] + p[2][0]) / 2, cy = (p[0][1] + p[2][1]) / 2;
@@ -596,26 +847,40 @@ function drawTile(ctx, x, y, time) {
   const i = idx(x, y);
   const h = world.height[i];
   const t = world.terrain[i];
-  const wet = t === T_LAKE || t === T_RIVER;
+  const wet = t === T_LAKE || t === T_RIVER || t === T_OCEAN;
   drawCliffs(ctx, x, y, h);
 
+  const plWet = t === T_PLANKDECK && world.flow[i] === T_PLANK_WET;   // 水上棧板:水面在其下
+  const art = t >= T_STONEPAVE && t <= T_ART_LAST;
+  if (plWet) {
+    polyPath(ctx, topPts(x, y, h, 3));
+    ctx.fillStyle = typeof artTile === 'function' ? artTile(PAL.water) : PAL.water;
+    ctx.fill();
+  }
   const p = topPts(x, y, h, wet ? 3 : 0);
   polyPath(ctx, p);
   const hs0 = cellHash(x, y);
-  let tileCol = t === T_ROAD ? PAL.road : (wet ? PAL.water : (t >= T_SAND && t <= T_SNOW ? groundTileCol(t, hs0) : PAL.grass[hs0 % 3]));
+  let tileCol = t === T_ROAD ? PAL.road : (wet ? PAL.water : (t >= T_SAND && t <= T_LAST ? groundTileCol(t, hs0) : PAL.grass[hs0 % 3]));
+  if (t >= T_OCEAN && typeof liveTileCol === 'function') tileCol = liveTileCol(t, i, hs0);   // 活地形底色(terrain_live.js)
   if (typeof artTile === 'function') tileCol = artTile(tileCol);
   ctx.fillStyle = tileCol;
   ctx.fill();
+  // 地形貼圖(js/terrain_tex.js;人工 / 自然地面,載入完成才有;失敗 / 關閉 → tex = false 走程式繪製)
+  const tex = t >= T_STONEPAVE && typeof terrainTexDraw === 'function' &&
+    terrainTexDraw(ctx, p, x, y, t, currentSeason === 'winter', ART_NEUTRAL ? '' : terrTintHex());
 
   // 邊線: 0 上→1 右 面向 (x,y-1); 1→2 面向 (x+1,y); 2→3 面向 (x,y+1); 3→0 面向 (x-1,y)
   const edges = [[0, 1, x, y - 1], [1, 2, x + 1, y], [2, 3, x, y + 1], [3, 0, x - 1, y]];
   edges.forEach(e => {
     if (!inBounds(e[2], e[3])) return;
     const nt = world.terrain[idx(e[2], e[3])];
-    if (t === T_ROAD && nt !== T_ROAD) edgeLine(ctx, p[e[0]], p[e[1]], PAL.roadEdge, 1, 1);
-    else if (wet && nt !== T_LAKE && nt !== T_RIVER) edgeLine(ctx, p[e[0]], p[e[1]], PAL.foam, 2, 0.6);
+    if (t === T_OCEAN) liveOceanEdge(ctx, p, e, x, y, nt);   // 海:深淺混色 + 岸邊白浪(terrain_live.js,烘進分塊)
+    else if (t === T_ROAD && nt !== T_ROAD) edgeLine(ctx, p[e[0]], p[e[1]], PAL.roadEdge, 1, 1);
+    else if (wet && !isWaterTerrain(nt)) edgeLine(ctx, p[e[0]], p[e[1]], PAL.foam, 2, 0.6);
+    else if (art && nt !== t) edgeLine(ctx, p[e[0]], p[e[1]], g2Tint(shade(GROUND2[t].mark, 1.05)), 1, 0.7);
     else if (t >= T_SAND || nt >= T_SAND) g2EdgeBlend(ctx, p, e, t, nt, x, y);
   });
+  if (plWet) drawDeckSkirt(ctx, p);
 
   if (view.zoom >= TILE_EDGE_MIN_ZOOM) {
     polyPath(ctx, p);
@@ -629,6 +894,17 @@ function drawTile(ctx, x, y, time) {
   if (t === T_RIVER) { if (!still) drawRiver(ctx, x, y, h, time); }
   else if (t === T_LAKE) { if (!still) drawLake(ctx, x, y, h, time); }
   else if (t >= T_SAND && t <= T_SNOW && view.zoom >= G2_DETAIL_ZOOM) drawGround2(ctx, x, y, h, t);
+  else if (art && view.zoom >= G2_DETAIL_ZOOM && !tex) drawArtGround(ctx, x, y, h, t);
+  else if (art && tex && plWet) drawArtGround(ctx, x, y, h, t, true);   // 水上棧板:頂面已貼圖,仍畫水緣樑頭 / 木樁
+  else if (t >= T_DIRT && t <= T_LAST && !tex && view.zoom >= G2_DETAIL_ZOOM) drawNaturalGround(ctx, x, y, h, t);
+  if (t >= T_OCEAN) liveDrawTile(ctx, x, y, h, t, time);   // 活地形的靜態細節(烘焙)+ c2d 動畫(terrain_live.js)
+}
+
+// 時段乘色的 #rrggbb(貼圖 c2d 路徑用 multiply 套色;ART 關閉 / 正午回 '')
+function terrTintHex() {
+  if (typeof artIsOn !== 'function' || !artIsOn() || typeof ART === 'undefined' || !ART.TOD || typeof artTodKey !== 'function') return '';
+  const t = ART.TOD[artTodKey()];
+  return t && t.mul ? t.mul : '';
 }
 
 // 物件繪製
@@ -1169,6 +1445,7 @@ function visSpan(BW, BH) {
 // 讓 GL 內的物件 / 居民與地形以畫家順序(d)遮擋。烘焙時 view.zoom 暫代為該層級的代表值(drawTile 內的邊線 / 紋路門檻),時段乘色改在合成時套用。
 // 失效條件由簽名自動判定:塊 + 外圍一圈的 (高度, 地形)、土地遮罩、季節、層級;換季 / 擴地 / 地形編輯 / 縮放層級改變 → 該塊重烘(每幀有時間預算,未烘好的塊先用舊版)。
 let tileBake = false;
+let terrBakeRes = 1;   // 烘焙中的層級解析度(terrain_tex.js 依此選小圖級數)
 const TERR_LV = [{ res: 0.25, N: 16 }, { res: 0.5, N: 16 }, { res: 1, N: 16 }, { res: 2, N: 8 }, { res: 4, N: 4 }];
 const TERR_SEASON_ID = { spring: 1, summer: 2, autumn: 3, winter: 4 };
 const terrDCol = [];
@@ -1205,16 +1482,20 @@ function terrLevel() {
 function terrSig(X0, Y0, N, lvl, landOn, lm) {
   let h = Math.imul(2166136261 ^ (TERR_SEASON_ID[currentSeason] || 0), 16777619);
   for (let i = 0; i < lvl.id.length; i++) h = Math.imul(h ^ lvl.id.charCodeAt(i), 16777619);
+  let tx = 0;
   for (let y = Y0 - 1; y <= Y0 + N; y++)
     for (let x = X0 - 1; x <= X0 + N; x++) {
       let v = 255;
       if (inBounds(x, y)) {
-        const i = idx(x, y);
-        v = world.height[i] * 16 + world.terrain[i];
+        const i = idx(x, y), tt = world.terrain[i];
+        if (tt >= T_STONEPAVE) tx = 1;
+        v = world.height[i] * 32 + tt;
+        if (tt === T_OCEAN) v = v * 8 + liveOceanCls(i);   // 海的深淺階(距離場;陸地改動 → 該塊重烘)
         if (landOn) v = v * 2 + lm.out[i];
       }
       h = Math.imul(h ^ v, 16777619);
     }
+  if (tx && typeof terrainTexGen === 'function') h = Math.imul(h ^ terrainTexGen(), 16777619);   // 含貼圖地形的塊:貼圖載入 / 開關改變時重烘
   return h >>> 0;
 }
 
@@ -1274,6 +1555,7 @@ function terrDepthTile(dc, x, y, h, wet, dl) {
 function terrBake(it, c, dc, lvl, landOn, lm) {
   const N = lvl.N, BW = boardW(), BH = boardH(), water = [], zs = view.zoom;
   tileBake = true;
+  terrBakeRes = lvl.res;
   ART_NEUTRAL = true;
   view.zoom = lvl.zrep;
   try {
@@ -1283,8 +1565,8 @@ function terrBake(it, c, dc, lvl, landOn, lm) {
         if (x >= BW || y >= BH) continue;
         const i = idx(x, y), t = world.terrain[i], waste = landOn && lm.out[i] === 1;
         if (waste) drawWasteTile(c, x, y); else drawTile(c, x, y, 0);
-        terrDepthTile(dc, x, y, world.height[i], !waste && (t === T_LAKE || t === T_RIVER), d);
-        if (!waste && (t === T_RIVER || t === T_LAKE)) water.push(x, y);
+        terrDepthTile(dc, x, y, world.height[i], !waste && isWaterTerrain(t), d);
+        if (!waste && (t === T_RIVER || t === T_LAKE || t >= T_OCEAN)) water.push(x, y);   // 活地形格也進清單(動畫疊層用)
       }
   } finally {
     tileBake = false;
@@ -1347,6 +1629,12 @@ function terrGl(ctx, landOn, lm, time) {
       if (!w) continue;
       for (let k = 0; k < w.length; k += 2) {
         const x = w[k], y = w[k + 1], i = idx(x, y), t = world.terrain[i];
+        if (t >= T_OCEAN) {   // 活地形動畫(terrain_live.js):先過便宜的開關 / 抽樣,再查佔用與可見
+          if (!LIVE.on || !liveCellPick(x, y, t) || world.occ[i] || pend.occ[i] || !cellVisible(x, y)) continue;
+          rqDepth(ctx, x + y);
+          liveAnim(ctx, x, y, t, time, world.height[i]);
+          continue;
+        }
         if ((t !== T_RIVER && t !== T_LAKE) || world.occ[i] || pend.occ[i] || !cellVisible(x, y)) continue;
         rqDepth(ctx, x + y);
         terrWaterGl(ctx, x, y, t, time);
@@ -1359,6 +1647,7 @@ function terrGl(ctx, landOn, lm, time) {
 var drawNow = 0;
 function draw(ctx, time) {
   drawNow = time;
+  if (typeof liveFrame === 'function') liveFrame(time, ctx);   // 活地形:距離場 / 動畫開關 / 元素上限(terrain_live.js)
   const cv = ctx.canvas;
   rqBegin(ctx);
   ctx.setTransform(1, 0, 0, 1, 0, 0);

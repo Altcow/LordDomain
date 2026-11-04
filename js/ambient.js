@@ -783,7 +783,7 @@ function ambScan(cell, R, tod) {
   for (let y = Math.max(0, cy - R); y <= Math.min(boardH() - 1, cy + R); y++) {
     for (let x = Math.max(0, cx - R); x <= Math.min(boardW() - 1, cx + R); x++) {
       const t = world.terrain[idx(x, y)];
-      if (t === T_LAKE || t === T_RIVER) res.water++;
+      if (typeof isWaterTerrain === 'function' ? isWaterTerrain(t) : (t === T_LAKE || t === T_RIVER)) res.water++;
     }
   }
   const cands = [];

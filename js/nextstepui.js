@@ -21,6 +21,19 @@ function nsBtn(text, cls, fn, label) {
   b.addEventListener('click', function (ev) { if (ev && ev.stopPropagation) ev.stopPropagation(); fn(ev); });
   return b;
 }
+// 圖示:依推薦的指標(cand.item.stat / cand.stat)或科技分支(go.kind=tech)選圖;選不到或偏好關閉 = 原 emoji
+function nsIconKey(cand) {
+  var k = (cand.item && cand.item.stat) || cand.stat || cand.branch || '', n;
+  if (!k && cand.go && cand.go.kind === 'tech' && typeof techNode === 'function') { try { n = techNode(cand.go.id); k = n ? n.branch : ''; } catch (e) { k = ''; } }
+  return k;
+}
+function nsIcon(cand, mark) {
+  var s = nsE('span', 'ns-ic'), key = nsIconKey(cand), im = (key && typeof uiIconNode === 'function' && typeof uiIconFile === 'function' && uiIconFile(key) && uiIconsOn()) ? uiIconNode(key, 36, cand.icon) : null;
+  if (mark) s.appendChild(nsE('span', null, mark));
+  if (im) { s.className = 'ns-ic ns-img'; s.appendChild(im); }
+  else s.appendChild(nsE('span', null, cand.icon));
+  return s;
+}
 function nsVp() {
   var w = 375, h = 667;
   if (typeof window !== 'undefined' && window) { if (window.innerWidth) w = window.innerWidth; if (window.innerHeight) h = window.innerHeight; }
@@ -40,7 +53,7 @@ var NS_CSS = [
   '#nsCard.ns-tR{border-left-color:#c0392b}#nsCard.ns-tY{border-left-color:#c99a1e}#nsCard.ns-tB{border-left-color:#4f86d6}#nsCard.ns-tC{border-left-color:#d9a441}',
   'body.photo-mode #nsCard,body.atk-mode #nsCard,body.replay-mode #nsCard,body.sandbox #nsCard,body.camp-mode #nsCard{display:none!important}',
   '#nsCard .ns-main{display:flex;gap:4px;align-items:flex-start;min-height:0;flex:1 1 auto;overflow:hidden;cursor:pointer}',
-  '#nsCard .ns-ic{flex:0 0 auto;font-size:14px;line-height:1.2}',
+  '#nsCard .ns-ic{flex:0 0 auto;font-size:14px;line-height:1.2}#nsCard .ns-ic.ns-img{display:inline-flex;align-items:center;gap:2px;min-height:36px}',
   '#nsCard .ns-tx{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;min-width:0}',
   '#nsCard .ns-why{color:#aebbd0;font-size:11px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}',
   '#nsCard .ns-acts{display:flex;gap:4px;flex:0 0 auto;align-items:center}',
@@ -119,7 +132,7 @@ function nsUiRender(cand, n) {
   }
   mark = NS_TIER_MARK[cand.tier] || '';
   main = nsE('div', 'ns-main');
-  main.appendChild(nsE('span', 'ns-ic', mark ? mark + cand.icon : cand.icon));
+  main.appendChild(nsIcon(cand, mark));
   main.appendChild(nsE('span', 'ns-tx', (nsUi.why && cand.why) ? cand.why : cand.text));
   main.title = cand.why || cand.text;
   main.addEventListener('click', function () { if (cand.why) { nsUi.why = !nsUi.why; nsUi.sig = ''; nsUiTick(); } });

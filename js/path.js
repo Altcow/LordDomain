@@ -18,11 +18,11 @@ const PATH_KEY_SHIFT = 4096;
 const PATH_CLIMB_COST = (typeof TD_COMBAT !== 'undefined' && TD_COMBAT.climbCost) || 40;
 
 // MOVE_COST[基礎 profile][地形值];地形值依 data.js:T_GRASS=0 T_LAKE=1 T_RIVER=2 T_ROAD=3
-// 4~6 = T_SAND / T_CRACK / T_SNOW(純視覺地形),代價一律同草地(索引 0)
+// 4~6 = T_SAND / T_CRACK / T_SNOW(純視覺地形),7~12 = 石板 / 夯土 / 水泥 / 鋼鐵 / 木棧板 / 木紋地板(人工地面),13~18 = 泥土 / 岩地 / 裂土 / 黑土 / 叢林 / 紅土(自然地面),代價一律同草地(索引 0);19~21 = 海洋(不可走)/ 沼澤(慢)/ 火山灰(略慢)
 const MOVE_COST = {
-  foot:  [10, PATH_UNREACH, 30, 8, 10, 10, 10],
-  horse: [10, PATH_UNREACH, 50, 7, 10, 10, 10],
-  heavy: [14, PATH_UNREACH, PATH_UNREACH, 8, 14, 14, 14]
+  foot:  [10, PATH_UNREACH, 30, 8, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, PATH_UNREACH, 25, 11],
+  horse: [10, PATH_UNREACH, 50, 7, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, PATH_UNREACH, 35, 12],
+  heavy: [14, PATH_UNREACH, PATH_UNREACH, 8, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, PATH_UNREACH, PATH_UNREACH, 15]
 };
 // 橋梁 / 階梯物件格的代價(§3.2「橋物件」欄)
 const MOVE_BRIDGE = { foot: 8, horse: 8, heavy: 10 };

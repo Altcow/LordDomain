@@ -65,7 +65,7 @@ function cityInfo(id) {
   if (r.cls === 'dwell') {
     tier = (d.tier !== undefined && d.tier !== null) ? d.tier : 1;
     r.tier = Math.max(0, Math.min(4, tier));
-    r.res = CITY_RES_OVR[id] || CITY_TIER_RES[r.tier];
+    r.res = CITY_RES_OVR[id] || (typeof houseKindOf === 'function' && CITY_RES_OVR[houseKindOf(id)]) || CITY_TIER_RES[r.tier];
   }
   CITY_INFO[id] = r;
   return r;
@@ -92,7 +92,7 @@ function cityscoreCompute(objs, board, lvOverride) {
     for (i = 0; i < N; i++) {
       t = terr[i];
       if (t === TR) roadG[i] = 1;
-      else if (t === TL || t === TV) waterTiles++;
+      else if (t === TL || t === TV || t === 19) waterTiles++;   // 19 = T_OCEAN(景觀水面;海水不可飲用,飲水看 cityfx 水源物件,不看地形)
     }
   }
   for (i = 0; i < objs.length; i++) {
@@ -264,7 +264,7 @@ function cityCondEval(c, S, lv) {
   switch (c.k) {
     case 'dwell': have = S.houses; need = c.n; break;
     case 'tier': have = 0; for (i = c.t; i < 5; i++) have += S.tiers[i]; need = c.n; break;
-    case 'types': have = 0; c.ids.forEach(function (id) { have += S.cnt[id] || 0; }); need = c.n; break;
+    case 'types': have = 0; c.ids.forEach(function (id) { have += S.cnt[id] || 0; if (typeof HOUSE_LIKE !== 'undefined') Object.keys(HOUSE_LIKE).forEach(function (sid) { if (HOUSE_LIKE[sid] === id) have += S.cnt[sid] || 0; }); }); need = c.n; break;
     case 'kinds': have = 0; c.cls.forEach(function (cl) { have += S.kindsCls[cl] || 0; }); need = c.n; break;
     case 'kindsAll': have = S.kindsAll; need = c.n; break;
     case 'cover': have = S.houses > 0 ? Math.floor(S.cover[c.svc] * 100 + 1e-6) : 0; need = Math.round(c.frac * 100); break;

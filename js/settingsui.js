@@ -338,6 +338,20 @@ function stDisplaySec() {
       stRender();
     })));
   }
+  if (typeof uiIconsSetOn === 'function') {
+    nodes.push(stRow('使用圖示圖片', stSwitch(uiIconsOn(), function (v) {
+      uiIconsSetOn(v);
+      if (typeof advUiRefresh === 'function') advUiRefresh(true);
+      if (typeof nsUiRefresh === 'function') nsUiRefresh(true);
+      stRender();
+    })));
+  }
+  if (typeof terrainTexSetOn === 'function') {
+    nodes.push(stRow('使用地形貼圖', stSwitch(terrainTexOn(), function (v) {
+      terrainTexSetOn(v);
+      stRender();
+    })));
+  }
   if (typeof extSpritesSetOn === 'function') {
     nodes.push(stRow('使用外部建築圖(試裝)', stSwitch(extSpritesOn(), function (v) {
       extSpritesSetOn(v);
@@ -577,7 +591,7 @@ function stDangerSec() {
     nodes.push(stSaveBtn('復原上一步', ok ? '救回剛被重新開始 / 刪除 / 切換前的內容' : '此裝置無法使用', function () { stClosePanel(); savesUiUndo(); }));
     nodes.push(stSaveBtn('世界小標籤:' + (worldTagOn() ? '顯示' : '隱藏'), '頂列的「世 NN」,點它開啟我的世界', function () { try { localStorage.setItem(WORLD_TAG_KEY, worldTagOn() ? '0' : '1'); } catch (e) { /* 略過 */ } if (typeof svTagSync === 'function') svTagSync(); stRender(); }));
   }
-  if (typeof savesDoAction === 'function') nodes.push(stSaveBtn('重新開始目前世界…', '只影響目前這個世界,偏好設定保留', function () { stClosePanel(); savesDoAction('all'); }, true));
+  if (typeof savesDoAction === 'function') nodes.push(stSaveBtn('重新開始目前世界…', '只影響目前這個世界,偏好設定保留', function () { stClosePanel(); if (typeof worldWizardOpen === 'function' && worldWizardOpen({ kind: 'restart', n: worldsActive(), from: 'settings' })) return; savesDoAction('all'); }, true));
   return stSec('世界與重新開始', nodes);
 }
 

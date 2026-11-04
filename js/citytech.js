@@ -116,12 +116,19 @@ function techEraOpen(e) {
   return true;
 }
 function techEra() { var e = 1; while (e < 5 && techEraOpen(e + 1)) e++; return e; }
-function techBigDone(id) { var s = techState(); if (!s || !id) return; id = TECH_BIG_ALIAS[id] || id; s.big[id] = 1; if (techNode(id)) s.done[id] = 1; }   // 大工程(里程碑)完成掛點:同時記為已研,供解鎖查詢
+function techBigDone(id) { var s = techState(); if (!s || !id) return; id = TECH_BIG_ALIAS[id] || id; var was = !!(s.big[id] || s.done[id]); s.big[id] = 1; if (techNode(id)) s.done[id] = 1; if (!was && typeof cardsOnTechDone === 'function') cardsOnTechDone(id, true); }   // 大工程(里程碑)完成掛點:同時記為已研,供解鎖查詢
 
 // ───────── 資源 ─────────
 function techGoodsIds(tier) {
   if (typeof GOODS === 'undefined') return [];
-  return Object.keys(GOODS).filter(function (g) { return GOODS[g].tier === tier && !GOODS[g].res; }).sort();
+  // 該階貨品尚未定義時(目前貨品只到 T2,科技卻有 T3/T4 需求),退用現有最高階貨品,避免中後期科技永遠付不起
+  var t = tier;
+  while (t >= 0) {
+    var ids = Object.keys(GOODS).filter(function (g) { return GOODS[g].tier === t && !GOODS[g].res; }).sort();
+    if (ids.length) return ids;
+    t--;
+  }
+  return [];
 }
 function techHave(id) { return typeof cityGoodsHave === 'function' ? cityGoodsHave(id) : 0; }
 function techGoodsPlan(g) {   // 回傳 {id:數量} 或 null(不足)。從庫存多者先取,同量依 id
@@ -254,6 +261,7 @@ function techFinish(c, now) {
   s.done[c.id] = 1;
   techEvents.push({ type: 'done', id: c.id, t: now });
   if (typeof techOnDone === 'function') techOnDone(c.id);
+  if (typeof cardsOnTechDone === 'function') cardsOnTechDone(c.id, false);   // 酒館:完成科技得酒令(cards.js)
   if (typeof cityUnlockApply === 'function') cityUnlockApply(c.id);
 }
 function techMulOf(c) { return techSpeedMul((techNode(c.id) || {}).branch) || 1; }

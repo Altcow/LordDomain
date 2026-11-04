@@ -1,8 +1,8 @@
-const VERSION = 'v36';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v37';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
-const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits):第一次載入後存起來,離線可用;版本遞增換新桶
-const RUNTIME_PATHS = ['/assets/buildings/', '/assets/portraits/'];
+const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
+const RUNTIME_PATHS = ['/assets/buildings/', '/assets/portraits/', '/assets/ui/', '/assets/terrain/'];
 const PRECACHE = [
   './',
   './index.html',
@@ -29,6 +29,7 @@ const PRECACHE = [
   './js/prog.js',
   './js/tech.js',
   './js/templates.js',
+  './js/templates112.js',
   './js/npc.js',
   './js/playerpool.js',
   './js/progmod_arch.js',
@@ -56,6 +57,7 @@ const PRECACHE = [
   './js/art_theme.js',
   './js/ext_sprites_data.js',
   './js/ext_sprites.js',
+  './js/terrain_tex.js',
   './js/render.js',
   './js/tddraw.js',
   './js/fishdraw.js',
@@ -70,6 +72,7 @@ const PRECACHE = [
   './js/cityfx_data.js',
   './js/cityfx.js',
   './js/objcat.js',
+  './js/uiicons.js',
   './js/cityadvisor_data.js',
   './js/cityadvisor.js',
   './js/nextstep_data.js',
@@ -92,8 +95,11 @@ const PRECACHE = [
   './js/techui.js',
   './js/saveslots.js',
   './js/savesui.js',
+  './js/worldpacks.js',
+  './js/worldwizard.js',
   './js/settingsui.js',
   './js/progui.js',
+  './js/terrain_live.js',
   './js/lordhallui.js',
   './js/carddata.js',
   './js/cards.js',

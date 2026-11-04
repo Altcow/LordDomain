@@ -131,13 +131,15 @@ function lifeRoadSig() {
 
 // 建築的門格:優先面(house 正面 rot0 南=+y、rot1 西=−x、rot2 北=−y、rot3 東=+x;hospital/research=+y)有道路才用,否則其他面;
 // 同高度道路格中取離建築中心最近者。找不到 = 沒有門路,不是目的地。
+// 風格住宅視同對應住宅(HOUSE_LIKE,nl_style_objects.js);未載入時原樣
+function lifeHouseKind(t) { return typeof houseKindOf === 'function' ? houseKindOf(t) : t; }
 function lifeFindDoor(o, ok) {
   const fp = footprint(o.type, o.rot), w = fp[0], h = fp[1];
   const hb = world.height[idx(o.x, o.y)];
   const faces = [[1, 0], [0, 1], [-1, 0], [0, -1]];
   let order = [0, 1, 2, 3];
   let pref = -1;
-  if (o.type === 'house') pref = ((o.rot & 3) + 1) & 3;
+  if (lifeHouseKind(o.type) === 'house') pref = ((o.rot & 3) + 1) & 3;
   else if (o.type === 'hospital' || o.type === 'research') pref = 1;
   if (pref >= 0) order = [pref].concat(order.filter(k => k !== pref));
   const bx = o.x + w / 2, by = o.y + h / 2;
@@ -191,8 +193,8 @@ function lifeRebuild() {
     const tp = obj ? obj.type : '';
     if (tp === 'stairs' || tp === 'ramp') stairs[i] = 1;
     if (gm[i] || tp === 'bridge') { ok[i] = 1; continue; }
-    if (world.terrain[i] === T_ROAD && (!obj || tp === 'stairs' || tp === 'ramp')) ok[i] = 1;
-    else if (obj && world.terrain[i] !== T_LAKE && world.terrain[i] !== T_RIVER && lifeWalkObj(tp)) ok[i] = 1; // 鋪面(walk:true,如廣場石板)可踩
+    if (isPavedTerrain(world.terrain[i]) && (!obj || tp === 'stairs' || tp === 'ramp')) ok[i] = 1;   // 道路 + 人工地面(石板 / 夯土 / 水泥 / 鋼鐵 / 木棧板 / 木紋地板)
+    else if (obj && !isWaterTerrain(world.terrain[i]) && lifeWalkObj(tp)) ok[i] = 1; // 鋪面(walk:true,如廣場石板)可踩
   }
   for (i = 0; i < N; i++) {
     if (!ok[i]) continue;
@@ -244,11 +246,12 @@ function lifeRebuild() {
       const pdr = lifeFindDoor(o, ok);
       if (pdr) { pdoors.push({ type: o.type, cell: pdr.cell, bx: pdr.bx, by: pdr.by }); pcells[pdr.cell] = 1; }
     }
-    if (LIFE_DEST_TYPES.indexOf(o.type) < 0) continue;
+    const dk = lifeHouseKind(o.type);
+    if (LIFE_DEST_TYPES.indexOf(dk) < 0) continue;
     const d = lifeFindDoor(o, ok);
     if (!d) continue;
-    dests.push({ type: o.type, cell: d.cell, bx: d.bx, by: d.by });
-    bcount[o.type] = (bcount[o.type] || 0) + 1;
+    dests.push({ type: dk, cell: d.cell, bx: d.bx, by: d.by });
+    bcount[dk] = (bcount[dk] || 0) + 1;
   }
   LIFE.road = { ok: ok, nb: nb, list: list, ent: ent, dests: dests, bcount: bcount, port: pdoors, portCells: pcells, dc: new Map(), q: new Int32Array(N), sig: lifeRoadSig(), spots: [], patrol: null };
   const R = LIFE.road;

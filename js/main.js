@@ -18,7 +18,9 @@ function boot() {
   // iOS 直版轉橫版後視窗尺寸與安全區常延遲更新:轉向後再補量兩次,並強制重排固定定位的邊欄/頂列
   window.addEventListener('orientationchange', () => { [120, 450].forEach(ms => setTimeout(() => { resizeCanvas(canvas); const sb = document.getElementById('sideBar'); if (sb) { sb.style.display = 'none'; void sb.offsetWidth; sb.style.display = ''; } }, ms)); });
   const migr = progBoot();
-  if (!loadWorld()) applyTemplate(DEFAULT_TEMPLATE);
+  const freshWorld = !loadWorld();
+  if (freshWorld) applyTemplate(DEFAULT_TEMPLATE);
+  if (typeof worldWizardBoot === 'function') worldWizardBoot(freshWorld);   // 精靈選的世界風格 / 起手範本(只在全新世界套用一次)
   initUI(canvas);
   if (migr.migrated && typeof showToast === 'function') showToast('舊領地已備份,從 1 級重新開始(設定可還原備份)');
   if (typeof initBattleUI === 'function') initBattleUI();

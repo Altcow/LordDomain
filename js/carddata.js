@@ -1,8 +1,9 @@
 // js/carddata.js — 卡牌與酒館 第一階段純資料(PLAN_CARDS.md v3:§2.2~2.6、§3A、§3.5、§4.4、§4.13、§5.4、§7.1;城建專注模式)。
 // 數字多為 PLACEHOLDER。戰、統、謀與名人專屬詞條資料保留但第一階段不啟用(CARD_TRAITS.cls / card.trn 標示)。
 // 驗證:node tools/test_cards.js(含名人表 lint)。不寫 DOM、不讀時間。ES2017;不用 ?. ??。
+// 【占位,待手填】名人的職業欄位(CARD_FIGS 無 ja/main)目前由五維自動推導(cards.js cardFigJobs);之後可逐位寫入 CARD_FIG_JOB_OVERRIDE 覆寫,不必改 CARD_FIGS。
 // 全域名稱:CARD_GRADE CARD_STATS CARD_LEARN CARD_FAC CARD_ROWS CARD_JOB_TIERPCT CARD_JOBS CARD_JOB_BY_ID CARD_JOB_PORTRAIT CARD_POST_GROUP CARD_VENUE_ORDER CARD_VENUES
-//          CARD_EXAM_SUBJECTS CARD_COST CARD_WINE CARD_CFG CARD_UPGRADE CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_SKILLS CARD_SKILL_BY_ID CARD_SKILL_BY_ROW CARD_FIGS CARD_FIG_BY_ID
+//          CARD_EXAM_SUBJECTS CARD_COST CARD_WINE CARD_CFG CARD_UPGRADE CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_SKILLS CARD_SKILL_BY_ID CARD_SKILL_BY_ROW CARD_FIGS CARD_FIG_BY_ID CARD_FIG_JOB_OVERRIDE
 
 // 品階(§3A.1):lo/hi 生成參數;stCap 單項基礎上限;tai 才帶;jobSlots 職業詞條槽;jobMax 職業最高階;learn 學養型分布(通才/偏才/專才/宗師 %);trN 一般詞條數;skn 技能數(第一階段只記數量)
 var CARD_GRADE = [
@@ -109,10 +110,13 @@ var CARD_WINE = {
   dailyGift: 2, dailyDaysMax: 7,   // 每日小禮 +2,最多存 7 天
   shardPerToken: 5,                // 5 碎 = 1 令
   shardWeekCap: 50,                // 請辭碎片每週上限
-  refundRate: 0.2                  // 請辭返還成本 20 %(碎片計:成本 c 令 → c 碎)
+  refundRate: 0.2,                 // 請辭返還成本 20 %(碎片計:成本 c 令 → c 碎)
+  techGift: 1, techGiftEra: 3, techGiftHi: 2,   // 每完成一項科技 +1 令,科技所屬時代 ≥ 3 起 +2(每個節點只發一次,記 cards.tokenGiven)
+  mileGift: 10                     // 完成一個里程碑(mg_*)+10 令
 };
 var CARD_CFG = {
-  capBase: 14,             // 名額基數(§7A.1 Lv10 = 14;無等級版以此占位,可由 cardsCapBonus() 追加)
+  capBase: 14,             // 名額基數:缺官階模組(lordhallui)時的退路(§7A.1 Lv10 = 14);可由 cardsCapBonus() 追加
+  capRank0: 10, capPerRank: 2, capMax: 40,   // 無等級版名額 = 10 + 官階等級 × 2,上限 40(官階等級 = lordhallui 官階表序號 1~);官階降低不踢人,只是不能再延請
   waitSeats: 5,            // 待定席
   tokMax: 5,               // 名人信物上限
   paceMin: 10,             // 時鐘回撥容忍(分鐘)
@@ -303,6 +307,8 @@ var CARD_FIGS = [
   {id:"youtu",name:"尤突",zi:"",fac:4,home:"丹陽",st:[60,72,47,35,62],tai:276,tr:[["山戰",0],["丹陽宗帥",1,"山地格守方受傷 −8 %"]],bio:"丹陽宗帥,受曹公印綬,為陸遜所破",fb:"史(山越,外族)",gr:3,birth:"?–?"},
   {id:"yufuluo",name:"於夫羅",zi:"",fac:4,home:"南匈奴",st:[80,86,52,50,78],tai:346,tr:[["騎射",0],["南匈奴單于",1,"胡騎部隊移速 +8 %"]],bio:"南匈奴單于,寓居河東平陽",fb:"史(外族)",gr:3,birth:"?–195"}
 ];
+// 名人職業覆寫表(之後逐位手填;cards.js 的 cardFigJobs 優先讀此表,查無才由五維推導):{ 名人id: { ja: { 職業id: 階(1~4) }, main: '主職業id' } }。目前為空。
+var CARD_FIG_JOB_OVERRIDE = {};
 var CARD_FIG_BY_ID = {};
 CARD_FIGS.forEach(function (f) { CARD_FIG_BY_ID[f.id] = f; });
 if (typeof module !== 'undefined' && module.exports) module.exports = { CARD_GRADE: CARD_GRADE, CARD_JOBS: CARD_JOBS, CARD_TRAITS: CARD_TRAITS, CARD_FIGS: CARD_FIGS, CARD_VENUES: CARD_VENUES };

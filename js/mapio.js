@@ -175,7 +175,7 @@ function mioAnalyze(bd) {
     if (occ[i] === MIO_K.wall || occ[i] === MIO_K.solid) bld[i] = 1;
     if (block[i] === 1) continue;
     if (occ[i] === MIO_K.obstacle || occ[i] === MIO_K.solid) continue;
-    if ((terrain[i] === T_LAKE || terrain[i] === T_RIVER) && !bridge[i]) continue;
+    if (isWaterTerrain(terrain[i]) && !bridge[i]) continue;
     pass[i] = 1;
     if (occ[i] === 0) ground[i] = 1;
   }

@@ -37,6 +37,9 @@ function svCss() {
     '#svPanel .svrb.empty{opacity:.7}' +
     '#svPanel .svrbt{display:flex;gap:8px;align-items:baseline;min-width:0}' +
     '#svPanel.busy .svlist{pointer-events:none;opacity:.6}' +
+    '#svPanel .svpk{display:flex;align-items:center;gap:6px;margin:2px 0;font-size:12px;opacity:.9;min-width:0}' +
+    '#svPanel .svflag{flex:0 0 auto;width:24px;height:16px}' +
+    '#svPanel .svpkn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
     '#worldTag{flex:0 0 auto;box-sizing:border-box;max-width:3.6em;overflow:hidden;white-space:nowrap;font-size:10px;line-height:1;padding:3px 4px;border:1px solid rgba(255,255,255,.28);border-radius:6px;opacity:.8;cursor:pointer;color:#f0e6cf}' +
     '#worldTag[hidden]{display:none}' +
     'body.sandbox #worldTag,body.atk-mode #worldTag,body.replay-mode #worldTag{display:none}';
@@ -125,6 +128,19 @@ function svRbRow(n, k, m, isActive) {
   return row;
 }
 
+// 世界風格小列:小旗 + 風格名稱(使用中世界看目前城市風格,其餘看 worlds.v1 的 packs;舊世界無欄位 = 漢)
+function svPackLine(n, isActive, w) {
+  var id = (isActive && typeof themeGet === 'function') ? themeGet() : (typeof worldsPackOf === 'function' ? worldsPackOf(n, w) : 'han'), line = svNode('div', 'svpk'), cv, p;
+  if (typeof worldPackGet !== 'function') { line.hidden = true; return line; }
+  p = worldPackGet(id);
+  cv = svNode('canvas', 'svflag');
+  cv.setAttribute('aria-hidden', 'true');
+  try { if (typeof flagDraw === 'function') flagDraw(cv, p.id, 24, 16); } catch (e) { /* 略過 */ }
+  line.appendChild(cv);
+  line.appendChild(svNode('span', 'svpkn', '風格:' + p.name));
+  return line;
+}
+
 // 一個世界一列:標題 = 平行世界 NN · 名稱;進入 / 重新開始 / 改名 / 刪除;可展開回溯點
 function svRow(n, m, w, list, live) {
   var isActive = w.active === n, name = w.names[n] || '', row = svNode('div', 'svrow' + (isActive ? ' active' : '') + (m || isActive ? '' : ' empty')), t = svNode('div', 'svt'), b = svNode('div', 'svb'), i, box, cur, open;
@@ -132,12 +148,14 @@ function svRow(n, m, w, list, live) {
   t.appendChild(svNode('span', 'svnm', name || (m || isActive ? '' : '空世界')));
   if (isActive) t.appendChild(svNode('span', 'svbadge', '使用中'));
   row.appendChild(t);
+  if (m || isActive) row.appendChild(svPackLine(n, isActive, w));
   if (isActive) row.appendChild(svNode('div', 'svs', '目前世界 · ' + svStats(live)));
   else if (m) row.appendChild(svNode('div', 'svs', svAway(w.lastActive[n] || m.ts) + ' · ' + svStats(m)));
   else row.appendChild(svNode('div', 'svs', '空世界:進入後從頭開始'));
   if (isActive) { cur = svBtn('目前世界', function () {}); cur.disabled = true; b.appendChild(cur); }
-  else b.appendChild(svBtn(m ? '進入' : '建立新世界', function () { svDoEnter(n, m); }));
-  if (m || isActive) b.appendChild(svBtn('重新開始', function () { svDoRemove(n, 'restart'); }, 'danger'));
+  else if (m) b.appendChild(svBtn('進入', function () { svDoEnter(n, m); }));
+  else b.appendChild(svBtn('建立新世界', function () { svDoCreate(n); }));
+  if (m || isActive) b.appendChild(svBtn('重新開始', function () { svDoRestart(n); }, 'danger'));
   b.appendChild(svBtn('改名', function () { svDoRename(n, name); }));
   if (m && !isActive) b.appendChild(svBtn('刪除', function () { svDoRemove(n, 'delete'); }, 'danger'));
   row.appendChild(b);
@@ -175,6 +193,7 @@ async function svRender() {
     return;
   }
   w = worldsGet();
+  if (typeof worldsPackNote === 'function' && worldsPackNote(w, w.active)) worldsPut(w);
   savesFlush();
   snap = savesCapture();
   live = savesSummarize(snap, savesLivePop());
@@ -209,6 +228,17 @@ function svDoEnter(n, m) {
     var r = await worldsEnter(n);
     svSay(r.ok ? '切換中…' : svReasonText(r.reason));
   });
+}
+
+// 建立新世界 / 重新開始:開風格精靈(js/worldwizard.js);沒有精靈時退回原本流程
+function svDoCreate(n) {
+  if (typeof worldWizardOpen === 'function' && worldWizardOpen({ kind: 'create', n: n, from: 'saves' })) return;
+  return svDoEnter(n, null);
+}
+
+function svDoRestart(n) {
+  if (typeof worldWizardOpen === 'function' && worldWizardOpen({ kind: 'restart', n: n, from: 'saves' })) return;
+  return svDoRemove(n, 'restart');
 }
 
 function svDoRemove(n, kind) {

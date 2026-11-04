@@ -3,7 +3,7 @@
 // pack 欄位 = 城市風格主題 id(theme_skin.js:'bei' = S5 北方、'nanman' = S3 南方):只有 world.city.theme 等於 pack 時才出現在建造選單且可建;
 //   其他風格(含預設漢)不顯示、不可建;已放置者不受影響(繪製與存檔都不看 pack)。解鎖:風格相符 = 起手開放(nlUnlocked 回 true)。
 // 功能參數比照既有物件、成本 +10%,全部 PLACEHOLDER:小型住宅比照 民房 house;3×3 院落比照 鄉紳宅 house_gentry;4×4 大宅比照 世家宅邸 mansion_clan;白牆比照 院牆 wall_courtyard。
-// 全域名稱:STYLE_OBJECTS objPackOk objPackThemes。外部全域一律 typeof 守衛。ES2017;不用 ?. ??
+// 全域名稱:STYLE_OBJECTS HOUSE_LIKE houseKindOf isHouseLike objPackOk objPackThemes。外部全域一律 typeof 守衛。ES2017;不用 ?. ??
 
 var STYLE_OBJECTS = {
   s5_yurt:       { name: '穹廬',     icon: '⛺', w: 2, h: 2, pack: 'bei',    group: 'town', like: 'house',         tpl: 'house',        tint: 'cloth1', cost: { wood: 28, stone: 11 }, prod: { coin: 0.12 }, tier: 1 },
@@ -16,6 +16,21 @@ var STYLE_OBJECTS = {
   s3_shuixie:    { name: '水榭大宅', icon: '🏞️', w: 4, h: 4, pack: 'nanman', group: 'town', like: 'mansion_clan',  tpl: 'mansion_clan', tint: 'cloth1', cost: { coin: 1650 }, tier: 4 },
   s3_wall:       { name: '白牆',     icon: '🧱', w: 1, h: 1, pack: 'nanman', group: 'road', like: 'wall_courtyard', tpl: 'wall_courtyard', tint: 'cloth1', cost: { coin: 11 }, drag: true }
 };
+
+// 風格住宅 → 既有住宅的對照(單一來源):居民目的地 / 住房容量 / 入住率 / 民房數量上限 / 繁榮度住房項 / 引導鏈民居數 都經此視同對應住宅。
+// 4 件 2×2 視同 house(民房);2 件 3×3 視同 house_gentry(鄉紳宅);2 件 4×4 視同 mansion_clan(世家宅邸)。其餘 type 一律回傳自己。
+var HOUSE_LIKE = {
+  s5_yurt: 'house', s5_adobe: 'house', s3_stilt: 'house', s3_tile: 'house',
+  s5_adobe_yard: 'house_gentry', s3_riverside: 'house_gentry',
+  s5_wubao: 'mansion_clan', s3_shuixie: 'mansion_clan'
+};
+function houseKindOf(type) { return Object.prototype.hasOwnProperty.call(HOUSE_LIKE, type) ? HOUSE_LIKE[type] : type; }
+// 是否視同民房 house(含 house 本身);原本只認 type === 'house' 的判斷都改用這個
+function isHouseLike(type) { return houseKindOf(type) === 'house'; }
+// 民居戶數表(cityfx_data.js 的 CITYFX_HOUSES,供 cityfx / 顧問 / 引導鏈共用):風格住宅沿用對應住宅的權重
+if (typeof CITYFX_HOUSES !== 'undefined') {
+  Object.keys(HOUSE_LIKE).forEach(function (id) { if (CITYFX_HOUSES[HOUSE_LIKE[id]] && !CITYFX_HOUSES[id]) CITYFX_HOUSES[id] = CITYFX_HOUSES[HOUSE_LIKE[id]]; });
+}
 
 // 物件是否符合目前城市風格:無 pack 的一律 true;有 pack 者須 themeGet() === pack。theme_skin.js 未載入時視為漢風格(不符)。
 function objPackOk(type) {
@@ -68,4 +83,4 @@ function objPackThemes() {
     A.def(id, spec);
   });
 })(typeof ART !== 'undefined' ? ART : null);
-if (typeof module !== 'undefined' && module.exports) module.exports = { STYLE_OBJECTS };
+if (typeof module !== 'undefined' && module.exports) module.exports = { STYLE_OBJECTS, HOUSE_LIKE, houseKindOf, isHouseLike };

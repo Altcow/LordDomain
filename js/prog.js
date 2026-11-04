@@ -374,7 +374,7 @@ function progFtueReady() { return typeof world !== 'undefined' && !!world && !!w
 function progHouseCount() {
   var objs = typeof estateObjects === 'function' ? estateObjects() : null, n = 0;
   if (!objs) return 0;
-  objs.forEach(function (o) { if (o && o.type === 'house') n++; });
+  objs.forEach(function (o) { if (o && (o.type === 'house' || (typeof isHouseLike === 'function' && isHouseLike(o.type)))) n++; });
   return n;
 }
 // 戰陣簽名:物件種類、位置、方向排序後的雜湊。戰陣棋盤尚未建立(world.stash 為 null)視為空戰陣;無法呼叫 campBoard 時回 null
@@ -406,7 +406,7 @@ function progCityStats(objs) {
     s.types[o.type] = (s.types[o.type] || 0) + 1;
     if (X.noCount.indexOf(o.type) >= 0) return;
     s.total++;
-    if (o.type === 'house') s.houses++;
+    if (o.type === 'house' || (typeof isHouseLike === 'function' && isHouseLike(o.type))) s.houses++;
     if (!d.prod) s.deco++;
   });
   if (typeof BUILD_GROUPS !== 'undefined') {

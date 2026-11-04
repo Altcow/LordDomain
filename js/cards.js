@@ -4,7 +4,7 @@
 // 第一階段刻意未做:名冊人物/小兵卡/人物圈、取捨詞條 §4.4A、戰場技能內容(只記數量 skn)、記名簿、快速模式、文鬥小遊戲(星數固定 1)、結義。
 // 全域名稱:cardsSkillList cardHash cardRng cardsStateNew cardsGet cardsNormSave cardsPeriodNo cardsSync cardsNextIn cardsVenueOpen cardsVenueTheme cardsGenBatch cardsOpenBatch
 //          cardsDiscardBatch cardsCost cardsCap cardsHire cardsClaimGift cardsRelease cardsUndoRelease cardsRecall cardsUpgradeCheck cardsUpgrade cardsStats cardsJobSlots
-//          cardsFind cardsSyncTalents cardsTalents cardsPatrolTalents cardsAccept cardsJobLine cardsAddTokens CARD_PIN
+//          cardsFind cardsSyncTalents cardsTalents cardsPatrolTalents cardsAccept cardsJobLine cardsAddTokens cardsOnTechDone cardsRankLv CARD_PIN
 
 var CARD_PIN = ['上上', '上中', '上下', '中上', '中中', '中下', '下上', '下中', '下下'];
 var CARD_RECALL_COST = 10;
@@ -41,7 +41,7 @@ function cardsStateNew(seed) {
   var s = (typeof seed === 'number' && isFinite(seed)) ? (seed >>> 0) : ((Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0);
   return {
     v: 1, seed: s, seq: 0, tok: CARD_WINE.startGift, shards: 0, shardWk: { w: -1, n: 0 }, gift: { day: -1 },
-    clock: { maxSeen: 0 }, last: { T: -1, E: -1, G: -1 }, acc: { T: [], E: [], G: [] }, cur: { T: null, E: null, G: null },
+    clock: { maxSeen: 0 }, tokenGiven: {}, last: { T: -1, E: -1, G: -1 }, acc: { T: [], E: [], G: [] }, cur: { T: null, E: null, G: null },
     pity: { T: 0, E: 0, G: 0 }, fame: { G: 0, E: 0 }, stars: { E: 1 }, roster: [], wait: [], wander: [], lastRel: null
   };
 }
@@ -54,6 +54,21 @@ function cardsGet() {
   return c.cards;
 }
 function cardsAddTokens(cs, n) { cs.tok = Math.max(0, cs.tok + (n | 0)); return cs.tok; }
+// 科技 / 里程碑完成發酒令(citytech.js 的 techFinish、techBigDone 呼叫):每節點只發一次(cs.tokenGiven);遷移出來的已研科技不走此路,不補發。回發放數
+function cardsOnTechDone(id, big) {
+  var cs = cardsGet(), g, node, n, name;
+  if (!cs || !id) return 0;
+  g = cs.tokenGiven || (cs.tokenGiven = {});
+  if (g[id]) return 0;
+  node = (typeof techNode === 'function') ? techNode(id) : null;
+  big = !!big || String(id).indexOf('mg_') === 0;
+  n = big ? CARD_WINE.mileGift : ((node && node.era >= CARD_WINE.techGiftEra) ? CARD_WINE.techGiftHi : CARD_WINE.techGift);
+  g[id] = 1;
+  cardsAddTokens(cs, n);
+  name = (node && node.name) || id;
+  if (typeof showToast === 'function') showToast('研成〈' + name + '〉,得酒令 +' + n);
+  return n;
+}
 
 // ───────── 招募歲鐘(§2.4) ─────────
 function cardsTz(now) { return new Date(now).getTimezoneOffset() * 60000; }
@@ -189,6 +204,12 @@ function cardPinOf(card, G) {
 }
 // 名人:職業由五維自動推導(§5.4 未手填職業,第一階段 PLACEHOLDER;gr 4 = [IV,I,I]、gr 3 = [III,I,I])
 function cardFigJobs(f) {
+  var ov = (typeof CARD_FIG_JOB_OVERRIDE !== 'undefined') ? CARD_FIG_JOB_OVERRIDE[f.id] : null, oja = {}, omain = null, ok;
+  if (ov && ov.ja && typeof ov.ja === 'object') {   // 手填覆寫優先:職業 id 須存在、階 1~4;無效項略過,全無效則退回推導
+    Object.keys(ov.ja).forEach(function (id) { var t = ov.ja[id] | 0; if (CARD_JOB_BY_ID[id] && t >= 1 && t <= 4) { oja[id] = t; if (!omain) omain = id; } });
+    ok = Object.keys(oja).length > 0;
+    if (ok) return { ja: oja, main: (ov.main && oja[ov.main]) ? ov.main : omain };
+  }
   var rules = [['bingshi'], ['bingshi', 'caishi'], ['wenshu', 'tianwen'], ['lizhi', 'jisuan', 'lvfa'], ['ciling', 'jiaohua', 'shangcai']];
   var ord = [0, 1, 2, 3, 4].sort(function (a, b) { return f.st[b] - f.st[a] || a - b; }), ja = {}, tiers = f.gr === 4 ? [4, 1, 1] : [3, 1, 1], main = null, k, i, j, list, pick;
   for (k = 0; k < 3; k++) {
@@ -284,7 +305,20 @@ function cardsDiscardBatch(cs, venue) { cs.cur[venue] = null; }
 
 // ───────── 名冊 / 延請 / 請辭 ─────────
 function cardsCost(c) { return CARD_GRADE[c.gr].cost + ((c.gr === 3 && c.learn === 3) ? CARD_COST.zongBonus : 0); }
-function cardsCap() { return CARD_CFG.capBase + ((typeof cardsCapBonus === 'function') ? (cardsCapBonus() | 0) : 0); }
+// 官階等級 1~(LH_RANKS 序號 + 1);缺 lordhallui / cityscore 時回 0(名額退回 capBase)
+function cardsRankLv() {
+  var s, r, i;
+  if (typeof lordhallRank !== 'function' || typeof cityscoreGet !== 'function') return 0;
+  try { s = cityscoreGet(false); r = lordhallRank(s ? s.pop : 0, s ? s.pros : 0); } catch (e) { return 0; }
+  if (typeof r === 'number') return Math.max(0, r | 0);
+  if (typeof LH_RANKS !== 'undefined') for (i = 0; i < LH_RANKS.length; i++) if (LH_RANKS[i].n === r) return i + 1;
+  return 0;
+}
+// 名額 = 10 + 官階等級 × 2(上限 40);無官階資料退回 capBase;再加 cardsCapBonus()。官階降低時名額減少但不踢人(roster 超額僅不能再延請)
+function cardsCap() {
+  var lv = cardsRankLv(), base = lv > 0 ? Math.min(CARD_CFG.capMax, CARD_CFG.capRank0 + lv * CARD_CFG.capPerRank) : CARD_CFG.capBase;
+  return base + ((typeof cardsCapBonus === 'function') ? (cardsCapBonus() | 0) : 0);
+}
 function cardsFind(cs, id) {
   var lists = ['roster', 'wait', 'wander'], i, j;
   for (i = 0; i < lists.length; i++) for (j = 0; j < cs[lists[i]].length; j++) if (cs[lists[i]][j].id === id) return { e: cs[lists[i]][j], list: lists[i], idx: j };
@@ -501,6 +535,7 @@ function cardsNormSave(v) {
   if (v.shardWk) n.shardWk = { w: cardNum(v.shardWk.w, -1, 1e9, -1) | 0, n: cardNum(v.shardWk.n, 0, 1e6, 0) | 0 };
   if (v.gift) n.gift.day = cardNum(v.gift.day, -1, 1e9, -1) | 0;
   if (v.clock) n.clock.maxSeen = cardNum(v.clock.maxSeen, 0, 1e15, 0);
+  if (v.tokenGiven && typeof v.tokenGiven === 'object') Object.keys(v.tokenGiven).slice(0, 600).forEach(function (k) { if (v.tokenGiven[k] && k.length <= 40) n.tokenGiven[k] = 1; });
   CARD_VENUE_ORDER.forEach(function (x) {
     V = CARD_VENUES[x];
     n.last[x] = (v.last && typeof v.last[x] === 'number') ? (v.last[x] | 0) : -1;

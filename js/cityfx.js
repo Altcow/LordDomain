@@ -61,7 +61,7 @@ function cfxSig() {
     n++;
     h = (Math.imul(h, 31) + cfxTid(o.type) * 977 + o.x * 131 + o.y * 7 + (o.rot || 0)) | 0;
   }
-  if (ter) for (i = 0; i < ter.length; i++) if (ter[i] === 3) roads++;
+  if (ter) for (i = 0; i < ter.length; i++) if (cfxRoadT(ter[i])) roads++;
   return w + ':' + n + ':' + h + ':' + roads + ':' + cfx.decVer + ':' + (ter ? ter.length : 0);
 }
 
@@ -245,6 +245,9 @@ function cfxCalc() {
   cfx.stats.lastMs = Date.now() - t0;
 }
 
+// 道路暢通指標算入的地形:道路 + 石板 / 夯土 / 水泥(data.js isRoadLikeTerrain;鋼鐵、木棧板、木紋地板不算);data.js 未載入時只認道路
+function cfxRoadT(t) { return typeof isRoadLikeTerrain === 'function' ? isRoadLikeTerrain(t) : t === 3; }
+
 function cfxRoadCalc(w, ter) {
   var N = w * w, arr = new Float32Array(N), i, j, c, s, cell, m, sp, tcnt, tt, add, x, y, selfLu = {}, fl, ax, ay, cnt = {}, dx, dy;
   var allLu = (cfx.allV.lu || 0) + (cfx.decV.lu || 0);
@@ -256,7 +259,7 @@ function cfxRoadCalc(w, ter) {
     for (ay = fl.y; ay < fl.y + fl.h; ay++) for (ax = fl.x; ax < fl.x + fl.w; ax++) if (ax >= 0 && ay >= 0 && ax < w && ay < w) selfLu[ay * w + ax] = Math.max(selfLu[ay * w + ax] || 0, fl.fx.lu);
   }
   for (cell = 0; cell < N; cell++) {
-    if (!(ter && ter[cell] === 3) && selfLu[cell] === undefined) continue;
+    if (!(ter && cfxRoadT(ter[cell])) && selfLu[cell] === undefined) continue;
     x = (cell % w) + 0.5; y = Math.floor(cell / w) + 0.5;
     add = (selfLu[cell] || 0) + allLu;
     if (cfx.luSrc.length) {
@@ -454,7 +457,7 @@ function cityFxPanelFill(list) {
 }
 
 function cityFxPanelRender() {
-  var ui = cfx.ui, sec = ui.sec, lv = cfxPanelLv(), i, key, row, d, v, lvl, items, j, line;
+  var ui = cfx.ui, sec = ui.sec, lv = cfxPanelLv(), i, key, row, d, v, lvl, items, j, line, ic;
   if (!sec) return;
   while (sec.firstChild) sec.removeChild(sec.firstChild);
   if (lv < CITYFX_PANEL_LV) { sec.hidden = true; return; }
@@ -467,7 +470,9 @@ function cityFxPanelRender() {
     if (lv < CITYFX_REVEAL[key]) continue;
     v = cityFxCity(key); lvl = cfxLevelOf(key, v);
     row = document.createElement('div'); row.className = 'pg-row';
-    row.textContent = CITYFX_ICON[key] + ' ' + CITYFX_NAME[key] + ' ' + cfxFmt(key, v) + '  ' + CFX_LV_MARK[lvl] + CITYFX_LEVEL_NAME[lvl];
+    ic = typeof uiIconNode === 'function' ? uiIconNode(key, 24, CITYFX_ICON[key]) : null;
+    if (ic && ic.tagName !== 'SPAN' && ic.tagName !== 'span') { row.appendChild(ic); row.appendChild(document.createTextNode(' ' + CITYFX_NAME[key] + ' ' + cfxFmt(key, v) + '  ' + CFX_LV_MARK[lvl] + CITYFX_LEVEL_NAME[lvl])); }
+    else row.textContent = CITYFX_ICON[key] + ' ' + CITYFX_NAME[key] + ' ' + cfxFmt(key, v) + '  ' + CFX_LV_MARK[lvl] + CITYFX_LEVEL_NAME[lvl];
     (function (k) { row.addEventListener('click', function () { cfx.ui.open[k] = !cfx.ui.open[k]; cityFxPanelRender(); }); })(key);
     sec.appendChild(row);
     if (ui.open[key]) {

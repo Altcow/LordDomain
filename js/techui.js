@@ -233,14 +233,14 @@ function tuQueueHtml() {
   if (!s.cur.length && !s.queue.length) h += '<div class="tu-empty">序列是空的。點樹上節點,在下方詳情按「研發」。</div>';
   s.cur.forEach(function (c) {
     var n = techNode(c.id), pct = c.total > 0 ? Math.max(0, Math.min(100, Math.round((1 - c.left / c.total) * 100))) : 0;
-    h += '<div class="tu-q cur"><div class="tu-qn">⏳ ' + tuEsc(n ? n.name : c.id) + '<small class="tu-left" data-left="' + c.id + '"> 剩 ' + techFmtTime(c.left) + '</small></div><div class="tu-bar"><i data-bar="' + c.id + '" style="width:' + pct + '%"></i></div>';
+    h += '<div class="tu-q cur"><div class="tu-qn">⏳ ' + (n ? tuBrIcon(n.branch, 20) : '') + tuEsc(n ? n.name : c.id) + '<small class="tu-left" data-left="' + c.id + '"> 剩 ' + techFmtTime(c.left) + '</small></div><div class="tu-bar"><i data-bar="' + c.id + '" style="width:' + pct + '%"></i></div>';
     if (tu.confirm === c.id) h += '<div class="tu-cf">' + tuEsc(techCancelHint(c.id)) + '<button data-tu="cancelyes" data-id="' + c.id + '">確定取消</button><button data-tu="cancelno">不取消</button></div>';
     else h += '<button data-tu="cancel" data-id="' + c.id + '">取消</button>';
     h += '</div>';
   });
   s.queue.forEach(function (id, i) {
     var n = techNode(id), wait = techCanStart(id) ? '' : '(等待)';
-    h += '<div class="tu-q"><div class="tu-qn">' + (i + 1) + '. ' + tuEsc(n ? n.name : id) + '<small> ' + wait + ' ' + tuDurText(techDurationOf(id)) + '</small></div>';
+    h += '<div class="tu-q"><div class="tu-qn">' + (i + 1) + '. ' + (n ? tuBrIcon(n.branch, 20) : '') + tuEsc(n ? n.name : id) + '<small> ' + wait + ' ' + tuDurText(techDurationOf(id)) + '</small></div>';
     if (tu.confirm === id) h += '<div class="tu-cf">' + tuEsc(techCancelHint(id)) + '<button data-tu="cancelyes" data-id="' + id + '">確定移除</button><button data-tu="cancelno">不移除</button></div>';
     else h += (i > 0 ? '<button data-tu="up" data-id="' + id + '">上移</button>' : '') + '<button data-tu="cancel" data-id="' + id + '">取消</button>';
     h += '</div>';
@@ -260,14 +260,18 @@ function tuTickQueue() {
 }
 function tuHeadHtml() { return tuTopHtml() + tuResHtml() + tuWarnHtml() + tuQueueHtml(); }
 
+// 分支圖示(js/uiicons.js 存在且偏好開啟才有;否則回空字串,頁籤維持純文字)
+function tuIconOn() { return typeof uiIconHtml === 'function' && typeof uiIconsOn === 'function' && uiIconsOn(); }
+function tuBrIcon(id, px, fb) { return tuIconOn() ? uiIconHtml(id, px, fb || '') : ''; }
 function tuTabsHtml() {
-  var h = '';
+  var h = '', ic = tuIconOn();
   TECH_BRANCHES.forEach(function (b) {
     var done = 0, tot = 0;
     CITY_TECHS.forEach(function (n) { if (n.branch === b.id) { tot++; if (techDone(n.id)) done++; } });
-    h += '<button class="tu-tab' + (tu.branch === b.id ? ' on' : '') + '" data-tu="tab" data-id="' + b.id + '">' + tuEsc(b.name) + '<small> ' + done + '/' + tot + '</small></button>';
+    if (ic) h += '<button class="tu-tab ic' + (tu.branch === b.id ? ' on' : '') + '" data-tu="tab" data-id="' + b.id + '" title="' + tuEsc(b.name) + '" aria-label="' + tuEsc(b.name) + '">' + tuBrIcon(b.id, 32, b.name.charAt(0)) + '<span class="tu-tn">' + tuEsc(b.name) + '</span><small> ' + done + '/' + tot + '</small></button>';
+    else h += '<button class="tu-tab' + (tu.branch === b.id ? ' on' : '') + '" data-tu="tab" data-id="' + b.id + '">' + tuEsc(b.name) + '<small> ' + done + '/' + tot + '</small></button>';
   });
-  return h;
+  return ic ? '<div class="tu-tr">' + h + '</div>' : h;
 }
 // 時代僅作為頂部參考色帶(階別顏色對照),不參與節點分組
 function tuEraHtml() {
@@ -464,6 +468,8 @@ var TU_CSS = '#techTreePanel{position:fixed;left:50%;top:3%;transform:translateX
   '.tu-sp{flex:1}.tu-res{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0}.tu-warn{color:#ffb4a0;margin:2px 0}.tu-msg{color:#9fe0a0;margin:2px 0}' +
   '.tu-qh{margin-top:4px;font-weight:bold}.tu-q{display:flex;flex-wrap:wrap;align-items:center;gap:4px;border-top:1px dashed #5a4727;padding:2px 0}.tu-qn{flex:1;min-width:140px}.tu-bar{width:100%;height:5px;background:#3a2f1a;border-radius:3px}.tu-bar i{display:block;height:100%;background:#f0b45a;border-radius:3px}.tu-cf{color:#ffd9a0;width:100%}.tu-empty{opacity:.7;padding:4px 0}' +
   '.tu-tabs{display:flex;overflow-x:auto;white-space:nowrap;gap:2px;padding:4px 8px 2px;flex:none}.tu-tab.on{background:#8a6d3b!important}.tu-tab small{opacity:.7}' +
+  '.tu-tr{display:flex;gap:2px;flex:none}.tu-tab.ic{display:inline-flex;align-items:center;gap:4px;min-height:44px;padding:2px 8px}.tu-tab.ic.on{outline:2px solid #f0b45a}' +
+  '@media (max-width:480px){.tu-tr{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));width:100%}.tu-tab.ic{flex-direction:column;justify-content:center;gap:0;padding:2px;margin:0;min-width:44px}.tu-tab.ic .tu-tn{display:none}.tu-tab.ic small{font-size:10px}}' +
   '.tu-es{display:flex;overflow-x:auto;white-space:nowrap;gap:4px;padding:2px 8px 4px;flex:none;align-items:center;font-size:11px}.tu-ec{padding:1px 8px;border-radius:9px;color:#111;opacity:.9}.tu-ec.off{opacity:.45}.tu-ecn{opacity:.55;margin-left:4px}' +
   '.tu-n.e1{--ec:#6aa86a}.tu-n.e2{--ec:#5aa0c8}.tu-n.e3{--ec:#c8a24a}.tu-n.e4{--ec:#c8704a}.tu-n.e5{--ec:#a86ac8}' +
   '.tu-ec.e1{background:#6aa86a}.tu-ec.e2{background:#5aa0c8}.tu-ec.e3{background:#c8a24a}.tu-ec.e4{background:#c8704a}.tu-ec.e5{background:#a86ac8}' +

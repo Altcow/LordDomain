@@ -284,7 +284,7 @@ function boardFromJSON(j, kind) {
       if (side === W) { b[k] = a; return; }
       for (let y = 0; y < side; y++) b[k].set(a.subarray(y * side, y * side + side), (y + off) * W + off);
     });
-    for (let i = 0; i < N; i++) if (b.terrain[i] > T_SNOW) b.terrain[i] = T_GRASS;   // 未知的大值當草地,不崩潰
+    for (let i = 0; i < N; i++) if (b.terrain[i] > T_MAXID) b.terrain[i] = T_GRASS;   // 未知的大值當草地,不崩潰
     const src = j.op !== undefined ? objUnpack(j) : (Array.isArray(j.objects) ? j.objects : []);
     b.objects = src
       .filter(o => o && typeof o.type === 'string' && hasType(o.type) && Number.isInteger(o.x) && Number.isInteger(o.y) &&
@@ -388,6 +388,7 @@ function sideOk(type) {
 }
 
 function countObjects(type) {
+  if (typeof isHouseLike === 'function' && isHouseLike(type)) return world.objects.filter(o => isHouseLike(o.type)).length;   // 風格住宅與民房共用民房上限
   return world.objects.filter(o => o.type === type).length;
 }
 
@@ -397,7 +398,7 @@ function capOf(type) {
   let m = d.max || null;
   if (type === 'research' && typeof techLabCap === 'function' && typeof CITY_TECHS !== 'undefined') m = techLabCap();   // NL1:研究院上限依時代
   if (progRulesOn() && typeof progProdCap === 'function') {
-    const pc = progProdCap(type, prog.lv);
+    const pc = progProdCap(typeof houseKindOf === 'function' ? houseKindOf(type) : type, prog.lv);
     if (pc !== null && (m === null || pc < m)) m = pc;
   }
   return m;
@@ -454,9 +455,19 @@ function paintTerrain(x, y, t, flowDir) {
   if (!landFits(x, y, 1, 1)) return false;
   removeObjectAt(x, y, false);
   const i = idx(x, y);
+  world.flow[i] = terrainFlowFor(i, t, flowDir);
   world.terrain[i] = t;
-  world.flow[i] = t === T_RIVER ? flowDir : 0;
   return true;
+}
+
+// 鋪地形 t 到格 i 後的 flow 值:河 = 流向;木棧板鋪在湖 / 河(或原本就是水上棧板)上 = T_PLANK_WET,其餘 0
+function terrainFlowFor(i, t, flowDir) {
+  if (t === T_RIVER) return flowDir;
+  if (t === T_PLANKDECK) {
+    const o = world.terrain[i];
+    return (o === T_LAKE || o === T_RIVER || (o === T_PLANKDECK && world.flow[i] === T_PLANK_WET)) ? T_PLANK_WET : 0;
+  }
+  return 0;
 }
 
 function changeHeight(x, y, delta) {
@@ -473,7 +484,7 @@ function productionPerSec() {
   estateObjects().forEach(o => {
     const p = OBJECTS[o.type].prod;
     if (!p) return;
-    const m = techMul('prod.' + o.type) * techMul('prod.all');
+    const m = techMul('prod.' + (typeof houseKindOf === 'function' ? houseKindOf(o.type) : o.type)) * techMul('prod.all');
     for (const k in p) total[k] = (total[k] || 0) + p[k] * m;
   });
   return total;
@@ -729,7 +740,7 @@ function loadWorldSave() {
     for (let y = 0; y < side; y++)
       for (let x = 0; x < side; x++) {
         const j = y * side + x, i = idx(x + ox, y + oy);
-        world.terrain[i] = tIn[j] > T_SNOW ? T_GRASS : tIn[j]; world.height[i] = hIn[j]; world.flow[i] = fIn[j];
+        world.terrain[i] = tIn[j] > T_MAXID ? T_GRASS : tIn[j]; world.height[i] = hIn[j]; world.flow[i] = fIn[j];
       }
     world.objects = objs.filter(o => o && OBJECTS[o.type])
       .map(o => {
@@ -839,7 +850,8 @@ function loadDemo(ox, oy) {
 }
 
 // 範本 ground 欄位的地形名稱 → 地形值(純視覺地形,見 data.js)
-const TPL_GROUND = { sand: T_SAND, crack: T_CRACK, snow: T_SNOW };
+const TPL_GROUND = { sand: T_SAND, crack: T_CRACK, snow: T_SNOW, stonepave: T_STONEPAVE, rammed: T_RAMMED, concrete: T_CONCRETE, steel: T_STEEL, plankdeck: T_PLANKDECK, woodfloor: T_WOODFLOOR,
+  dirt: T_DIRT, rock: T_ROCK, cracksoil: T_CRACKSOIL, blacksoil: T_BLACKSOIL, jungle: T_JUNGLE, redsoil: T_REDSOIL };
 
 function tplCells(e) {
   let pts = [];
@@ -888,7 +900,10 @@ function applyTemplate(id) {
   const estate = world.board === 'estate';
   const ox = (boardW() - t.w) >> 1, oy = (boardH() - t.h) >> 1;
   const keep = Object.assign({}, world.res);
-  let failed = 0, lvSkip = 0;
+  let failed = 0, lvSkip = 0, themeMsg = '';
+  // 風格範本(t.theme):套用前先把城市風格切到對應風格,風格件才放得上去
+  if (t.theme && estate && typeof themeSet === 'function' && typeof themeGet === 'function' && themeGet() !== t.theme && themeSet(t.theme))
+    themeMsg = '城市風格已切換為' + THEME_SKINS[t.theme].name + '風格(' + t.name.replace(/^\S+\s*/, '') + '使用該風格建築)';
   tplRun(() => {
     if (t.legacy === 'demo') {
       // demo 由程式產生、不經 put 計數：先以規則暫停算出應放件數，差額即城市等級略過件數
@@ -904,7 +919,8 @@ function applyTemplate(id) {
       if (estate) clearWorld(); else clearBoard();
       (t.heights || []).forEach(a => fillRect(ox + a[1], oy + a[2], ox + a[1] + a[3] - 1, oy + a[2] + a[4] - 1,
         (x, y) => { world.height[idx(x, y)] = Math.min(MAX_H, a[0]); }));
-      (t.ground || []).forEach(op => {   // 沙地 / 裂地 / 雪地(先鋪,後面的水與路會覆蓋)
+      (t.ground || []).forEach(op => {   // 沙地 / 裂地 / 雪地(先鋪,後面的水與路會覆蓋);op.over = 水之後才鋪(木棧板鋪在水面上)
+        if (op.over) return;
         const r = op.rect, gt = TPL_GROUND[op.t];
         if (gt !== undefined) fillRect(ox + r[0], oy + r[1], ox + r[0] + r[2] - 1, oy + r[1] + r[3] - 1, (x, y) => paintTerrain(x, y, gt, 0));
       });
@@ -915,6 +931,11 @@ function applyTemplate(id) {
           if (hl && lx >= hl[0] && lx < hl[0] + hl[2] && ly >= hl[1] && ly < hl[1] + hl[3]) return;
           paintTerrain(x, y, tt, op.flow || 0);
         });
+      });
+      (t.ground || []).forEach(op => {   // 水之後的人工地面(木棧板蓋在湖 / 河上,flow 由 paintTerrain 處理)
+        if (!op.over) return;
+        const r = op.rect, gt = TPL_GROUND[op.t];
+        if (gt !== undefined) fillRect(ox + r[0], oy + r[1], ox + r[0] + r[2] - 1, oy + r[1] + r[3] - 1, (x, y) => paintTerrain(x, y, gt, 0));
       });
       (t.roads || []).forEach(r => fillRect(ox + r[0], oy + r[1], ox + r[0] + r[2] - 1, oy + r[1] + r[3] - 1,
         (x, y) => paintTerrain(x, y, T_ROAD, 0)));
@@ -951,8 +972,8 @@ function applyTemplate(id) {
   if (estate) world.res = keep;
   if (estate) world.lastTs = Date.now();
   // 城市等級略過件數以 toast 說明(延後一拍顯示,蓋過呼叫端緊接著的「已套用」提示)
-  if (lvSkip > 0 && typeof showToast === 'function') {
-    const msg = lvSkip + ' 件需要研發或已達數量上限,未放置';
+  if ((lvSkip > 0 || themeMsg) && typeof showToast === 'function') {
+    const msg = (themeMsg ? themeMsg + (lvSkip > 0 ? ';' : '') : '') + (lvSkip > 0 ? lvSkip + ' 件需要研發或已達數量上限,未放置' : '');
     if (typeof setTimeout === 'function') setTimeout(() => showToast(msg), 0); else showToast(msg);
   }
   return { placed: world.objects.length, failed: failed, skipLv: lvSkip, ox: ox, oy: oy };
@@ -1196,7 +1217,8 @@ function pendRebuild() {
 // 待購中 type 的件數，skip 為不計入的索引（-1 表示全計）
 function pendCount(type, skip) {
   let n = 0;
-  pend.list.forEach((o, i) => { if (o.type === type && i !== skip) n++; });
+  const hl = typeof isHouseLike === 'function' && isHouseLike(type);
+  pend.list.forEach((o, i) => { if ((hl ? isHouseLike(o.type) : o.type === type) && i !== skip) n++; });
   return n;
 }
 
@@ -1331,8 +1353,8 @@ function terrainOkUnder(x, y, t) {
 function paintTerrainKeep(x, y, t, flowDir) {
   if (!landFits(x, y, 1, 1)) return false;
   const i = idx(x, y);
+  world.flow[i] = terrainFlowFor(i, t, flowDir);
   world.terrain[i] = t;
-  world.flow[i] = t === T_RIVER ? flowDir : 0;
   return true;
 }
 

@@ -187,7 +187,7 @@ function goodsInvalidate() { goodsPlanCache = null; }
 // 建立 label 圖:道路格(T_ROAD 或橋 / 城門等物件所在格)連通成分編號
 function goodsRoadLabels(b, W) {
   var N = W * W, road = new Uint8Array(N), lab = new Int32Array(N), n = 0, i, x, y;
-  for (i = 0; i < N; i++) if (b.terrain[i] === T_ROAD) road[i] = 1;
+  for (i = 0; i < N; i++) if (isRoadLikeTerrain(b.terrain[i])) road[i] = 1;
   (b.objects || []).forEach(function (o) {
     if (GOODS_ROADLIKE.indexOf(o.type) < 0 || !OBJECTS[o.type]) return;
     var f = footprint(o.type, o.rot | 0);

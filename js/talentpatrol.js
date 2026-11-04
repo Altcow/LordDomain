@@ -121,7 +121,7 @@ function tpEnv() {
   if (typeof cardsSyncTalents === 'function') cardsSyncTalents();   // 名冊 → world.city.talents(cards.js);名冊空時沿用占位
   if (!city || !city.talents || !city.talents.length) return null;
   const roster = typeof cardsPatrolTalents === 'function' ? cardsPatrolTalents() : null;   // 名冊人物 at = 'type@x,y' → bids
-  const pass = (x, y) => x >= 0 && y >= 0 && x < boardW() && y < boardH() && world.terrain[idx(x, y)] === T_ROAD && !world.occ[idx(x, y)];
+  const pass = (x, y) => x >= 0 && y >= 0 && x < boardW() && y < boardH() && isPavedTerrain(world.terrain[idx(x, y)]) && !world.occ[idx(x, y)];
   const bld = bid => {
     const o = world.objects[bid - 1];
     if (!o) return null;

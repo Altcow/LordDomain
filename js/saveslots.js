@@ -29,7 +29,7 @@ var SAVE_PREF_KEYS = [
   'lorddomain.settings.v1', 'lorddomain.mute', 'lorddomain.bgm.pick', 'lorddomain.bgm.rot', 'lorddomain.art.v1', 'lorddomain.life.v1',
   'lorddomain.render', 'lorddomain.fps', 'lorddomain.powersave', 'lorddomain.cityonly', 'lorddomain.adv.mode', 'lorddomain.guide.v1', 'lorddomain.id.v1',
   'lorddomain.ui.top', 'lorddomain.ui.cat', 'lorddomain.ui.camptop', 'lorddomain.ui.campcat', 'lorddomain.ui.variant', 'lorddomain.ui.wallskin',
-  'lorddomain.ui.mode', 'lorddomain.ui.prevMode', 'lorddomain.ui.compact', 'lorddomain.ui.bpreview', 'lorddomain.ui.fsTipDismissed', 'lorddomain.ui.worldtag', 'lorddomain.extsprites', 'lorddomain.nextstep'
+  'lorddomain.ui.mode', 'lorddomain.ui.prevMode', 'lorddomain.ui.compact', 'lorddomain.ui.bpreview', 'lorddomain.ui.fsTipDismissed', 'lorddomain.ui.worldtag', 'lorddomain.extsprites', 'lorddomain.nextstep', 'lorddomain.uiicons', 'lorddomain.terraintex'
 ];
 // 世界管理鍵:不進槽、不清除(世界清單 / 跨分頁鎖)
 var SAVE_WORLD_KEYS = ['lorddomain.worlds.v1', 'lorddomain.worlds.lock', 'lorddomain.legacymig.v1'];
@@ -252,9 +252,27 @@ function worldsNorm(v) {
   if (savesIsWorldId(v.active)) w.active = v.active;
   if (nm && typeof nm === 'object') for (k in nm) if (savesIsWorldId(+k) && typeof nm[k] === 'string') w.names[k] = savesCleanName(nm[k]);
   if (la && typeof la === 'object') for (k in la) if (savesIsWorldId(+k) && typeof la[k] === 'number') w.lastActive[k] = la[k];
+  worldsNormPacks(v, w);
   if (v.pending && savesIsWorldId(v.pending.from) && savesIsWorldId(v.pending.to)) w.pending = { from: v.pending.from, to: v.pending.to };
   if (v.arrived && savesIsWorldId(v.arrived.to)) w.arrived = { to: v.arrived.to, left: typeof v.arrived.left === 'number' ? v.arrived.left : null, fresh: !!v.arrived.fresh };
   return w;
+}
+// 世界風格 meta(js/worldwizard.js):packs[n] = {id:風格 id, ver:1}(無欄位 = han);fresh[n] = {pack, tpl} 為「下次此世界全新啟動」時套用的一次性設定,啟動後即清除
+function worldsPackOk(p) { return !!p && typeof p === 'object' && typeof p.id === 'string' && /^[a-z0-9_]{1,16}$/.test(p.id); }
+function worldsNormPacks(v, w) {
+  var k, f;
+  if (v.packs && typeof v.packs === 'object') {
+    for (k in v.packs) if (savesIsWorldId(+k) && worldsPackOk(v.packs[k])) { if (!w.packs) w.packs = {}; w.packs[k] = { id: v.packs[k].id, ver: 1 }; }
+  }
+  if (v.fresh && typeof v.fresh === 'object') {
+    for (k in v.fresh) {
+      f = v.fresh[k];
+      if (savesIsWorldId(+k) && f && typeof f === 'object' && typeof f.pack === 'string' && /^[a-z0-9_]{1,16}$/.test(f.pack)) {
+        if (!w.fresh) w.fresh = {};
+        w.fresh[k] = { pack: f.pack, tpl: typeof f.tpl === 'string' && /^[A-Za-z0-9_]{1,40}$/.test(f.tpl) ? f.tpl : '' };
+      }
+    }
+  }
 }
 function worldsPut(w) {
   try { localStorage.setItem(WORLDS_KEY, JSON.stringify(w)); return true; } catch (e) { return false; }
@@ -269,6 +287,24 @@ function worldsGet() {
   return w;
 }
 function worldsActive() { return worldsGet().active; }
+// 清掉空的 packs / fresh 物件(沒有內容時不留欄位,舊存檔位元組不變)
+function worldsPackPrune(w) {
+  if (w.packs && !Object.keys(w.packs).length) delete w.packs;
+  if (w.fresh && !Object.keys(w.fresh).length) delete w.fresh;
+}
+// 世界 n 的風格 id(舊世界 / 無欄位 / 未知 = 'han')
+function worldsPackOf(n, w) { var m = w || worldsGet(), p = m.packs && m.packs[n]; return p ? p.id : 'han'; }
+// 把使用中世界目前的城市風格記進 meta(w 為呼叫端持有的 worlds 物件,不自行寫入);回 true = 有變動
+function worldsPackNote(w, n) {
+  var cur;
+  if (typeof themeGet !== 'function' || n !== w.active) return false;
+  cur = themeGet();
+  if (worldsPackOf(n, w) === cur && (cur === 'han' || (w.packs && w.packs[n]))) return false;
+  if (cur === 'han' && !(w.packs && w.packs[n])) return false;
+  if (!w.packs) w.packs = {};
+  w.packs[n] = { id: cur, ver: 1 };
+  return true;
+}
 // map.js saveWorldObj 呼叫:把世界編號 / 名稱寫進該世界自己的主存檔
 function worldsStamp(o) {
   var w = worldsGet();
@@ -491,6 +527,7 @@ async function worldsEnter(to) {
     if (!b.ok) return { ok: false, reason: 'nobackup' };
     w = worldsGet();
     left = w.lastActive[to] || null;
+    worldsPackNote(w, from);
     w.pending = { from: from, to: to };
     if (!worldsPut(w)) { savesToast('無法記錄切換狀態,未切換'); return { ok: false, reason: 'apply' }; }
     savesSuspendOn();
@@ -680,6 +717,9 @@ async function worldsRemove(n, kind, opts) {
     } catch (e) { return { ok: false, reason: 'idb' }; }
     w = worldsGet();
     if (kind === 'delete') { delete w.names[n]; delete w.lastActive[n]; }
+    if (w.packs) delete w.packs[n];
+    if (w.fresh) delete w.fresh[n];
+    worldsPackPrune(w);
     worldsPut(w);
     return { ok: true };
   });

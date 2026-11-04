@@ -49,6 +49,8 @@ function advCityActive() {
   if (typeof isCityOnly === 'function') { try { return !!isCityOnly(); } catch (e) { return false; } }
   return true;
 }
+// 指標小圖示節點(js/uiicons.js 存在且開啟時回 <img>;否則回 fallback 文字或 null)
+function advIcon(id, px, fb) { return typeof uiIconNode === 'function' ? uiIconNode(id, px, fb) : (fb ? advE('span', null, fb) : null); }
 function advObjName(id) { return (typeof OBJECTS !== 'undefined' && OBJECTS[id] && OBJECTS[id].name) || id; }
 function advTechName(id) { return (typeof TECHS !== 'undefined' && TECHS[id] && TECHS[id].name) || id; }
 
@@ -59,7 +61,7 @@ var ADV_CSS = [
   '.adv-t0{background:#2f8f4e}.adv-t1{background:#c99a1e;color:#1d1600!important}.adv-t2{background:#c0392b}',
   '#advChip[hidden],#advDock[hidden],#advCard[hidden],#advDict[hidden],#advSprite[hidden],#advTip[hidden]{display:none!important}',
   'body.photo-mode #advChip,body.photo-mode #advDock,body.photo-mode #advSprite,body.atk-mode #advChip,body.atk-mode #advDock,body.atk-mode #advSprite,body.sandbox #advChip,body.sandbox #advDock,body.sandbox #advSprite{display:none!important}',
-  '#advDock{position:fixed;left:0;right:0;bottom:0;height:22vh;min-height:120px;z-index:20;background:rgba(24,30,40,.96);border-top:1px solid #45566e;color:#e8edf2;font-size:12px;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}',
+  '#advDock{position:fixed;left:0;right:0;bottom:0;height:22vh;min-height:150px;z-index:20;background:rgba(24,30,40,.96);border-top:1px solid #45566e;color:#e8edf2;font-size:12px;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}',
   '#advDock.adv-land{left:75%;top:0;height:auto;min-height:0;border-top:0;border-left:1px solid #45566e}',
   '.adv-head{display:flex;align-items:center;gap:4px;padding:3px 6px;flex:0 0 auto;border-bottom:1px solid #35425a}',
   '.adv-tab{background:#2a3547;color:#cfd8e3;border:1px solid #45566e;border-radius:6px;padding:3px 7px;font-size:12px;min-height:26px}',
@@ -70,6 +72,7 @@ var ADV_CSS = [
   '.adv-body{flex:1 1 auto;min-height:0;overflow:auto;padding:4px 6px}',
   '.adv-bars{display:flex;gap:6px;align-items:stretch;height:100%;overflow-x:auto}',
   '.adv-col{flex:0 0 36px;display:flex;flex-direction:column;align-items:center;cursor:pointer;touch-action:manipulation}',
+  '.adv-col .ui-ic{margin-bottom:1px}.adv-row .ui-ic{flex:0 0 auto}',
   '.adv-mk{font-size:11px;line-height:13px;white-space:nowrap}',
   '.adv-track{position:relative;flex:1 1 auto;width:30px;min-height:48px;border-radius:4px;overflow:hidden;border:1px solid #4a5a72}',
   '.adv-band{position:absolute;left:0;right:0}',
@@ -91,11 +94,11 @@ var ADV_CSS = [
   '.adv-empty{color:#9fb0c6;padding:6px 0}',
   '#advCard{position:fixed;z-index:30;width:290px;max-width:calc(100vw - 16px);box-sizing:border-box;background:rgba(30,38,52,.98);border:1px solid #6a82aa;border-radius:8px;color:#e8edf2;font-size:12px;padding:6px 34px 6px 8px;line-height:1.45;overflow:auto}',
   '#advCard .adv-x{position:absolute;right:3px;top:3px;margin:0}',
-  '#advCard .adv-q{font-weight:700}',
+  '#advCard .adv-q{font-weight:700;display:flex;align-items:center;gap:6px;min-height:40px}',
   '#advCard .adv-acts{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap}',
   '#advTip{position:fixed;z-index:60;max-width:160px;max-height:64px;overflow:hidden;background:rgba(20,26,36,.96);border:1px solid #6a82aa;border-radius:6px;color:#e8edf2;font-size:11px;padding:3px 6px;pointer-events:none}',
   '#advDict{position:fixed;left:8px;right:8px;top:8px;bottom:8px;z-index:41;background:rgba(24,30,40,.99);border:1px solid #6a82aa;border-radius:10px;color:#e8edf2;display:flex;flex-direction:column;font-size:13px;line-height:1.6}',
-  '#advDict .adv-dh{display:flex;align-items:center;padding:6px 8px;border-bottom:1px solid #35425a;font-size:15px;font-weight:700;flex:0 0 auto}',
+  '#advDict .adv-dh{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #35425a;font-size:15px;font-weight:700;flex:0 0 auto}',
   '#advDict .adv-db{flex:1 1 auto;overflow:auto;padding:8px 12px;min-height:0}',
   '#advDict .adv-df{display:flex;gap:8px;justify-content:center;padding:6px;border-top:1px solid #35425a;flex:0 0 auto}',
   '#advDict h4{margin:8px 0 2px;color:#e0c06a;font-size:13px}',
@@ -213,10 +216,12 @@ function advRenderBars(body, c) {
   body.appendChild(wrap);
 }
 function advBarCol(b) {
-  var col = advE('div', 'adv-col' + (b.level === 2 ? ' adv-blink' : '')), tr = advE('div', 'adv-track'), mk = advE('div', 'adv-mk', b.mark + b.word), fill;
+  var col = advE('div', 'adv-col' + (b.level === 2 ? ' adv-blink' : '')), tr = advE('div', 'adv-track'), mk = advE('div', 'adv-mk', b.mark + b.word), fill, ic;
   mk.style.color = b.level === 2 ? '#ff8a7a' : (b.level === 1 ? '#f0cf6a' : '#8fe0a8');
   col.setAttribute('role', 'button'); col.setAttribute('aria-label', b.name + ' ' + Math.round(b.val) + b.unit + ' ' + b.word);
   col.setAttribute('data-bar', b.id);
+  ic = advIcon(b.id, 28, '');
+  if (ic) col.appendChild(ic);
   col.appendChild(mk);
   advBand(tr, 0, b.yFrac, 'adv-bg2'); advBand(tr, b.yFrac, b.gFrac, 'adv-bg1'); advBand(tr, b.gFrac, 1, 'adv-bg0');
   advLineAt(tr, b.yFrac); advLineAt(tr, b.gFrac);
@@ -229,9 +234,11 @@ function advBarCol(b) {
 function advBand(tr, a, z, cls) { var d = advE('div', 'adv-band ' + cls); d.style.bottom = Math.round(a * 100) + '%'; d.style.height = Math.round((z - a) * 100) + '%'; tr.appendChild(d); }
 function advLineAt(tr, f) { if (f <= 0 || f >= 1) return; var d = advE('div', 'adv-line'); d.style.bottom = Math.round(f * 100) + '%'; tr.appendChild(d); }
 function advBarRow(b) {
-  var row = advE('div', 'adv-row'), hb = advE('div', 'adv-hb'), f = advE('div', 'adv-hf adv-f' + b.level), mk = advE('span', 'adv-mk', b.mark + b.word);
+  var row = advE('div', 'adv-row'), hb = advE('div', 'adv-hb'), f = advE('div', 'adv-hf adv-f' + b.level), mk = advE('span', 'adv-mk', b.mark + b.word), ic;
   row.setAttribute('data-bar', b.id);
   mk.style.color = b.level === 2 ? '#ff8a7a' : (b.level === 1 ? '#f0cf6a' : '#8fe0a8');
+  ic = advIcon(b.id, 28, '');
+  if (ic) row.appendChild(ic);
   row.appendChild(advE('span', 'adv-nm', b.name));
   f.style.width = Math.round(b.frac * 100) + '%';
   hb.appendChild(f); row.appendChild(hb); row.appendChild(mk);
@@ -327,14 +334,18 @@ function advUiRefresh(force) {
 
 // ───────── 錨點小浮卡 ─────────
 function advUiCard(id, anchorEl) {
-  var h = STAT_HELP[id], c = advGet(false), bar, it, card = advUi.el.card, r, vp = advVp(), size = { w: 290, h: 150 }, fb, anchor;
+  var h = STAT_HELP[id], c = advGet(false), bar, it, card = advUi.el.card, r, vp = advVp(), size = { w: 290, h: 150 }, fb, anchor, q, ic;
   if (!h || !advUi.inited) return false;
   if (advUi.dict) return false;
   bar = c.bars.filter(function (b) { return b.id === id; })[0];
   it = c.items.filter(function (x) { return x.stat === id && x.tier !== 'B'; })[0] || c.items.filter(function (x) { return x.stat === id; })[0] || null;
   while (card.firstChild) card.removeChild(card.firstChild);
   card.appendChild(advBtn('✕', 'adv-x', function () { advUiCardClose(); }, '關閉'));
-  card.appendChild(advE('div', 'adv-q', h.icon + ' ' + h.name + ' · 這是什麼?'));
+  q = advE('div', 'adv-q');
+  ic = advIcon(id, 40, h.icon);
+  if (ic) q.appendChild(ic);
+  q.appendChild(advE('span', null, (ic && ic.tagName !== 'IMG' && ic.tagName !== 'img' ? ' ' : '') + h.name + ' · 這是什麼?'));
+  card.appendChild(q);
   card.appendChild(advE('div', null, h.brief));
   if (bar) card.appendChild(advE('div', null, bar.mark + bar.word + ' 現值 ' + Math.round(bar.val) + bar.unit + ' · ' + h.range.split('、')[0].replace(/^.*?:/, '')));
   if (it) card.appendChild(advE('div', null, '建議:' + it.text));
@@ -361,14 +372,17 @@ function advDictOrder() {
   return ids;
 }
 function advUiHelp(id) {
-  var h = STAT_HELP[id], d = advUi.el.dict, order, idx, hd, bd, ft, m;
+  var h = STAT_HELP[id], d = advUi.el.dict, order, idx, hd, bd, ft, m, ic;
   if (!h || !advUi.inited) return false;
   advUi.dict = id;
   if (!advPmOpen('adv-dict', 'big', d)) { advUi.dict = null; return false; }
   advUiCardClose();
   while (d.firstChild) d.removeChild(d.firstChild);
   order = advDictOrder(); idx = order.indexOf(id);
-  hd = advE('div', 'adv-dh', h.icon + ' ' + h.name + ' · 指標辭典');
+  hd = advE('div', 'adv-dh');
+  ic = advIcon(id, 40, h.icon);
+  if (ic) hd.appendChild(ic);
+  hd.appendChild(advE('span', null, (ic && ic.tagName !== 'IMG' && ic.tagName !== 'img' ? ' ' : '') + h.name + ' · 指標辭典'));
   hd.appendChild(advBtn('✕', 'adv-x', function () { advUiDictClose(); }, '關閉'));
   d.appendChild(hd);
   bd = advE('div', 'adv-db');

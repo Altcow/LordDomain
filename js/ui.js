@@ -21,6 +21,18 @@ const TERRAIN_TOOLS = {
   sand:  { name: '沙地', icon: '🏜️', drag: true, tip: '淡黃沙地,純外觀,玩法同草地' },
   crack: { name: '裂地', icon: '🪨', drag: true, tip: '乾旱龜裂的土地,純外觀,玩法同草地' },
   snow:  { name: '雪地', icon: '❄️', drag: true, tip: '終年積雪,純外觀,玩法同草地' },
+  stonepave: { name: '石板地', icon: '🔲', drag: true, tip: '灰色石板,鋪廣場與街道;可蓋建築、可通行,算道路暢通' },
+  rammed:    { name: '夯土地', icon: '🟫', drag: true, tip: '平整黃土夯層,可蓋建築、可通行,算道路暢通' },
+  concrete:  { name: '水泥地', icon: '⬜', drag: true, tip: '方格水泥,鋪港口;可蓋建築、可通行,算道路暢通' },
+  steel:     { name: '鋼鐵地面', icon: '⚙️', drag: true, tip: '鉚釘鋼板,科技 / 軍功環境;可蓋建築、可通行,不算道路,不長樹' },
+  plankdeck: { name: '木棧板', icon: '🪵', drag: true, tip: '可鋪在湖 / 河上的木棧道;可蓋建築、可通行,不長樹' },
+  woodfloor: { name: '木紋地板', icon: '🟧', drag: true, tip: '連續木紋室內地板;可蓋建築、可通行,不長樹' },
+  dirt:      { name: '泥土地', icon: '🟤', drag: true, tip: '褐色泥土,純外觀,玩法同草地' },
+  rock:      { name: '岩地', icon: '🪨', drag: true, tip: '裸露岩石地面,純外觀;可蓋建築、可通行,但不可種田,冬季不積雪' },
+  cracksoil: { name: '裂土地', icon: '🟠', drag: true, tip: '乾裂的土地,純外觀,玩法同草地' },
+  blacksoil: { name: '黑土地', icon: '⬛', drag: true, tip: '肥沃黑土,純外觀(耕作加成尚未實作),玩法同草地' },
+  jungle:    { name: '叢林地面', icon: '🌴', drag: true, tip: '濕潤的叢林地表,純外觀,玩法同草地' },
+  redsoil:   { name: '紅土', icon: '🟥', drag: true, tip: '紅色土壤,純外觀,玩法同草地' },
   lake:  { name: '湖',   icon: '💧', drag: true },
   river: { name: '河流', icon: '🌊', drag: true },
   raise: { name: '升高', icon: '⬆️', drag: true },
@@ -40,7 +52,12 @@ const TOP_LIST = [
   { id: 'mil', kind: 'build', icon: '⚔', name: '軍事建築', short: '軍事' }
 ];
 // 地形頂層內容(不含拆除:拆除只在建築頂層出現)
-const TERRAIN_MENU = ['road', 'grass', 'sand', 'crack', 'snow', 'lake', 'river', 'raise', 'lower'];
+const TERRAIN_MENU = ['road', 'grass', 'sand', 'crack', 'snow', 'stonepave', 'rammed', 'concrete', 'steel', 'plankdeck', 'woodfloor', 'dirt', 'rock', 'cracksoil', 'blacksoil', 'jungle', 'redsoil', 'lake', 'river', 'raise', 'lower'];
+// 人工地面鋪設費用(每格;PLACEHOLDER,數值待平衡):道路 / 沙 / 裂 / 雪地維持免費。免費建造模式(progFreeBuild)不收
+const TERRAIN_COST = {
+  stonepave: { stone: 2 }, rammed: { coin: 2 }, woodfloor: { wood: 2 }, plankdeck: { wood: 2 },
+  concrete: { coin: 2, stone: 3 }, steel: { coin: 6, stone: 3 }
+};
 // 變體群組:群組第一個為代表(選單只顯示代表),其餘變體在選到代表後以小圖示列選擇;變體仍是合法物件 id(舊存檔與範本照常)
 const VARIANT_GROUPS = {
   tree: ['tree', 'tree_pine', 'tree_willow', 'tree_sakura', 'tree_maple', 'tree_mulberry', 'tree_peach', 'tree_cypress']
@@ -65,8 +82,24 @@ let fxHi = null;   // 輕點高亮 / 落地光圈(render.js drawFx)
 let draftFloatKey = '', lastFloatHtml = '';
 let lastDraftHtml = '', lastSettleHtml = '';
 
-const TERRAIN_OF = { road: T_ROAD, grass: T_GRASS, sand: T_SAND, crack: T_CRACK, snow: T_SNOW, lake: T_LAKE, river: T_RIVER };
-const TERRAIN_NAME = ['草地', '湖', '河', '道路', '沙地', '裂地', '雪地'];
+const TERRAIN_OF = { road: T_ROAD, grass: T_GRASS, sand: T_SAND, crack: T_CRACK, snow: T_SNOW, lake: T_LAKE, river: T_RIVER,
+  stonepave: T_STONEPAVE, rammed: T_RAMMED, concrete: T_CONCRETE, steel: T_STEEL, plankdeck: T_PLANKDECK, woodfloor: T_WOODFLOOR,
+  dirt: T_DIRT, rock: T_ROCK, cracksoil: T_CRACKSOIL, blacksoil: T_BLACKSOIL, jungle: T_JUNGLE, redsoil: T_REDSOIL };
+const TERRAIN_NAME = ['草地', '湖', '河', '道路', '沙地', '裂地', '雪地', '石板地', '夯土地', '水泥地', '鋼鐵地面', '木棧板', '木紋地板', '泥土地', '岩地', '裂土地', '黑土地', '叢林地面', '紅土'];
+// 鋪設人工地面的扣款:先 terrainAfford 檢查、鋪成功後 terrainSpend 扣(重鋪同地形不會進到這裡)
+function terrainAfford(target) {
+  const c = TERRAIN_COST[Object.keys(TERRAIN_OF).find(k => TERRAIN_OF[k] === target)];
+  if (!c || (typeof progFreeBuild === 'function' && progFreeBuild())) return true;
+  if (canAfford(c)) return true;
+  warnOnce('資源不足，鋪設 ' + TERRAIN_NAME[target] + ' 需要 ' + costText(c));
+  return false;
+}
+function terrainSpend(target) {
+  const c = TERRAIN_COST[Object.keys(TERRAIN_OF).find(k => TERRAIN_OF[k] === target)];
+  if (!c || (typeof progFreeBuild === 'function' && progFreeBuild())) return;
+  spend(c);
+  updateResBar();
+}
 
 // 指標手勢狀態: mode = null | pan | tool | pending | paint | pinch
 const gs = { ptrs: new Map(), mode: null, primary: null, pinch: null, timer: 0, op: null, last: null };
@@ -1040,6 +1073,10 @@ function addToolButton(bar, id, icon, name, def) {
   let html = '<span class="ic">' + icon + '</span><span>' + name + '</span>';
   let title = name;
   if (!def && TERRAIN_TOOLS[id] && TERRAIN_TOOLS[id].tip) title += '：' + TERRAIN_TOOLS[id].tip;
+  if (!def && TERRAIN_COST[id] && game.mode === 'estate' && !progFreeBuild()) {
+    html += '<span class="cost">' + costText(TERRAIN_COST[id]) + '</span>';
+    title += ' 每格 ' + costText(TERRAIN_COST[id]);
+  }
   if (def) {
     html += '<span class="cost">' + costText(objCost(id)) + '</span>';
     title += ' ' + costText(objCost(id));
@@ -1154,7 +1191,8 @@ function previewOk(t, x, y) {
   if (OBJECTS[t]) return canPlacePending(t, x, y, ui.rot, -1) && canAfford(addCost(pendTotal(), objCost(t)));
   if (t === 'raise') return !world.occ[i] && !pend.occ[i] && world.height[i] < MAX_H;
   if (t === 'lower') return !world.occ[i] && !pend.occ[i] && world.height[i] > 0;
-  if (t === 'erase') return !!world.occ[i] || !!pend.occ[i] || world.terrain[i] === T_ROAD;
+  if (t === 'erase') return !!world.occ[i] || !!pend.occ[i] || (isPavedTerrain(world.terrain[i]) || isLiveTerrain(world.terrain[i]));
+  if (t in TERRAIN_COST && !(typeof progFreeBuild === 'function' && progFreeBuild()) && !canAfford(TERRAIN_COST[t])) return false;
   return !world.occ[i] && !pend.occ[i];
 }
 
@@ -1334,10 +1372,12 @@ function applyHidden(t, x, y, i, pn) {
       warnOnce(OBJECTS[world.objects[n - 1].type].name + '不能在' + TERRAIN_NAME[target] + '上，此格不可改');
       return false;
     }
+    if (!terrainAfford(target)) return false;
     if (!paintTerrainKeep(x, y, target, ui.rot)) {
       warnOnce('超出城市土地範圍');
       return false;
     }
+    terrainSpend(target);
     return true;
   }
   if (t === 'raise' || t === 'lower') {
@@ -1358,7 +1398,7 @@ function applyHidden(t, x, y, i, pn) {
     warnOnce('隱藏建築中無法拆除，請先按 👁 顯示建築');
     return false;
   }
-  if (world.terrain[i] === T_ROAD) {
+  if ((isPavedTerrain(world.terrain[i]) || isLiveTerrain(world.terrain[i]))) {
     if (!paintTerrainKeep(x, y, T_GRASS, 0)) {
       warnOnce('超出城市土地範圍');
       return false;
@@ -1377,7 +1417,7 @@ function previewOkHidden(t, x, y, i) {
     const h = world.height[o ? idx(o.x, o.y) : i];
     return t === 'raise' ? h < MAX_H : h > 0;
   }
-  return !n && world.terrain[i] === T_ROAD;
+  return !n && (isPavedTerrain(world.terrain[i]) || isLiveTerrain(world.terrain[i]));
 }
 
 function missingOf(cost) {
@@ -1478,17 +1518,21 @@ function applyOne(x, y) {
         return false;
       }
       if (world.terrain[i] === target && (target !== T_RIVER || world.flow[i] === ui.rot)) return false;
+      if (!terrainAfford(target)) return false;
       if (!paintTerrainKeep(x, y, target, ui.rot)) {
         warnOnce('超出城市土地範圍');
         return false;
       }
+      terrainSpend(target);
       return true;
     }
     if (world.terrain[i] === target && (target !== T_RIVER || world.flow[i] === ui.rot)) return false;
+    if (!terrainAfford(target)) return false;
     if (!paintTerrain(x, y, target, ui.rot)) {
       warnOnce('超出城市土地範圍');
       return false;
     }
+    terrainSpend(target);
     return true;
   }
   if (t === 'raise' || t === 'lower') {
@@ -1505,7 +1549,7 @@ function applyOne(x, y) {
     else showToast('已拆除 ' + OBJECTS[o.type].name + '，退還 ' + refundText(refund));
     return true;
   }
-  if (world.terrain[i] === T_ROAD) {
+  if ((isPavedTerrain(world.terrain[i]) || isLiveTerrain(world.terrain[i]))) {
     if (!paintTerrain(x, y, T_GRASS, 0)) {
       warnOnce('超出城市土地範圍');
       return false;
