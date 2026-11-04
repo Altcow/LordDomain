@@ -1,4 +1,4 @@
-const VERSION = 'v34';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v35';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const PRECACHE = [
@@ -52,6 +52,7 @@ const PRECACHE = [
   './js/art_traffic.js',
   './js/art_wallskin.js',
   './js/art_theme.js',
+  './js/ext_sprites.js',
   './js/render.js',
   './js/tddraw.js',
   './js/fishdraw.js',
@@ -68,6 +69,8 @@ const PRECACHE = [
   './js/objcat.js',
   './js/cityadvisor_data.js',
   './js/cityadvisor.js',
+  './js/nextstep_data.js',
+  './js/nextstep.js',
   './js/panorama.js',
   './js/audiodata.js',
   './js/audio.js',
@@ -93,6 +96,7 @@ const PRECACHE = [
   './js/cardsui.js',
   './js/cityscoreui.js',
   './js/cityadvisorui.js',
+  './js/nextstepui.js',
   './js/guide.js',
   './js/mapedit.js',
   './js/battleui.js',

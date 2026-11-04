@@ -101,6 +101,8 @@ function puiSrcText(from) {
 }
 
 // 城建專注模式(js/cityonly.js)是否開啟
+// 「推薦下一步」(nextstep.js)取代經營板 / 城建專注模式的新手任務提示條與清單入口(戰陣板不動)
+function puiNsReplaces() { return typeof nsGet === 'function' && (puiCity() || (typeof game !== 'undefined' && game && game.mode === 'estate')); }
 function puiCity() { return typeof isCityOnly === 'function' && isCityOnly(); }
 
 // 經驗進度條(城建專注模式的升級抽屜用)
@@ -407,13 +409,14 @@ function puiTaskModel() {
 function puiTaskRender() {
   var p, m, wel, show;
   if (!pui.ftue || !pui.wel) return;
+  if (pui.taskBtn) pui.taskBtn.style.display = puiNsReplaces() ? 'none' : '';
   p = progGet();
   m = puiTaskModel();
   wel = !p.ftue.welcomed && puiModeOk();
   if (pui.welTxt) pui.welTxt.textContent = puiCity() ? '歡迎,城主!先點下方的建築,多蓋幾座民房,再蓋伐木場;蓋出新種類、擴大城市就能升級,點頂列 Lv 看條件。' : '歡迎,城主!先點下方的建築,蓋一座民房;點頂列 Lv 看升級條件。';
   pui.welShown = wel;
   pui.wel.hidden = !wel;
-  show = !wel && !p.ftue.off && m.kind !== 'none' && puiModeOk();
+  show = !wel && !p.ftue.off && m.kind !== 'none' && puiModeOk() && !puiNsReplaces();
   pui.taskShown = show;
   pui.ftue.hidden = !show;
   if (!show) return;

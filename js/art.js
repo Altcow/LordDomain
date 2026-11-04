@@ -455,9 +455,10 @@ var ART = window.ART = (function () {
     return (t !== tod || n !== season) ? { tod: t, season: n } : null;
   };
   A.objSprite = function (type, f, v, res) {
-    var s = A.OBJ[type];
+    var s = A.OBJ[type], xs;
     v = v || {};
     if (s.sym) f = 0;
+    if (typeof extSpriteGet === 'function' && (xs = extSpriteGet(type, f, v, res))) return xs;   // ext_sprites.js:外部精靈圖(缺圖 / 關閉回 null 走程式繪製)
     var key = type + '|' + f + '|' + A.vkey(v) + '|' + res;
     if (A.cache[key]) return A.touch(key);
     if (A.bakeBudget > 0 && A.bakeMs > A.bakeBudget) {

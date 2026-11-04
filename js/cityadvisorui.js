@@ -434,7 +434,7 @@ function advUiSprite(c) {
   dot = advE('span', 'adv-dot adv-t' + (main.tier === 'R' ? 2 : (main.tier === 'Y' ? 1 : 0))); face.appendChild(dot);
   face.addEventListener('click', function () { advUiOpenDock('adv'); });
   sp.appendChild(face);
-  if (show && mode === 'full' && main.id === advUi.bubbleId) {
+  if (show && mode === 'full' && main.id === advUi.bubbleId && !(typeof nsEnabled === 'function' && nsEnabled())) {   // 「推薦下一步」開啟時由右上角小卡接手,縣丞不再跳氣泡(只留小臉入口)
     bub = advE('div', 'adv-bub', ADV_TIER_MARK[main.tier] + ' ' + main.text);
     acts = advE('div', 'adv-acts');
     acts.appendChild(advBtn('前往', 'adv-btn', function () { advUiGoItem(main); }));

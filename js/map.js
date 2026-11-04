@@ -73,6 +73,8 @@ function rebuildOcc() {
     const key = (o.x + w - 1) + (o.y + h - 1);
     (world.objDiag[key] = world.objDiag[key] || []).push(o);
   });
+  // 同一條對角線上的平手:右邊的蓋左邊(x 大者後畫),與建造順序無關,畫面穩定
+  world.objDiag.forEach(l => { if (l && l.length > 1) l.sort((a, b) => a.x - b.x || a.y - b.y); });
 }
 
 // 朝向（0~3）；facing 缺省取 rot（PLAN_TD_MASTER §15.2）

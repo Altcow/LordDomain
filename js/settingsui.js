@@ -323,10 +323,24 @@ function stDisplaySec() {
     })));
     nodes.push(stEl('p', 'st-hint', '隱藏釣魚、仙獸、戰鬥,專心蓋城。升級改靠蓋出新種類建築、擴大城市,不需要材料與首領營;關閉後恢復原本規則(已累積的經驗保留)。'));
   }
+  if (typeof nsSetEnabled === 'function') {
+    nodes.push(stRow('推薦下一步', stSwitch(nsEnabled(), function (v) {
+      nsSetEnabled(v);
+      if (typeof nsUiRefresh === 'function') nsUiRefresh(true);
+      stRender();
+    })));
+    nodes.push(stEl('p', 'st-hint', '右上角的小提示,一步步告訴你可以先做什麼;卡上 ✕ 只關掉那一則。'));
+  }
   if (typeof artSetOn === 'function') {
-    const artOn = typeof ART_ON !== 'undefined' ? !!ART_ON : true;
+    const artOn =typeof ART_ON !== 'undefined' ? !!ART_ON : true;
     nodes.push(stRow('新美術與光暈', stSwitch(artOn, function (v) {
       artSetOn(v);
+      stRender();
+    })));
+  }
+  if (typeof extSpritesSetOn === 'function') {
+    nodes.push(stRow('使用外部建築圖(試裝)', stSwitch(extSpritesOn(), function (v) {
+      extSpritesSetOn(v);
       stRender();
     })));
   }

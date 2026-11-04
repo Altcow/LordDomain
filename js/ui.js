@@ -283,6 +283,7 @@ function syncSideBar() {
     let hid = it.target ? (!orig || !!orig.hidden) : false;
     if (it.special === 'slots') hid = typeof slotPopAvail === 'function' ? !slotPopAvail() : true;
     if (it.gate && !isUnlocked('feature', it.gate)) hid = true;
+    if (it.special === 'quest' && game.mode !== 'battleDesign' && typeof nsGet === 'function') hid = true;   // 經營板 / 城建專注:任務由右上角「推薦下一步」取代(戰陣板不動)
     b.hidden = hid;
     const slotsOn = it.special === 'slots' && typeof slotPopIsOpen === 'function' && slotPopIsOpen();
     b.classList.toggle('on', it.special === 'edit' ? !!ui.editing : (it.special === 'slots' ? slotsOn : !!(orig && orig.classList.contains('on'))));
