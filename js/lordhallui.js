@@ -2,7 +2,7 @@
 // 分頁一「概況」:官階稱號 / 人口 / 繁榮 / 政績 / 民情摘要 / 研發摘要 / 庫房警示 / 入口鈕;
 // 分頁二「派工」:可派駐建築 × 人才槽位,單項指派 + 一鍵全部自動分派;資料取自 world.city.talents(占位,無人才系統時顯示空狀態)。
 // 所有外部模組(cityFxGet / cityscoreGet / techSummary / goodsCity / cityAdvisor / panelmgr)皆 typeof 守衛,缺失就略過或灰化。
-// 公開 API:lordhallOpen(tab) lordhallClose() lordhallToggle() lordhallRender() lordhallTap(obj)
+// 公開 API:lordhallOpen(tab) lordhallClose() lordhallToggle() lordhallRender() lordhallTap(obj) lordhallAssignPost(tid, postId)
 //          lordhallRank(pop, pros) lordhallOverview() lordhallJobSites() lordhallAutoAssign() lordhallAssign(tid, siteId)
 var LH_TYPE = 'palace';
 // 官階表(占位,可替換):依人口 / 繁榮度,取最後一個達標者
@@ -65,11 +65,13 @@ function lordhallJobSites() {
   if (typeof estateObjects === 'function') { try { objs = estateObjects() || []; } catch (e) { objs = []; } }
   else if (typeof world !== 'undefined' && world && world.objects) objs = world.objects;
   var ts = lordhallTalents();
+  var npcOn = (typeof NPC_TYPE_POST !== 'undefined') && (typeof npcSiteInfo === 'function');   // 職司表(npcdata.js)存在時,可派駐建築改讀職司表;否則沿用占位 LH_SLOTS
   objs.forEach(function (o, i) {
-    var d = LH_SLOTS[o.type];
+    var d = npcOn ? npcSiteInfo(o.type) : LH_SLOTS[o.type], nm, id;
     if (!d) return;
-    var id = o.type + '@' + o.x + ',' + o.y;
-    out.push({ id: id, type: o.type, name: d.name, grp: d.grp, slots: d.slots, x: o.x, y: o.y,
+    id = o.type + '@' + o.x + ',' + o.y;
+    nm = npcOn ? ((typeof OBJECTS !== 'undefined' && OBJECTS[o.type] && OBJECTS[o.type].name) || o.type) : d.name;
+    out.push({ id: id, type: o.type, name: nm, grp: npcOn ? d.name : d.grp, post: npcOn ? d.post : null, slots: npcOn ? d.per : d.slots, x: o.x, y: o.y,
       who: ts.filter(function (t) { return t.at === id; }) });
   });
   return out;
@@ -78,24 +80,39 @@ function lordhallAssign(tid, siteId) {
   var ts = lordhallTalents(), t = null, site = null, i;
   for (i = 0; i < ts.length; i++) if (ts[i].id === tid) t = ts[i];
   if (!t) return false;
-  if (siteId === null || siteId === undefined || siteId === '') { t.at = null; return true; }
+  if (siteId === null || siteId === undefined || siteId === '') { t.at = null; delete t.since; lhStaffDirty(); return true; }
   lordhallJobSites().forEach(function (s) { if (s.id === siteId) site = s; });
   if (!site) return false;
   if (site.who.length >= site.slots && site.who.indexOf(t) < 0) return false;
+  if (site.post && typeof npcCanAssign === 'function' && t.at !== siteId && !npcCanAssign(t, siteId)) return false;   // 職司席位已滿
   t.at = siteId;
+  if (typeof npcDayOf === 'function') t.since = npcDayOf(Date.now());   // 派駐年資起算日
+  lhStaffDirty();
   return true;
 }
-// 全部自動分派:閒置人才優先給職司對口(t.job === site.grp)的建築,其次任何有空位者
+function lhStaffDirty() { if (typeof npcStaffDirty === 'function') npcStaffDirty(); }
+// 指派到某職司:挑該職司第一個有空位的建築;回 true/false
+function lordhallAssignPost(tid, postId) {
+  var site = null;
+  lordhallJobSites().forEach(function (s) { if (!site && s.post === postId && s.who.length < s.slots) site = s; });
+  return site ? lordhallAssign(tid, site.id) : false;
+}
+// 全部自動分派:閒置人才優先給職司對口(t.job === site.grp)的建築,其次任何有空位者;有職司表時改以個人人事值最高的職司為先
 function lordhallAutoAssign() {
   var ts = lordhallTalents(), n = 0;
   var idle = ts.filter(function (t) { return !t.at; });
   if (!idle.length) return 0;
   idle.sort(function (a, b) { return (b.star ? 1 : 0) - (a.star ? 1 : 0); });
   idle.forEach(function (t) {
-    var sites = lordhallJobSites().filter(function (s) { return s.who.length < s.slots; });
-    var pick = sites.filter(function (s) { return s.grp === t.job; })[0] || sites[0];
-    if (pick) { t.at = pick.id; n++; }
+    var sites = lordhallJobSites().filter(function (s) { return s.who.length < s.slots && (!s.post || typeof npcCanAssign !== 'function' || npcCanAssign(t, s.id)); });
+    var pick;
+    if (sites.length && typeof npcFitScore === 'function' && sites[0].post) {
+      sites.sort(function (a, b) { return npcFitScore(t, b.post) - npcFitScore(t, a.post); });
+      pick = sites[0];
+    } else pick = sites.filter(function (s) { return s.grp === t.job; })[0] || sites[0];
+    if (pick) { t.at = pick.id; if (typeof npcDayOf === 'function') t.since = npcDayOf(Date.now()); n++; }
   });
+  if (n) lhStaffDirty();
   return n;
 }
 
@@ -153,9 +170,37 @@ function lhMoodFn() {
   for (i = 0; i < names.length; i++) { try { var f = (typeof window !== 'undefined' ? window : globalThis)[names[i]]; if (typeof f === 'function') return f; } catch (e) { } }
   return null;
 }
+// 職司表版派工頁(PLAN_INTERIORS P2):每個職司一段——席位、人事加成 / 上限條、在任者(個人 %)、閒置人選(依個人值排序,前 4 位)
+function lhHtmlPosts(ts, sites) {
+  var idle = ts.filter(function (t) { return !t.at; }), h = '', seen = {};
+  h += '<div class="lhr"><span>人才 ' + ts.length + '(閒置 ' + idle.length + ')</span><button class="lhb" data-lh="auto"' + (idle.length && sites.length ? '' : ' disabled') + '>全部自動分派</button></div>';
+  if (!sites.length) return h + '<div class="lhr"><span>城中尚無可派駐的建築</span></div>';
+  sites.forEach(function (s) { if (s.post) seen[s.post] = s.type; });
+  Object.keys(seen).forEach(function (pid) {
+    var info = npcStaffInfo(seen[pid]), free = sites.filter(function (s) { return s.post === pid && s.who.length < s.slots; }).length, cands;
+    h += '<div class="lhsec">' + lhEsc(info.name) + ' ' + info.used + '/' + info.seats + ' 席 · 人事 +' + Math.round(info.pct) + ' %(上限 ' + info.cap + ' %)' + (info.live ? '' : '・效果接入中') + '</div>';
+    h += '<div class="lhr"><span>' + lhBar(info.pct / info.cap * 100) + '</span><span style="opacity:.7">' + lhEsc(info.eff) + '</span></div>';
+    info.people.forEach(function (p) {
+      h += '<div class="lhr"><span>' + lhEsc(p.name) + ' <small style="opacity:.7">' + lhEsc(lhPartText(p)) + '</small></span><span><b>+' + Math.round(p.pct) + '%</b> <button class="lhb" data-lh="un" data-t="' + lhEsc(p.id) + '">卸任</button></span></div>';
+    });
+    if (info.waste) h += '<div class="lhr lhwarn"><span>另有 ' + info.waste + ' 人超出席位,暫不計入</span></div>';
+    if (free > 0 && info.used < info.seats) {
+      cands = idle.map(function (t) { return { t: t, v: npcFitScore(t, pid) }; }).sort(function (a, b) { return b.v - a.v; }).slice(0, 4);
+      cands.forEach(function (c) {
+        h += '<div class="lhr"><span>' + lhEsc(c.t.name || c.t.id) + ' <small style="opacity:.7">預估 +' + Math.round(c.v) + '%</small></span><button class="lhb" data-lh="asp" data-t="' + lhEsc(c.t.id) + '" data-p="' + pid + '">派駐</button></div>';
+      });
+    }
+  });
+  return h;
+}
+function lhPartText(p) {
+  var a = (p.parts || []).map(function (x) { var j = (typeof CARD_JOB_BY_ID !== 'undefined') ? CARD_JOB_BY_ID[x.job] : null; return (j ? j.t[x.t - 1] : x.job) + (x.half ? '(輔)' : ''); });
+  return a.length ? a.join('、') : '屬性加成';
+}
 function lhHtmlJobs() {
   var ts = lordhallTalents(), sites = lordhallJobSites(), h = '';
   if (!ts.length) return '<div class="lhr"><span>尚無人才,招募後可派工</span></div>';
+  if (typeof npcStaffInfo === 'function' && typeof NPC_TYPE_POST !== 'undefined') return lhHtmlPosts(ts, sites);
   var idle = ts.filter(function (t) { return !t.at; });
   h += '<div class="lhr"><span>人才 ' + ts.length + '(閒置 ' + idle.length + ')</span><button class="lhb" data-lh="auto"' + (idle.length && sites.length ? '' : ' disabled') + '>全部自動分派</button></div>';
   if (!sites.length) return h + '<div class="lhr"><span>城中尚無可派駐的建築</span></div>';
@@ -185,6 +230,7 @@ function lhClick(e) {
   if (a === 'x') lordhallClose();
   else if (a === 'tab') { lh.tab = b.getAttribute('data-tab') === 'job' ? 'job' : 'ov'; lordhallRender(); }
   else if (a === 'auto') { lordhallAutoAssign(); lordhallRender(); }
+  else if (a === 'asp') { lordhallAssignPost(b.getAttribute('data-t'), b.getAttribute('data-p')); lordhallRender(); }
   else if (a === 'as') { lordhallAssign(b.getAttribute('data-t'), b.getAttribute('data-s')); lordhallRender(); }
   else if (a === 'un') { lordhallAssign(b.getAttribute('data-t'), null); lordhallRender(); }
   else if (a === 'tech') { if (typeof techPanelOpen === 'function') { lordhallClose(); techPanelOpen(); } else if (typeof toggleTechPanel === 'function') { lordhallClose(); toggleTechPanel(true); } }
@@ -198,11 +244,13 @@ function lordhallOpen(tab) {
   if (typeof panelOpen === 'function') { try { panelOpen('lordhall', el); } catch (e) { } }
   lordhallRender();
   el.hidden = false;
+  if (typeof panelLsSet === 'function') panelLsSet('lordhall', true);
 }
 function lordhallClose() {
   if (!lh.open && !(lh.el && !lh.el.hidden)) return;
   lh.open = false;
   if (lh.el) lh.el.hidden = true;
+  if (typeof panelLsSet === 'function') panelLsSet('lordhall', false);
   if (typeof panelClose === 'function') { try { panelClose('lordhall'); } catch (e) { } }
 }
 function lordhallToggle() { if (lh.open) lordhallClose(); else lordhallOpen(); }

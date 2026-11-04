@@ -7,7 +7,7 @@ const BUILD_GROUPS = [
   { id: 'town', name: '民居與村落', items: ['hut_ruin', 'hut_mud', 'hut_plank', 'hut_collapsed', 'shack_lean', 'cave_dwelling', 'bamboo_house', 'house_tile', 'house_gentry', 'mansion_great', 'mansion_clan', 'manor_estate', 'yard_poor', 'wall_ruin', 'gate_wicker', 'fence_broken', 'well_old', 'rack_net', 'rack_cloth', 'shed_livestock', 'junk_pile', 'tree_dead'] },
   { id: 'bazaar', name: '市集地攤', items: ['plaza_stone', 'plaza_earth', 'plaza_center', 'vendor_platform', 'banner_wine', 'banner_cloth', 'banner_herb', 'ground_veg', 'ground_sandal', 'ground_goods', 'ground_bamboo', 'ground_pottery', 'ground_cloth', 'ground_iron', 'ground_old', 'hawker_carrier', 'perform_ring', 'storyteller', 'notice_board', 'hitching_post', 'water_vat', 'livestock_pen', 'smith_awning', 'barber_stand', 'fortune_stall', 'food_wonton', 'food_hubing', 'food_noodle'] },
   { id: 'farm', name: '農牧', items: ['field_millet', 'field_sprout', 'field_hemp', 'field_wheat', 'mulberry_grove', 'orchard', 'vegetable_plot', 'herb_garden', 'tea_garden', 'beehive', 'plow', 'hoe', 'millstone', 'waterwheel', 'winnower', 'ox', 'horse', 'donkey', 'chicken', 'duck', 'goose', 'sheep', 'pig', 'stable', 'sheepfold', 'ranch_fence', 'trough', 'fodder', 'haystack', 'grain_sacks', 'granary_round', 'salt_pile', 'saltfield', 'grain_drying'] },
-  { id: 'ind', name: '產業', items: ['lumber', 'deco_lumberyard', 'loom_shop', 'sawbench', 'lograft', 'quarry', 'mine_entrance', 'minecart', 'ore_iron', 'ore_copper', 'ore_stone', 'smithy', 'shop_smith', 'bank'] },
+  { id: 'ind', name: '產業', items: ['lumber', 'deco_lumberyard', 'loom_shop', 'sawbench', 'lograft', 'quarry', 'mine_entrance', 'minecart', 'ore_iron', 'ore_copper', 'ore_stone', 'smithy', 'shop_smith', 'brewery', 'bank'] },
   { id: 'port', name: '港口與碼頭', items: ['dock', 'pier_plank', 'wharf_platform', 'mooring_post', 'boat_small', 'boat_sampan', 'ship_cargo', 'ship_grain', 'ship_tower', 'ferry', 'warehouse_port', 'crane_pole', 'cargo_sacks', 'cargo_crates', 'cargo_jars', 'cargo_salt', 'cargo_silk', 'port_lamp', 'fish_market', 'shipyard', 'fishery', 'fish_rack'] },
   { id: 'mil', name: '軍事與營地', items: ['army_camp', 'parade_ground', 'drill_ground', 'archer', 'shield', 'cavalry', 'siege', 'hospital', 'tent_group', 'tent_general', 'flag_army', 'flag_great', 'drum_tower', 'beacon', 'deco_watchtower', 'deco_stable', 'deco_weaponrack', 'deco_target', 'training_dummy', 'deco_jumaa', 'deco_campfire', 'deco_lujiao', 'tent_small', 'war_chariot', 'cloud_ladder', 'ram', 'trebuchet', 'jinglan', 'warship'] },
   { id: 'garden', name: '庭園與景觀', items: ['tree', 'stone', 'tree_pine', 'tree_willow', 'tree_sakura', 'tree_maple', 'tree_mulberry', 'tree_peach', 'tree_cypress', 'deco_bamboo', 'deco_bush', 'flower_bed', 'deco_rocks', 'rockery', 'stone_lamp', 'lantern_line', 'deco_pond', 'lotus', 'reeds', 'potted_plant', 'small_bridge', 'lantern_post', 'stone_lion', 'spirit_wall'] },
@@ -198,6 +198,7 @@ function uiSetMode(m) {
 
 // 右側邊欄與頂列收進來的功能。top:true 的項目在正常模式留在頂列(原按鈕),精簡模式改由邊欄展開。
 // target 為既有按鈕 id,點擊時代為 click(原按鈕與其監聽不變);scope 限定經營(estate)或戰鬥布置(camp)
+let uiSideExpanded = false;
 const UI_SIDE_ITEMS = [
   { key: 'slots', icon: '🏘', label: '經營', title: '版面選擇(3 格):點一下打開,再點一次關閉', scope: 'all', special: 'slots' },
   { key: 'quest', icon: '📋', label: '任務', title: '任務清單(並重新顯示左上任務提示條)', scope: 'all', special: 'quest' },
@@ -209,6 +210,7 @@ const UI_SIDE_ITEMS = [
   { key: 'shop', icon: '🏪', label: '商店', title: '商店', scope: 'estate', target: 'btnShop', gate: 'shop' },
   { key: 'tech', icon: '📜', label: '科技', title: '科技樹與研發序列', scope: 'estate', special: 'tech' },
   { key: 'goods', icon: '📦', label: '庫房', title: '庫房(貨品與工坊狀態)', scope: 'estate', target: 'btnGoods' },
+  { key: 'caravan', icon: '🛻', label: '走鏢', title: '走鏢(鏢師、馬車與高階貨品)', scope: 'estate', target: 'btnCaravan', gate: 'caravan' },
   { key: 'save', icon: '💾', label: '存檔', title: '布置存檔', scope: 'estate', target: 'btnLayoutSave' },
   { key: 'season', icon: '🌤', label: '季節', title: '季節與時段', scope: 'estate', target: 'seasonBtn' },
   { key: 'help', icon: '❓', label: '說明', title: '戰鬥布置工具說明', scope: 'camp', target: 'btnToolHelp' },
@@ -248,6 +250,12 @@ function initSideUI() {
     list.appendChild(b);
   });
   side.appendChild(list);
+  const exp = document.createElement('button');
+  exp.id = 'sideExpand';
+  exp.className = 'side-expand';
+  exp.hidden = true;
+  exp.addEventListener('click', () => { uiSideExpanded = !uiSideExpanded; syncSideBar(); });
+  side.appendChild(exp);
   document.body.appendChild(side);
   document.addEventListener('pointerdown', e => {
     if (side.classList.contains('open') && !e.target.closest('#sideBar')) side.classList.remove('open');
@@ -323,7 +331,7 @@ function syncSideBar() {
     b.querySelector('.ic').textContent = icon;
     b.querySelector('.lb').textContent = label;
   });
-  // 正常模式最多 6 顆:依序捨棄 拍照 → 季節(精簡模式的展開列都還在);頂列項目與另一畫面的項目不算
+  // 正常模式最多 6 顆:依序捨棄 季節 → 存檔 → 任務(拍照保留;任務由下一步提示卡取代,精簡展開列仍有)(精簡模式的展開列都還在);頂列項目與另一畫面的項目不算
   if (!uiIsCompact()) {
     const camp = game.mode === 'battleDesign';
     const vis = key => {
@@ -331,7 +339,14 @@ function syncSideBar() {
       return b && !b.hidden ? b : null;
     };
     const count = () => UI_SIDE_ITEMS.filter(it => !it.top && (it.scope === 'all' || (it.scope === 'camp') === camp) && vis(it.key)).length;
-    ['photo', 'season'].forEach(k => { if (count() > 6 && vis(k)) vis(k).hidden = true; });
+    const overflow = count() > 6;
+    if (!uiSideExpanded) ['season', 'save', 'quest'].forEach(k => { if (count() > 6 && vis(k)) vis(k).hidden = true; });
+    const ex = document.getElementById('sideExpand');
+    if (ex) { ex.hidden = !overflow; ex.textContent = uiSideExpanded ? '▴ 收合' : '▾ 全部'; ex.title = uiSideExpanded ? '收合側欄' : '展開全部功能'; side.classList.toggle('expanded', uiSideExpanded && overflow); }
+  } else {
+    const ex = document.getElementById('sideExpand');
+    if (ex) ex.hidden = true;
+    side.classList.remove('expanded');
   }
 }
 
@@ -1067,6 +1082,20 @@ function bottomStackPx() {
   return (tb ? tb.offsetHeight : 0) + (cb && !cb.hidden ? cb.offsetHeight : 0) + (vb && !vb.hidden ? vb.offsetHeight : 0);
 }
 
+// 建造選單圖示:有外部精靈圖(ext_sprites.js 登錄且開關開)者以縮圖取代 emoji;載入失敗(缺圖)退回原 emoji
+function extToolIcon(btn, id, icon) {
+  if (typeof EXT_SPRITES === 'undefined' || typeof extSpritesOn !== 'function' || !EXT_SPRITES[id] || !extSpritesOn()) return;
+  const ic = btn.querySelector ? btn.querySelector('.ic') : null;
+  if (!ic || typeof Image === 'undefined') return;
+  const im = new Image();
+  im.alt = '';
+  im.style.cssText = 'width:22px;height:22px;object-fit:contain;display:block;margin:0 auto';
+  im.onerror = () => { ic.textContent = icon; };
+  ic.textContent = '';
+  ic.appendChild(im);
+  im.src = EXT_SPRITES[id].L;
+}
+
 function addToolButton(bar, id, icon, name, def) {
   const btn = document.createElement('button');
   btn.setAttribute('data-tool', id === null ? '' : id);
@@ -1089,6 +1118,7 @@ function addToolButton(bar, id, icon, name, def) {
     title += ' 〔風格件〕';
   }
   btn.innerHTML = html;
+  if (def) extToolIcon(btn, id, icon);
   btn.title = title;
   btn.addEventListener('click', () => {
     if (typeof bpvIntercept === 'function' && bpvIntercept(id)) return;   // 預覽勾選時:只顯示放大預覽浮卡,不選工具
@@ -1770,6 +1800,7 @@ function onPointerEnd(e) {
 
 // 瀏覽模式輕點建築:科研院開科研面板;其他只做輕微高亮(不開任何選單)。居民點擊(lifeTap)優先
 function tapObjectAt(sx, sy) {
+  if (typeof chainVisTap === 'function' && chainVisTap(sx, sy)) return;   // 瓶頸圖示(chainvis.js)
   if (typeof lifeTap === 'function' && lifeTap(sx, sy)) return;
   const c = screenToCell(sx, sy);
   if (!c) return;
@@ -1782,6 +1813,7 @@ function tapObjectAt(sx, sy) {
     toggleTechPanel(true);
     return;
   }
+  if (typeof npcTapBuilding === 'function') npcTapBuilding(o);   // 人事加成提示(npcui.js)
   fxMark(o, 'tap');
 }
 

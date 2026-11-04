@@ -1,4 +1,4 @@
-const VERSION = 'v37';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v38';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -69,6 +69,7 @@ const PRECACHE = [
   './js/crowdparts.js',
   './js/citytraffic.js',
   './js/talentpatrol.js',
+  './js/chainvis.js',
   './js/cityfx_data.js',
   './js/cityfx.js',
   './js/objcat.js',
@@ -91,6 +92,10 @@ const PRECACHE = [
   './js/nl_style_objects.js',
   './js/art_card.js',
   './js/panelmgr.js',
+  './js/caravan_goods.js',
+  './js/caravan.js',
+  './js/caravanui.js',
+  './js/caravan_vis.js',
   './js/buildpreview.js',
   './js/techui.js',
   './js/saveslots.js',
@@ -102,8 +107,14 @@ const PRECACHE = [
   './js/terrain_live.js',
   './js/lordhallui.js',
   './js/carddata.js',
+  './js/portrait_gender.js',
   './js/cards.js',
   './js/cardsui.js',
+  './js/cardsui_named.js',
+  './js/npcdata.js',
+  './js/famous_lines.js',
+  './js/npcinteract.js',
+  './js/npcui.js',
   './js/cityscoreui.js',
   './js/cityadvisorui.js',
   './js/nextstepui.js',
@@ -115,6 +126,9 @@ const PRECACHE = [
   './js/pet.js',
   './js/petdraw.js',
   './js/petui.js',
+  './js/interior.js',
+  './js/tavern_data.js',
+  './js/tavern_scene.js',
   './js/main.js',
   './js/pwa.js',
   './icons/icon-180.png',

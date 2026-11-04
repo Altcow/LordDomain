@@ -229,17 +229,18 @@ function nsGo(cand) {
 
 // ───────── 卡片幾何(純函式,供 UI 與測試)─────────
 // 右上小卡:直版 = 頂列下方、右側欄左邊,高度止於 y=20% 之前;橫版 = 右側 25% 欄、右側欄左邊。尺寸 ≤ 寬 60%、高 18%,絕不進正中央(x25~75% × y20~80%)。
+var NS_LAND_MIN_H = 96;
 function nsCardRect(vw, vh, topY) {
   var side = 52, land = vw >= vh, maxW = vw * 0.6, maxH = vh * 0.18, x, y, w, h;
   y = Math.max(4, topY || 50);
   if (land) {
     x = vw * 0.75 + 2; w = Math.min(maxW, Math.max(96, vw - side - x));
-    h = maxH;
+    h = Math.max(maxH, NS_LAND_MIN_H);   // 橫版:卡片位於 x>=75%(不進正中央),高度可放寬到 >=96,容得下 44px 按鈕 + 兩行 14px 文字
   } else {
     w = Math.min(maxW, vw - side - 6); x = vw - side - w;
     h = Math.min(maxH, vh * 0.2 - y - 2);
   }
   h = Math.max(30, h);
-  return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), land: land, showWhy: h >= 84 };
+  return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), land: land, showWhy: !land && h >= 84 };
 }
 function nsRectsOverlap(a, b) { return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h; }

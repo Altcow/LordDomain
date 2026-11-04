@@ -24,7 +24,29 @@ var EXT_SPRITES_TUNE = {
   plaza_stone: { base: 0.95 },
   road_stone:  { base: 0.95 },
   s5_adobe_yard: { base: 0.97 },
-  s3_stilt:    { base: 0.95 }
+  s3_stilt:    { base: 0.95 },
+  // 建築第二批(48 件)手調:自動估 base 偏窄(圍籬 / 高腳 / 外牆外擴)者放大 base;1×1 小件略放大 scale 方便辨識(仍小於 2×2 民房)
+  sheepfold:   { base: 0.85 },
+  kao_chang:   { base: 0.90 },
+  house_gentry: { base: 0.88 },
+  warehouse_port: { base: 0.88 },
+  fan_che:     { base: 0.90 },
+  waterwheel:  { base: 0.95 },
+  granary_round: { scale: 1.2 },
+  di_dong:     { scale: 1.2 },
+  hun_tian:    { base: 0.95 },
+  jing_qu:     { base: 0.95 },
+  // 風格建築(西域 s7_ / 羌氐 s2_)手調:自動估 base 偏窄(底面菱形下緣收尖)而放大過頭者放大 base,使牆腳貼合佔地菱形(見 tools/ext_compare_b3.png)
+  s7_adobe_flat: { base: 0.96 },
+  s7_camel_yard: { base: 0.97 },
+  s7_merchant_mansion: { base: 0.97 },
+  s7_bazaar_arcade: { base: 0.98 },
+  s2_stone_house: { base: 0.96 },
+  s2_felt_tent: { base: 0.85 },
+  s2_pen:      { base: 0.95 },
+  s2_stone_yard: { base: 0.97 },
+  s2_zhai_manor: { base: 0.97 },
+  s2_felt_camp: { base: 0.96 }
 };
 var EXT_SPRITES = {};
 (function () {

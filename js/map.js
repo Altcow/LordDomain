@@ -484,7 +484,7 @@ function productionPerSec() {
   estateObjects().forEach(o => {
     const p = OBJECTS[o.type].prod;
     if (!p) return;
-    const m = techMul('prod.' + (typeof houseKindOf === 'function' ? houseKindOf(o.type) : o.type)) * techMul('prod.all');
+    const m = techMul('prod.' + (typeof houseKindOf === 'function' ? houseKindOf(o.type) : o.type)) * techMul('prod.all') * (typeof npcStaffMul === 'function' ? npcStaffMul(o.type) : 1);   // 派駐人事乘區(npcinteract.js)
     for (const k in p) total[k] = (total[k] || 0) + p[k] * m;
   });
   return total;

@@ -76,7 +76,7 @@ function techDurationOf(id) {
   var base = (TECH_MIN['C' + n.era] || 2) * 60;
   return Math.max(1, Math.round(techIsStyle(n) ? base / 2 : base));
 }
-function techSpeedMul(branch) { return 1; }      // 掛點:研究院入住人才 buff(上限 2)
+function techSpeedMul(branch) { return (typeof npcTechSpeedMul === 'function') ? npcTechSpeedMul() : 1; }      // 掛點:研究院入住人才 buff(上限 2)——學官職司人事值(npcinteract.js)
 function techLabCount() {
   if (typeof world === 'undefined' || !world) return 0;
   var o = world.objects;

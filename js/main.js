@@ -77,7 +77,8 @@ function frame(nowMs) {
     saveWorld();
   }
   if (typeof battleUiTick === 'function') battleUiTick(dt);
-  if (typeof game !== 'undefined' && game.mode === 'fishing') { requestAnimationFrame(frame); return; }
+  if (typeof cardsNamedTick === 'function') cardsNamedTick(dt);   // 指名券:官階晉升檢查(cards.js,每 5 秒)
+  if (typeof game !== 'undefined' && (game.mode === 'fishing' || game.mode === 'interior')) { requestAnimationFrame(frame); return; }   // 釣魚 / 室內:全螢幕子畫面自己畫,不重畫城市
   // 繪製幀率上限(動態:操作中用設定值 60/30,閒置 30;省電固定 30);未達間隔的 rAF 只跑上面的模擬 / tick,不畫
   if (!pano.open && (typeof perfGateOk !== 'function' || perfGateOk(drawGate || (drawGate = perfGateNew()), nowMs))) draw(ctx, nowMs / 1000);
   requestAnimationFrame(frame);

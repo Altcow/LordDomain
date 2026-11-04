@@ -2,7 +2,7 @@
 // 全域名稱:techPanelOpen(nodeId?) techPanelClose techPanelToggle techPanelIsOpen techUiHtml techUiAct techUiState techUiUnlockNames
 //          techUiLayout techUiAncestors techUiSuccessors techUiHighlight techUiFirstReady techUiEraText techObjLockText techFeatLockText techFeatLockGo techLockedNames techCancelHint
 // 依賴(皆 typeof 守衛):citytech.js、techtree_data.js、nolevel_data.js、panelmgr.js、goods.js。ES2017;不用 ?. ??。
-var tu = { el: null, open: false, branch: 'ag', focus: '', sel: '', zoom: 1, confirm: '', sig: '', qSig: '', treeKey: '', builds: 0, last: {}, dragged: 0, timer: 0, msg: '', bodyEl: null, headEl: null, topEl: null, resEl: null, warnEl: null, qEl: null, tabsEl: null, eraEl: null, scEl: null, cvEl: null, detEl: null };
+var tu = { el: null, open: false, branch: 'ag', focus: '', sel: '', zoom: 1, confirm: '', sig: '', qSig: '', treeKey: '', builds: 0, last: {}, dragged: 0, timer: 0, msg: '', bodyEl: null, headEl: null, topEl: null, resEl: null, warnEl: null, qEl: null, tabsEl: null, eraEl: null, scEl: null, cvEl: null, detEl: null, lsZoom: 0, stripEl: null, sResEl: null, sCurEl: null, qOpen: false, sug: 1, sugSet: {}, sugWhy: {} };
 var TU_STATE_TXT = { done: '已研', cur: '研發中', queued: '排隊中', ready: '可研', req: '前置未滿', era: '本時代未開', mega: '里程碑' };
 
 function tuEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -207,10 +207,108 @@ function techUiEraText(e) {
   return t;
 }
 
+// ───────── 研發建議(T4):只標不鎖,前 3 名加 ★;可關(偏好存 localStorage)─────────
+var TU_SUG_BAR = { ag: 'food', wa: 'water', md: 'sani', ed: 'mood', df: 'order' };   // 分支 → 城市指標
+var TU_SUG_BARN = { food: '糧食', water: '水源', sani: '衛生', mood: '民心', order: '治安' };
+function tuSugLoad() { try { if (typeof localStorage !== 'undefined' && localStorage.getItem('techui_sug') === '0') tu.sug = 0; } catch (e) { /* 略過 */ } }
+function tuSugSave() { try { if (typeof localStorage !== 'undefined') localStorage.setItem('techui_sug', tu.sug ? '1' : '0'); } catch (e) { /* 略過 */ } }
+// 回傳 [{id,score,why}](分數高者在前,最多 3 筆)。依 (a) 指標偏低的對口分支 (b) 解鎖物件數 (c) 目前時代且下一時代未開
+function techUiSuggest() {
+  var low = {}, cur = typeof techEra === 'function' ? techEra() : 1, nextClosed = cur < 5 && !techEraOpen(cur + 1), out = [], built = true;
+  if (typeof estateObjects === 'function') { try { built = (estateObjects() || []).length > 3; } catch (e0) { built = true; } }
+  Object.keys(TU_SUG_BAR).forEach(function (b) {
+    var k = TU_SUG_BAR[b], v;
+    if (typeof cityFxCity !== 'function' || !built) return;
+    try { v = cityFxCity(k); } catch (e) { v = null; }
+    if (typeof v === 'number' && isFinite(v) && v < 50) low[b] = k;
+  });
+  CITY_TECHS.forEach(function (n) {
+    var sc = 0, why = [];
+    if (techIsStyle(n) || techIsMega(n) || techUiState(n.id).k !== 'ready') return;
+    if (low[n.branch]) { sc += 5; why.push(TU_SUG_BARN[low[n.branch]] + '偏低'); }
+    if (nextClosed && n.era === cur) { sc += 2; why.push('邁向下一時代'); }
+    if (n.unlock && n.unlock.length) { sc += Math.min(2, n.unlock.length * 0.5); if (!why.length) why.push('解鎖 ' + n.unlock.length + ' 項'); }
+    sc -= n.era * 0.01;
+    if (sc > 0) out.push({ id: n.id, score: sc, why: why.join('、') });
+  });
+  out.sort(function (a, b) { return b.score - a.score || (a.id < b.id ? -1 : 1); });
+  return out.slice(0, 3);
+}
+function tuSugCalc() {
+  var l = tu.sug ? techUiSuggest() : [];
+  tu.sugSet = {}; tu.sugWhy = {};
+  l.forEach(function (o) { tu.sugSet[o.id] = 1; tu.sugWhy[o.id] = o.why; });
+}
+
+// ───────── 時代進度(T6)─────────
+// e 時代 → 開下一時代的進度:{ done, k, ms(大工程是否滿足,無條件為 true), hasMs, groups };第 5 時代回 null
+function techUiEraProg(e) {
+  var need, ms;
+  if (e >= 5) return null;
+  need = techEraNeed(e + 1);
+  ms = !need.groups || techState().bigWaive >= e + 1 || need.groups.some(function (g) { return g.every(techBigHas); });
+  return { done: techEraDoneCount(e), k: need.k, ms: ms, hasMs: !!need.groups, groups: need.groups };
+}
+// 點時代色帶要跳去的節點:該時代第一個可研 → 尚缺的大工程 → ''
+function techUiEraTarget(e) {
+  var order = TECH_BRANCHES.map(function (b) { return b.id; }), i, j, k, lay, ids, n, p = techUiEraProg(e), found = '';
+  for (i = 0; i < order.length && !found; i++) {
+    lay = techUiLayout(order[i], 1);
+    for (j = 0; j < lay.cols.length && !found; j++) {
+      ids = lay.cols[j] || [];
+      for (k = 0; k < ids.length; k++) { n = techNode(ids[k]); if (n.era === e && !techIsStyle(n) && !techIsMega(n) && techUiState(ids[k]).k === 'ready') { found = ids[k]; break; } }
+    }
+  }
+  if (found) return found;
+  if (p && p.hasMs && !p.ms) p.groups.forEach(function (g) { g.forEach(function (x) { if (!found && techNode(x) && !techBigHas(x)) found = x; }); });
+  return found;
+}
+
+// ───────── 詳情輔助:路徑總成本(T5 部分)/ 路線進度(T3 部分)/ 去建造(T2 部分)─────────
+function techUiChainCost(id) {
+  var ex = techExpand(id), coin = 0, xue = 0, g = {}, tiers = [];
+  if (!ex.ok || ex.list.length < 2) return null;
+  ex.list.forEach(function (x) {
+    var c = techCostOf(x);
+    if (!c) return;
+    coin += c.coin; xue += c.xue;
+    if (c.goods && c.goods.n > 0) g[c.goods.tier] = (g[c.goods.tier] || 0) + c.goods.n;
+  });
+  Object.keys(g).forEach(function (t) {
+    var have = 0;
+    techGoodsIds(+t).forEach(function (gid) { have += techHave(gid); });
+    tiers.push({ tier: +t, n: g[t], have: have });
+  });
+  return { count: ex.list.length, coin: coin, xue: xue, tiers: tiers };
+}
+function techUiChainHtml(id) {
+  var c = techUiChainCost(id), coin = (typeof world !== 'undefined' && world.res && world.res.coin) || 0, s = techState(), p = [];
+  if (!c) return '';
+  p.push('金 ' + c.coin + (coin < c.coin ? '(缺 ' + Math.ceil(c.coin - coin) + ')' : ''));
+  if (c.xue) p.push('學識 ' + c.xue + (s.xue < c.xue ? '(缺 ' + Math.ceil(c.xue - s.xue) + ')' : ''));
+  c.tiers.forEach(function (t) { p.push('第' + (t.tier + 1) + '階貨品 ×' + t.n + (t.have < t.n ? '(缺 ' + (t.n - t.have) + ')' : '')); });
+  return '<div class="tu-c tu-chain">研發到這裡共 ' + c.count + ' 項,總需求:' + tuEsc(p.join('　')) + '</div>';
+}
+function techUiRoutes(n) {   // 此節點所屬路線的進度:[{id,name,done,tot}]
+  var out = [], rs = (typeof TECH_ROUTES !== 'undefined' && TECH_ROUTES) ? TECH_ROUTES : [];
+  (n.route || []).forEach(function (r) {
+    var nm = r, d = 0, t = 0, i;
+    for (i = 0; i < rs.length; i++) if (rs[i].id === r) nm = rs[i].name || r;
+    CITY_TECHS.forEach(function (x) { if (x.route && x.route.indexOf(r) >= 0) { t++; if (techDone(x.id)) d++; } });
+    if (t) out.push({ id: r, name: nm, done: d, tot: t });
+  });
+  return out;
+}
+function techUiBuildable(n) {   // 已研成後可直接去蓋的物件 id(最多 3 個)
+  var out = [];
+  (n.unlock || []).forEach(function (u) { if (out.length < 3 && typeof OBJECTS !== 'undefined' && OBJECTS[u] && !OBJECTS[u].retired && out.indexOf(u) < 0) out.push(u); });
+  return out;
+}
+
 // ───────── 繪製 ─────────
 function tuSet(el, k, html) { if (!el) return; if (tu.last[k] !== html) { tu.last[k] = html; el.innerHTML = html; } }
 function tuTopHtml() {
-  return '<b>📜 科技樹</b><span class="tu-sp"></span><button data-tu="locate">定位可研</button><button data-tu="zoom">縮放:' + TU_ZOOMS[tu.zoom].n + '</button><button class="tu-x" data-tu="close">✕</button>';
+  return '<b>📜 科技樹</b><span class="tu-sp"></span><button data-tu="locate">定位可研</button><button data-tu="sug">建議:' + (tu.sug ? '開' : '關') + '</button><button data-tu="zoom">縮放:' + TU_ZOOMS[tu.zoom].n + '</button><button class="tu-x" data-tu="close">✕</button>';
 }
 function tuResHtml() {
   var s = techState(), labs = techLabCount(), cap = techLabCap(), slots = techSlots(), coin = (typeof world !== 'undefined' && world.res && world.res.coin) || 0, e = techEra();
@@ -258,6 +356,24 @@ function tuTickQueue() {
     if (B && B.style) B.style.width = pct + '%';
   });
 }
+// 橫版底部單行(浮動):資源 + 進行中摘要 + 展開鈕;每秒只改 span 文字,不重建節點
+function tuStripRes() { var s = techState(), coin = (typeof world !== 'undefined' && world.res && world.res.coin) || 0; return '金 ' + Math.floor(coin) + '　學識 ' + Math.floor(s.xue); }
+function tuStripCur() {
+  var s = techState(), c = s.cur[0], n;
+  if (c) { n = techNode(c.id); return '⏳ 進行中:' + (n ? n.name : c.id) + ' 剩 ' + techFmtTime(c.left) + (s.cur.length + s.queue.length > 1 ? '(+' + (s.cur.length + s.queue.length - 1) + ')' : ''); }
+  if (techLabCount() <= 0) return '⚠ 需建研究院才能研發';
+  return s.queue.length ? '排隊中 ' + s.queue.length + ' 項' : '研發序列是空的';
+}
+function tuTickStrip() {
+  var a = tuStripRes(), b = tuStripCur();
+  if (tu.sResEl && tu.sResEl.textContent !== a) tu.sResEl.textContent = a;
+  if (tu.sCurEl && tu.sCurEl.textContent !== b) tu.sCurEl.textContent = b;
+}
+function tuSyncCls() {
+  if (!tu.el || !tu.el.classList) return;
+  tu.el.classList.toggle('tu-sel', !!tu.sel);
+  tu.el.classList.toggle('tu-qopen', !!tu.qOpen);
+}
 function tuHeadHtml() { return tuTopHtml() + tuResHtml() + tuWarnHtml() + tuQueueHtml(); }
 
 // 分支圖示(js/uiicons.js 存在且偏好開啟才有;否則回空字串,頁籤維持純文字)
@@ -275,19 +391,24 @@ function tuTabsHtml() {
 }
 // 時代僅作為頂部參考色帶(階別顏色對照),不參與節點分組
 function tuEraHtml() {
-  var h = '', e;
-  for (e = 1; e <= 5; e++) h += '<span class="tu-ec e' + e + (techEraOpen(e) ? '' : ' off') + '">第' + TU_CN[e] + '時代' + (tuEraName(e) ? '〈' + tuEraName(e) + '〉' : '') + (techEraOpen(e) ? '' : '🔒') + '</span>';
-  return h + '<span class="tu-ecn">色條 = 節點階別(僅供參考)</span>';
+  var h = '', e, p;
+  for (e = 1; e <= 5; e++) {
+    p = techUiEraProg(e);
+    h += '<span class="tu-ec e' + e + (techEraOpen(e) ? '' : ' off') + '" data-tu="era" data-id="' + e + '">第' + TU_CN[e] + '時代' + (tuEraName(e) ? '〈' + tuEraName(e) + '〉' : '') + (techEraOpen(e) ? '' : '🔒') +
+      (p ? ' ' + Math.min(p.done, p.k) + '/' + p.k + (p.hasMs ? ' 大工程' + (p.ms ? '✔' : '✘') : '') : '') + '</span>';
+  }
+  return h + '<span class="tu-ecn">色條 = 節點階別;數字 = 開下一時代進度,點了跳到缺的節點</span>';
 }
 
 function tuNodeClass(id, hs, st) {
   var n = techNode(id), s = st || techUiState(id), lk = s.k !== 'done' && s.k !== 'mega' && !techEraOpen(n.era);
-  return 'tu-n e' + n.era + ' ' + s.k + (lk ? ' lk' : '') + (tu.focus === id ? ' focus' : '') + (tu.sel === id ? ' sel' : '') + (hs ? (hs.nodes[id] ? ' hl' : ' dim') : '');
+  return 'tu-n e' + n.era + ' ' + s.k + (lk ? ' lk' : '') + (tu.focus === id ? ' focus' : '') + (tu.sel === id ? ' sel' : '') + (tu.sugSet[id] ? ' sug' : '') + (hs ? (hs.nodes[id] ? ' hl' : ' dim') : '');
 }
 function tuEdgeStatus(e) { return techDone(e.from) ? (techDone(e.to) ? 'done' : 'ready') : 'todo'; }
 function tuEdgeClass(e, hs) { return 'tu-e ' + tuEdgeStatus(e) + (e.or ? ' or' : '') + (hs ? (hs.edges[e.key] ? ' hl' : ' dim') : ''); }
 
 function tuTreeInner(branch, zoom) {
+  tuSugCalc();
   var lay = techUiLayout(branch, zoom), Z = lay.Z, hs = tu.sel ? techUiHighlight(tu.sel) : null, h;
   h = '<svg class="tu-svg" width="' + lay.w + '" height="' + lay.h + '" xmlns="http://www.w3.org/2000/svg">';
   lay.edges.forEach(function (e) {
@@ -320,6 +441,7 @@ function tuBuildTree(force) {
 function tuApply() {
   var hs = tu.sel ? techUiHighlight(tu.sel) : null, els, i, el, id, st, c, s, t, e, lay;
   if (!tu.cvEl || !tu.cvEl.querySelectorAll) return;
+  tuSugCalc();
   els = tu.cvEl.querySelectorAll('[data-node]');
   for (i = 0; i < els.length; i++) {
     el = els[i]; id = el.getAttribute('data-node'); st = techUiState(id); c = tuNodeClass(id, hs, st);
@@ -346,14 +468,17 @@ function tuDetailHtml() {
   if (n.desc) h += '<div class="tu-d">' + tuEsc(n.desc) + '</div>';
   if (st.k === 'mega') h += '<div class="tu-c">條件:' + tuEsc((n.cost && n.cost.goodsText) || '大工程達成') + '</div><div class="tu-d">里程碑不走研發序列,由大工程完成後記入。</div>';
   else h += '<div class="tu-c">' + tuEsc(tuCostText(n.id)) + '　時長 ' + tuDurText(techDurationOf(n.id)) + '</div>';
+  if (tu.sugSet[n.id] && tu.sugWhy[n.id]) h += '<div class="tu-sg">★ 建議先研:' + tuEsc(tu.sugWhy[n.id]) + '</div>';
   if (un.length) h += '<div class="tu-u">解鎖:' + tuEsc(un.join('、')) + '</div>';
+  techUiRoutes(n).forEach(function (r) { h += '<div class="tu-rt">路線〈' + tuEsc(r.name) + '〉 ' + r.done + '/' + r.tot + '</div>'; });
   pr = function (r) { return '<button class="tu-pr ' + (techDone(r) ? 'ok' : 'no') + '" data-tu="goto" data-id="' + r + '">' + (techDone(r) ? '✓ ' : '✗ ') + tuEsc(tuNodeName(r)) + '</button>'; };
   if (n.req && n.req.length) h += '<div class="tu-pq">前置:' + n.req.map(pr).join('') + (n.reqOr && n.reqOr.length ? ' <b>或</b> ' + n.reqOr.map(pr).join('') : '') + '</div>';
   if (st.k === 'req') h += '<div class="tu-lk">前置未滿:' + tuEsc(st.miss.join('、')) + (n.reqOr && n.reqOr.length ? '(或 ' + tuEsc(n.reqOr.map(tuNodeName).join('、')) + ')' : '') + '</div>';
   if (st.k !== 'done' && st.k !== 'mega' && !techEraOpen(n.era)) h += '<div class="tu-lk">🔒 ' + tuEsc(techUiEraText(n.era)) + '</div>';
   c = '';
   if (st.k === 'ready') c = '<button data-tu="add" data-id="' + n.id + '">研發</button>';
-  else if (st.k === 'req') c = '<button data-tu="addto" data-id="' + n.id + '">研發到這裡</button>';
+  else if (st.k === 'req') c = techUiChainHtml(n.id) + '<button data-tu="addto" data-id="' + n.id + '">研發到這裡</button>';
+  else if (st.k === 'done') techUiBuildable(n).forEach(function (u) { c += '<button data-tu="build" data-id="' + u + '">去蓋 ' + tuEsc(OBJECTS[u].name || u) + '</button>'; });
   return h + c;
 }
 function techUiHtml() {
@@ -362,7 +487,7 @@ function techUiHtml() {
 
 function tuSig() {
   var s = techState();
-  return [Object.keys(s.done).length, s.cur.map(function (c) { return c.id; }).join(','), s.queue.join(','), techEra(), techLabCount(), tu.branch, tu.zoom, tu.confirm, tu.msg, tu.focus, tu.sel].join('|');
+  return [Object.keys(s.done).length, s.cur.map(function (c) { return c.id; }).join(','), s.queue.join(','), techEra(), techLabCount(), tu.branch, tu.zoom, tu.confirm, tu.msg, tu.focus, tu.sel, tu.sug].join('|');
 }
 function tuRender(rebuild) {
   var qs;
@@ -372,16 +497,18 @@ function tuRender(rebuild) {
   if (tu.qEl && (rebuild || qs !== tu.qSig)) { tu.qSig = qs; tu.qEl.innerHTML = tuQueueHtml(); }
   tuTickQueue();
   tuSet(tu.tabsEl, 'tabs', tuTabsHtml()); tuSet(tu.eraEl, 'era', tuEraHtml());
+  tuSugCalc();
   tuBuildTree(rebuild === 'tree');
   tuApply();
   tuSet(tu.detEl, 'det', tuDetailHtml());
+  tuTickStrip(); tuSyncCls();
   tu.sig = tuSig();
 }
 // 每秒:只更新資源數字與倒數;只有序列 / 已研 / 時代 等簽章改變才局部刷新(節點不重建)
 function tuTick() {
   if (!tu.el) return;
   tuSet(tu.resEl, 'res', tuResHtml());
-  tuTickQueue();
+  tuTickQueue(); tuTickStrip();
   if (tuSig() !== tu.sig) tuRender(false);
 }
 function tuScrollTo(id) {
@@ -405,10 +532,21 @@ function techUiAct(act, id) {
   tu.msg = '';
   if (act === 'close') { techPanelClose(); return; }
   if (act === 'tab') { tu.branch = id; tu.focus = ''; tu.sel = ''; tuRender(false); if (tu.scEl) { tu.scEl.scrollLeft = 0; tu.scEl.scrollTop = 0; } return; }
+  if (act === 'qtoggle') { tu.qOpen = !tu.qOpen; tuSyncCls(); return; }
   if (act === 'sel') { tu.sel = tu.sel === id ? '' : id; tuRender(false); return; }
   if (act === 'desel') { tu.sel = ''; tuRender(false); return; }
   if (act === 'goto') { tuGoto(id); return; }
   if (act === 'zoom') { tu.zoom = (tu.zoom + 1) % TU_ZOOMS.length; tuRender(false); if (tu.sel) tuScrollTo(tu.sel); return; }
+  if (act === 'sug') { tu.sug = tu.sug ? 0 : 1; tuSugSave(); tuRender(false); return; }
+  if (act === 'era') {
+    id = techUiEraTarget(+id);
+    if (id) tuGoto(id); else { tu.msg = '這個時代目前沒有可研的節點'; tuRender(false); }
+    return;
+  }
+  if (act === 'build') {
+    if (typeof OBJECTS !== 'undefined' && OBJECTS[id] && typeof setTool === 'function') { techPanelClose(); setTool(id); tuToast('已選 ' + (OBJECTS[id].name || id) + ',點地面放置'); }
+    return;
+  }
   if (act === 'locate') {
     id = techUiFirstReady(tu.branch);
     if (id) tuGoto(id); else { tu.msg = '目前沒有可研的節點(前置未滿或該時代尚未開放)'; tuRender(false); }
@@ -479,12 +617,34 @@ var TU_CSS = '#techTreePanel{position:fixed;left:50%;top:3%;transform:translateX
   '.tu-st{font-size:.85em;border-radius:8px;padding:0 6px;background:#3a2f1a}.tu-st.ready{background:#2f5a2f}.tu-st.done{background:#2a4a6a}.tu-st.cur,.tu-st.queued{background:#6a5a1a}.tu-st.mega{background:#5a3a5a}.tu-st.era{background:#444}' +
   '.tu-n.ready{background-color:#294a29;border-color:#7fd37f}.tu-n.done{background-color:#1f3550}.tu-n.cur,.tu-n.queued{background-color:#52461a;border-color:#f0b45a}.tu-n.req{background-color:#2b2418;opacity:.85}.tu-n.era{background-color:#2a2a2a;opacity:.75}.tu-n.mega{background-color:#4a2f4a;border-color:#c89ac8}' +
   '.tu-n.focus{outline:2px solid #f0b45a}.tu-n.sel{outline:3px solid #fff}.tu-n.dim{opacity:.25}.tu-n.hl{opacity:1}' +
+  '.tu-ec[data-tu]{cursor:pointer}.tu-n{position:relative}.tu-n.sug::after{content:"★";position:absolute;right:3px;top:0;color:#ffd36a;font-size:14px;line-height:1}.tu-sg{margin-top:3px;color:#ffd36a}.tu-rt{margin-top:3px;color:#d8c6ff}.tu-chain{color:#ffd9a0}' +
   '.tu-xb{display:block;box-sizing:border-box;width:100%;font-size:10px;line-height:16px;color:#cfe3ff;background:#2a3a55;border-radius:8px;margin-top:1px;padding:0 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}' +
   '.tu-e path{fill:none;stroke-width:2}.tu-e text{fill:#e8c6ff;font-size:11px;text-anchor:middle}.tu-e.done path{stroke:#f0b45a}.tu-e.ready path{stroke:#7fd37f}.tu-e.todo path{stroke:#6c675c;stroke-dasharray:5 4}.tu-e.or path{stroke-dasharray:7 3}.tu-e.or.todo path{stroke:#9a7ab0}.tu-e.dim{opacity:.1}.tu-e.hl path{stroke-width:3}' +
-  '.tu-dt{display:flex;align-items:center;gap:6px}.tu-d,.tu-c,.tu-u,.tu-lk,.tu-pq,.tu-hint{margin-top:3px;opacity:.92}.tu-hint{opacity:.7}.tu-lk{color:#ffb4a0}.tu-u{color:#cfe3ff}#techTreePanel .tu-pr.ok{border-color:#7fd37f}#techTreePanel .tu-pr.no{border-color:#c0705a}';
+  '.tu-dt{display:flex;align-items:center;gap:6px}.tu-d,.tu-c,.tu-u,.tu-lk,.tu-pq,.tu-hint{margin-top:3px;opacity:.92}.tu-hint{opacity:.7}.tu-lk{color:#ffb4a0}.tu-u{color:#cfe3ff}#techTreePanel .tu-pr.ok{border-color:#7fd37f}#techTreePanel .tu-pr.no{border-color:#c0705a}' +
+  // ── 橫版大面板模式(body.panel-big-landscape):滿版;單一薄列 = 分支圖示頁籤 + 定位 / 縮放 / 關閉;樹區滿版可拖曳捲動;研發序列收成浮動單行、詳情為右側浮層(皆不占樹區高度)
+  'body.panel-big-landscape #techTreePanel:not([hidden]){position:fixed;left:0;top:0;right:0;bottom:0;width:auto;height:auto;transform:none;border:0;border-radius:0;z-index:41;display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;grid-template-rows:var(--ls-bar,44px) minmax(0,1fr);box-sizing:border-box;padding:env(safe-area-inset-top) var(--ls-sr,12px) env(safe-area-inset-bottom) var(--ls-sl,12px);max-height:none}' +
+  'body.panel-big-landscape #techTreePanel .tu-topbar,body.panel-big-landscape #techTreePanel .tu-body{display:contents}' +
+  'body.panel-big-landscape #techTreePanel .tu-topbar>b,body.panel-big-landscape #techTreePanel .tu-topbar>.tu-sp,body.panel-big-landscape #techTreePanel .tu-es{display:none}' +
+  'body.panel-big-landscape #techTreePanel .tu-topbar>button{grid-row:1;min-height:var(--ls-tap,44px);min-width:var(--ls-tap,44px);margin:0 0 0 var(--ls-gap,8px);padding:0 10px;font-size:14px;align-self:center}' +
+  'body.panel-big-landscape #techTreePanel .tu-tabs{grid-row:1;grid-column:1;display:flex;align-items:center;overflow-x:auto;overflow-y:hidden;padding:0;gap:var(--ls-gap,8px);min-height:var(--ls-bar,44px);-webkit-overflow-scrolling:touch;touch-action:pan-x}' +
+  'body.panel-big-landscape #techTreePanel .tu-tr{display:flex;gap:var(--ls-gap,8px)}' +
+  'body.panel-big-landscape #techTreePanel .tu-tab{margin:0;min-height:var(--ls-tap,44px);min-width:var(--ls-tap,44px);font-size:14px;flex:none}' +
+  'body.panel-big-landscape #techTreePanel .tu-tab.ic{display:inline-flex;justify-content:center;padding:2px 6px}body.panel-big-landscape #techTreePanel .tu-tab.ic .tu-tn,body.panel-big-landscape #techTreePanel .tu-tab.ic small{display:none}' +
+  'body.panel-big-landscape #techTreePanel .tu-sc{grid-row:2;grid-column:1/-1;min-height:0}body.panel-big-landscape #techTreePanel .tu-sc::after{content:"";display:block;height:56px}' +
+  'body.panel-big-landscape #techTreePanel .tu-head{display:none}' +
+  'body.panel-big-landscape #techTreePanel.tu-qopen .tu-head{display:block;position:absolute;left:var(--ls-sl,12px);right:var(--ls-sr,12px);bottom:calc(env(safe-area-inset-bottom) + 52px);max-height:55%;z-index:3;border:1px solid #8a6d3b;border-radius:8px;background:rgba(40,32,20,.98)}' +
+  'body.panel-big-landscape #techTreePanel .tu-det{display:none}' +
+  'body.panel-big-landscape #techTreePanel.tu-sel .tu-det{display:block;position:absolute;right:var(--ls-sr,12px);top:calc(env(safe-area-inset-top) + var(--ls-bar,44px));bottom:calc(env(safe-area-inset-bottom) + 4px);width:min(360px,46%);max-height:none;z-index:4;border:1px solid #8a6d3b;border-radius:8px;overscroll-behavior:contain;touch-action:pan-y}' +
+  'body.panel-big-landscape #techTreePanel .tu-strip{display:flex;align-items:center;gap:var(--ls-gap,8px);position:absolute;left:var(--ls-sl,12px);bottom:calc(env(safe-area-inset-bottom) + 6px);height:var(--ls-thin,40px);max-width:calc(100% - var(--ls-sl,12px) - var(--ls-sr,12px));box-sizing:border-box;padding:0 4px 0 12px;z-index:3;border:1px solid #8a6d3b;border-radius:20px;background:rgba(40,32,20,.96);font-size:14px;white-space:nowrap}' +
+  'body.panel-big-landscape #techTreePanel.tu-sel .tu-strip{max-width:calc(100% - 380px - var(--ls-sl,12px))}body.panel-big-landscape #techTreePanel.tu-sel .tu-s-res{display:none}' +
+  'body.panel-big-landscape #techTreePanel .tu-s-btn{margin:0;min-height:var(--ls-tap,44px);min-width:var(--ls-tap,44px)}' +
+  'body.panel-big-landscape #techTreePanel .tu-det button,body.panel-big-landscape #techTreePanel .tu-head button{min-height:var(--ls-tap,44px);min-width:var(--ls-tap,44px);font-size:14px}body.panel-big-landscape #techTreePanel .tu-det,body.panel-big-landscape #techTreePanel .tu-head{font-size:14px}' +
+  'body.panel-big-landscape #techTreePanel .tu-cv{font-size:14px!important}body.panel-big-landscape #techTreePanel :is(.tu-nf,.tu-xb,.tu-st,.tu-era,.tu-ecn,.tu-e text){font-size:12px}' +
+  '.tu-strip{display:none}';
 function tuEnsure() {
   var st, el, mk;
   if (tu.el) return tu.el;
+  tuSugLoad();
   if (typeof document === 'undefined' || !document.createElement) return null;
   mk = function (cls) { var d = document.createElement('div'); d.className = cls; return d; };
   st = document.createElement('style'); st.id = 'techuiCss'; st.textContent = TU_CSS;
@@ -497,7 +657,10 @@ function tuEnsure() {
   tu.scEl.appendChild(tu.cvEl);
   tu.bodyEl.appendChild(tu.tabsEl); tu.bodyEl.appendChild(tu.eraEl); tu.bodyEl.appendChild(tu.scEl);
   tu.detEl = mk('tu-det');
-  el.appendChild(tu.topEl); el.appendChild(tu.headEl); el.appendChild(tu.bodyEl); el.appendChild(tu.detEl);
+  tu.stripEl = mk('tu-strip'); tu.sResEl = document.createElement('span'); tu.sResEl.className = 'tu-s-res'; tu.sCurEl = document.createElement('span'); tu.sCurEl.className = 'tu-s-cur';
+  tu.stripEl.appendChild(tu.sResEl); tu.stripEl.appendChild(tu.sCurEl);
+  mk = document.createElement('button'); mk.className = 'tu-s-btn'; if (mk.setAttribute) mk.setAttribute('data-tu', 'qtoggle'); mk.textContent = '序列 ▲'; tu.stripEl.appendChild(mk);
+  el.appendChild(tu.topEl); el.appendChild(tu.headEl); el.appendChild(tu.bodyEl); el.appendChild(tu.detEl); el.appendChild(tu.stripEl);
   el.addEventListener('click', tuOnClick);
   tuBindDrag(tu.scEl);
   if (document.body && document.body.appendChild) document.body.appendChild(el);
@@ -514,7 +677,8 @@ function techPanelIsOpen() { return !!tu.open; }
 function techPanelOpen(nodeId) {
   var el = tuEnsure(), n = nodeId ? techNode(nodeId) : null;
   if (typeof CITY_TECHS === 'undefined' || typeof techState !== 'function') return false;
-  tu.msg = ''; tu.confirm = '';
+  tu.msg = ''; tu.confirm = ''; tu.qOpen = false;
+  if (typeof panelLsActive === 'function' && panelLsActive() && !tu.lsZoom) { tu.zoom = TU_ZOOMS.length - 1; tu.lsZoom = 1; }   // 橫版首次開啟:節點用「大」(高 56,容得下 14px 兩行名稱 + 狀態列)
   if (n) { tu.branch = n.branch; tu.focus = nodeId; tu.sel = nodeId; } else tu.focus = '';
   if (el && typeof panelOpen === 'function') panelOpen('techtree');
   tu.open = true;

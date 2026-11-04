@@ -962,6 +962,7 @@ function lifeFrame(time) {
     LIFE.active = false;
     LIFE.drawAcc = 0;
     LIFE.wallT = -1;
+    if (typeof caravanVisClear === 'function') caravanVisClear();
     if (LIFE.npcs.length) lifeReset();
     return;
   }
@@ -984,6 +985,8 @@ function lifeFrame(time) {
   lifeSpawnTick(dt);
   lifePortTick(dt);
   if (typeof lifeTrafficTick === 'function') lifeTrafficTick(dt);
+  if (typeof npcHeroTick === 'function') npcHeroTick(dt);   // 名冊人物 hero(npcinteract.js)
+  if (typeof caravanVisTick === 'function') caravanVisTick(dt);   // 走鏢車隊視覺(caravan_vis.js)
   LIFE.chatT -= dt;
   if (LIFE.chatT <= 0) { LIFE.chatT = 0.5; lifeChatCheck(); }
 
@@ -1078,6 +1081,7 @@ function lifeDrawOne(ctx, n, res, tod, season, useArt, alpha) {
 
 // 依對角線分桶繪製(每個對角線一次呼叫,總成本 O(n));縮放分三級:正常 / <0.5 簡化 / <0.35 色點
 function lifeDrawDiag(ctx, d, time) {
+  if (typeof caravanVisDraw === 'function') caravanVisDraw(ctx, d);   // 走鏢車隊(caravan_vis.js),依同一組對角線桶
   if (!LIFE.active || !LIFE.buck) return;
   const list = LIFE.buck[d];
   if (!list || !list.length) return;
@@ -1192,6 +1196,8 @@ function lifeCardMake() {
 }
 
 function lifeCardShow(n) {
+  if (n.role === 'hero' && typeof npcHeroCardShow === 'function' && npcHeroCardShow(n)) return;   // 名冊人物:專屬小卡(npcui.js)
+  if (typeof npcHeroCardHide === 'function') npcHeroCardHide();
   const c = LIFE.card || lifeCardMake();
   if (!c) return;
   LIFE.cardFor = n;
@@ -1203,5 +1209,6 @@ function lifeCardShow(n) {
 
 function lifeCardHide() {
   LIFE.cardFor = null;
+  if (typeof npcHeroCardHide === 'function') npcHeroCardHide();
   if (LIFE.card) LIFE.card.box.style.display = 'none';
 }

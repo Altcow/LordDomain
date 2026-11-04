@@ -1,6 +1,6 @@
 // js/panelmgr.js — 面板管理器(PLAN_NOLEVEL §7 / NL3a):同時最多 1 大面板 + 1 停靠面板 + 1 浮卡;互斥、單一 Esc、浮卡幾何、全螢幕隱藏、狀態還原。
 // 全域名稱:panelRegister panelOpen panelClose panelCloseAll panelIsOpen panelTopId panelPlaceCard panelMapInputBlocked panelNoteMapGesture
-//   panelFullscreen panelFsActive panelSyncFs panelBack panelSetStateHooks panelNoteIntentMove panelKindOpen;資料表 PANEL_Z PANEL_MUTEX PANEL_BLOCKED_BY PANEL_ESC_ORDER PANEL_FS_AUTO。
+//   panelFullscreen panelFsActive panelSyncFs panelBack panelSetStateHooks panelNoteIntentMove panelKindOpen;資料表 PANEL_Z PANEL_MUTEX PANEL_BLOCKED_BY PANEL_ESC_ORDER PANEL_FS_AUTO。 panelLsActive panelLsSet panelLsSync;常數 PANEL_LS。
 // 漸進遷移:既有面板保留自己的 toggle 函式,只在開啟時呼叫 panelOpen(id)、關閉時呼叫 panelClose(id),並以 close 回呼讓管理器代為關閉互斥者。ES2017;不用 ?. ??。
 var PANEL_Z = { hud: 10, dock: 20, card: 30, bigMask: 40, big: 41, dlgMask: 50, dlg: 51, transient: 60, guide: 70, fullscreen: 80, photoBack: 90 };
 var PANEL_MUTEX = { big: ['big', 'card'], dock: ['dock'], card: ['card'] };      // 開啟某 kind 時,自動關閉這些 kind 的舊面板
@@ -22,6 +22,28 @@ var panelReplaying = false;
 var panelMaskEl = null;
 var panelHooks = { snap: null, restore: null };
 var panelBound = false;
+
+// ───── 橫版大面板模式(手機橫版:大面板開啟時隱藏城市 HUD、面板滿版、薄列 + 內容區上下滑動) ─────
+// 規格常數(與 css/style.css 末段 :root 的 --ls-* 變數一致;tools/test_landscape.js 會核對)
+var PANEL_LS = { query: '(orientation: landscape) and (max-height: 520px)', cls: 'panel-big-landscape', thin: 40, tap: 44, gap: 8, padX: 12, bodyFont: 14, subFont: 12, titleFont: 16, row: 48, iconMin: 28, iconMax: 40, ratio: 0.75 };
+var panelLsExtra = {};                  // 非 panelmgr 管理的全版面板(例:城主府)以 panelLsSet(key,on) 登記
+var panelLsMql = null;
+
+function panelLsActive() {
+  try {
+    if (typeof window === 'undefined' || !window || typeof window.matchMedia !== 'function') return false;
+    if (!panelLsMql) panelLsMql = window.matchMedia(PANEL_LS.query);
+    return !!panelLsMql.matches;
+  } catch (e) { return false; }
+}
+function panelLsSet(key, on) { if (on) panelLsExtra[key] = 1; else delete panelLsExtra[key]; panelLsSync(); }
+function panelLsWant() { return panelLsActive() && !panelFsActive() && (!!panelKindOpen('big') || Object.keys(panelLsExtra).length > 0); }
+function panelLsSync() {
+  var on = panelLsWant();
+  if (typeof document === 'undefined' || !document.body || !document.body.classList) return on;
+  document.body.classList.toggle(PANEL_LS.cls, on);
+  return on;
+}
 
 function panelKindOf(id) { return panelDefs[id] ? panelDefs[id].kind : ''; }
 
@@ -97,6 +119,7 @@ function panelOpen(id, opts) {
   }
   if (d.kind === 'big' && !panelKindOpen('big')) panelSnap = panelSnapshot();
   panelOpenList.push(id);
+  panelLsSync();
   if (panelEl(d) && !d.legacy && o.show !== false) panelEl(d).hidden = false;
   panelPlaceNow(d, o);
   panelApplyMask();
@@ -114,6 +137,7 @@ function panelClose(id) {
   d.anchor = null;
   hadBig = d.kind === 'big';
   panelApplyMask();
+  panelLsSync();
   if (hadBig && !panelKindOpen('big')) panelRestoreState();
   return true;
 }
@@ -291,6 +315,7 @@ function panelFullscreen(reason, on) {
     }
     panelApplyMask();
   }
+  panelLsSync();
 }
 function panelSyncFs() {
   var m = '', rs = '';
@@ -407,6 +432,12 @@ function panelBind() {
   document.addEventListener('wheel', panelOnWheel, { capture: true, passive: true });
   document.addEventListener('keydown', panelOnKey, true);
   if (typeof setInterval === 'function') setInterval(panelSyncFs, 400);
+  try {                                                // 旋轉 / 視窗變動:重算橫版大面板模式
+    panelLsActive();
+    if (panelLsMql && panelLsMql.addEventListener) panelLsMql.addEventListener('change', panelLsSync);
+    else if (panelLsMql && panelLsMql.addListener) panelLsMql.addListener(panelLsSync);
+    if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('resize', panelLsSync);
+  } catch (e) { /* 略過 */ }
 }
 
 // ───── 既有面板登錄(漸進遷移;各 toggle 函式保留,開啟 / 關閉時通知管理器,管理器代為關閉互斥者) ─────

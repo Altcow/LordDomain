@@ -607,7 +607,15 @@ body.ui-compact { --stack: 40px; --side-w: 80px; }
   #sideBar .side-list { display: grid; grid-template-columns: 44px 44px; }
 }
 /* 橫版:右側不留瀏海安全區(瀏海/動態島在左側),頂列右側圖示與右邊欄一樣貼齊右邊 */
-@media (orientation: landscape) { #topbar { padding-right: 4px; } }
+@media (orientation: landscape) { #topbar { padding-right: max(4px, env(safe-area-inset-right)); } }
+/* 頂列最右兩顆(👁 / ⚙)視覺 30px,觸控區擴成 ≥44px(左右各外擴,不超出頂列高度);頂列一律不讓按鈕被擠出視窗 */
+#topbar #btnMenu, #topbar #btnHide { position: relative; }
+#topbar #btnMenu.st-menu-btn { min-width: 34px; }
+#topbar #btnMenu::after, #topbar #btnHide::after { content: ""; position: absolute; top: 50%; height: 44px; transform: translateY(-50%); }
+#topbar #btnMenu::after { left: -6px; right: -4px; }   /* 34 + 10 = 44;右側 4px 不超出頂列 padding,不產生橫向捲動 */
+#topbar #btnHide::after { left: -7px; right: -3px; }
+/* 直版:縣丞警示圖示 🧭 靠左上(緊接世界標籤),不放在頂列正中央 */
+@media (orientation: portrait) { #topbar #worldTag { order: -2; } #topbar #advChip { order: -1; } }
 @media (orientation: landscape) and (max-height: 500px) {
   #sideBar { gap: 3px; }
   #sideBar .side-list { gap: 3px; }
@@ -839,6 +847,16 @@ body.atk-mode #toast, body.sandbox #toast { top: auto; bottom: calc(92px + env(s
 .ld-seg button { flex: 1 1 0; }
 .ld-box button { min-height: 44px; padding: 6px 10px; font-size: 14px; text-align: left; }
 .ld-box button small { display: block; font-size: 11px; opacity: .75; margin-top: 2px; white-space: normal; }
+/* 範本卡片:每個範本一張卡(名稱一行、簡述分行、尺寸另起一行),不被壓縮、長字換行 */
+.ld-row.ld-col > button { flex: 0 0 auto; }
+.ld-box button.tpl-card { display: block; width: 100%; min-height: 56px; padding: 10px 12px; white-space: normal; overflow-wrap: anywhere; word-break: break-word; text-align: left; line-height: 1.4; }
+.ld-box button.tpl-card .tc-name { display: block; font-size: 15px; font-weight: bold; line-height: 1.35; }
+.ld-box button.tpl-card .tc-ic { display: inline-block; min-width: 1.6em; margin-right: 10px; text-align: center; }
+.ld-box button.tpl-card small { display: block; margin-top: 6px; font-size: 12px; line-height: 1.5; opacity: .8; }
+.ld-box button.tpl-card .tc-sz { display: block; margin-top: 4px; font-size: 11px; opacity: .6; }
+.ld-row.ld-scroll { gap: 8px; }
+.ld-box.ld-wide { width: min(560px, 100%); }
+.ld-box.ld-wide .ld-row.ld-scroll { max-height: 56vh; }
 .ld-box button.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; font-weight: bold; }
 .ld-box button:disabled { opacity: .4; }
 .ld-box button.slot.empty { opacity: .75; }
@@ -1171,3 +1189,107 @@ body.atk-mode #csChip, body.replay-mode #csChip, body.sandbox #csChip, body.phot
 .bpvcard .bpv-ctl button { flex: 1 1 0; min-width: 0; height: 24px; padding: 0 2px; font-size: 11px; }
 .bpvcard .bpv-ctl button.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; }
 .bpvcard .bpv-x { position: absolute; right: 4px; top: 2px; width: 22px; height: 22px; padding: 0; font-size: 11px; background: transparent; border: 0; color: #f3ead7; }
+
+/* ===== 橫版大面板模式(手機橫版 orientation:landscape + max-height:520px) =====
+   由 js/panelmgr.js 的 panelLsSync() 在「有 kind:'big' 面板開啟」時給 body 加 .panel-big-landscape;常數與 PANEL_LS 一致(tools/test_landscape.js 會核對)。
+   規則:HUD(頂列 / 側欄 / 工具列 / 晶片 / 推薦卡 / 縣丞)隱藏;大面板滿版(扣安全區);薄列 = 標題 + 關閉(固定);內容區 flex:1 + 上下滑動;
+   可點元素 >=44px、字級 >=14px、列高 >=48px;內容區左右內距 >=12px 並避開安全區。直版 / 桌機不受影響。 */
+:root { --ls-thin: 40px; --ls-bar: 44px; --ls-tap: 44px; --ls-gap: 8px; --ls-padx: 12px; --ls-font: 14px; --ls-sub: 12px; --ls-title: 16px; --ls-row: 48px; --ls-icon-min: 28px; --ls-icon-max: 40px; --ls-sl: max(12px, env(safe-area-inset-left)); --ls-sr: max(12px, env(safe-area-inset-right)); }
+body.panel-big-landscape :is(#topbar, #sideBar, #toolbar, #pendBar, #advChip, #csChip, #progChip, #progFtue, #progWelcome, #nsCard, #advSprite, #advTip, #worldTag, #btnMenu, #advDock, #questList) { visibility: hidden !important; pointer-events: none !important; }
+body.panel-big-landscape :is(#shop, #tplMenu, #goodsPanel, #csPanel, #progDrawer, #lordhall, #cardsPanel, #advDict):not([hidden]) {
+  position: fixed !important; left: 0 !important; top: 0 !important; right: 0 !important; bottom: 0 !important; width: auto !important; height: auto !important; max-width: none !important; max-height: none !important;
+  margin: 0 !important; transform: none !important; border-radius: 0 !important; border: 0 !important; z-index: 41 !important; box-sizing: border-box !important;
+  padding: env(safe-area-inset-top) var(--ls-sr) env(safe-area-inset-bottom) var(--ls-sl) !important; background: #141a24; color: #eee;
+}
+/* 字級下限與可點元素下限(套用到面板內所有後代;1em 取自父層,故不會把標題縮小) */
+body.panel-big-landscape :is(#shop, #tplMenu, #goodsPanel, #csPanel, #progDrawer, #lordhall, #cardsPanel, #advDict):not([hidden]) :is(button, span, div, small, b, i, em, s, u, label, p, li, td, th, a, select, input, strong, summary, h4, section) { font-size: max(var(--ls-font), 1em); }
+body.panel-big-landscape :is(#shop, #tplMenu, #goodsPanel, #csPanel, #progDrawer, #lordhall, #cardsPanel, #advDict):not([hidden]) :is(button, select, summary, [role=button], input:not([type=checkbox]):not([type=radio])) { min-height: var(--ls-tap); min-width: var(--ls-tap); }
+/* 會自己捲動的面板(商店 / 範本 / 庫房):根即內容區;標題 + 關閉鈕改成固定薄列 */
+body.panel-big-landscape :is(#shop, #tplMenu, #goodsPanel):not([hidden]) { display: block !important; overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; padding-top: calc(var(--ls-bar) + env(safe-area-inset-top) + 8px) !important; }
+body.panel-big-landscape :is(#shop, #tplMenu, #goodsPanel):not([hidden])::before { content: ''; position: fixed; left: 0; right: 0; top: 0; height: calc(var(--ls-bar) + env(safe-area-inset-top)); background: #161d28; border-bottom: 1px solid rgba(255, 255, 255, .15); z-index: 1; }
+body.panel-big-landscape #shop:not([hidden]) .head { position: fixed !important; left: var(--ls-sl); right: var(--ls-sr); top: env(safe-area-inset-top); height: var(--ls-bar); margin: 0; padding: 0; z-index: 2; display: flex; align-items: center; background: none; border: 0; }
+body.panel-big-landscape #shop:not([hidden]) .head b, body.panel-big-landscape :is(#tplMenu, #goodsPanel):not([hidden]) > b { font-size: var(--ls-title); }
+body.panel-big-landscape :is(#tplMenu, #goodsPanel):not([hidden]) > b { position: fixed; left: var(--ls-sl); top: env(safe-area-inset-top); height: var(--ls-bar); line-height: var(--ls-bar); z-index: 2; }
+body.panel-big-landscape #shop:not([hidden]) .close { position: static !important; margin: 0 0 0 auto; }
+body.panel-big-landscape :is(#tplMenu, #goodsPanel):not([hidden]) .close { position: fixed !important; float: none !important; right: var(--ls-sr); top: env(safe-area-inset-top); z-index: 2; margin: 0; background: none; }
+body.panel-big-landscape :is(#shop .row, #tplMenu .tpl, #goodsPanel .grow) { min-height: var(--ls-row); }
+body.panel-big-landscape #tplMenu:not([hidden]) { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ls-gap); align-content: start; }
+body.panel-big-landscape #tplMenu:not([hidden]) > .tpl { margin: 0; width: auto; }
+body.panel-big-landscape #tplMenu:not([hidden]) > small { grid-column: 1 / -1; }
+body.panel-big-landscape #shop:not([hidden]) .row { gap: var(--ls-gap); }
+body.panel-big-landscape #shop:not([hidden]) .deal small { white-space: normal; overflow: visible; }
+/* 有固定標題 / 內容分區的面板(繁榮度 / 升級 / 城主府 / 招募 / 辭典):flex 欄;標題薄列固定,內容區 flex:1 上下滑動 */
+body.panel-big-landscape :is(#csPanel, #progDrawer, #lordhall, #cardsPanel, #advDict):not([hidden]) { display: flex !important; flex-direction: column; }
+body.panel-big-landscape :is(#csPanel .cs-head, #progDrawer .pg-head, #lordhall .lhhd, #cardsPanel .cuhd, #advDict .adv-dh) { flex: 0 0 auto; height: var(--ls-bar); min-height: var(--ls-bar); padding: 0; margin: 0; flex-wrap: nowrap; gap: var(--ls-gap); box-sizing: border-box; overflow: visible; }
+body.panel-big-landscape :is(.cs-title, .pg-title, #lordhall .lhhd > b, #cardsPanel .cuhd > b, #advDict .adv-dh > b) { font-size: var(--ls-title) !important; flex: 0 0 auto; white-space: nowrap; overflow: visible; max-width: none; }
+body.panel-big-landscape :is(#csPanel .cs-body, #progDrawer .pg-list, #lordhall .lhbd, #cardsPanel .cubd, #advDict .adv-db) { flex: 1 1 auto !important; min-height: 0 !important; max-height: none !important; height: auto !important; overflow-y: auto !important; overflow-x: hidden; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; padding: 8px var(--ls-gap) 8px 0 !important; margin: 0 !important; }
+body.panel-big-landscape :is(#progDrawer .pg-row, #lordhall .lhr, #cardsPanel .cur) { min-height: var(--ls-row); align-items: center; }
+body.panel-big-landscape #advDict .adv-df { position: absolute; top: env(safe-area-inset-top); right: calc(var(--ls-sr) + var(--ls-tap) + var(--ls-gap)); height: var(--ls-bar); padding: 0; border: 0; }
+body.panel-big-landscape #advDict .adv-link { display: inline-block; padding: 12px 6px; margin: -12px 0; }
+body.panel-big-landscape :is(#csPanel .cs-x, #progDrawer .pg-x, #lordhall .lhx, #cardsPanel .cux, #advDict .adv-dx) { margin-left: auto; }
+body.panel-big-landscape #progDrawer .pg-foot { flex: 0 0 auto; min-height: 0; padding: 0; }
+body.panel-big-landscape #progDrawer .pg-hlv { flex: 1 1 auto; white-space: normal; overflow: visible; }
+body.panel-big-landscape #lordhall .lhhd > b { flex: 1 1 auto !important; }
+body.panel-big-landscape #cardsPanel .cutabs { flex: 1 1 auto; }
+body.panel-big-landscape #cardsPanel[data-tab=R] .cubd { column-width: 300px; column-gap: var(--ls-padx); }
+body.panel-big-landscape #cardsPanel .cucard { break-inside: avoid; }
+body.panel-big-landscape #cardsPanel .cusec { break-after: avoid; }
+/* 世界管理 / 建立新世界精靈本身已滿版:只調薄列、字級與左右分欄(左 = 旗幟與簡介預覽;右 = 設定欄位) */
+body.panel-big-landscape :is(#svPanel .svh, #wwPanel .wwh) { height: var(--ls-bar); padding-top: 0; padding-bottom: 0; box-sizing: border-box; }
+body.panel-big-landscape :is(#svPanel .svh, #wwPanel .wwh, #svPanel .svinfo, #svPanel .svmsg, #svPanel .svlist, #wwPanel .wwbody, #wwPanel .wwfoot, #wwPanel .wwmsg) { padding-left: var(--ls-sl); padding-right: var(--ls-sr); }
+body.panel-big-landscape :is(#svPanel, #wwPanel) :is(button, span, div, small, b, i, label, p, li, select, input) { font-size: max(var(--ls-font), 1em); }
+body.panel-big-landscape :is(#svPanel, #wwPanel) :is(button, select, input:not([type=checkbox]):not([type=radio])) { min-height: var(--ls-tap); min-width: var(--ls-tap); }
+body.panel-big-landscape #wwPanel .wwbody { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); grid-template-rows: repeat(6, auto) 1fr; column-gap: calc(var(--ls-padx) * 2); align-content: start; }
+body.panel-big-landscape #wwPanel .wwbody > * { grid-column: 2; }
+body.panel-big-landscape #wwPanel .wwbody > .wwprev { grid-column: 1; grid-row: 1 / 8; margin-top: 10px; align-self: start; overflow: visible; }
+body.panel-big-landscape #wwPanel .wwfoot { position: absolute; top: env(safe-area-inset-top); right: calc(var(--ls-sr) + var(--ls-tap) + var(--ls-gap)); height: var(--ls-bar); padding: 0; border: 0; width: min(50%, 420px); box-sizing: border-box; }
+body.panel-big-landscape #wwPanel .wwmsg:empty { display: none; }
+body.panel-big-landscape #wwPanel .wwh b { max-width: 40%; }
+body.panel-big-landscape #svPanel .svinfo { padding-top: 2px; padding-bottom: 2px; font-size: var(--ls-sub) !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; word-break: normal; }
+body.panel-big-landscape #svPanel .svmsg:empty { display: none; }
+body.panel-big-landscape #svPanel .svlist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--ls-padx); align-content: start; }
+body.panel-big-landscape #svPanel .svlist > .svsec { grid-column: 1 / -1; }
+/* 設定抽屜 / 民情長條圖停靠 / 推薦下一步:橫版(不論是否有大面板)調整可點大小與字級 */
+@media (orientation: landscape) and (max-height: 520px) {
+  #stRoot .st-drawer { left: auto; top: 0; bottom: 0; width: min(380px, 62vw); max-height: none; border-radius: 0; transform: translateX(105%); padding-right: env(safe-area-inset-right); box-sizing: border-box; }
+  #stRoot.st-open .st-drawer { transform: none; }
+  #stRoot .st-grip { display: none; }
+  #stRoot .st-foot { position: absolute; top: 0; right: calc(var(--ls-padx) + var(--ls-tap) + var(--ls-gap) + env(safe-area-inset-right)); padding: 0; height: var(--ls-bar); display: flex; align-items: center; }
+  #stRoot .st-foot .st-done { width: auto; min-width: 88px; margin: 0; }
+  #stRoot .st-body { padding-bottom: env(safe-area-inset-bottom); }
+  #stRoot .st-head { min-height: var(--ls-bar); padding-top: 0; padding-bottom: 0; }
+  #stRoot .st-drawer :is(button, select, input:not([type=checkbox]):not([type=radio])) { min-height: var(--ls-tap); min-width: var(--ls-tap); }
+  #stRoot .st-drawer :is(button, span, div, small, label, p, li, select, input, b) { font-size: max(var(--ls-font), 1em); }
+  #advDock :is(.adv-tab, .adv-gear, .adv-x) { min-width: var(--ls-tap); min-height: var(--ls-tap); }
+  #advDock :is(button, span, div, small, b, i, label) { font-size: max(var(--ls-font), 1em); }
+  body #nsCard .ns-b { min-height: var(--ls-tap); min-width: var(--ls-tap); font-size: var(--ls-font); padding: 0 4px; }
+  body #nsCard .ns-acts { gap: 2px; }
+  body #nsCard { font-size: var(--ls-font); }
+  body #nsCard .ns-main { min-height: var(--ls-tap); }
+  #advDock .adv-row { min-height: var(--ls-row); }
+}
+
+#sideBar .side-expand { width: 44px; min-height: 26px; margin: 0; padding: 2px 0; border-radius: 10px 0 0 10px; border-right: none; background: rgba(47, 59, 77, .78); border: 1px solid rgba(69, 86, 110, .8); color: #e8edf2; font-size: 10px; line-height: 1.1; }
+#sideBar.expanded .side-list { max-height: calc(100vh - var(--top-h) - env(safe-area-inset-top) - 80px); overflow-y: auto; overscroll-behavior: contain; }
+
+/* 設定面板分頁(settingsui.js):頂部 tab 列固定、內容區捲動;各區塊以 data-tab 顯示 / 隱藏 */
+#stRoot .st-tabs { flex: 0 0 auto; display: flex; gap: 4px; padding: 4px 12px 0; border-bottom: 1px solid rgba(255, 255, 255, .18); }
+#stRoot .st-tabs[hidden] { display: none; }
+#stRoot .st-tab { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 4px 2px; font-size: 14px; border: 0; border-bottom: 3px solid transparent; border-radius: 6px 6px 0 0; background: none; color: inherit; opacity: .7; white-space: nowrap; }
+#stRoot .st-tab.on { opacity: 1; font-weight: bold; color: #f0b45a; border-bottom-color: #f0b45a; background: rgba(240, 180, 90, .1); }
+#stRoot .st-body[data-tab="view"] > .st-sec:not([data-tab="view"]),
+#stRoot .st-body[data-tab="sound"] > .st-sec:not([data-tab="sound"]),
+#stRoot .st-body[data-tab="world"] > .st-sec:not([data-tab="world"]),
+#stRoot .st-body[data-tab="more"] > .st-sec:not([data-tab="more"]) { display: none; }
+#stRoot .st-hint.st-note { margin: -2px 0 6px; padding: 0 8px; font-size: 12px; line-height: 1.5; color: #9aa6b5; opacity: 1; }
+#stRoot .st-sec-mode { padding: 10px; border: 1px solid rgba(240, 180, 90, .55); border-radius: 10px; background: rgba(240, 180, 90, .08); }
+#stRoot .st-sec-danger { padding: 10px; border: 2px solid #c96a5f; border-radius: 10px; background: rgba(201, 106, 95, .1); }
+#stRoot .st-sec-danger .st-h { color: #ff9b8f; }
+#stRoot .st-hint.st-warn { color: #ffb4aa; opacity: 1; }
+@media (orientation: landscape) and (max-height: 520px) {
+  #stRoot .st-tabs { padding: 0 12px; }
+  #stRoot .st-tab { min-height: var(--ls-tap); }
+}
+#stRoot .st-body :is(button, select, .st-range) { min-height: 44px; }
+#stRoot .st-body .st-bgm-p { min-width: 44px; }
+#stRoot .st-body .st-seg button, #stRoot .st-body .st-sw { min-width: 44px; }

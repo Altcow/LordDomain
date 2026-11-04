@@ -209,7 +209,9 @@ var ADVICE = [
   { id: 'a_house_tight', tier: 'Y', pri: 63, stat: 'house', cond: 'houseTight', cd: 3, text: '房子快住滿了({pct}%),再添幾戶。', go: { kind: 'build', type: 'house' } },
   { id: 'a_house_empty', tier: 'Y', pri: 45, stat: 'house', cond: 'houseEmpty', cd: 6, text: '空屋不少(入住 {pct}%),先把糧、水、衛生顧好,人才肯來。', go: { kind: 'help', stat: 'house' } },
 
-  { id: 'a_store_blocked', tier: 'R', pri: 75, stat: 'store', cond: 'storeBlocked', cd: 0, text: '有 {n} 座工坊斷料停工,到庫房看看缺什麼。', go: { kind: 'panel', id: 'goods' } },
+  { id: 'a_store_blocked', tier: 'R', pri: 75, stat: 'store', cond: 'storeBlocked', cd: 0, text: '有 {n} 座工坊斷料停工,多半缺「{miss}」,到庫房看看。', go: { kind: 'panel', id: 'goods' } },
+  { id: 'a_store_noroad', tier: 'Y', pri: 59, stat: 'road', cond: 'storeNoRoad', cd: 3, text: '有 {n} 座工坊沒接上通往城主府的路,產量只剩一半,補段路吧。', go: { kind: 'camera', target: 'worst' } },
+  { id: 'a_store_loom', tier: 'B', pri: 31, stat: 'store', cond: 'storeLoom', cd: 6, text: '麻田種出來的麻沒處用,蓋第一座織坊把它織成麻布。', go: { kind: 'build', type: 'loom_shop' } },
   { id: 'a_store_full', tier: 'Y', pri: 58, stat: 'store', cond: 'storeFull', cd: 3, text: '有 {n} 項貨品快滿倉,開市集賣一些,別白白溢出。', go: { kind: 'build', type: 'market' } },
   { id: 'a_store_first', tier: 'B', pri: 32, stat: 'store', cond: 'storeFirst', cd: 6, text: '人家不少了,蓋座工坊把原料變成好東西。', go: { kind: 'build', type: 'lumber' } },
 

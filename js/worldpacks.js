@@ -21,10 +21,10 @@ var WORLD_PACKS = [
     feats: ['起手建築:氈帳、土坯屋、塢堡', '特色:純外觀風格,部分民房換成氈帳與土坯樣式,數值不變', '適合:喜歡邊塞氣氛、牧場與馬匹佈局的玩法'], tpl: '' },
   { id: 'xiyu', name: '西域 · 綠洲絲路', sub: '土坯平頂 · 藍綠釉 · 駝隊商旅',
     intro: '沙海邊上的綠洲,土坯平頂配藍綠釉瓦,駝隊載著絲綢與香料來去。商旅與樂人聚在市集,買賣與歌舞是這裡最熱鬧的光景。',
-    buildings: ['s5_adobe', 'house_tile', 'post_station', 'market'], buildingsPending: true,
+    buildings: ['s7_adobe_flat', 's7_vault', 's7_camel_yard', 's7_merchant_mansion'], buildingsPending: false,
     people: [{ id: 'shangcai_a', name: '商旅', src: 'assets/portraits/generic/shangcai_a.webp' }, { id: 'yuewu_a', name: '樂舞人', src: 'assets/portraits/generic/yuewu_a.webp' }],
     flag: { shape: 'pennant', pat: 'grape_diamond', c: ['#2f4f8a', '#f1ead8', '#e3b95c'] },
-    feats: ['起手建築:土坯屋、瓦頂屋、驛站、市集(暫以相近建築加藍綠色票代替)', '特色:純外觀風格,數值不變;專屬建築圖尚待補', '適合:偏好商路與貿易氣氛的玩法'], tpl: '' },
+    feats: ['起手建築:土坯平頂屋、拱頂屋、駝站大院、商賈大宅', '特色:純外觀風格,數值不變;另有穹頂小廟、坎兒井口與市集拱廊大院', '適合:偏好商路與貿易氣氛的玩法'], tpl: '' },
   { id: 'nanman', name: '南國 · 水鄉澤國', sub: '竹木 · 高腳屋 · 茅頂水榭',
     intro: '溪水縱橫、竹木成林,高腳屋沿水而立,茅頂遮雨又通風。魚米豐足,與山外鹽布往來不斷,日子溫潤而安穩。',
     buildings: ['s3_stilt', 's3_tile', 's3_shuixie', 's3_riverside'], buildingsPending: false,
@@ -33,10 +33,10 @@ var WORLD_PACKS = [
     feats: ['起手建築:高腳屋、瓦頂水榭、臨水屋', '特色:純外觀風格,竹木茅頂樣式,數值不變', '適合:喜歡臨水佈局、綠意與漁米氣氛的玩法'], tpl: '' },
   { id: 'qiang', name: '羌氐 · 高原碉寨', sub: '石砌碉房 · 白氈黑邊 · 山谷牧耕',
     intro: '高原山谷間,石砌碉房依山而築,白氈與黑邊是族人愛用的記號。人們逐水草、種麥養羊、織布換糧,與涼州鄰里往來不絕。',
-    buildings: ['cave_dwelling', 's5_wubao', 'quarry'], buildingsPending: true,
+    buildings: ['s2_stone_house', 's2_felt_tent', 's2_stone_tower', 's2_zhai_manor'], buildingsPending: false,
     people: [{ id: 'mateng', name: '馬騰', src: 'assets/portraits/mateng.webp' }, { id: 'xumu_a', name: '牧人', src: 'assets/portraits/generic/xumu_a.webp' }, { id: 'nongshi_a', name: '農人', src: 'assets/portraits/generic/nongshi_a.webp' }],
     flag: { shape: 'rect', pat: 'felt_diamond', c: ['#cfc8b8', '#2a2623', '#9a4a32'] },
-    feats: ['起手建築:窯洞、塢堡、採石場(暫以相近建築加石灰色票代替)', '特色:純外觀風格,數值不變;專屬碉房圖尚待補', '適合:喜歡山地、石砌與牧耕氣氛的玩法'], tpl: '' }
+    feats: ['起手建築:石砌碉房、白氈黑邊帳、石砌碉樓、寨堡大宅', '特色:純外觀風格,數值不變;另有依山梯屋、石院、牲畜圍欄與白氈大帳院', '適合:喜歡山地、石砌與牧耕氣氛的玩法'], tpl: '' }
 ];
 
 function worldPackIds() { return WORLD_PACKS.map(function (p) { return p.id; }); }

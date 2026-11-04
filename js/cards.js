@@ -4,6 +4,7 @@
 // 第一階段刻意未做:名冊人物/小兵卡/人物圈、取捨詞條 §4.4A、戰場技能內容(只記數量 skn)、記名簿、快速模式、文鬥小遊戲(星數固定 1)、結義。
 // 全域名稱:cardsSkillList cardHash cardRng cardsStateNew cardsGet cardsNormSave cardsPeriodNo cardsSync cardsNextIn cardsVenueOpen cardsVenueTheme cardsGenBatch cardsOpenBatch
 //          cardsDiscardBatch cardsCost cardsCap cardsHire cardsClaimGift cardsRelease cardsUndoRelease cardsRecall cardsUpgradeCheck cardsUpgrade cardsStats cardsJobSlots
+//          cardsGenNamed cardsNamedDraw cardsNamedOpen cardsAddNameTokens cardsNamedGive cardsNamedRankCheck cardsNamedTick cardsNamedKeyOk
 //          cardsFind cardsSyncTalents cardsTalents cardsPatrolTalents cardsAccept cardsJobLine cardsAddTokens cardsOnTechDone cardsRankLv CARD_PIN
 
 var CARD_PIN = ['上上', '上中', '上下', '中上', '中中', '中下', '下上', '下中', '下下'];
@@ -40,7 +41,7 @@ function cardWPick(r, items, wf) {
 function cardsStateNew(seed) {
   var s = (typeof seed === 'number' && isFinite(seed)) ? (seed >>> 0) : ((Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0);
   return {
-    v: 1, seed: s, seq: 0, tok: CARD_WINE.startGift, shards: 0, shardWk: { w: -1, n: 0 }, gift: { day: -1 },
+    v: 1, seed: s, seq: 0, tok: CARD_WINE.startGift, nameTokens: 0, namedCount: 0, shards: 0, shardWk: { w: -1, n: 0 }, gift: { day: -1 },
     clock: { maxSeen: 0 }, tokenGiven: {}, last: { T: -1, E: -1, G: -1 }, acc: { T: [], E: [], G: [] }, cur: { T: null, E: null, G: null },
     pity: { T: 0, E: 0, G: 0 }, fame: { G: 0, E: 0 }, stars: { E: 1 }, roster: [], wait: [], wander: [], lastRel: null
   };
@@ -65,6 +66,7 @@ function cardsOnTechDone(id, big) {
   n = big ? CARD_WINE.mileGift : ((node && node.era >= CARD_WINE.techGiftEra) ? CARD_WINE.techGiftHi : CARD_WINE.techGift);
   g[id] = 1;
   cardsAddTokens(cs, n);
+  if (big) cardsNamedGive(cs, id, '完成里程碑');   // 指名券占位來源:里程碑 +1(與酒令同為每節點一次)
   name = (node && node.name) || id;
   if (typeof showToast === 'function') showToast('研成〈' + name + '〉,得酒令 +' + n);
   return n;
@@ -88,6 +90,7 @@ function cardsSync(cs, now, isOpen) {
   CARD_VENUE_ORDER.forEach(function (v) {
     var V = CARD_VENUES[v], n, last, room, k, i;
     if (isOpen && !isOpen(v)) return;
+    if (v === 'G') return;   // 殿試池已改為『指定池』(不靠計時,見 cardsNamedDraw):不再累積新批次;舊存檔既有 acc.G / cur.G / last.G 保留不動、不報錯
     n = cardsPeriodNo(v, now); last = cs.last[v];
     if (last < 0) { cs.acc[v].push(cardsKey(v, n)); cs.last[v] = n; added++; return; }
     if (n > last) {
@@ -115,9 +118,14 @@ function cardsVenueTheme(venue, no) {
 }
 
 // ───────── 候選人生成(§3A.2、§4.13.4) ─────────
-function cardGenName(r) {
-  var s = CARD_NAME_SUR[Math.floor(r() * CARD_NAME_SUR.length)], g = CARD_NAME_GIV[Math.floor(r() * CARD_NAME_GIV.length)];
-  if (r() < 0.5) g += CARD_NAME_GIV[Math.floor(r() * CARD_NAME_GIV.length)];
+// 性別('m'/'f'):與頭像性別綁定(js/portrait_gender.js、cardsui.js cardsUiAvatarVar);名字用字依性別分池
+var CARD_NAME_GIV_F = ['婉', '貞', '蘭', '梅', '秀', '英', '蓮', '芳', '淑', '慧', '娥', '姬', '嫻', '春', '巧', '雲', '珍', '玉', '翠', '柔', '嬌', '菊', '荷', '霞', '月', '纖', '織', '娘'];
+var CARD_NAME_GIV_M = CARD_NAME_GIV.filter(function (x) { return ['玉', '織', '純'].indexOf(x) < 0; });
+function cardGenSex(cs, venue, key, slot, tag) { return cardRng(cardHash(cs.seed, venue, key, slot, (tag || '') + '|sex'))() < 0.42 ? 'f' : 'm'; }
+function cardGenName(r, sex) {
+  var P = sex === 'f' ? CARD_NAME_GIV_F : CARD_NAME_GIV_M;
+  var s = CARD_NAME_SUR[Math.floor(r() * CARD_NAME_SUR.length)], g = P[Math.floor(r() * P.length)];
+  if (r() < 0.5) g += P[Math.floor(r() * P.length)];
   return s + g;
 }
 function cardGenStats(r, G) {
@@ -152,7 +160,7 @@ function cardGenTraits(r, G, n) {
   return out;
 }
 // 職業詞條:回 {ja:{id:階}, main:id}
-function cardGenJobs(r, G, learn, venue, no) {
+function cardGenJobs(r, G, learn, venue, no, row) {
   var theme = cardsVenueTheme(venue, no), ja = {}, jobs = CARD_JOBS, main, slots, t, others, i, j;
   function w(j) {
     if (venue === 'T' && j.row === theme.row) return 2;
@@ -173,12 +181,16 @@ function cardGenJobs(r, G, learn, venue, no) {
   }
   slots = cardRint(r, G.jobSlots[0], G.jobSlots[1]);
   if (learn === 0) {
-    pickOther(slots);
+    if (row) {   // 指定池職業分類:第一個職業詞條固定取自該分類
+      j = cardWPick(r, jobs.filter(function (x) { return x.row === row; }), function () { return 1; });
+      ja[j.id] = 1;
+      pickOther(Math.max(0, slots - 1));
+    } else pickOther(slots);
     main = Object.keys(ja)[0];
     return { ja: ja, main: main };
   }
   t = learn === 1 ? Math.min(G.jobMax, G.id >= 2 && r() < 0.5 ? 3 : 2) : (learn === 2 ? 3 : 4);
-  main = cardWPick(r, jobs, w).id;
+  main = cardWPick(r, row ? jobs.filter(function (x) { return x.row === row; }) : jobs, w).id;
   ja[main] = t;
   others = Math.max(0, slots - t);
   if (learn >= 2) others = r() < 0.5 ? 1 : 0;
@@ -233,7 +245,7 @@ function cardFigTraitIds(f) {
 function cardFromFig(f, venue, slot) {
   var jb = cardFigJobs(f), V = CARD_VENUES[venue];
   return {
-    slot: slot, fig: f.id, name: f.name, zi: f.zi, fac: f.fac, gr: f.gr, st: f.st.slice(), tai: f.tai, ja: jb.ja, main: jb.main, learn: f.gr === 4 ? 3 : 2,
+    slot: slot, fig: f.id, sex: (typeof portraitGenderOf === 'function' && portraitGenderOf(f.id)) || 'm', name: f.name, zi: f.zi, fac: f.fac, gr: f.gr, st: f.st.slice(), tai: f.tai, ja: jb.ja, main: jb.main, learn: f.gr === 4 ? 3 : 2,
     tr: cardFigTraitIds(f), trn: f.tr.map(function (t) { return [t[0], t[1] ? 1 : 0, t[2] || '']; }), skn: CARD_GRADE[f.gr].skn,
     org: { k: venue === 'E' ? 'pin' : V.org, v: venue === 'E' ? 0 : undefined }
   };
@@ -242,19 +254,23 @@ function cardGen(cs, venue, key, slot, gr, tag, opt) {
   var V = CARD_VENUES[venue], no = cardsKeyNo(key), r = cardRng(cardHash(cs.seed, venue, key, slot, tag || '')), G = CARD_GRADE[gr], card, pool, f, learn, jb, facW, i, tr;
   opt = opt || {};
   if (gr === 4) {
-    pool = CARD_FIGS.filter(function (x) { return x.gr === 4; });
+    pool = CARD_FIGS.filter(function (x) { return x.gr === 4 && (opt.fac === undefined || x.fac === opt.fac); });
     return cardFromFig(pool[Math.floor(r() * pool.length)], venue, slot);
   }
-  if (gr === 3 && V.bFig > 0) {
+  if (gr === 3 && V.bFig > 0 && !opt.noFig) {
     var fm = (venue === 'E') ? Math.min(V.bFig * 2, V.bFig + 0.002 * Math.max(0, cs.fame.E - CARD_CFG.fameAfter)) : V.bFig;
-    if (r() < fm) { pool = CARD_FIGS.filter(function (x) { return x.gr === 3; }); return cardFromFig(pool[Math.floor(r() * pool.length)], venue, slot); }
+    if (r() < fm) {
+      pool = CARD_FIGS.filter(function (x) { return x.gr === 3 && (opt.fac === undefined || x.fac === opt.fac); });
+      if (pool.length) return cardFromFig(pool[Math.floor(r() * pool.length)], venue, slot);
+    }
   }
+  var sex = cardGenSex(cs, venue, key, slot, tag);
   facW = venue === 'G' ? ((no % 5) + 5) % 5 : -1;
-  f = cardWPick(r, [0, 1, 2, 3, 4], function (x) { return x === facW ? 2 : 1; });
+  f = opt.fac !== undefined ? opt.fac : cardWPick(r, [0, 1, 2, 3, 4], function (x) { return x === facW ? 2 : 1; });
   learn = cardPickLearn(r, G, !!opt.zhuan);
-  jb = cardGenJobs(r, G, learn, venue, no);
+  jb = cardGenJobs(r, G, learn, venue, no, opt.row);
   tr = cardGenTraits(r, G, cardRint(r, G.trN[0], G.trN[1]));
-  card = { slot: slot, fig: null, name: cardGenName(r), zi: '', fac: f, gr: gr, st: cardGenStats(r, G), tai: 0, ja: jb.ja, main: jb.main, learn: learn, tr: tr, trn: null, skn: G.skn, org: { k: V.org } };
+  card = { slot: slot, fig: null, sex: sex, name: cardGenName(r, sex), zi: '', fac: f, gr: gr, st: cardGenStats(r, G), tai: 0, ja: jb.ja, main: jb.main, learn: learn, tr: tr, trn: null, skn: G.skn, org: { k: V.org } };
   card.tai = card.st.reduce(function (a, b) { return a + b; }, 0);
   if (gr === 1 && card.tai >= 240) card.skn = 1;
   if (venue === 'E') card.org.v = cardPinOf(card, G);
@@ -302,6 +318,82 @@ function cardsOpenBatch(cs, venue) {
   return b;
 }
 function cardsDiscardBatch(cs, venue) { cs.cur[venue] = null; }
+
+// ───────── 指定池(取代殿試池;PLAN_INTERIORS I-1):不靠計時,消耗『指名券』(cs.nameTokens)。結果批次放 cs.cur.G(同殿試的存檔格式,pool 'G')─────────
+// mode 'fac' key = 陣營 0~4(CARD_FAC 序);mode 'row' key = 職業分類字(CARD_ROWS)。名人只在 fac 模式出現;row 模式的金檔降為紫。
+function cardsNamedKeyOk(mode, key) {
+  if (mode === 'fac') return typeof key === 'number' && key >= 0 && key < CARD_FAC.length && key === Math.floor(key);
+  if (mode === 'row') return CARD_ROWS.indexOf(key) >= 0;
+  return false;
+}
+function cardsNamedOpen() { return cardsVenueOpen('G'); }   // 開放條件沿用原殿試閘(科技 dianshi),不新增條件
+function cardsAddNameTokens(cs, n) { cs.nameTokens = Math.max(0, (cs.nameTokens | 0) + (n | 0)); return cs.nameTokens; }
+// 確定性:種子 = hash(cs.seed, 'named', mode, key, seedKey);seedKey = 已抽次數。不改 cs(除讀 cs.pity.G)。回批次 {key, venue:'G', cands, hasUpper, pityHit, named:{mode,key}}
+function cardsGenNamed(cs, mode, key, seedKey) {
+  var V = CARD_VENUES.G, cands = [], i, pityHit = false, best, bkey = 'G:' + (seedKey | 0), tag = 'named|' + mode + '|' + key, opt = {};
+  function rollGr(slot) {
+    var r = cardRng(cardHash(cs.seed, 'named', mode, key, seedKey, slot, 'gr')), x = r() * 100, acc = 0, g;
+    for (g = 0; g < 5; g++) { acc += V.gr[g]; if (x < acc) return (g === 4 && mode === 'row') ? 3 : g; }
+    return 0;
+  }
+  function highest() { var b = 0, k; for (k = 1; k < cands.length; k++) if (cands[k].tai > cands[b].tai) b = k; return b; }
+  if (mode === 'fac') opt.fac = key; else { opt.row = key; opt.noFig = true; }
+  function gen(slot, gr, t) { return cardGen(cs, 'G', bkey, slot, gr, tag + (t ? '|' + t : '') + '|' + seedKey, opt); }
+  for (i = 0; i < V.batch; i++) cands.push(gen(i, rollGr(i), ''));
+  if (!cands.some(function (c) { return c.gr >= 3; }) && cs.pity.G >= CARD_CFG.pityBatches) {
+    best = highest(); cands[best] = gen(best, 3, 'pity'); pityHit = true;
+  }
+  if (!cands.some(function (c) { return c.gr >= 2; })) { best = highest(); cands[best] = gen(best, 2, 'floor'); }
+  return { key: bkey, venue: 'G', cands: cands, hasUpper: cands.some(function (c) { return c.gr >= 3; }), pityHit: pityHit, named: { mode: mode, key: key } };
+}
+// 延請一次:扣 1 券、遞增已抽次數、結果成為 cs.cur.G。reason:closed 未開放 bad 參數錯 busy 尚有未處理的批次 ticket 指名券不足
+function cardsNamedDraw(cs, mode, key) {
+  var b;
+  if (!cardsNamedOpen()) return { ok: false, reason: 'closed' };
+  if (!cardsNamedKeyOk(mode, key)) return { ok: false, reason: 'bad' };
+  if (cs.cur.G) return { ok: false, reason: 'busy' };
+  if ((cs.nameTokens | 0) < 1) return { ok: false, reason: 'ticket' };
+  b = cardsGenNamed(cs, mode, key, cs.namedCount | 0);
+  cs.nameTokens -= 1; cs.namedCount = (cs.namedCount | 0) + 1;
+  cs.pity.G = b.hasUpper ? 0 : cs.pity.G + 1;
+  b.taken = b.cands.map(function () { return 0; });
+  cs.cur.G = b;
+  return { ok: true, batch: b };
+}
+// 指名券來源(占位):里程碑完成 +1、官階晉升 +1。每個事件只發一次(記在 cs.tokenGiven.named)。回發放張數
+function cardsNamedFlags(cs) {
+  var g = cs.tokenGiven || (cs.tokenGiven = {});
+  if (!g.named || typeof g.named !== 'object') g.named = { ids: {}, rank: -1 };
+  if (!g.named.ids) g.named.ids = {};
+  return g.named;
+}
+function cardsNamedGive(cs, evId, why) {
+  var f = cardsNamedFlags(cs);
+  if (!evId || f.ids[evId]) return 0;
+  f.ids[evId] = 1;
+  cardsAddNameTokens(cs, 1);
+  if (typeof showToast === 'function') showToast((why || '') + ',得指名券 +1');
+  return 1;
+}
+// 官階晉升檢查:首次檢查只記錄現況(舊存檔不補發);之後每升一階發一張。回發放張數
+function cardsNamedRankCheck(cs) {
+  var lv = cardsRankLv(), f, n = 0, i;
+  if (lv <= 0) return 0;
+  f = cardsNamedFlags(cs);
+  if (f.rank < 0) { f.rank = lv; return 0; }
+  for (i = f.rank + 1; i <= lv; i++) n += cardsNamedGive(cs, 'rank' + i, '官階晉升');
+  if (lv > f.rank) f.rank = lv;
+  return n;
+}
+var cardsNamedClock = 0;
+// 主迴圈掛點(main.js frame):每 5 秒檢查一次官階;無資料 / 例外一律略過
+function cardsNamedTick(dt) {
+  var cs;
+  cardsNamedClock += dt || 0;
+  if (cardsNamedClock < 5) return 0;
+  cardsNamedClock = 0;
+  try { if (typeof npcTick === 'function') npcTick(5); cs = cardsGet(); return cs ? cardsNamedRankCheck(cs) : 0; } catch (e) { return 0; }   // npcTick:人物互動(親近年資 / 請託)
+}
 
 // ───────── 名冊 / 延請 / 請辭 ─────────
 function cardsCost(c) { return CARD_GRADE[c.gr].cost + ((c.gr === 3 && c.learn === 3) ? CARD_COST.zongBonus : 0); }
@@ -375,6 +467,7 @@ function cardsHire(cs, venue, slot) {
     learn: c.learn, tr: c.tr.slice(), trn: c.trn ? c.trn.map(function (t) { return t.slice(); }) : null, skn: c.skn, org: { k: c.org.k, v: c.org.v }, pool: venue, key: b.key,
     at: null, star: 0, tok: 0, up: 0, cost: cost
   };
+  if (c.sex) e.sex = c.sex;
   cardsRefreshEntry(e);
   cs.tok -= cost; b.taken[slot] = e.id; cs.lastRel = null;
   if (wait) cs.wait.push(e); else cs.roster.push(e);
@@ -522,20 +615,35 @@ function cardNormCard(c, isEntry) {
     o.no = cardNum(c.no, 0, 1e9, 0) | 0; o.pool = (c.pool === 'T' || c.pool === 'E' || c.pool === 'G') ? c.pool : 'T'; o.key = String(c.key || '').slice(0, 20);
     o.at = (typeof c.at === 'string' && c.at) ? c.at.slice(0, 40) : null; o.star = c.star ? 1 : 0; o.tok = cardNum(c.tok, 0, CARD_CFG.tokMax, 0) | 0;
     o.up = cardNum(c.up, 0, CARD_CFG.upMax, 0) | 0; o.cost = cardNum(c.cost, 0, 99, CARD_GRADE[o.gr].cost) | 0;
+    if (cardNum(c.fav, 0, 5, 0) | 0) o.fav = cardNum(c.fav, 0, 5, 0) | 0; if (c.gift) o.gift = 1; if (typeof c.favDay === 'number' && isFinite(c.favDay)) o.favDay = c.favDay | 0; if (typeof c.since === 'number' && isFinite(c.since)) o.since = c.since | 0;   // 人物互動(npcinteract.js):親近 / 小禮旗標 / 最近加親近日 / 派駐起始日
     cardsRefreshEntry(o);
   } else o.slot = cardNum(c.slot, 0, 6, 0) | 0;
   j = 0;
+  // 性別:名人固定查表;路人有值才採用,舊存檔沒有時依其目前頭像查表補上(頭像不變)
+  if (o.fig) { o.sex = (typeof portraitGenderOf === 'function' && portraitGenderOf(o.fig)) || 'm'; }
+  else if (c.sex === 'm' || c.sex === 'f') o.sex = c.sex;
+  else if (typeof cardsUiPortraitJob === 'function' && typeof cardsUiAvatarVar === 'function' && typeof portraitGenderOf === 'function' && (j = cardsUiPortraitJob(o))) { k = portraitGenderOf('generic/' + j + '_' + cardsUiAvatarVar(o)); if (k) o.sex = k; }
   return o;
 }
 function cardsNormSave(v) {
   var n, k, V;
   if (!v || typeof v !== 'object') return null;
   n = cardsStateNew(typeof v.seed === 'number' ? v.seed : undefined);
-  n.seq = cardNum(v.seq, 0, 1e9, 0) | 0; n.tok = cardNum(v.tok, 0, 1e6, 0) | 0; n.shards = cardNum(v.shards, 0, 1e6, 0) | 0;
+  n.seq = cardNum(v.seq, 0, 1e9, 0) | 0; n.tok = cardNum(v.tok, 0, 1e6, 0) | 0; n.nameTokens = cardNum(v.nameTokens, 0, 1e6, 0) | 0; n.namedCount = cardNum(v.namedCount, 0, 1e9, 0) | 0; n.shards = cardNum(v.shards, 0, 1e6, 0) | 0;
   if (v.shardWk) n.shardWk = { w: cardNum(v.shardWk.w, -1, 1e9, -1) | 0, n: cardNum(v.shardWk.n, 0, 1e6, 0) | 0 };
   if (v.gift) n.gift.day = cardNum(v.gift.day, -1, 1e9, -1) | 0;
   if (v.clock) n.clock.maxSeen = cardNum(v.clock.maxSeen, 0, 1e15, 0);
-  if (v.tokenGiven && typeof v.tokenGiven === 'object') Object.keys(v.tokenGiven).slice(0, 600).forEach(function (k) { if (v.tokenGiven[k] && k.length <= 40) n.tokenGiven[k] = 1; });
+  if (v.tokenGiven && typeof v.tokenGiven === 'object') Object.keys(v.tokenGiven).slice(0, 600).forEach(function (k) {
+    var nm = v.tokenGiven[k];
+    if (k === 'named') {   // 指名券一次性旗標:{ids:{事件id:1}, rank:已記錄的官階等級}
+      if (nm && typeof nm === 'object') {
+        n.tokenGiven.named = { ids: {}, rank: cardNum(nm.rank, -1, 99, -1) | 0 };
+        if (nm.ids && typeof nm.ids === 'object') Object.keys(nm.ids).slice(0, 600).forEach(function (e) { if (nm.ids[e] && e.length <= 40) n.tokenGiven.named.ids[e] = 1; });
+      }
+      return;
+    }
+    if (nm && k.length <= 40) n.tokenGiven[k] = 1;
+  });
   CARD_VENUE_ORDER.forEach(function (x) {
     V = CARD_VENUES[x];
     n.last[x] = (v.last && typeof v.last[x] === 'number') ? (v.last[x] | 0) : -1;
@@ -545,6 +653,7 @@ function cardsNormSave(v) {
       var cands = v.cur[x].cands.map(function (c) { return cardNormCard(c, false); });
       if (cands.every(function (c) { return !!c; })) {
         n.cur[x] = { key: String(v.cur[x].key), venue: x, cands: cands, hasUpper: !!v.cur[x].hasUpper, pityHit: !!v.cur[x].pityHit,
+          named: (x === 'G' && v.cur[x].named && cardsNamedKeyOk(v.cur[x].named.mode, v.cur[x].named.key)) ? { mode: v.cur[x].named.mode, key: v.cur[x].named.key } : undefined,
           taken: cands.map(function (c, i) { var t = v.cur[x].taken && v.cur[x].taken[i]; return t === -1 ? -1 : (typeof t === 'string' ? t : 0); }) };
       }
     }
@@ -555,7 +664,12 @@ function cardsNormSave(v) {
     var seen = {};
     n[l] = Array.isArray(v[l]) ? v[l].map(function (c) { return cardNormCard(c, true); }).filter(function (c) { if (!c || seen[c.id]) return false; seen[c.id] = 1; return true; }) : [];
   });
-  for (k = 0; k < n.roster.length; k++) { var m = /^r(\d+)$/.exec(n.roster[k].id); if (m && +m[1] > n.seq) n.seq = +m[1]; }
+  if (Array.isArray(v.errand)) n.errand = v.errand.slice(0, 4).filter(function (q) { return q && typeof q.id === 'string' && typeof q.eid === 'string' && (q.kind === 'goods' || q.kind === 'build'); }).map(function (q) {   // 人物請託(npcinteract.js)
+    return { id: q.id.slice(0, 12), eid: q.eid.slice(0, 12), kind: q.kind, text: String(q.text || '').slice(0, 60), day: cardNum(q.day, 0, 1e9, 0) | 0, goods: q.goods ? String(q.goods).slice(0, 24) : undefined, n: cardNum(q.n, 0, 999, 0) | 0, type: q.type ? String(q.type).slice(0, 32) : undefined, base: cardNum(q.base, 0, 9999, 0) | 0 };
+  });
+  if (cardNum(v.errDay, -1, 1e9, -1) > -1) n.errDay = cardNum(v.errDay, -1, 1e9, -1) | 0;
+  if (cardNum(v.errSeq, 0, 1e9, 0) > 0) n.errSeq = cardNum(v.errSeq, 0, 1e9, 0) | 0;
+  for (k = 0; k < n.roster.length; k++) { var m =/^r(\d+)$/.exec(n.roster[k].id); if (m && +m[1] > n.seq) n.seq = +m[1]; }
   return n;
 }
 if (typeof module !== 'undefined' && module.exports) module.exports = { cardHash: cardHash, cardRng: cardRng };

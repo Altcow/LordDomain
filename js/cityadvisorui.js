@@ -359,6 +359,7 @@ function advUiCard(id, anchorEl) {
   card.style.maxHeight = Math.round(fb.h) + 'px'; card.style.maxWidth = Math.round(fb.w) + 'px';
   r = anchorEl && anchorEl.getBoundingClientRect ? anchorEl.getBoundingClientRect() : null;
   anchor = r ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
+  if (anchor && !vp.land && anchorEl === advUi.el.chip) anchor.x = Math.round((vp.w - anchor.w) / 2);   // 直版 🧭 靠左上:卡片仍對正中上方展開(否則被擠進窄的左欄)
   if (!advPmOpen('adv-card', 'card', card, anchor, size)) { advUi.card = null; card.hidden = true; return false; }
   card.hidden = false;
   return true;

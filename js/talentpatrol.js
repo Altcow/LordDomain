@@ -92,6 +92,8 @@ function tpStep(dt, env) {
 }
 
 function talentPatrolBoost(bid) { return !!(TP.boosts[bid] && TP.boosts[bid] > TP.t); }
+// 名冊「前往」(npcinteract.js npcGoto):讓指定建築立刻閃一次綠光,不給加成旗標
+function talentPatrolPing(bid) { if (bid > 0) TP.pulses.push({ bid: bid, t0: TP.t }); }
 function talentPatrolReset(seed) {
   TP.seed = (seed | 0) || 1; TP.t = 0; TP.next = {}; TP.walkers = []; TP.pulses = []; TP.boosts = {};
   TP.stats = { spawned: 0, arrived: 0, nopath: 0, drawn: 0 };

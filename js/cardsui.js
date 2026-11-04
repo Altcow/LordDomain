@@ -3,14 +3,14 @@
 // 入口:點酒館 / 考場 / 殿試台建築(ui.js tapObjectAt → cardsUiTap);或 cardsUiOpen(tab)。面板走 panelmgr('cards');引擎在 cards.js,資料在 carddata.js。
 // 不發聲、不推播、不紅點。ES2017;不用 ?. ??。
 // 全域名稱:cardsUiOpen cardsUiClose cardsUiToggle cardsUiTap cardsUiRender cardsUiHtmlCard cardsUiCtx cardsUiFmtCd cardsUiInfo cardsUiInfoHtml cardsUiAvatarVar
-var CU_TAB_NAME = { T: '酒館', E: '縣試', G: '殿試', R: '名冊' };
-var CU_TYPE_TAB = { tavern: 'T', kao_chang: 'E', dian_shi_tai: 'G' };
+var CU_TAB_NAME = { O: '總覽', T: '酒館', E: '縣試', N: '指名', R: '名冊' };   // 殿試池已改為指定池 'N'(cardsui_named.js);舊呼叫 cardsUiOpen('G') 轉到 'N'
+var CU_TYPE_TAB = { tavern: 'T', kao_chang: 'E', dian_shi_tai: 'N' };   // 酒館建築另由 tavern_scene.js 優先進入室內;考場 / 殿試台只開本介面
 var CU_CLS = { war: '戰', cmd: '統', plan: '謀', econ: '經', life: '生', trait: '性', odd: '怪' };
 var CU_ROMAN = ['', 'I', 'II', 'III', 'IV'];
 var CU_LIVE_CITY = '城建類:資料已備,派駐於對口建築時計入;產出數值結算尚在接入(巡視綠光已有)';
 var CU_LIVE_WAR = '戰事重開後生效(城建專注模式不啟用)';
 var cuMiss = {};
-var cu = { open: false, tab: 'T', detail: null, confirm: null, el: null, timer: 0, msg: '', info: null };
+var cu = { open: false, tab: 'O', detail: null, confirm: null, el: null, timer: 0, msg: '', info: null, chain: false, nmode: 'fac', nkey: 0 };
 
 function cuEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function cardsUiFmtCd(ms) {
@@ -94,17 +94,32 @@ function cuTraitsHtml(c, full) {
   if (war.length) h += '<details><summary>武略 ▸ ' + war.length + ' 條(戰事重開後生效)</summary>' + war.map(one).join('') + '</details>';
   return h;
 }
-function cardsUiAvatarVar(c) {
-  var s = String(c.name) + '|' + c.main + '|' + (c.slot === undefined ? '' : c.slot), h = 7, i;
+// 頭像變體 a|b|c:先照舊雜湊算 v0;卡有 sex 時,若 v0 的頭像性別不符則往後(循環)找同性別者。
+// 舊卡 sex 由 cards.js 依「舊雜湊頭像」補上,故 v0 必符、頭像不變。該職業 3 張都沒有該性別頭像時,cardsUiPortraitJob 已先換成相近職業(CUI_SEX_ALT)。
+function cardsUiAvatarVar(c, pj) {
+  var s = String(c.name) + '|' + c.main + '|', h = 7, i, k, v;
   for (i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) >>> 0;
-  return 'abc'.charAt(h % 3);
+  h %= 3;
+  if (c.sex && !c.fig && typeof portraitGenderOf === 'function' && (pj || (pj = cardsUiPortraitJob(c)))) {
+    for (k = 0; k < 3; k++) { v = 'abc'.charAt((h + k) % 3); if (portraitGenderOf('generic/' + pj + '_' + v) === c.sex) return v; }
+  }
+  return 'abc'.charAt(h);
 }
-// 卡片主職業(職業詞條最高階者)→ 頭像職業 id;沒有職業詞條回 null(回退剪影)
+// 某職業頭像沒有某性別時的替代職業(取同性質、有該性別頭像者)。目前只有女性缺:caishi jiaohua jiqiao lizhi niangzao yetie yingzao
+var CUI_SEX_ALT = { caishi: 'nongshi', jiaohua: 'wenshu', jiqiao: 'zaozhi', lizhi: 'wenshu', niangzao: 'paochu', yetie: 'taoci', yingzao: 'fangzhi' };
+function cuHasSex(pj, sex) {
+  return ['a', 'b', 'c'].some(function (v) { return portraitGenderOf('generic/' + pj + '_' + v) === sex; });
+}
+// 卡片主職業(職業詞條最高階者)→ 頭像職業 id;沒有職業詞條回 null(回退剪影);卡有 sex 且該職業無同性別頭像時換成 CUI_SEX_ALT 的職業
 function cardsUiPortraitJob(c) {
-  var best = null, bt = 0, id;
-  if (c.main && CARD_JOB_PORTRAIT[c.main]) return CARD_JOB_PORTRAIT[c.main];
-  for (id in (c.ja || {})) if (CARD_JOB_PORTRAIT[id] && c.ja[id] > bt) { bt = c.ja[id]; best = id; }
-  return best ? CARD_JOB_PORTRAIT[best] : null;
+  var best = null, bt = 0, id, pj = null;
+  if (c.main && CARD_JOB_PORTRAIT[c.main]) pj = CARD_JOB_PORTRAIT[c.main];
+  else {
+    for (id in (c.ja || {})) if (CARD_JOB_PORTRAIT[id] && c.ja[id] > bt) { bt = c.ja[id]; best = id; }
+    pj = best ? CARD_JOB_PORTRAIT[best] : null;
+  }
+  if (pj && c.sex && !c.fig && typeof portraitGenderOf === 'function' && !cuHasSex(pj, c.sex) && CUI_SEX_ALT[pj]) pj = CUI_SEX_ALT[pj];
+  return pj;
 }
 function cuImgFail(img) {
   var m = img.getAttribute('src'), a = img.getAttribute('data-alt');
@@ -117,8 +132,8 @@ function cuAvatarHtml(c) {
   for (i = 0; i < G.corner; i++) corner += '◆';
   if (c.fig) src = 'assets/portraits/' + cuEsc(c.fig) + '.webp';
   else if ((pj = cardsUiPortraitJob(c))) {
-    src = 'assets/portraits/generic/' + pj + '_' + cardsUiAvatarVar(c) + '.webp';
-    if (c.gr <= 3) alt = 'assets/portraits/generic/' + pj + '_' + c.gr + '_' + cardsUiAvatarVar(c) + '.webp';
+    src = 'assets/portraits/generic/' + pj + '_' + cardsUiAvatarVar(c, pj) + '.webp';
+    if (c.gr <= 3) alt = 'assets/portraits/generic/' + pj + '_' + c.gr + '_' + cardsUiAvatarVar(c, pj) + '.webp';
     if (cuMiss[src] && alt) { src = alt; alt = ''; }
   }
   if (src && !cuMiss[src]) img = '<img alt="" src="' + src + '"' + (alt ? ' data-alt="' + alt + '"' : '') + ' onerror="cuImgFail(this)">';
@@ -147,7 +162,11 @@ function cuVenueHtml(cs, v) {
     h += '<button class="cub" data-a="open" data-v="' + v + '"' + (n ? '' : ' disabled') + '>' + (n ? '翻閱下一批' : '尚無新批次') + '</button>';
     return h;
   }
-  h += '<div class="cusec">名帖 · ' + cuEsc(b.key) + '</div>';
+  return h + cuBatchHtml(cs, v, b);
+}
+function cuBatchHtml(cs, v, b) {
+  var V = CARD_VENUES[v], h = '', i;
+  h += '<div class="cusec">' + (b.venue === 'G' && typeof cuNamedLabel === 'function' ? cuEsc(cuNamedLabel(b)) : '名帖 · ' + cuEsc(b.key)) + '</div>';
   for (i = 0; i < b.cands.length; i++) {
     var c = b.cands[i], tk = b.taken[i], cost = cardsCost(c);
     h += cardsUiHtmlCard(c, { taken: !!tk, extra: '<div class="cur"><span class="cusub cuink">' + (c.org.k === 'pin' ? '品第 ' + CARD_PIN[c.org.v] : V.orgName) + ' · 延請 🎴' + cost + '</span>' +
@@ -163,7 +182,7 @@ function cuRosterHtml(cs) {
   if (cu.detail) { var f = cardsFind(cs, cu.detail); if (f) return cuDetailHtml(cs, f); cu.detail = null; }
   h += '<div class="cur"><span>名額 <b>' + cs.roster.length + '/' + cap + '</b></span><span class="cusub">待定席 ' + cs.wait.length + '/' + CARD_CFG.waitSeats + '</span></div>';
   if (cs.lastRel) h += '<button class="cub" data-a="undo">復原最近請辭</button>';
-  if (!list.length) h += '<div class="cusub">名冊空空如也。到酒館、縣試、殿試延請人才吧。</div>';
+  if (!list.length) h += '<div class="cusub">名冊空空如也。到酒館、縣試、指名延請人才吧。</div>';
   list.forEach(function (e) { h += cuRowHtml(e, false); });
   if (cs.wait.length) { h += '<div class="cusec">待定席</div>'; cs.wait.forEach(function (e) { h += cuRowHtml(e, true); }); }
   if (cs.wander.length) { h += '<div class="cusec">故人(流浪)</div>'; cs.wander.forEach(function (e) { h += cuRowHtml(e, false, true); }); }
@@ -185,7 +204,8 @@ function cuDetailHtml(cs, f) {
     h += '<div class="cusub" style="opacity:1;cursor:pointer" data-a="info" data-k="job" data-key="' + k + ':' + t + '">' + cuEsc(j.name) + ':' + j.t.map(function (n, i) { return i < t ? '<b>' + n + '</b>' : n; }).join(' → ') + '<br>對口 ' + cuEsc(j.post) + ' · 加成 +' + CARD_JOB_TIERPCT[t] + ' %(' + cuEsc(j.eff) + ')' + (t === 4 ? ' · 宗師舞台:' + cuEsc(j.stage) : '') + '</div>';
   }
   chk = cardsUpgradeCheck(e, cardsUiCtx());
-  h += '<div class="cusec">升階</div><div class="cusub" style="opacity:1">' + (chk.ok ? '條件已達(尚未開放執行)' : cuEsc(chk.reasons.join(';'))) + '</div>';
+  h += '<div class="cusec">升階</div><div class="cusub" style="opacity:1">' + (chk.ok ? '條件已達' : cuEsc(chk.reasons.join(';'))) + '</div>';
+  if (typeof cuNpcDetailHtml === 'function') h += cuNpcDetailHtml(cs, e, f);   // 親近 / 所在 / 請託 / 升階(npcui.js)
   h += '<div class="cusec">管理</div>';
   if (f.list === 'wait') h += '<button class="cub" data-a="accept" data-id="' + e.id + '"' + (cs.roster.length >= cardsCap() ? ' disabled' : '') + '>收入名冊</button>';
   if (f.list === 'wander') h += '<button class="cub" data-a="recall" data-id="' + e.id + '">請回(🎴' + CARD_RECALL_COST + ' + 1 名額)</button>';
@@ -285,14 +305,17 @@ function cardsUiInfoHtml(kind, key) {
 
 // ---------- 面板 ----------
 function cardsUiRender() {
-  var el = cuEnsure(), cs, h, tabs = ['T', 'E', 'G', 'R'];
+  var el = cuEnsure(), cs, h, tabs = ['O', 'T', 'E', 'N', 'R'];
   if (!el) return;
   cs = cuCs();
   if (!cs) { el.innerHTML = '<div class="cubd">尚無城邦資料</div>'; return; }
-  h = '<div class="cuhd"><b>🍶 招賢 · 🎴 ' + cs.tok + '</b><button class="cuq" data-a="info" data-k="legend" data-key="all" aria-label="圖例說明">?</button><button class="cux" data-a="close" aria-label="關閉">×</button><div class="cutabs">' + tabs.map(function (t) { return '<button class="cutab' + (cu.tab === t ? ' on' : '') + '" data-a="tab" data-t="' + t + '">' + CU_TAB_NAME[t] + '</button>'; }).join('') + '</div></div><div class="cubd">';
+  h = '<div class="cuhd"><b>🍶 招賢 · 🎴 ' + cs.tok + ' · 🎫 ' + (cs.nameTokens | 0) + '</b><button class="cuq" data-a="info" data-k="legend" data-key="all" aria-label="圖例說明">?</button><button class="cux" data-a="close" aria-label="關閉">×</button><div class="cutabs">' + tabs.map(function (t) { return '<button class="cutab' + (cu.tab === t ? ' on' : '') + '" data-a="tab" data-t="' + t + '">' + CU_TAB_NAME[t] + '</button>'; }).join('') + '</div></div><div class="cubd">';
   if (cu.tab === 'R') h += cuRosterHtml(cs);
-  else h += cuVenueHtml(cs, cu.tab);
+  else if (cu.tab === 'O' && typeof cuOverviewHtml === 'function') h += cuOverviewHtml(cs);
+  else if (cu.tab === 'N' && typeof cuNamedHtml === 'function') h += cuNamedHtml(cs);
+  else h += cuVenueHtml(cs, cu.tab === 'T' || cu.tab === 'E' ? cu.tab : 'T');
   el.innerHTML = h + '</div>' + (cu.info ? cardsUiInfoHtml(cu.info.k, cu.info.key) : '');
+  el.setAttribute('data-tab', cu.tab);
 }
 function cuTick() {
   var cs, nodes, i, v;
@@ -318,9 +341,11 @@ function cuClick(ev) {
   if (a === 'info') { cu.info = { k: b.getAttribute('data-k'), key: b.getAttribute('data-key') }; cardsUiRender(); return; }
   if (a === 'infox') { cu.info = null; cardsUiRender(); return; }
   cu.info = null;
-  if (a === 'tab') { cu.tab = b.getAttribute('data-t'); cu.detail = null; cu.confirm = null; }
+  if (a === 'tab') { cu.tab = b.getAttribute('data-t'); cu.detail = null; cu.confirm = null; cu.chain = false; }
   else if (a === 'open') { cardsOpenBatch(cs, v); cuSave(); }
-  else if (a === 'skip') { cardsDiscardBatch(cs, v); cuSave(); }
+  else if (a === 'skip') { cardsDiscardBatch(cs, v); cuSave(); if (cu.chain && typeof cuChainNext === 'function') cuChainNext(cs); }
+  else if (typeof cuNamedClick === 'function' && cuNamedClick(a, b, cs)) { /* 總覽 / 指名分頁動作(cardsui_named.js) */ }
+  else if (typeof cuNpcClick === 'function' && cuNpcClick(a, b, cs)) { /* 名冊詳情:前往 / 請託 / 升階(npcui.js) */ }
   else if (a === 'hire') {
     r = cardsHire(cs, v, +b.getAttribute('data-i'));
     if (!r.ok) cu.msg = { tok: '酒令不足', full: '名額與待定席都滿了,先請辭一人', maxtok: '信物已滿', none: '此人已不在' }[r.reason] || '無法延請';
@@ -349,9 +374,10 @@ function cardsUiOpen(tab) {
   if (!el) return;
   cs = cuCs();
   if (!cs) return;
+  if (tab === 'G') tab = 'N';
   if (tab && CU_TAB_NAME[tab]) cu.tab = tab;
   if (cardsClaimGift(cs, cuNow()) > 0) cuSave();
-  cu.open = true; cu.detail = null; cu.confirm = null; cu.msg = ''; cu.info = null;
+  cu.open = true; cu.detail = null; cu.confirm = null; cu.msg = ''; cu.info = null; cu.chain = false;
   if (typeof panelOpen === 'function') { try { panelOpen('cards'); } catch (e) { /* 略過 */ } }
   cardsUiRender();
   el.hidden = false;
@@ -368,6 +394,7 @@ function cardsUiToggle(tab) { if (cu.open) cardsUiClose(); else cardsUiOpen(tab)
 // 點擊掛點:ui.js tapObjectAt 呼叫;是酒館 / 考場 / 殿試台就開面板並回傳 true
 function cardsUiTap(o) {
   if (!o || !CU_TYPE_TAB[o.type]) return false;
+  if (o.type === 'tavern' && typeof tavernSceneEnter === 'function' && tavernSceneEnter()) return true;   // 酒館:進室內畫面(不可用時退回本介面)
   cardsUiToggle(CU_TYPE_TAB[o.type]);
   return true;
 }

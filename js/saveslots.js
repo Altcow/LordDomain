@@ -21,7 +21,7 @@ var SAVE_KEY_PROG = 'lorddomain.prog.v1';
 var SAVE_NOOFFLINE_KEY = 'lorddomain.load.noOffline';   // 舊版旗標(已不再使用);啟動時若殘留一律清除
 
 // 進度鍵:整組進槽;讀檔時槽內沒有的會被移除(避免殘留)
-var SAVE_SLOT_KEYS = ['lorddomain.save.v1', 'lorddomain.prog.v1', 'lorddomain.fish.v1', 'lorddomain.pet.v1'];
+var SAVE_SLOT_KEYS = ['lorddomain.save.v1', 'lorddomain.prog.v1', 'lorddomain.fish.v1', 'lorddomain.pet.v1', 'lorddomain.caravan.v1'];
 // 暫態進度鍵:不進槽,但讀檔 / 重新開始時一律清掉(與舊盤面綁定,留著會錯亂)
 var SAVE_TRANSIENT_KEYS = ['lorddomain.draft.v1'];
 // 偏好鍵:不進槽,讀檔 / 重新開始後保留目前值
@@ -29,7 +29,7 @@ var SAVE_PREF_KEYS = [
   'lorddomain.settings.v1', 'lorddomain.mute', 'lorddomain.bgm.pick', 'lorddomain.bgm.rot', 'lorddomain.art.v1', 'lorddomain.life.v1',
   'lorddomain.render', 'lorddomain.fps', 'lorddomain.powersave', 'lorddomain.cityonly', 'lorddomain.adv.mode', 'lorddomain.guide.v1', 'lorddomain.id.v1',
   'lorddomain.ui.top', 'lorddomain.ui.cat', 'lorddomain.ui.camptop', 'lorddomain.ui.campcat', 'lorddomain.ui.variant', 'lorddomain.ui.wallskin',
-  'lorddomain.ui.mode', 'lorddomain.ui.prevMode', 'lorddomain.ui.compact', 'lorddomain.ui.bpreview', 'lorddomain.ui.fsTipDismissed', 'lorddomain.ui.worldtag', 'lorddomain.extsprites', 'lorddomain.nextstep', 'lorddomain.uiicons', 'lorddomain.terraintex'
+  'lorddomain.ui.mode', 'lorddomain.ui.prevMode', 'lorddomain.ui.compact', 'lorddomain.ui.bpreview', 'lorddomain.ui.fsTipDismissed', 'lorddomain.ui.worldtag', 'lorddomain.ui.settingsTab', 'lorddomain.extsprites', 'lorddomain.nextstep', 'lorddomain.uiicons', 'lorddomain.terraintex'
 ];
 // 世界管理鍵:不進槽、不清除(世界清單 / 跨分頁鎖)
 var SAVE_WORLD_KEYS = ['lorddomain.worlds.v1', 'lorddomain.worlds.lock', 'lorddomain.legacymig.v1'];

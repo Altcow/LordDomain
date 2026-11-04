@@ -12,6 +12,8 @@ let stBodyEl = null;
 let stVerText = '';
 let stVerEl = null;
 let stBgmOpen = false;
+let stTabBarEl = null;
+let stCurTab = '';
 let stExtraRows = [];   // settingsAddRow 登記的列:{ label, onclick, group }
 
 function stClone(o) {
@@ -135,8 +137,11 @@ function stEl(tag, cls, text) {
   return e;
 }
 
-function stSec(title, nodes) {
-  const sec = stEl('section', 'st-sec');
+// tab:此區塊歸屬的分頁 id(見 ST_TABS);cls:額外 class(如 st-danger-sec)
+function stSec(title, nodes, tab, cls) {
+  const sec = stEl('section', 'st-sec' + (cls ? ' ' + cls : ''));
+  sec.setAttribute('data-tab', tab || 'more');
+  sec.stTab = tab || 'more';
   sec.appendChild(stEl('h3', 'st-h', title));
   nodes.forEach(function (n) { sec.appendChild(n); });
   return sec;
@@ -147,6 +152,46 @@ function stRow(label, control) {
   row.appendChild(stEl('span', 'st-lbl', label));
   row.appendChild(control);
   return row;
+}
+
+// 一列設定 + 其下一行灰字白話說明
+function stAdd(nodes, label, control, hint) {
+  nodes.push(stRow(label, control));
+  if (hint) nodes.push(stEl('p', 'st-hint st-note', hint));
+}
+
+// 分頁:id、名稱、一句話說明
+const ST_TABS = [
+  { id: 'view', name: '畫面操作' },
+  { id: 'sound', name: '聲音' },
+  { id: 'world', name: '世界存檔' },
+  { id: 'more', name: '進階' }
+];
+const ST_TAB_KEY = 'lorddomain.ui.settingsTab';
+// 外部登記的列(settingsAddRow)白話說明
+const ST_EXTRA_HINT = {
+  '自訂音樂 ›': '用自己的音樂檔取代遊戲內建的背景音樂。',
+  '🎬 拍攝錄影': '開啟拍攝錄影面板:把城市錄成影片,或在城裡走一圈拍攝。',
+  '📋 範本…': '挑一份現成的版面範本載入到草稿,不會直接蓋掉你正在用的城。',
+  '🏘️ 城市風格…': '每點一次換一種城市外觀風格(只換外觀,不影響數值)。'
+};
+
+function stTabLoad() {
+  try {
+    const v = localStorage.getItem(ST_TAB_KEY);
+    if (ST_TABS.some(function (t) { return t.id === v; })) return v;
+  } catch (e) {
+    console.warn('[st] tab read failed', e);
+  }
+  return 'view';
+}
+
+function stTabSave(id) {
+  try {
+    localStorage.setItem(ST_TAB_KEY, id);
+  } catch (e) {
+    console.warn('[st] tab write failed', e);
+  }
 }
 
 function stSwitch(on, onChange) {
@@ -216,6 +261,16 @@ function stExtraNodes(group) {
   });
 }
 
+// 同上,但每列後面附一行灰字說明(有登記的話)
+function stExtraNodesH(group) {
+  const out = [];
+  stExtraRows.filter(function (r) { return r.group === group && (typeof r.show !== 'function' || r.show()); }).forEach(function (r, i) {
+    out.push(stExtraNodes(group)[i]);
+    if (ST_EXTRA_HINT[r.label]) out.push(stEl('p', 'st-hint st-note', ST_EXTRA_HINT[r.label]));
+  });
+  return out;
+}
+
 // 背景音樂曲目:每個場景一列「選單 + 試聽」,選擇存在 bgm.js 的 localStorage(lorddomain.bgm.pick)
 function stBgmRow(g) {
   const key = g[0];
@@ -279,22 +334,154 @@ let stAcMsg = '';
 
 function stSoundSec() {
   const cfg = settingsGet();
-  const nodes = [
-    stRow('安靜模式(只留介面與重點音)', stSwitch(cfg.quiet, function (v) {
-      settingsSet('quiet', v);
-      stRender();
-    })),
-    stVolBlock('音樂', 'music')
-  ];
+  const nodes = [];
+  stAdd(nodes, '安靜模式', stSwitch(cfg.quiet, function (v) {
+    settingsSet('quiet', v);
+    stRender();
+  }), '開了以後只剩按鈕聲和重要提示音,背景音樂與環境音大幅變小,適合在安靜的地方玩。');
+  nodes.push(stVolBlock('音樂', 'music'));
+  nodes.push(stEl('p', 'st-hint st-note', '背景音樂的開關與音量;關掉就不再播放音樂。'));
   if (typeof bgmGroups === 'function' && typeof bgmAudition === 'function') nodes.push(stBgmCard());
-  nodes.push(
-    stVolBlock('音效', 'sfx'),
-    stVolBlock('環境音', 'amb'),
-    stRow('跟隨靜音鍵', stSwitch(cfg.followSilent, function (v) {
-      settingsSet('followSilent', v);
+  nodes.push(stVolBlock('音效', 'sfx'));
+  nodes.push(stEl('p', 'st-hint st-note', '蓋房子、點按鈕、戰鬥時的聲音;關掉後操作時不會有聲音。'));
+  nodes.push(stVolBlock('環境音', 'amb'));
+  nodes.push(stEl('p', 'st-hint st-note', '風聲、水聲、鳥鳴這類城市背景聲;嫌吵可以單獨關掉。'));
+  stAdd(nodes, '跟隨靜音鍵', stSwitch(cfg.followSilent, function (v) {
+    settingsSet('followSilent', v);
+    stRender();
+  }), '開了以後,手機側邊的靜音開關打開時遊戲也跟著沒聲音。');
+  return stSec('聲音', nodes.concat(stExtraNodesH('聲音')), 'sound');
+}
+
+function stCityOn() { return typeof isCityOnly === 'function' && isCityOnly(); }
+
+// 玩法模式:城建專注(明顯區隔,獨立區塊)
+function stPlaySec() {
+  const nodes = [];
+  if (typeof setCityOnly === 'function') {
+    stAdd(nodes, '城建專注模式', stSwitch(stCityOn(), function (v) {
+      setCityOnly(v);
+      if (typeof buildToolbar === 'function') buildToolbar();
+      if (typeof syncSideBar === 'function') syncSideBar();
+      if (typeof progUiRefresh === 'function') progUiRefresh();
       stRender();
-    }))
-  );
+    }), '隱藏釣魚、仙獸、戰鬥,專心蓋城。升級改靠蓋出新種類建築、擴大城市,不需要材料與首領營;關閉後恢復原本規則(已累積的經驗保留)。');
+  }
+  if (!nodes.length) return null;
+  return stSec('玩法模式', nodes, 'view', 'st-sec-mode');
+}
+
+// 畫面與操作:介面模式、提示、範本、城市風格
+function stUiSec() {
+  const nodes = [];
+  if (typeof uiSetMode === 'function') {
+    const curMode = typeof uiGetMode === 'function' ? uiGetMode() : 'normal';
+    stAdd(nodes, '介面模式', stSeg([['normal', '正常'], ['compact', '精簡']].concat(isUnlocked('feature', 'photo') ? [['photo', '拍照']] : []), curMode, function (v) {
+      if (v === 'photo') stClosePanel();
+      uiSetMode(v);
+      stRender();
+    }), '正常:所有按鈕都在。精簡:按鈕縮小、騰出更多地圖空間。' + (isUnlocked('feature', 'photo') ? '拍照:隱藏全部按鈕,方便截圖。' : ''));
+  }
+  if (typeof nsSetEnabled === 'function') {
+    stAdd(nodes, '推薦下一步', stSwitch(nsEnabled(), function (v) {
+      nsSetEnabled(v);
+      if (typeof nsUiRefresh === 'function') nsUiRefresh(true);
+      stRender();
+    }), '右上角的小提示,一步步告訴你可以先做什麼;卡上 ✕ 只關掉那一則。關掉後不再出現提示卡。');
+  }
+  return stSec('畫面', nodes.concat(stExtraNodesH('畫面')), 'view');
+}
+
+// 拍攝與錄影:入口由 recorder.js 以 settingsAddRow(group '拍攝') 登記,未開放時整區不顯示
+function stShotSec() {
+  const nodes = stExtraNodesH('拍攝');
+  if (!nodes.length) return null;
+  return stSec('拍攝與錄影', nodes, 'view');
+}
+
+// 美術與居民
+function stArtSec() {
+  const nodes = [];
+  if (typeof lifeSetOn === 'function') {
+    const lifeOn = typeof lifeGetOn === 'function' ? !!lifeGetOn() : true;
+    stAdd(nodes, '路上居民 👥', stSwitch(lifeOn, function (v) {
+      lifeSetOn(v);
+      stRender();
+    }), '開了,街上會有小人走來走去,讓城市有生氣;關掉可以更順、更省電,對遊戲內容沒有影響。');
+  }
+  if (typeof lifeSetDensity === 'function' && typeof lifeGetDensity === 'function') {
+    stAdd(nodes, '居民密度', stSeg([['off', '關'], ['low', '少'], ['mid', '中'], ['high', '多'], ['crowd', '熱鬧']], lifeGetDensity(), function (v) {
+      lifeSetDensity(v);
+      stRender();
+    }), '街上同時出現多少小人。越多越熱鬧,但手機會比較燙、比較耗電。');
+  }
+  if (!nodes.length) return null;
+  return stSec('美術與居民', nodes, 'view');
+}
+
+// 進階:少人用的設定集中在最後一個分頁(新美術合併開關、外部建築圖、流暢度、繪圖引擎、音效快取、世界小標籤)
+// 新美術合併開關:顯示=存在的三項皆開(任一關即顯示關);切換時三個既有偏好鍵一起寫齊(鍵名與讀取邏輯不變)
+function stNewArtOn() {
+  if (typeof artSetOn === 'function' && !(typeof ART_ON !== 'undefined' ? !!ART_ON : true)) return false;
+  if (typeof uiIconsSetOn === 'function' && !uiIconsOn()) return false;
+  if (typeof terrainTexSetOn === 'function' && !terrainTexOn()) return false;
+  return true;
+}
+
+function stNewArtSet(v) {
+  if (typeof artSetOn === 'function') artSetOn(v);
+  if (typeof uiIconsSetOn === 'function') {
+    uiIconsSetOn(v);
+    if (typeof advUiRefresh === 'function') advUiRefresh(true);
+    if (typeof nsUiRefresh === 'function') nsUiRefresh(true);
+  }
+  if (typeof terrainTexSetOn === 'function') terrainTexSetOn(v);
+}
+
+// 流暢度:對應 perf.js 兩個既有旗標。省電=省電模式開(一律 30 幀);平衡=省電關、操作時 30 幀;流暢=省電關、操作時 60 幀(預設)
+function stFluencyGet() {
+  if (isPowerSave()) return 'save';
+  return perfGetFps() === 60 ? 'smooth' : 'bal';
+}
+
+function stFluencySet(v) {
+  if (v === 'save') {
+    perfSetPowerSave(true);
+    perfSetFps(30);
+  } else {
+    perfSetPowerSave(false);
+    perfSetFps(v === 'smooth' ? 60 : 30);
+  }
+}
+
+function stAdvSec() {
+  const nodes = [];
+  if (typeof artSetOn === 'function' || typeof uiIconsSetOn === 'function' || typeof terrainTexSetOn === 'function') {
+    stAdd(nodes, '新美術', stSwitch(stNewArtOn(), function (v) {
+      stNewArtSet(v);
+      stRender();
+    }), '開了會用新畫的建築、地面貼圖、圖示與日夜光暈;關掉就回到最簡單的舊畫面,比較省電。');
+  }
+  if (typeof extSpritesSetOn === 'function') {
+    stAdd(nodes, '使用外部建築圖(試裝)', stSwitch(extSpritesOn(), function (v) {
+      extSpritesSetOn(v);
+      stRender();
+    }), '試用中的另一套建築圖片;開了部分建築外觀會不同,不影響玩法。看到怪怪的就關掉。');
+  }
+  if (typeof perfSetFps === 'function') {
+    stAdd(nodes, '流暢度', stSeg([['save', '省電'], ['bal', '平衡'], ['smooth', '流暢']], stFluencyGet(), function (v) {
+      stFluencySet(v);
+      if (v === 'smooth' && typeof showToast === 'function') showToast('操作時用 60 較順;不操作時自動降到 30 省電');
+      stRender();
+    }), '省電:一律 30 幀、居民少一級且動作較稀、水面靜止、音樂較簡單,最不燙。平衡:操作時 30 幀。流暢:拖曳縮放時 60 幀,看著城市不動時降到 30。只影響動作順不順,不影響畫質。');
+  }
+  if (typeof renderSetBackend === 'function') {
+    stAdd(nodes, '繪圖引擎', stSeg([['c2d', '標準'], ['gl', '加速(實驗)']], renderGetBackend(), function (v) {
+      renderSetBackend(v);
+      if (v === 'gl' && typeof showToast === 'function') showToast('加速繪圖(實驗):下一個畫面起生效;若無法使用會自動改回標準');
+      stRender();
+    }), '加速(實驗)用 WebGL 合成建築與居民,地形與介面仍用標準畫法;手機若出現黑畫面或異常請改回標準。錄影與拍照時會自動使用標準繪圖。');
+  }
   if (typeof acClear === 'function') {
     const cb = stEl('button', 'st-sw', stAcMsg || '清除');
     cb.setAttribute('aria-label', '清除音效快取');
@@ -304,104 +491,14 @@ function stSoundSec() {
         stRender();
       });
     });
-    nodes.push(stRow('音效快取(下次啟動重新合成)', cb));
+    stAdd(nodes, '音效快取', cb, '遊戲會把合成好的音效存在手機裡加快載入。聲音怪怪的才需要清除,下次啟動會重新合成(不影響存檔)。');
   }
-  return stSec('聲音', nodes.concat(stExtraNodes('聲音')));
-}
-
-function stCityOn() { return typeof isCityOnly === 'function' && isCityOnly(); }
-
-function stDisplaySec() {
-  const nodes = [];
-  if (typeof setCityOnly === 'function') {
-    nodes.push(stRow('城建專注模式', stSwitch(stCityOn(), function (v) {
-      setCityOnly(v);
-      if (typeof buildToolbar === 'function') buildToolbar();
-      if (typeof syncSideBar === 'function') syncSideBar();
-      if (typeof progUiRefresh === 'function') progUiRefresh();
-      stRender();
-    })));
-    nodes.push(stEl('p', 'st-hint', '隱藏釣魚、仙獸、戰鬥,專心蓋城。升級改靠蓋出新種類建築、擴大城市,不需要材料與首領營;關閉後恢復原本規則(已累積的經驗保留)。'));
+  if (typeof savesUiOpen === 'function' && typeof worldTagOn === 'function') {
+    nodes.push(stSaveBtn('世界小標籤:' + (worldTagOn() ? '顯示' : '隱藏'), '頂列的「世 NN」,點它開啟我的世界', function () { try { localStorage.setItem(WORLD_TAG_KEY, worldTagOn() ? '0' : '1'); } catch (e) { /* 略過 */ } if (typeof svTagSync === 'function') svTagSync(); stRender(); }));
+    nodes.push(stEl('p', 'st-hint st-note', '決定畫面頂端要不要顯示目前是第幾個世界的小標籤,只影響外觀。'));
   }
-  if (typeof nsSetEnabled === 'function') {
-    nodes.push(stRow('推薦下一步', stSwitch(nsEnabled(), function (v) {
-      nsSetEnabled(v);
-      if (typeof nsUiRefresh === 'function') nsUiRefresh(true);
-      stRender();
-    })));
-    nodes.push(stEl('p', 'st-hint', '右上角的小提示,一步步告訴你可以先做什麼;卡上 ✕ 只關掉那一則。'));
-  }
-  if (typeof artSetOn === 'function') {
-    const artOn =typeof ART_ON !== 'undefined' ? !!ART_ON : true;
-    nodes.push(stRow('新美術與光暈', stSwitch(artOn, function (v) {
-      artSetOn(v);
-      stRender();
-    })));
-  }
-  if (typeof uiIconsSetOn === 'function') {
-    nodes.push(stRow('使用圖示圖片', stSwitch(uiIconsOn(), function (v) {
-      uiIconsSetOn(v);
-      if (typeof advUiRefresh === 'function') advUiRefresh(true);
-      if (typeof nsUiRefresh === 'function') nsUiRefresh(true);
-      stRender();
-    })));
-  }
-  if (typeof terrainTexSetOn === 'function') {
-    nodes.push(stRow('使用地形貼圖', stSwitch(terrainTexOn(), function (v) {
-      terrainTexSetOn(v);
-      stRender();
-    })));
-  }
-  if (typeof extSpritesSetOn === 'function') {
-    nodes.push(stRow('使用外部建築圖(試裝)', stSwitch(extSpritesOn(), function (v) {
-      extSpritesSetOn(v);
-      stRender();
-    })));
-  }
-  if (typeof lifeSetOn === 'function') {
-    const lifeOn = typeof lifeGetOn === 'function' ? !!lifeGetOn() : true;
-    nodes.push(stRow('路上居民 👥', stSwitch(lifeOn, function (v) {
-      lifeSetOn(v);
-      stRender();
-    })));
-  }
-  if (typeof lifeSetDensity === 'function' && typeof lifeGetDensity === 'function') {
-    nodes.push(stRow('居民密度', stSeg([['off', '關'], ['low', '少'], ['mid', '中'], ['high', '多'], ['crowd', '熱鬧']], lifeGetDensity(), function (v) {
-      lifeSetDensity(v);
-      stRender();
-    })));
-  }
-  if (typeof perfSetFps === 'function') {
-    const ps = isPowerSave();
-    nodes.push(stRow('操作時幀率', stSeg([[30, '30'], [60, '60']], ps ? 30 : perfGetFps(), function (v) {
-      perfSetFps(v);
-      if (v === 60 && typeof showToast === 'function') showToast('操作時用 60 較順;不操作時自動降到 30 省電');
-      stRender();
-    })));
-    if (!ps && perfGetFps() === 60) nodes.push(stEl('p', 'st-hint', '操作時用 60 較順;不操作時自動降到 30 省電。'));
-    nodes.push(stRow('省電模式(較不順但較不燙)', stSwitch(ps, function (v) {
-      perfSetPowerSave(v);
-      stRender();
-    })));
-    nodes.push(stEl('p', 'st-hint', '幀率不影響畫質(清晰度、解析度),只影響動作順不順:拖曳、縮放、點選時用上面的設定,看著城市不動時固定 30。省電模式一律 30、居民少一級且動作較稀、水面靜止、背景音樂較簡單。'));
-  }
-  if (typeof renderSetBackend === 'function') {
-    nodes.push(stRow('繪圖引擎', stSeg([['c2d', '標準'], ['gl', '加速(實驗)']], renderGetBackend(), function (v) {
-      renderSetBackend(v);
-      if (v === 'gl' && typeof showToast === 'function') showToast('加速繪圖(實驗):下一個畫面起生效;若無法使用會自動改回標準');
-      stRender();
-    })));
-    nodes.push(stEl('p', 'st-hint', '加速(實驗)用 WebGL 合成建築與居民,地形與介面仍用標準畫法;手機若出現黑畫面或異常請改回標準。錄影與拍照時會自動使用標準繪圖。'));
-  }
-  if (typeof uiSetMode === 'function') {
-    const curMode = typeof uiGetMode === 'function' ? uiGetMode() : 'normal';
-    nodes.push(stRow('介面模式', stSeg([['normal', '正常'], ['compact', '精簡']].concat(isUnlocked('feature', 'photo') ? [['photo', '拍照']] : []), curMode, function (v) {
-      if (v === 'photo') stClosePanel();
-      uiSetMode(v);
-      stRender();
-    })));
-  }
-  return stSec('畫面', nodes.concat(stExtraNodes('畫面')));
+  if (!nodes.length) return null;
+  return stSec('進階設定', nodes, 'more');
 }
 
 // 全螢幕說明:瀏覽器列佔空間時的做法;不支援 requestFullscreen 的瀏覽器(如 iPhone Safari)不顯示按鈕
@@ -558,14 +655,14 @@ function stHelpSec() {
   nodes.push(stIconCard());
   if (!stCityOn()) nodes.push(stDexCard());   // 兵種圖鑑:城建專注模式隱藏
   nodes.push(stHowtoCard());
-  return stSec('說明', nodes.concat(stExtraNodes('說明')));
+  return stSec('說明', nodes.concat(stExtraNodes('說明')), 'more');
 }
 
 function stAboutSec() {
   const ver = stEl('p', 'st-ver', '版本 ' + (stVerText || '讀取中…'));
   stVerEl = ver;
   const credit = stEl('p', 'st-credit', '本遊戲美術與音效由程式自行繪製合成,目前未使用第三方素材。');
-  return stSec('關於', [ver, credit]);
+  return stSec('關於', [ver, credit], 'more');
 }
 
 // 世界與重新開始 / 目前世界的陣地:我的世界面板 / 復原上一步 / 重新開始 / 清除陣地 / 清空領地(邏輯在 saveslots.js、savesui.js;每個動作先彈說明確認並自動備份到復原槽)
@@ -579,7 +676,8 @@ function stSaveBtn(label, sub, onclick, danger) {
   return b;
 }
 
-function stDangerSec() {
+// 世界與存檔:一般操作(不會清掉東西)
+function stWorldSec() {
   const nodes = [];
   const ok = typeof savesAvailable === 'function' && savesAvailable();
   if (typeof worldTitle === 'function') {
@@ -588,42 +686,99 @@ function stDangerSec() {
   }
   if (typeof savesUiOpen === 'function') {
     nodes.push(stSaveBtn('我的世界(' + WORLD_COUNT + ')', ok ? '切換 / 重新開始 / 改名 / 回溯點' : '此裝置無法多世界', function () { stClosePanel(); savesUiOpen(); }));
+    nodes.push(stEl('p', 'st-hint st-note', '你有好幾個互相獨立的存檔(平行世界),可以在這裡切換、改名,或回到之前的時間點。'));
     nodes.push(stSaveBtn('復原上一步', ok ? '救回剛被重新開始 / 刪除 / 切換前的內容' : '此裝置無法使用', function () { stClosePanel(); savesUiUndo(); }));
-    nodes.push(stSaveBtn('世界小標籤:' + (worldTagOn() ? '顯示' : '隱藏'), '頂列的「世 NN」,點它開啟我的世界', function () { try { localStorage.setItem(WORLD_TAG_KEY, worldTagOn() ? '0' : '1'); } catch (e) { /* 略過 */ } if (typeof svTagSync === 'function') svTagSync(); stRender(); }));
+    nodes.push(stEl('p', 'st-hint st-note', '不小心按到重新開始或刪除時,按這個可以救回剛才的內容(只救最近一次)。'));
   }
-  if (typeof savesDoAction === 'function') nodes.push(stSaveBtn('重新開始目前世界…', '只影響目前這個世界,偏好設定保留', function () { stClosePanel(); if (typeof worldWizardOpen === 'function' && worldWizardOpen({ kind: 'restart', n: worldsActive(), from: 'settings' })) return; savesDoAction('all'); }, true));
-  return stSec('世界與重新開始', nodes);
+  if (!nodes.length) return null;
+  return stSec('世界與存檔', nodes, 'world');
 }
 
-// 目前世界的陣地:經營 / 戰陣兩塊地圖板(與平行世界無關),只影響目前這個世界
+// 目前世界的陣地:經營 / 戰陣兩塊地圖板(與平行世界無關),只影響目前這個世界;每個動作先彈說明確認並自動備份到復原槽
 function stCampSec() {
   const nodes = [stEl('div', 'st-hint', '只影響目前這個世界;不影響其他世界。')];
   if (typeof savesDoAction === 'function') {
     if (!stCityOn()) nodes.push(stSaveBtn('清除陣地…', '只清目前世界的戰陣板,其餘不動', function () { stClosePanel(); savesDoAction('camp'); }, true));
     nodes.push(stSaveBtn('清空領地…', '只清目前世界的領地建築與地形,資源與科技保留', function () { stClosePanel(); savesDoAction('estate'); }, true));
   }
-  return stSec('目前世界的陣地', nodes);
+  return nodes;
+}
+
+// 危險操作:醒目紅框獨立區塊;每個動作都會先彈出確認並自動備份,可用「復原上一步」救回
+function stDangerSec() {
+  if (typeof savesDoAction !== 'function') return null;
+  const nodes = [stEl('p', 'st-hint st-warn', '下面的按鈕會清掉內容。按下後會先跳出確認說明並自動備份,按錯了可用上面的「復原上一步」救回。')];
+  nodes.push(stSaveBtn('重新開始目前世界…', '只影響目前這個世界,偏好設定保留', function () { stClosePanel(); if (typeof worldWizardOpen === 'function' && worldWizardOpen({ kind: 'restart', n: worldsActive(), from: 'settings' })) return; savesDoAction('all'); }, true));
+  return stSec('⚠ 危險操作', nodes.concat(stCampSec()), 'world', 'st-sec-danger');
+}
+
+function stTabOf(sec) {
+  return sec.stTab;
 }
 
 function stRender() {
   if (!stBodyEl) return;
-  stBodyEl.innerHTML = '';
   const battle = stInBattle();
-  stBodyEl.appendChild(stSoundSec());
-  const builtin = ['聲音', '畫面', '說明', '關於', '危險區', '世界與重新開始', '目前世界的陣地'];
+  const prevTop = stBodyEl.scrollTop || 0;
+  const prevTab = stBodyEl.stShown || '';
+  if (!stCurTab) stCurTab = stTabLoad();
+  stBodyEl.innerHTML = '';
+  const secs = [];
+  const add = function (sec) { if (sec) secs.push(sec); };
+  add(stSoundSec());
+  const builtin = ['聲音', '畫面', '拍攝', '說明', '關於', '危險區', '世界與重新開始', '目前世界的陣地'];
   stExtraRows.forEach(function (r) {
     if (builtin.indexOf(r.group) >= 0) return;
     const nodes = stExtraNodes(r.group);
     if (!nodes.length) return;
     builtin.push(r.group);
-    stBodyEl.appendChild(stSec(r.group, nodes));
+    add(stSec(r.group, nodes, 'more'));
   });
-  if (battle) return;
-  stBodyEl.appendChild(stDisplaySec());
-  stBodyEl.appendChild(stHelpSec());
-  stBodyEl.appendChild(stAboutSec());
-  stBodyEl.appendChild(stDangerSec());
-  stBodyEl.appendChild(stCampSec());
+  if (battle) {
+    // 出征 / 回放 / 沙盤:只留聲音;外部登記的列(如拍攝)也放在聲音頁
+    add(stShotSec());
+    secs.forEach(function (sec) { sec.setAttribute('data-tab', 'sound'); sec.stTab = 'sound'; });
+  } else {
+    add(stPlaySec());
+    add(stUiSec());
+    add(stShotSec());
+    add(stArtSec());
+    add(stWorldSec());
+    add(stDangerSec());
+    add(stHelpSec());
+    add(stAboutSec());
+    add(stAdvSec());
+  }
+  const order = ST_TABS.map(function (t) { return t.id; });
+  const live = battle ? ['sound'] : order.filter(function (id) { return secs.some(function (sc) { return stTabOf(sc) === id; }); });
+  if (live.indexOf(stCurTab) < 0) stCurTab = live[0] || 'view';
+  secs.forEach(function (sec) { stBodyEl.appendChild(sec); });
+  stBodyEl.stShown = battle ? 'sound' : stCurTab;
+  stBodyEl.setAttribute('data-tab', stBodyEl.stShown);
+  stRenderTabs(battle ? [] : live);
+  if (prevTab === stBodyEl.stShown) stBodyEl.scrollTop = prevTop;
+  else stBodyEl.scrollTop = 0;
+}
+
+function stRenderTabs(live) {
+  if (!stTabBarEl) return;
+  stTabBarEl.innerHTML = '';
+  stTabBarEl.hidden = !live.length;
+  live.forEach(function (id) {
+    const t = ST_TABS.filter(function (x) { return x.id === id; })[0];
+    const b = stEl('button', 'st-tab' + (id === stCurTab ? ' on' : ''), t.name);
+    b.setAttribute('role', 'tab');
+    b.setAttribute('data-tab', id);
+    b.setAttribute('aria-selected', id === stCurTab ? 'true' : 'false');
+    b.addEventListener('click', function () {
+      if (id === stCurTab) return;
+      stCurTab = id;
+      stTabSave(id);
+      if (typeof bgmAuditionStop === 'function') bgmAuditionStop();
+      stRender();
+    });
+    stTabBarEl.appendChild(b);
+  });
 }
 
 function stOpenPanel() {
@@ -658,6 +813,9 @@ function stBuildRoot() {
   x.addEventListener('click', stClosePanel);
   head.appendChild(x);
   drawer.appendChild(head);
+  stTabBarEl = stEl('div', 'st-tabs');
+  stTabBarEl.setAttribute('role', 'tablist');
+  drawer.appendChild(stTabBarEl);
   stBodyEl = stEl('div', 'st-body');
   drawer.appendChild(stBodyEl);
   const foot = stEl('div', 'st-foot');

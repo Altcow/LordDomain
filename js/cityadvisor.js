@@ -117,7 +117,9 @@ var ADV_COND = {
   houseTight: function (s, L, R) { return R.house && L.house === 1 && s.occ >= 92 ? { pct: Math.round(s.occ) } : false; },
   houseEmpty: function (s, L, R) { return R.house && L.house === 1 && s.occ < 60 && s.houses >= 6 ? { pct: Math.round(s.occ) } : false; },
 
-  storeBlocked: function (s, L, R) { return R.store && s.store && s.store.blocked > 0 ? { n: s.store.blocked } : false; },
+  storeBlocked: function (s, L, R) { return R.store && s.store && s.store.blocked > 0 ? { n: s.store.blocked, miss: s.store.missName || '原料' } : false; },
+  storeNoRoad: function (s, L, R) { return s.store && s.store.noroad > 0 ? { n: s.store.noroad } : false; },
+  storeLoom: function (s) { return s.store && s.store.needLoom ? {} : false; },
   storeFull: function (s, L, R) { return R.store && s.store && s.store.full > 0 ? { n: s.store.full } : false; },
   storeFirst: function (s) { return (s.workshops || 0) === 0 && s.houses >= 6 ? {} : false; },
 
@@ -321,6 +323,11 @@ function advSnapshot() {
       wsList = goodsWorkshopList(); s.store = { blocked: 0, full: 0, short: 0 };
       wsList.forEach(function (w) { if (w.kind === 'rec') s.workshops++; if (w.state === 'blocked') s.store.blocked++; else if (w.state === 'full') s.store.full++; else if (w.state === 'short') s.store.short++; });
       if (typeof goodsVisibleList === 'function') goodsVisibleList().forEach(function (g) { if (g.cap > 0 && g.have / g.cap >= 0.95) s.store.full++; });
+      s.store.noroad = 0; s.store.missName = ''; s.store.needLoom = false;   // O4:未通路工坊數 / 缺的料 / 有麻田沒織坊
+      if (typeof goodsProdRows === 'function') {
+        goodsProdRows().forEach(function (w) { if (w.kind === 'rec' && !w.conn) s.store.noroad++; if (!s.store.missName && w.state === 'blocked' && w.missName) s.store.missName = w.missName; });
+        s.store.needLoom = !!(typeof goodsBuiltTypes === 'function' && goodsBuiltTypes().field_hemp && !goodsBuiltTypes().loom_shop);
+      }
       s.store.health = advClamp(100 - s.store.blocked * 35 - s.store.full * 25 - s.store.short * 10, 0, 100);
       if (!wsList.length && s.store.full === 0) s.store.health = 100;
     } catch (e3) { s.store = null; }

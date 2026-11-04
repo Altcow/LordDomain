@@ -205,7 +205,7 @@ const PROG_UNLOCK_ESTATE = {
   15: ['siege', 'army_camp', 'tent_group', 'flag_great', 'drum_tower', 'well_sweep', 'shipyard'],
   16: ['tree_mulberry', 'deco_brazier', 'paifang', 'ship_tower'],
   17: ['saltfield', 'salt_pile', 'waterwheel', 'oxcart', 'deco_oxcart'],
-  18: ['toll_gate', 'beacon', 'deco_watchtower', 'ferry', 'deco_stable', 'mansion_clan'],
+  18: ['toll_gate', 'beacon', 'deco_watchtower', 'ferry', 'deco_stable', 'mansion_clan', 'brewery'],
   19: ['tent_general', 'war_chariot', 'cloud_ladder', 'ram'],
   20: ['trebuchet', 'jinglan', 'warship'],
   21: ['shop_gamble', 'carriage'],

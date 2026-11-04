@@ -5,7 +5,7 @@
 // ES2017;不用 ?. ??。
 //
 // 新增的經營建築(只登錄 OBJECTS 與暫用外觀,見 art_deco2.js;解鎖等級見 progdata.js PROG_UNLOCK_ESTATE):
-//   field_hemp 麻田(Lv1,外觀 = 田的別名)、loom_shop 織坊(Lv2,外觀 = 布攤的別名)。
+//   field_hemp 麻田(Lv1,外觀 = 田的別名)、loom_shop 織坊(Lv2,外觀 = 布攤的別名)、brewery 釀酒坊(Lv18 / ed_yuedan 月旦評,外觀 = 酒館的別名)。
 // 沿用的現有建築(解鎖等級依 PLAN §23.2 提前):sawbench 木工棚 Lv1、smith_awning 打鐵舖 Lv3、shop_cloth 成衣鋪 Lv3、
 //   mine_entrance 礦坑口 + ore_iron 鐵礦堆 Lv3;field_sprout / vegetable_plot / field_millet / field_wheat 沿用原等級。
 
@@ -43,6 +43,15 @@ const GOODS = {
   // T2 成品
   g_nongju:    { name: '農具',   icon: '🔧', tier: 2, w: 2 },
   g_yifu:      { name: '衣物',   icon: '👘', tier: 2, cons: 'cloth', w: 1 },
+  // T3 工藝品(PLAN_INTERIORS §3 O1;科技 T3 成本與 T4 配方原料;上限 / 基價走階別表)
+  g_qiqi:      { name: '漆器',   icon: '🏺', tier: 3, w: 2 },
+  g_jin:       { name: '錦',     icon: '🎎', tier: 3, w: 1 },
+  g_ciqi:      { name: '瓷器',   icon: '🍶', tier: 3, w: 3 },
+  g_zhi:       { name: '紙',     icon: '📃', tier: 3, w: 1 },
+  // T4 奢侈品(科技 T4 成本)
+  g_yuqi:      { name: '玉器',   icon: '💎', tier: 4, w: 2 },
+  g_yinqi:     { name: '銀器',   icon: '🥈', tier: 4, w: 2 },
+  g_mingjiu:   { name: '名酒',   icon: '🍷', tier: 4, w: 2 },
   // 舊普材料(PLAN §23.1.3):id 與舊 PROG_MATS 相同,只供遷移與日後配方使用
   mat_zhujian: { name: '竹簡',   icon: '📜', tier: 1, legacy: true, w: 1 },
   mat_niupi:   { name: '牛皮',   icon: '🟫', tier: 1, legacy: true, w: 2 },
@@ -76,7 +85,15 @@ const RECIPES = {
   r_mabu:    { name: '麻布', bld: ['loom_shop'],    in: { g_ma: 2 },                 out: { mat_mabu: 1 },   rate: 2, lv: 2, jobs: 4, tech: null, opt: null },
   r_tieding: { name: '鐵錠', bld: ['smith_awning'], in: { g_tiekuang: 2, wood: 10 }, out: { mat_tieding: 1 }, rate: 2, lv: 3, jobs: 4, tech: null, opt: null },
   r_yifu:    { name: '衣物', bld: ['shop_cloth'],   in: { mat_mabu: 2 },             out: { g_yifu: 1 },     rate: 1, lv: 3, jobs: 6, tech: null, opt: null },
-  r_nongju:  { name: '農具', bld: ['smith_awning'], in: { mat_tieding: 1, g_muban: 1 }, out: { g_nongju: 1 }, rate: 1, lv: 3, jobs: 6, tech: null, opt: null }
+  r_nongju:  { name: '農具', bld: ['smith_awning'], in: { mat_tieding: 1, g_muban: 1 }, out: { g_nongju: 1 }, rate: 1, lv: 3, jobs: 6, tech: null, opt: null },
+  // T3 / T4(PLAN_INTERIORS §3 O1;全部 PLACEHOLDER)。建築沿用 nl_objects.js 的科技解鎖物件(lv 欄僅供參考,lint 對科技解鎖建築不比對等級)
+  r_qiqi:    { name: '漆器', bld: ['qi_qi_fang'],  in: { g_muban: 2, mat_mabu: 1 },       out: { g_qiqi: 1 },    rate: 1,   lv: 1, jobs: 6, tech: null, opt: null },
+  r_jin:     { name: '錦',   bld: ['jin_fang'],    in: { mat_mabu: 4 },                   out: { g_jin: 1 },     rate: 1,   lv: 1, jobs: 6, tech: null, opt: null },
+  r_ciqi:    { name: '瓷器', bld: ['ci_yao'],      in: { stone: 20, wood: 20 },           out: { g_ciqi: 1 },    rate: 1,   lv: 1, jobs: 6, tech: null, opt: null },
+  r_zhi:     { name: '紙',   bld: ['zao_zhi'],     in: { g_ma: 3, wood: 10 },             out: { g_zhi: 1 },     rate: 1.5, lv: 1, jobs: 4, tech: null, opt: null },
+  r_yuqi:    { name: '玉器', bld: ['yu_qi_fang'],  in: { stone: 30, mat_tieding: 1 },     out: { g_yuqi: 1 },    rate: 0.5, lv: 1, jobs: 6, tech: null, opt: null },
+  r_yinqi:   { name: '銀器', bld: ['yin_lou'],     in: { g_tiekuang: 4, wood: 10 },       out: { g_yinqi: 1 },   rate: 0.5, lv: 1, jobs: 6, tech: null, opt: null },
+  r_mingjiu: { name: '名酒', bld: ['brewery'],     in: { g_liang: 10, g_qiqi: 1 },        out: { g_mingjiu: 1 }, rate: 0.5, lv: 18, jobs: 6, tech: null, opt: null }
 };
 
 // ───────── 5. 查詢輔助(純函式,無外部相依)─────────

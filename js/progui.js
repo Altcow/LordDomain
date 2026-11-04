@@ -362,7 +362,7 @@ function puiBuildDrawer() {
 // 模式判斷:戰鬥、錄影、拍照、釣魚、仙獸、沙盤與備份中不顯示任務提示
 function puiModeOk() {
   var b = document.body, m = (typeof game !== 'undefined' && game) ? game.mode : 'estate';
-  if (['attack', 'replay', 'fishing', 'pet'].indexOf(m) >= 0) return false;
+  if (['attack', 'replay', 'fishing', 'pet', 'interior'].indexOf(m) >= 0) return false;
   if (typeof game !== 'undefined' && game && game.backup) return false;
   if (b && b.classList && (b.classList.contains('photo-mode') || b.classList.contains('atk-mode') ||
       b.classList.contains('replay-mode') || b.classList.contains('sandbox'))) return false;

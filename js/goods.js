@@ -34,6 +34,7 @@ function goodsNormCity(v) {
     if (v.adv && typeof advNormSave === 'function') c.adv = advNormSave(v.adv);   // 顧問已完成 / 已忽略 id(cityadvisor.js)
     if (v.ns && typeof nsNormSave === 'function') c.ns = nsNormSave(v.ns);   // 推薦下一步:已關閉 / 已看過 id(nextstep.js)
     if (v.cards && typeof cardsNormSave === 'function') { var cd = cardsNormSave(v.cards); if (cd) c.cards = cd; }   // 酒館 / 名冊(cards.js)
+    if (v.tavern && typeof tavernNormSave === 'function') { var tv = tavernNormSave(v.tavern); if (tv) c.tavern = tv; }   // 酒館室內資料 {lv, rooms, seed}(tavern_scene.js;I1 起才有包間內容)
   }
   return c;
 }
@@ -48,7 +49,7 @@ function goodsCity() {
 // ───────── 庫存存取 ─────────
 function goodsCapOf(id) { return goodsCapBase(id) * goodsCapMul(id); }
 function goodsCapMul(id) { return 1; }   // 掛點:庫房建築 / 科技加成(CT6d)
-function goodsLaborMul(entry) { return 1; }   // 掛點:勞力比 / 派駐(§4.2、PLAN_CARDS)
+function goodsLaborMul(entry) { return (entry && typeof npcStaffMul === 'function') ? npcStaffMul(entry.type) : 1; }   // 掛點:勞力比 / 派駐——派駐人事乘區 npcStaffMul(npcinteract.js,PLAN_INTERIORS P1;勞力比尚未接)
 function goodsTechMul(key) { return typeof techMul === 'function' ? techMul(key) : 1; }
 function goodsProdMul(entry, tech) {
   var m = goodsLaborMul(entry);
@@ -248,13 +249,13 @@ function goodsPlan(force) {
           return Math.abs(q.x + qf[0] / 2 - cx) <= s.near.r && Math.abs(q.y + qf[1] / 2 - cy) <= s.near.r;
         });
       }
-      entries.push({ kind: 'src', sid: sid, type: o.type, x: o.x, y: o.y, key: key, ok: ok, conn: true, tier: -1 });
+      entries.push({ kind: 'src', sid: sid, type: o.type, x: o.x, y: o.y, rot: o.rot | 0, key: key, ok: ok, conn: true, tier: -1 });
     });
     var rids = goodsRecipesFor(o.type);
     if (rids.length) {
       var rid = c.sel[key] && rids.indexOf(c.sel[key]) >= 0 ? c.sel[key] : rids[0];
       var out0 = Object.keys(RECIPES[rid].out)[0];
-      entries.push({ kind: 'rec', rid: rid, rids: rids, type: o.type, x: o.x, y: o.y, key: key, ok: true, conn: connected(o), tier: goodsTier(out0) });
+      entries.push({ kind: 'rec', rid: rid, rids: rids, type: o.type, x: o.x, y: o.y, rot: o.rot | 0, key: key, ok: true, conn: connected(o), tier: goodsTier(out0) });
     }
   });
   // 結算順序:原料點 → 工坊(階別由低到高)→ 位置(確定性)
@@ -395,6 +396,68 @@ function goodsWorkshopList() {
   });
   return out;
 }
+// ───────── 生產視圖資料(PLAN_INTERIORS §3 O3 / O9 / O10;chainvis.js 與顧問使用;純讀取,不改結算)─────────
+// 每個生產建築一列:cause = 主要原因('ok' 正常 / 'wait' 尚未結算 / 'miss' 缺料 / 'road' 未通路 / 'full' 庫滿 / 'ore' 缺礦脈)、
+// level = 0 正常 1 警示 2 停工;perHour = 目前實際產出(件 / 遊戲小時),直接取結算的 eff(已含派駐人事 npcStaffMul 與道路 ×0.5,這裡不再另乘)
+var GOODS_CAUSE_ICON = { miss: '⛔', road: '🛤️', full: '📦', ore: '⛰️' };
+function goodsProdRows() {
+  var plan = goodsPlan(), out = [];
+  plan.entries.forEach(function (e) {
+    var st = goodsStatus[e.key], d = OBJECTS[e.type] || {}, f = footprint(e.type, e.rot | 0), s = null, r = null, oid, nom, causes = [], miss = null, capped = false, row;
+    if (st && st.kind !== e.kind) st = null;
+    if (e.kind === 'src') { s = GOODS_SOURCES[e.sid]; oid = Object.keys(s.out)[0]; nom = s.out[oid]; }
+    else { r = RECIPES[e.rid]; oid = Object.keys(r.out)[0]; nom = r.out[oid] * r.rate; }
+    if (st) {
+      if (e.kind === 'src' && st.state === 'noore') causes.push('ore');
+      if (e.kind === 'rec' && st.state === 'blocked' && st.miss) { causes.push('miss'); miss = st.miss; }
+      if (st.state === 'full') causes.push('full');
+      if (e.kind === 'rec' && !e.conn) causes.push('road');
+      if (st.state !== 'full' && !GOODS[oid].res && goodsRaw(oid) >= goodsCapOf(oid) - 1e-6) { causes.push('full'); capped = true; }
+      if (e.kind === 'rec' && st.state === 'short' && st.miss) { causes.push('miss'); miss = miss || st.miss; }
+    } else if (e.kind === 'src' && !e.ok) causes.push('ore');
+    else if (e.kind === 'rec' && !e.conn) causes.push('road');
+    row = {
+      key: e.key, kind: e.kind, type: e.type, name: d.name || e.type, icon: d.icon || '', x: e.x, y: e.y, w: f[0], h: f[1],
+      out: oid, outName: goodsName(oid), outIcon: GOODS[oid].icon || '', recipe: e.kind === 'rec' ? r.name : goodsName(oid),
+      state: st ? st.state : 'wait', miss: miss, missName: miss ? goodsName(miss) : '', conn: e.conn, causes: causes, cause: causes[0] || (st ? 'ok' : 'wait'),
+      perHour: st && st.state !== 'blocked' && st.state !== 'full' && st.state !== 'noore' ? Math.round(nom * st.eff * 100) / 100 : 0,
+      nominal: nom, capped: capped
+    };
+    row.level = (row.state === 'blocked' || row.state === 'full' || row.state === 'noore') ? 2 : (causes.length ? 1 : 0);
+    row.reason = goodsProdReason(row);
+    out.push(row);
+  });
+  return out;
+}
+// 原因文字(點瓶頸圖示 / 生產視圖列表共用)
+function goodsProdReason(row) {
+  var c = row.cause, mk, bt;
+  if (c === 'miss') {
+    mk = goodsMakers(row.miss)[0];
+    bt = mk ? goodsBuiltTypes() : null;
+    return '缺料:' + row.missName + (row.state === 'short' ? '(部分運轉)' : '(停工)') + (mk ? '。' + row.missName + '由「' + mk.bldName + '」' + (bt[mk.bld] ? '供應,請擴產或接路' : '供應,但還沒蓋') : '');
+  }
+  if (c === 'road') return '沒有道路連到城主府,產量只剩 ×' + GOODS_ROAD_MUL + '。補一段路接上主幹道';
+  if (c === 'full') {
+    var cc = goodsCity();
+    return '「' + row.outName + '」已滿倉(' + cityGoodsHave(row.out) + ' / ' + goodsCapOf(row.out) + ')' + (cc && cc.autoSell ? ',多出的自動賣掉(×' + GOODS_SELL_MUL + ')' : ',停工中。開自動賣或用掉它');
+  }
+  if (c === 'ore') { var sid = Object.keys(GOODS_SOURCES).filter(function (k) { return GOODS_SOURCES[k].bld === row.type; })[0], nr = sid && GOODS_SOURCES[sid].near; return '缺礦脈:' + (nr ? nr.r + ' 格內要有「鐵礦堆」' : '附近要有礦脈'); }
+  if (c === 'wait') return '等待結算';
+  return '運轉中';
+}
+// 摘要:{ total, ok, miss, road, full, ore, wait, blocked, noroad(未通路工坊數), missIds }
+function goodsProdSummary(rows) {
+  rows = rows || goodsProdRows();
+  var s = { total: rows.length, ok: 0, miss: 0, road: 0, full: 0, ore: 0, wait: 0, blocked: 0, noroad: 0, missIds: [] };
+  rows.forEach(function (r) {
+    if (r.cause === 'ok') s.ok++; else s[r.cause]++;
+    if (r.state === 'blocked') s.blocked++;
+    if (r.kind === 'rec' && !r.conn) s.noroad++;
+    if (r.miss && s.missIds.indexOf(r.miss) < 0) s.missIds.push(r.miss);
+  });
+  return s;
+}
 // 切換多配方工坊的配方(打鐵舖:鐵錠 ↔ 農具)
 function goodsCycleRecipe(key) {
   var c = goodsCity(), plan = goodsPlan(), e = null;
@@ -421,12 +484,103 @@ function goodsVisibleList() {
   return out;
 }
 
+// ───────── 鏈條(PLAN_INTERIORS §3 O2 最小版:文字樹,上游往下縮排、下游列表;標出尚未蓋的生產建築)─────────
+// 目前城市已蓋的生產建築 type 集合(含伐木場 / 採石場)
+function goodsBuiltTypes() {
+  var b = typeof estateBoard === 'function' ? estateBoard() : null, out = {};
+  if (b && b.objects) b.objects.forEach(function (o) { out[o.type] = true; });
+  return out;
+}
+function goodsBldName(t) { return (typeof OBJECTS !== 'undefined' && OBJECTS[t] && OBJECTS[t].name) || t; }
+// 某貨品的所有產法:[{ kind:'src'|'rec'|'res', bld, bldName, rid?, inputs:{id:量}, rate? }];純資料
+function goodsMakers(id) {
+  var out = [];
+  Object.keys(GOODS_SOURCES).forEach(function (sid) {
+    var s = GOODS_SOURCES[sid];
+    if (s.out[id]) out.push({ kind: 'src', bld: s.bld, bldName: goodsBldName(s.bld), inputs: {}, rate: s.out[id] });
+  });
+  Object.keys(GOODS_RES_SOURCES).forEach(function (b) { if (GOODS_RES_SOURCES[b] === id) out.push({ kind: 'res', bld: b, bldName: goodsBldName(b), inputs: {} }); });
+  Object.keys(RECIPES).forEach(function (rid) {
+    var r = RECIPES[rid];
+    if (r.out[id]) r.bld.forEach(function (b) { out.push({ kind: 'rec', rid: rid, bld: b, bldName: goodsBldName(b), inputs: r.in, rate: r.rate, outN: r.out[id] }); });
+  });
+  return out;
+}
+// 下游:用到此貨品的配方,以及其他用途標籤(科技成本 / 農具 / 居民消費)
+function goodsUsers(id) {
+  var out = { recipes: [], tags: [] }, g = GOODS[id];
+  Object.keys(RECIPES).forEach(function (rid) {
+    var r = RECIPES[rid];
+    if (r.in[id]) out.recipes.push({ rid: rid, name: r.name, out: Object.keys(r.out)[0], n: r.in[id], bld: r.bld.map(goodsBldName).join('/') });
+  });
+  if (g && !g.res && g.tier >= 1 && !g.legacy) out.tags.push('科技研發成本(T' + g.tier + ' 任選)');
+  if (g && GOODS_FARM_TOOL.id === id) out.tags.push('田糧產 ×' + GOODS_FARM_TOOL.bonus);
+  if (g && g.cons) out.tags.push('居民消費:' + g.cons);
+  return out;
+}
+// 上游樹:{ id, name, icon, tier, makers:[{ bldName, built, kind, rate, kids:[{ n, node }] }] };depth 限制展開層數
+function goodsChainUp(id, depth, built) {
+  var g = GOODS[id] || {}, node = { id: id, name: g.name || id, icon: g.icon || '', tier: g.tier || 0, makers: [] };
+  built = built || goodsBuiltTypes();
+  if (depth <= 0) return node;
+  goodsMakers(id).forEach(function (m) {
+    var kids = [];
+    Object.keys(m.inputs).forEach(function (iid) { kids.push({ n: m.inputs[iid], node: goodsChainUp(iid, depth - 1, built) }); });
+    node.makers.push({ bld: m.bld, bldName: m.bldName, built: !!built[m.bld], kind: m.kind, rate: m.rate, kids: kids });
+  });
+  return node;
+}
+var goodsTab = 'inv', goodsChainSel = 'g_yifu', goodsChainFocus = null;   // goodsChainFocus:鏈條圖上標出缺口的貨品 id(瓶頸圖示 / 生產分頁帶入)
+function goodsChainNodeHtml(node, n, lv) {
+  var h = '<div class="gch" style="margin-left:' + (lv ? 10 : 0) + 'px"><span' + (node.id === goodsChainFocus ? ' class="gfocus"' : '') + '>' + (n ? n + '× ' : '') + node.icon + ' ' + goodsEsc(node.name) + ' <i class="gtag">T' + node.tier + '</i>' + (node.id === goodsChainFocus ? ' ◀ 缺口' : '') + '</span>';
+  node.makers.forEach(function (m) {
+    h += '<small class="' + (m.built ? '' : 'bad') + '">' + (m.kind === 'rec' ? '由' : '產自') + '「' + goodsEsc(m.bldName) + '」' + (m.built ? '' : '(尚未建造)') + '</small>';
+    m.kids.forEach(function (k) { h += goodsChainNodeHtml(k.node, k.n, lv + 1); });
+  });
+  return h + '</div>';
+}
+// 生產分頁(O10):每個生產建築的狀態 / 產出每小時 / 缺什麼;問題在前
+function goodsProdHtml() {
+  var rows = goodsProdRows(), sm = goodsProdSummary(rows), on = typeof chainVisIsOn === 'function' && chainVisIsOn();
+  var h = '<div class="gsub">共 ' + sm.total + ' 處:運轉 ' + sm.ok + ',缺料 ' + sm.miss + ',未通路 ' + sm.road + ',庫滿 ' + sm.full + (sm.ore ? ',缺礦 ' + sm.ore : '') + '。</div>';
+  if (typeof chainVisToggle === 'function') h += '<div class="gsub">城市畫面生產視圖(顯示全部生產建築狀態與貨物流向):<button class="gmini' + (on ? ' on' : '') + '" data-gp="view">' + (on ? '開' : '關') + '</button></div>';
+  if (!rows.length) return h + '<div class="gsub">還沒有生產建築:蓋麻田、木工棚、織坊、礦坑、打鐵舖、成衣鋪。</div>';
+  rows = rows.slice().sort(function (a, b) { return (b.level - a.level) || (b.causes.length - a.causes.length) || (a.y - b.y) || (a.x - b.x); });
+  var okShown = 0, okHidden = 0;
+  rows.forEach(function (r) {
+    if (r.level === 0 && !r.causes.length) { if (okShown >= 10) { okHidden++; return; } okShown++; }
+    var ic = GOODS_CAUSE_ICON[r.cause] || (r.cause === 'ok' ? '✅' : '⏳');
+    h += '<div class="gws' + (r.level >= 1 ? ' bad' : '') + '"><span>' + ic + ' ' + r.icon + ' ' + goodsEsc(r.name) + ' → ' + r.outIcon + goodsEsc(r.outName) + '</span>' +
+      '<span class="gn">' + (r.perHour > 0 ? r.perHour + ' /時' : '—') + '</span><small style="flex:0 0 100%">' + goodsEsc(r.reason) + '</small>' +
+      '<button class="gmini" data-gp="go" data-k="' + r.key + '">前往</button>' +
+      (r.cause === 'miss' || r.cause === 'full' ? '<button class="gmini" data-gp="gap" data-id="' + r.out + '" data-m="' + (r.miss || '') + '">鏈條</button>' : '') + '</div>';
+  });
+  if (okHidden) h += '<div class="gsub">另有 ' + okHidden + ' 處運轉正常(未列出)。</div>';
+  return h;
+}
+function goodsChainHtml() {
+  var h = '<div class="gsub">選一個貨品,看它的上游原料與下游用途;紅字 = 該生產建築還沒蓋。</div><div class="gchips">';
+  Object.keys(GOODS).filter(function (id) { var g = GOODS[id]; return !g.res && !g.legacy && !g.later && g.tier >= 1; }).sort(function (a, b) { return (GOODS[a].tier - GOODS[b].tier) || (a < b ? -1 : 1); }).forEach(function (id) {
+    h += '<button class="gmini' + (id === goodsChainSel ? ' on' : '') + '" data-gp="chain" data-id="' + id + '">' + GOODS[id].icon + goodsEsc(GOODS[id].name) + '</button>';
+  });
+  h += '</div><div class="gtier">上游(怎麼做)</div>' + goodsChainNodeHtml(goodsChainUp(goodsChainSel, 6), 0, 0);
+  var u = goodsUsers(goodsChainSel);
+  h += '<div class="gtier">下游(拿來做什麼)</div>';
+  if (!u.recipes.length && !u.tags.length) h += '<div class="gsub">目前只能賣給市集(基價 ' + goodsPrice(goodsChainSel) + ')</div>';
+  u.recipes.forEach(function (r) { h += '<div class="gsub">' + r.n + '件 → ' + goodsEsc(goodsName(r.out)) + '(' + goodsEsc(r.bld) + ')</div>'; });
+  u.tags.forEach(function (t) { h += '<div class="gsub">' + goodsEsc(t) + '</div>'; });
+  return h;
+}
+
 // ───────── 最小 UI:庫房面板(側欄「庫房」按鈕 → 隱藏的 #btnGoods)─────────
 function goodsEsc(s) { return String(s).replace(/[&<>"]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
 function goodsPanelHtml() {
   var c = goodsCity(), h = '', tierName = ['原料', '加工品', '成品', '工藝品', '奢侈品'], last = -1;
   if (!c) return '';
-  h += '<button class="close" data-gp="close" title="關閉">✕</button><b>📦 庫房</b>';
+  h += '<button class="close" data-gp="close" title="關閉">✕</button><b>📦 庫房</b> ' +
+    '<button class="gmini' + (goodsTab === 'inv' ? ' on' : '') + '" data-gp="tab" data-v="inv">庫存</button><button class="gmini' + (goodsTab === 'chain' ? ' on' : '') + '" data-gp="tab" data-v="chain">鏈條</button><button class="gmini' + (goodsTab === 'prod' ? ' on' : '') + '" data-gp="tab" data-v="prod">生產</button>';
+  if (goodsTab === 'chain') return h + goodsChainHtml();
+  if (goodsTab === 'prod') return h + goodsProdHtml();
   h += '<div class="gsub">每種貨品各有上限;<button data-gp="sell" class="gmini">溢出自動賣:' + (c.autoSell ? '開' : '關') + '</button></div>';
   goodsVisibleList().forEach(function (g) {
     if (g.tier !== last) { last = g.tier; h += '<div class="gtier">T' + g.tier + ' ' + tierName[g.tier] + '</div>'; }
@@ -451,6 +605,14 @@ function goodsPanelRender() {
   el.hidden = !goodsPanelOpen;
   if (goodsPanelOpen) el.innerHTML = goodsPanelHtml();
 }
+// 開庫房的鏈條分頁:sel = 要看的貨品,focus = 標出缺口的貨品(皆可省略)
+function goodsOpenChain(sel, focus) {
+  if (sel && GOODS[sel]) goodsChainSel = sel;
+  goodsChainFocus = focus && GOODS[focus] ? focus : null;
+  goodsTab = 'chain';
+  goodsPanelToggle(true);
+  goodsPanelRender();
+}
 function goodsPanelToggle(open) {
   goodsPanelOpen = open === undefined ? !goodsPanelOpen : !!open;
   if (goodsPanelOpen) {
@@ -465,6 +627,11 @@ function goodsPanelClick(e) {
   if (!t) return;
   var a = t.getAttribute('data-gp');
   if (a === 'close') goodsPanelToggle(false);
+  else if (a === 'tab') { var tv = t.getAttribute('data-v'); goodsTab = tv === 'chain' ? 'chain' : (tv === 'prod' ? 'prod' : 'inv'); if (goodsTab !== 'chain') goodsChainFocus = null; goodsPanelRender(); }
+  else if (a === 'view') { if (typeof chainVisToggle === 'function') chainVisToggle(); goodsPanelRender(); }
+  else if (a === 'go') { var kk = (t.getAttribute('data-k') || '').split(','); if (typeof centerOnCell === 'function' && kk.length === 2) { centerOnCell(+kk[0], +kk[1]); if (typeof clampView === 'function') clampView(); } }
+  else if (a === 'gap') { goodsOpenChain(t.getAttribute('data-id'), t.getAttribute('data-m')); }
+  else if (a === 'chain') { goodsChainSel = t.getAttribute('data-id') || goodsChainSel; goodsPanelRender(); }
   else if (a === 'sell') { goodsToggleSell(); goodsPanelRender(); }
   else if (a === 'cyc') { goodsCycleRecipe(t.getAttribute('data-k')); goodsPanelRender(); }
 }
@@ -480,7 +647,8 @@ function goodsUiInit() {
       '#goodsPanel .grow{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;margin-top:4px}#goodsPanel .grow .gn{margin-left:auto;font-variant-numeric:tabular-nums}' +
       '#goodsPanel .gbar{display:block;flex:0 0 100%;height:4px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}#goodsPanel .gbar u{display:block;height:100%;background:#f0b45a;text-decoration:none}' +
       '#goodsPanel .gws{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;margin-top:5px}#goodsPanel .gws small{flex:1;min-width:0;opacity:.8}#goodsPanel .gws.bad small{color:#ff8a7a;opacity:1}' +
-      '#goodsPanel .gmini{min-height:28px;padding:2px 8px;font-size:12px}';
+      '#goodsPanel .gmini{min-height:28px;padding:2px 8px;font-size:12px}#goodsPanel .gmini.on{background:#f0b45a;color:#222}' +
+      '#goodsPanel .gchips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}#goodsPanel .gch{margin-top:3px;border-left:1px solid rgba(255,255,255,.2);padding-left:6px}#goodsPanel .gch small{display:block;opacity:.8}#goodsPanel .gch small.bad{color:#ff8a7a;opacity:1}#goodsPanel .gtag{opacity:.6;font-size:11px}#goodsPanel .gfocus{color:#ff8a7a;font-weight:bold}';
     document.head.appendChild(css);
     var panel = document.createElement('div');
     panel.id = 'goodsPanel';

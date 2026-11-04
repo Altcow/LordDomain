@@ -1725,6 +1725,7 @@ function draw(ctx, time) {
   if (typeof artLights === 'function') artLights(ctx, time);   // GL 幀:光暈走 GL 加法混色批次(rqGlow);c2d 時 ctx === ov
   if (typeof lifeDrawTop === 'function') lifeDrawTop(ov, time);
   if (typeof talentPatrolDraw === 'function') talentPatrolDraw(ov, time);
+  if (typeof chainVisDraw === 'function') chainVisDraw(ov, time);   // 產業鏈:瓶頸圖示 / 貨物流向(chainvis.js)
   if (preview.visible) drawPreview(ov);
   // 草稿只在經營模式顯示;離開經營模式(釣魚、仙獸、戰鬥布置等)即丟棄,移動中的建築回原位
   if (typeof draft !== 'undefined' && draft) {

@@ -129,6 +129,17 @@ function bpvBounds(cv) {
   return { x: 0, y: 0, w: w, h: h };
 }
 
+// 外部精靈圖延遲載入:預覽先以程式繪製顯示,圖載入完成後補畫一次(最多等約 6 秒;缺圖 / 失敗就維持程式繪製)
+function bpvExtRetry(t) {
+  var e, st;
+  if (typeof EXT_SPRITES === 'undefined' || typeof extSpriteState !== 'function' || !(e = EXT_SPRITES[t])) return;
+  if (typeof extSpritesOn === 'function' && !extSpritesOn()) return;
+  st = extSpriteState(e.L);
+  if (st !== 'loading' || (bpv.retry || 0) >= 24 || typeof setTimeout !== 'function') return;
+  bpv.retry = (bpv.retry || 0) + 1;
+  setTimeout(function () { if (bpv.id && bpv.el && !bpv.el.hidden) bpvDraw(); }, 250);
+}
+
 function bpvDraw() {
   var cv = bpv.cv, c, t, spr, bb, k, dw, dh, d = OBJECTS[bpv.id], v;
   bpv.last = { mode: 'none', scale: 0 };
@@ -148,6 +159,7 @@ function bpvDraw() {
       c.imageSmoothingEnabled = true;
       c.drawImage(spr.cv, bb.x, bb.y, bb.w, bb.h, (cv.width - dw) / 2, (cv.height - dh) / 2, dw, dh);
       bpv.last = { mode: 'art', scale: k * BPV_RES / 2 };   // CSS 像素 / 世界像素(畫布 2× 取樣)
+      bpvExtRetry(t);
       return;
     }
   } catch (e) { /* 烘焙失敗:退回圖示 */ }
@@ -174,7 +186,7 @@ function bpvAnchor() {
 function bpvShow(id) {
   var el = bpvEnsureEl(), opened = false;
   if (!el || typeof OBJECTS === 'undefined' || !OBJECTS[id]) return false;
-  bpv.id = id;
+  bpv.id = id; bpv.retry = 0;
   bpvRender();
   if (typeof panelOpen === 'function') opened = panelOpen('bpv', { kind: 'card', anchor: bpvAnchor(), size: bpvSize() });
   if (!opened) {
