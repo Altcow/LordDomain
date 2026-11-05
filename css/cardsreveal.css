@@ -87,6 +87,24 @@
 .rv-ok { min-height: 48px; min-width: 160px; font-size: 18px; border-color: #f2c640; background: #7a5a10; }
 .rv-ok[hidden], .rv-skip[hidden], .rv-hint[hidden] { display: none; }
 .rv-hint { align-self: center; font-size: 13px; opacity: .6; min-height: 44px; line-height: 44px; }
+/* 美術卡(js/cardart.js;.rv.art = 整批邊框 / 背景 / 卡背已載入):卡片比例 355:578,背面用新卡背,正面為邊框 + 人物背景 + 頭像 */
+.rv.art .rv-card { height: calc(var(--cw) * 1.628); }
+@media (orientation: landscape) {
+  .rv.art { --cw: min(calc((100vw - 96px - 6 * var(--gap)) / 7), calc((100vh - 130px) * .6), 130px); }
+  .rv.art .rv-fin { padding-bottom: 72px; }   /* 特寫卡上移,避開下方姓名字幕 */
+  .rv.art .rv-fin.n1 .rv-stg { --cw: min(36vh, 40vw); }
+  .rv.art .rv-fin.n4 .rv-stg { --cw: min(19vw, 30vh); }
+}
+.rv.art .rv-bk { background: url("../assets/card/card_back.webp") center / 100% 100% no-repeat; border: none; border-radius: 5%; }
+.rv.art .rv-card.hint3 .rv-bk { box-shadow: 0 0 .5em .1em #a56fe0; }
+.rv.art .rv-card.hint4 .rv-bk { box-shadow: 0 0 .6em .15em #f2c640; }
+.rv.art .rv-fr { background: none; border: none; padding: 0; box-shadow: none; border-radius: 5%; display: block; }
+.rv.art .rv-card.g4 .rv-fr, .rv.art .rv-card.g3 .rv-fr { background: none; box-shadow: none; }
+.rv .caf.caf { width: 100%; height: 100%; font-size: calc(var(--cw) * .01); }
+.rv .caf .canm { font-size: 10em; }
+.rv .caf .capn { gap: 1.5em; }
+.rv .caf .capl { font-size: 9.5em; }
+.rv .caf .rv-sil { fill: var(--gc); opacity: .55; }
 .rv.final { background: rgba(8, 10, 18, .96); }
 .rv.final .rv-main { z-index: 5; }
 body.cards-reveal { overscroll-behavior: none; }

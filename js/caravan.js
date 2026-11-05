@@ -4,6 +4,9 @@
 // 結算:以時間戳(Date.now)計。出車時預抽亂數種子,到時用種子開獎 → 線上與離線(關閉遊戲再回來)結果一致;離線期間車隊照常走,不打折也不暫停。
 //   庫房尚未載入(goodsCity() 為 null)時不結算,等下一次 tick。
 // 對外:caravanGet caravanSave caravanTick caravanBuyCart caravanHire caravanDismiss caravanStart caravanQuote caravanPoolToday caravanUsedToday caravanLeft
+//   caravanHall caravanCartCount caravanCartBusy caravanCartFree caravanShedUsed caravanRouteOpen
+// 馬車可重複擁有:carts = { 品階id: 輛數 }(舊檔 { white: 1 } 即 1 輛,直接沿用);每趟 trips[i].no = 該品階第幾輛(1 起),占用以「品階 + 序號」判定。
+//   持有總數受鏢局車棚上限(買車時檢查;舊檔超額不刪,只是不能再買);同時出隊數受鏢局等級限制。
 // ES2017;不用 ?. ??。
 
 const CARAVAN_KEY = 'lorddomain.caravan.v1';
@@ -21,22 +24,31 @@ function caravanInt(v, lo, hi, d) {
 function caravanNorm(d) {
   var s = caravanBlank(), seen = {};
   if (!d || typeof d !== 'object' || d.v !== 1) return s;
-  CARAVAN_CARTS.forEach(function (c) { if (d.carts && d.carts[c.id]) s.carts[c.id] = 1; });
-  s.carts.white = 1;
+  var capMax = CARAVAN_HALL[CARAVAN_HALL.length - 1].shed;
+  CARAVAN_CARTS.forEach(function (c) {   // 舊檔值為 1(或 true)→ 1 輛;數量夾在 0~最大車棚,不憑空多車
+    var n = d.carts && typeof d.carts === 'object' ? caravanInt(d.carts[c.id] === true ? 1 : d.carts[c.id], 0, capMax, 0) : 0;
+    if (n > 0) s.carts[c.id] = n;
+  });
+  if (!(s.carts.white >= 1)) s.carts.white = 1;
   if (Array.isArray(d.roster)) d.roster.forEach(function (id) {
     if (caravanEscortValid(id) && !seen[id] && s.roster.length < CARAVAN_ROSTER_MAX) { seen[id] = 1; s.roster.push(id); }
   });
   var busyC = {}, busyE = {};
   if (Array.isArray(d.trips)) d.trips.forEach(function (t) {
-    if (!t || !caravanCart(t.cart) || !s.carts[t.cart] || busyC[t.cart] || !caravanRoute(t.route)) return;
-    var t0 = Number(t.t0), t1 = Number(t.t1);
+    if (!t || !caravanCart(t.cart) || !s.carts[t.cart] || !caravanRoute(t.route)) return;
+    var t0 = Number(t.t0), t1 = Number(t.t1), used = busyC[t.cart] || (busyC[t.cart] = {}), no = caravanInt(t.no, 1, s.carts[t.cart], 0), k;
     if (!isFinite(t0) || !isFinite(t1) || t1 < t0) return;
+    if (!no || used[no]) {   // 舊檔沒有序號 / 序號重複 → 補第一個空的;全占用則丟棄(同一輛車不會同時跑兩趟)
+      no = 0;
+      for (k = 1; k <= s.carts[t.cart]; k++) if (!used[k]) { no = k; break; }
+      if (!no) return;
+    }
     var esc = [];
     (Array.isArray(t.esc) ? t.esc : []).forEach(function (id) {
       if (s.roster.indexOf(id) >= 0 && !busyE[id] && esc.length < caravanCart(t.cart).slots) { esc.push(id); busyE[id] = 1; }
     });
-    busyC[t.cart] = 1;
-    s.trips.push({ cart: t.cart, route: t.route, esc: esc, t0: t0, t1: t1, seed: caravanInt(t.seed, 0, 4294967295, 1), fee: caravanInt(t.fee, 0, 1e9, 0) });
+    used[no] = 1;
+    s.trips.push({ cart: t.cart, no: no, route: t.route, esc: esc, t0: t0, t1: t1, seed: caravanInt(t.seed, 0, 4294967295, 1), fee: caravanInt(t.fee, 0, 1e9, 0) });
   });
   s.day = typeof d.day === 'string' ? d.day.slice(0, 10) : '';
   s.used = caravanInt(d.used, 0, 1e6, 0);
@@ -128,23 +140,53 @@ function caravanDismiss(id) {
   return { ok: true };
 }
 
-// ───────── 買車 ─────────
+// ───────── 鏢局等級 / 車棚 ─────────
+// 遊戲尚無鏢局建築:以官階(cards.js cardsRankLv,缺資料時 0)對 CARAVAN_HALL.rank 換算;回傳該級資料列
+function caravanHall() {
+  var rk = 0, h = CARAVAN_HALL[0], i;
+  if (typeof cardsRankLv === 'function') { try { rk = cardsRankLv() | 0; } catch (e) { rk = 0; } }
+  for (i = 0; i < CARAVAN_HALL.length; i++) if (rk >= CARAVAN_HALL[i].rank) h = CARAVAN_HALL[i];
+  return h;
+}
+function caravanRouteOpen(routeId) { var r = caravanRoute(routeId); return !!r && caravanHall().lv >= (r.hall || 1); }
+function caravanCartCount(cartId) { return caravanGet().carts[cartId] | 0; }
+function caravanShedUsed() {
+  var s = caravanGet(), n = 0;
+  CARAVAN_CARTS.forEach(function (c) { n += s.carts[c.id] | 0; });
+  return n;
+}
+function caravanCartBusy(cartId) {
+  var n = 0;
+  caravanGet().trips.forEach(function (t) { if (t.cart === cartId) n++; });
+  return n;
+}
+function caravanCartFree(cartId) { return Math.max(0, caravanCartCount(cartId) - caravanCartBusy(cartId)); }
+function caravanCartPrice(cartId) { var c = caravanCart(cartId); return !c ? 0 : (c.cost > 0 ? c.cost : CARAVAN_WHITE_EXTRA); }
+
+// ───────── 買車(同品階可多輛,受車棚上限)─────────
 function caravanBuyCart(cartId) {
-  var s = caravanGet(), c = caravanCart(cartId);
+  var s = caravanGet(), c = caravanCart(cartId), cost, cap = caravanHall().shed;
   if (!c) return { ok: false, reason: '沒有這種車' };
-  if (s.carts[cartId]) return { ok: false, reason: '已經有了' };
-  if (typeof world === 'undefined' || !world || !world.res || (world.res.coin || 0) < c.cost) return { ok: false, reason: '金幣不足(需 ' + c.cost + ')' };
-  world.res.coin -= c.cost;
-  s.carts[cartId] = 1;
+  if (caravanShedUsed() >= cap) return { ok: false, reason: '車棚已滿(' + cap + ' 輛)' };
+  cost = caravanCartPrice(cartId);
+  if (typeof world === 'undefined' || !world || !world.res || (world.res.coin || 0) < cost) return { ok: false, reason: '金幣不足(需 ' + cost + ')' };
+  world.res.coin -= cost;
+  s.carts[cartId] = (s.carts[cartId] | 0) + 1;
   caravanSave();
-  return { ok: true, cost: c.cost };
+  return { ok: true, cost: cost, n: s.carts[cartId] };
 }
 
 // ───────── 出車 ─────────
-function caravanTrip(cartId) {
+// 找路上的車隊:只給品階 → 該品階第一趟;給序號 → 該輛
+function caravanTrip(cartId, no) {
   var ts = caravanGet().trips;
-  for (var i = 0; i < ts.length; i++) if (ts[i].cart === cartId) return ts[i];
+  for (var i = 0; i < ts.length; i++) if (ts[i].cart === cartId && (no === undefined || (ts[i].no || 1) === no)) return ts[i];
   return null;
+}
+function caravanFreeNo(cartId) {   // 該品階第一輛閒置車的序號;沒有回 0
+  var n = caravanCartCount(cartId), k;
+  for (k = 1; k <= n; k++) if (!caravanTrip(cartId, k)) return k;
+  return 0;
 }
 function caravanPower(escIds) {
   var p = 0;
@@ -184,13 +226,17 @@ function caravanPrereq() {
   return ok ? { ok: true } : { ok: false, reason: '缺道路:驛站旁的道路還沒連到城門' };
 }
 function caravanStart(cartId, routeId, escIds, now) {
-  var s = caravanGet(), c = caravanCart(cartId), r = caravanRoute(routeId), esc = [], busy, q, i, t, pre;
+  var s = caravanGet(), c = caravanCart(cartId), r = caravanRoute(routeId), esc = [], busy, q, i, t, pre, no, hall;
   now = now === undefined ? Date.now() : now;
   if (!c || !r) return { ok: false, reason: '選擇不完整' };
   pre = caravanPrereq();
   if (!pre.ok) return { ok: false, reason: pre.reason };
+  hall = caravanHall();
+  if (!caravanRouteOpen(routeId)) return { ok: false, reason: '這條路線要鏢局 Lv' + r.hall + ' 才開放' };
   if (!s.carts[cartId]) return { ok: false, reason: '還沒有這輛車' };
-  if (caravanTrip(cartId)) return { ok: false, reason: '這輛車還在路上' };
+  no = caravanFreeNo(cartId);
+  if (!no) return { ok: false, reason: '這種車都在路上,要另一輛車' };
+  if (s.trips.length >= hall.trips) return { ok: false, reason: '同時出隊已達上限(鏢局 Lv' + hall.lv + ':' + hall.trips + ' 隊)' };
   if (typeof goodsCity !== 'function' || !goodsCity()) return { ok: false, reason: '庫房尚未就緒' };
   caravanRollDay(s, now);
   if (s.used >= CARAVAN_DAILY_MAX) return { ok: false, reason: '今天的車次用完了(' + CARAVAN_DAILY_MAX + ')' };
@@ -206,9 +252,9 @@ function caravanStart(cartId, routeId, escIds, now) {
   world.res.coin -= q.fee;
   s.used++;
   s.stats.trips++;
-  s.trips.push({ cart: cartId, route: routeId, esc: esc, t0: now, t1: now + q.sec * 1000, seed: Math.floor(Math.random() * 4294967295) + 1, fee: q.fee });
+  s.trips.push({ cart: cartId, no: no, route: routeId, esc: esc, t0: now, t1: now + q.sec * 1000, seed: Math.floor(Math.random() * 4294967295) + 1, fee: q.fee });
   caravanSave();
-  return { ok: true, fee: q.fee, sec: q.sec };
+  return { ok: true, fee: q.fee, sec: q.sec, no: no };
 }
 
 // ───────── 結算 ─────────

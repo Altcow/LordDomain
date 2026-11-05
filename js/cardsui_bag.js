@@ -39,7 +39,7 @@ function cuOverFmt(ms) {
 function cuOverRowHtml(cs, c) {
   var j = CARD_JOB_BY_ID[c.main], left = cardsOverLeft(cs, c, cuNow());
   return '<div class="cur cubr" style="border-left:5px solid var(--gr' + c.gr + ');padding-left:4px"><button class="cub" data-a="bsel" data-id="' + c.bid + '" aria-label="勾選">' + (cu.bsel[c.bid] ? '☑' : '☐') + '</button>' +
-    '<span class="cubn" data-a="bdet" data-id="' + c.bid + '"><span><b>' + cuBagGrLabel(c.gr) + '</b> ' + cuEsc(c.name) + '<span class="cusub"> ' + (j ? j.t[(c.ja[c.main] || 1) - 1] : '') + ' · 才 ' + c.tai + '</span></span></span>' +
+    '<span class="cubn" data-a="bdet" data-id="' + c.bid + '">' + (typeof cuArtThumb === 'function' ? cuArtThumb(c) : '') + '<span><b>' + cuBagGrLabel(c.gr) + '</b> ' + cuEsc(c.name) + '<span class="cusub"> ' + (j ? j.t[(c.ja[c.main] || 1) - 1] : '') + ' · 才 ' + c.tai + '</span></span></span>' +
     '<span class="cuovt' + (left < CARD_BAG.overWarnMs ? ' urg' : '') + '" data-ovl="' + c.bid + '">' + cuOverFmt(left) + '</span></div>';
 }
 function cuOverHtml(cs) {
@@ -73,7 +73,7 @@ function cuBagRowHtml(c) {
   var j = CARD_JOB_BY_ID[c.main], cost = cardsCost(c);
   return '<div class="cur cubr" style="border-left:5px solid var(--gr' + c.gr + ');padding-left:4px">' +
     (c.fig ? '<span class="cusub" style="min-width:44px;text-align:center">名人</span>' : '<button class="cub" data-a="bsel" data-id="' + c.bid + '" aria-label="勾選">' + (cu.bsel[c.bid] ? '☑' : '☐') + '</button>') +
-    '<span class="cubn" data-a="bdet" data-id="' + c.bid + '"><span><b>' + cuBagGrLabel(c.gr) + '</b> ' + cuEsc(c.name) + (c.tok ? ' <span class="cusub">信物' + c.tok + '</span>' : '') +
+    '<span class="cubn" data-a="bdet" data-id="' + c.bid + '">' + (typeof cuArtThumb === 'function' ? cuArtThumb(c) : '') + '<span><b>' + cuBagGrLabel(c.gr) + '</b> ' + cuEsc(c.name) + (c.tok ? ' <span class="cusub">信物' + c.tok + '</span>' : '') +
     '<span class="cusub"> ' + (j ? j.t[(c.ja[c.main] || 1) - 1] : '') + ' · 才 ' + c.tai + '</span></span></span>' +
     '<button class="cub" data-a="benl" data-id="' + c.bid + '">任用 🎴' + cost + '</button></div>';
 }

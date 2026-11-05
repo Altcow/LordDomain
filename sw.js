@@ -1,8 +1,8 @@
-const VERSION = 'v46';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v47';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
-const RUNTIME_PATHS = ['/assets/buildings/', '/assets/portraits/', '/assets/ui/', '/assets/terrain/', '/assets/fullbody/', '/assets/bnfx/', '/assets/furnace/', '/assets/traffic/'];
+const RUNTIME_PATHS = ['/assets/buildings/', '/assets/portraits/', '/assets/ui/', '/assets/terrain/', '/assets/fullbody/', '/assets/bnfx/', '/assets/furnace/', '/assets/traffic/', '/assets/card/'];
 const PRECACHE = [
   './',
   './index.html',
@@ -119,6 +119,7 @@ const PRECACHE = [
   './js/carddata.js',
   './js/portrait_gender.js',
   './js/cards.js',
+  './js/cardart.js',
   './js/cardsui.js',
   './js/cardsui_named.js',
   './js/cardsui_bag.js',
@@ -160,6 +161,7 @@ const PRECACHE = [
   './js/bn_effects.js',
   './js/bndraw.js',
   './js/bnui.js',
+  './js/bnlog.js',
   './js/bnmap.js',
   './js/minimap.js',
   './js/main.js',

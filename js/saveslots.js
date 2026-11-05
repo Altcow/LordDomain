@@ -21,7 +21,7 @@ var SAVE_KEY_PROG = 'lorddomain.prog.v1';
 var SAVE_NOOFFLINE_KEY = 'lorddomain.load.noOffline';   // 舊版旗標(已不再使用);啟動時若殘留一律清除
 
 // 進度鍵:整組進槽;讀檔時槽內沒有的會被移除(避免殘留)
-var SAVE_SLOT_KEYS = ['lorddomain.save.v1', 'lorddomain.prog.v1', 'lorddomain.fish.v1', 'lorddomain.pet.v1', 'lorddomain.caravan.v1', 'lorddomain.visit.v1', 'lorddomain.bn.v1'];
+var SAVE_SLOT_KEYS = ['lorddomain.save.v1', 'lorddomain.prog.v1', 'lorddomain.fish.v1', 'lorddomain.pet.v1', 'lorddomain.caravan.v1', 'lorddomain.visit.v1', 'lorddomain.bn.v1', 'lorddomain.bnlog.v1'];
 // 暫態進度鍵:不進槽,但讀檔 / 重新開始時一律清掉(與舊盤面綁定,留著會錯亂)
 var SAVE_TRANSIENT_KEYS = ['lorddomain.draft.v1'];
 // 偏好鍵:不進槽,讀檔 / 重新開始後保留目前值

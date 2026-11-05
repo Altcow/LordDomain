@@ -21,11 +21,23 @@ const CARAVAN_QTY = { 1: [3, 5], 2: [2, 3], 3: [1, 2], 4: [1, 1] };
 
 // ───────── 2. 路線 ─────────
 // fee = 保鑣費(金幣,出發時付);secMul = 時間倍率;risk = 基本受阻機率;yieldMul = 件數倍率(只影響件數);power = 建議鏢師戰力合計
+// 路線地圖(caravanui.js 程式繪製):hall = 開放所需鏢局等級;town = 目的地城鎮名(魔幻外觀不顯示);mx,my = 地圖節點座標;cx,cy = 路線彎曲控制點(皆為 CARAVAN_MAP 座標)
 const CARAVAN_ROUTES = [
-  { id: 'near', name: '近郊官道', fee: 100, secMul: 1,   risk: 0.10, yieldMul: 1,   power: 2 },
-  { id: 'hill', name: '山間小路', fee: 300, secMul: 1.5, risk: 0.25, yieldMul: 1.3, power: 6 },
-  { id: 'far',  name: '遠方商道', fee: 800, secMul: 2.2, risk: 0.40, yieldMul: 1.7, power: 12 }
+  { id: 'near', name: '近郊官道', fee: 100, secMul: 1,   risk: 0.10, yieldMul: 1,   power: 2,  hall: 1, town: '臨亭集', mx: 74,  my: 58,  cx: 112, cy: 98 },
+  { id: 'hill', name: '山間小路', fee: 300, secMul: 1.5, risk: 0.25, yieldMul: 1.3, power: 6,  hall: 1, town: '山陽鎮', mx: 254, my: 46,  cx: 222, cy: 104 },
+  { id: 'far',  name: '遠方商道', fee: 800, secMul: 2.2, risk: 0.40, yieldMul: 1.7, power: 12, hall: 2, town: '雒陽',   mx: 262, my: 160, cx: 170, cy: 176 }
 ];
+// 地圖畫布(viewBox)與本城節點
+const CARAVAN_MAP = { w: 320, h: 210, hx: 150, hy: 110 };
+
+// 鏢局等級(PLAN_CARAVAN §2.1;遊戲尚無鏢局建築,以官階代用:cardsRankLv() ≥ rank 即達該級;PLACEHOLDER)
+// trips = 同時出隊上限;shed = 車棚(持有馬車總數上限,買車時檢查)
+const CARAVAN_HALL = [
+  { lv: 1, rank: 0, trips: 1, shed: 4 },
+  { lv: 2, rank: 3, trips: 2, shed: 6 },
+  { lv: 3, rank: 5, trips: 3, shed: 8 }
+];
+const CARAVAN_WHITE_EXTRA = 500;    // 白車開局送 1 輛;再添購每輛的價錢(PLACEHOLDER)
 
 // ───────── 3. 結算 ─────────
 const CARAVAN_POWER_K = 0.02;       // 每 1 點鏢師戰力降低的受阻機率
@@ -75,6 +87,7 @@ function caravanOfficeName() { var f = caravanFx(); return f && f.office ? f.off
 function caravanEscortTitle() { var f = caravanFx(); return f && f.escortTitle ? f.escortTitle : '鏢師'; }
 function caravanCartTitle(c) { var f = caravanFx(); return (f && f.carts && f.carts[c.id]) || c.title; }
 function caravanRouteName(r) { var f = caravanFx(); return (f && f.routes && f.routes[r.id]) || r.name; }
+function caravanRouteTown(r) { return caravanFx() ? '' : (r.town || ''); }
 function caravanCart(id) {
   for (var i = 0; i < CARAVAN_CARTS.length; i++) if (CARAVAN_CARTS[i].id === id) return CARAVAN_CARTS[i];
   return null;
@@ -82,6 +95,22 @@ function caravanCart(id) {
 function caravanRoute(id) {
   for (var i = 0; i < CARAVAN_ROUTES.length; i++) if (CARAVAN_ROUTES[i].id === id) return CARAVAN_ROUTES[i];
   return null;
+}
+// 路線地圖:本城 → 目的地的二次貝茲曲線上,參數 f(0~1)的座標 [x, y]
+function caravanMapPos(routeId, f) {
+  var r = caravanRoute(routeId), M = CARAVAN_MAP, u;
+  if (!r) return [M.hx, M.hy];
+  f = f < 0 ? 0 : (f > 1 ? 1 : f);
+  u = 1 - f;
+  return [u * u * M.hx + 2 * u * f * r.cx + f * f * r.mx, u * u * M.hy + 2 * u * f * r.cy + f * f * r.my];
+}
+// 一趟在地圖上的「去程」進度:前半段 0~1(本城 → 目的地);已抵達目的地(過半)回 -1 = 不畫
+function caravanMapGo(trip, now) {
+  var dur = trip.t1 - trip.t0, f;
+  if (!(dur > 0)) return -1;
+  f = (now - trip.t0) / dur;
+  if (f >= 0.5) return -1;
+  return f <= 0 ? 0 : f * 2;
 }
 // 某馬車的 T1~T4 機率(正規化,和 = 1;回傳長度 4 的陣列)
 function caravanOdds(cartId) {

@@ -2,7 +2,7 @@
 // 入口:cardsRevealPlay(cards, onDone) — cards 為本批卡陣列(gr 0白/1青/2藍/3紫/4金);動畫結束(按「收下」)或玩家按「略過」時呼叫 onDone(只一次)。
 // 排程:階段1 白青藍快速翻開(≤0.6s)→ 階段2 紫階逐張(中央放大旋轉+紫光,再飛向格子)→ 階段3 金階逐張(滿版金光+粒子)→ 終局:紫金 ≥4 張時最後 4 張同時開。
 // 無紫金:只做快速翻牌。點一下 = 跳到下一小步並進入加速;略過 = 直接顯示最終排列並呼叫 onDone;結尾停在最終排列頁等「收下」。
-// 全域名稱:cardsRevealPlay cardsRevealPlan cardsRevealActive cardsRevealLog。依賴(皆 typeof 守衛):cardsui.js 頭像函式、carddata.js 職業、audio.js auPlay、perf.js isPowerSave。ES2017;只用 transform/opacity 動畫。
+// 全域名稱:cardsRevealPlay cardsRevealPlan cardsRevealActive cardsRevealLog。依賴(皆 typeof 守衛):cardart.js 美術卡(整批邊框 / 背景 / 卡背都已載入才用,root 加 .art;否則原畫法)、cardsui.js 頭像函式、carddata.js 職業、audio.js auPlay、perf.js isPowerSave。ES2017;只用 transform/opacity 動畫。
 var RV_FIN_MAX = 4;                      // 終局合開最多張數
 var RV_MS = { flip: 600, p: 1200, g: 1800, fin: 2000, ps: 0.5, fast: 0.4 };
 var rvS = null;                          // 目前演出狀態(同時只有一場)
@@ -45,10 +45,19 @@ function rvAvatar(c) {
 }
 function rvGradeCh(gr) { return typeof CARD_GRADE !== 'undefined' && CARD_GRADE[gr] ? CARD_GRADE[gr].ch : ['白', '青', '藍', '紫', '金'][gr] || ''; }
 function rvJobName(c) { return typeof CARD_JOB_BY_ID !== 'undefined' && CARD_JOB_BY_ID[c.main] ? CARD_JOB_BY_ID[c.main].name : ''; }
+// 美術卡正面(js/cardart.js):名牌卷軸 = 姓名,資訊面板 = 品階 · 職業(名人另標)
+function rvArtFront(c) {
+  var gr = c.gr | 0;
+  return '<div class="rv-fr">' + cardArtHtml(c, { portrait: rvAvatar(c), name: '<span class="canmt' + (String(c.name || '').length > 4 ? ' canml' : '') + '">' + rvEsc(c.name) + '</span>',
+    panel: '<div class="capl">' + rvEsc(rvGradeCh(gr)) + '階' + (c.fig ? ' · 名人' : '') + '</div><div class="capl">' + rvEsc(rvJobName(c)) + '</div>', cls: 'carv' }) + '</div>';
+}
+// 這批卡是否全部可用美術卡(邊框與背景都已載入);缺 cardart.js / 載入中 / 缺檔 → 整批用原畫法
+function rvArtOk(list) { return typeof cardArtOk === 'function' && typeof cardArtHtml === 'function' && list.every(function (c) { return cardArtOk(c); }) && (typeof cardArtState !== 'function' || cardArtState('assets/card/card_back.webp') === 1); }
 function rvMkCard(c, up) {
   var el = document.createElement('div'), gr = c.gr | 0, i, corner = '';
   for (i = 0; i < gr; i++) corner += '◆';
   el.className = 'rv-card g' + gr + (up ? ' up' : '');
+  if (rvS && rvS.art) { el.innerHTML = '<div class="rv-in"><div class="rv-bk"></div>' + rvArtFront(c) + '</div>'; return el; }
   el.innerHTML = '<div class="rv-in"><div class="rv-bk"><span>令</span></div><div class="rv-fr"><b class="rv-g">' + rvGradeCh(gr) + '</b>' + (c.fig ? '<i class="rv-fg">名人</i>' : '') +
     '<div class="rv-av">' + rvAvatar(c) + '</div><div class="rv-nm">' + rvEsc(c.name) + '</div><div class="rv-jb">' + rvEsc(rvJobName(c)) + '</div><div class="rv-cn">' + corner + '</div></div></div>';
   return el;
@@ -204,10 +213,12 @@ function cardsRevealPlay(cards, onDone) {
   if (!list.length || typeof document === 'undefined' || !document.body) { if (typeof onDone === 'function') { try { onDone(); } catch (e) { /* 呼叫端錯誤不影響 */ } } return false; }
   power = rvPower();
   plan = cardsRevealPlan(list, power);
-  root = document.createElement('div'); root.className = 'rv' + (power ? ' ps' : '');
+  if (typeof cardArtPreload === 'function') cardArtPreload();   // 首次使用時載入並快取卡片美術(已載過不重複)
+  var art = rvArtOk(list);
+  root = document.createElement('div'); root.className = 'rv' + (power ? ' ps' : '') + (art ? ' art' : '');
   root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', '抽卡結果');
   main = rvDiv('rv-main', root); grid = rvDiv('rv-grid', main);
-  s = rvS = { root: root, list: list, cards: [], cbs: typeof onDone === 'function' ? [onDone] : [], power: power, fast: false, k: 1, timer: null, pos: 0, steps: null, stg: [], final: false, fired: false, closed: false, log: [] };
+  s = rvS = { root: root, list: list, art: art, cards: [], cbs: typeof onDone === 'function' ? [onDone] : [], power: power, fast: false, k: 1, timer: null, pos: 0, steps: null, stg: [], final: false, fired: false, closed: false, log: [] };
   rvLastLog = s.log;
   list.forEach(function (c) {
     var el = rvMkCard(c, false), g = c.gr | 0;

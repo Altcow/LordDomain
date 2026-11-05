@@ -15,6 +15,7 @@ var BNDR = {
   stats: { frames: 0, lastMs: 0, sumMs: 0, maxMs: 0, samples: [] }
 };
 var BN_NUM_N = 28, BN_FX_N = 64;
+var BN_NUM_DMG = '#ff3b30', BN_NUM_HEAL = '#3ee05a', BN_NUM_MIN = 15;   // 浮字:扣血紅、補血綠,一律黑色描邊;最小字級(px)
 var BN_ST_ICON = { atk_up: 1, atk_down: 1, def_up: 1, def_down: 1, spd_up: 1, stun: 1, burn: 1, poison: 1, bleed: 1, shield: 1, silence: 1, taunt: 1, timid: 1, confuse: 1, heal_reduce: 'heal_block', ward: 1 };
 var BN_ST_NAME = {
   stun: '暈眩', fear: '威懾', confuse: '擾亂', timid: '怯戰', silence: '計窮', ult_lock: '封大', atk_down: '攻↓', def_down: '防↓', spd_down: '速↓', mark: '標記',
@@ -109,22 +110,39 @@ function bnDrLook(u) {
 }
 
 // ───────── 版面 ─────────
-// 回 L:{vw,vh,top,bot,colW,pitch,sh,pos:{A:[[{x,y}×3]×3],B:...},fs}。x = 腳底中心,y = 腳底。我方在左、前排靠中央。
+// 回 L:{vw,vh,top,bot,colW,pitch,sh,pos:{A:[[{x,y}×3]×3],B:...},fs,gap,bt,labY,labH,labX0,banY}。x = 腳底中心,y = 腳底。我方在左、前排靠中央。
+// 每方 3×3 九宮格:排(row 0 前 1 中 2 後)= 橫向,列(col)= 縱向;雙方中間留 gap。每格垂直佔用 = 頭上 head(血條 + 狀態圖示)+ 立繪 sh + 腳下 foot(名字),列距 pitch ≥ 這三者,立繪不互相蓋住血條。
+// 技能名標籤(bnDrLabels)放在各自陣營上方天空的牆角:區塊上方有空間就放 top 下方,否則放在頂端帶(左方讓出左上返回鈕 labX0)。
 function bnDrLayout(vw, vh, top, bot) {
-  var half = vw / 2, colW = Math.max(30, (half - 6) / 3.05), fh = Math.max(80, vh - top - bot), avail = fh - 40, sh, pitch, bt, L = { vw: vw, vh: vh, top: top, bot: bot, pos: { A: [], B: [] } }, r, c, x, y;
-  sh = Math.max(48, Math.min(colW * 1.8, avail / 2.35, 230));
-  pitch = Math.min(sh + 24, (avail - sh * 1.06) / 2);
-  bt = top + 24 + Math.max(0, (avail - (sh * 1.06 + 2 * pitch))) / 2;   // 區塊頂(最上格頭頂);頭上留 24px 給血條 / 狀態圖示
+  var gap = Math.max(28, vw * 0.07), side = (vw - gap) / 2 - 10, colW = Math.max(30, side / 3), fh = Math.max(80, vh - top - bot), head = 34, foot = 16, sh, pitch, bt, L = { vw: vw, vh: vh, top: top, bot: bot, pos: { A: [], B: [] } }, r, c, x, y, fs, labH, room, stag;
+  pitch = Math.max(30, (fh - head - foot) / 3);
+  sh = Math.max(40, Math.min(colW * 1.35, pitch - 18, 170));
+  pitch = Math.min(pitch, sh + head + foot + 10);
+  // 斜排:列距不夠放「立繪 + 血條 + 名字」時(橫式),上下列水平錯開一個血條寬,血條 / 名字不互蓋
+  // (錯開一個血條寬不夠時改縮立繪,讓上下列垂直不重疊)
+  stag = colW * 0.16;
+  if (pitch < sh + head + foot + 6) {
+    x = Math.max(32, Math.min(colW * 0.86, sh * 0.72)) + 8;
+    if (x <= colW * 0.45) stag = Math.max(stag, x);
+    else sh = Math.max(40, pitch - head - foot - 6);
+  }
+  colW = Math.max(30, Math.min(colW, (vw / 2 - gap / 2 - stag - 10 - sh * 0.3) / 2.5));   // 最外側(後排錯開列)立繪不出畫面
+  bt = top + head + Math.max(0, (fh - head - foot - (sh + 2 * pitch))) * 0.55;   // 區塊頂(最上格頭頂),略偏下(地面)
   for (r = 0; r < 3; r++) {
     L.pos.A[r] = []; L.pos.B[r] = [];
     for (c = 0; c < 3; c++) {
-      x = half - colW * (0.5 + 0.95 * r) + (c - 1) * colW * 0.3;   // 斜排:上下格錯開,減少立繪垂直重疊
-      y = bt + sh + c * pitch + (r === 1 ? sh * 0.03 : (r === 2 ? sh * 0.06 : 0));
+      x = vw / 2 - gap / 2 - colW * (0.5 + r) + (c - 1) * stag;
+      y = bt + sh + c * pitch;
       L.pos.A[r][c] = { x: x, y: y };
       L.pos.B[r][c] = { x: vw - x, y: y };
     }
   }
-  L.colW = colW; L.pitch = pitch; L.sh = sh; L.fs = Math.max(11, Math.min(21, colW / 4.6));
+  fs = Math.max(11, Math.min(21, colW / 4.6, sh / 4));
+  labH = Math.max(22, Math.min(30, fs * 1.9));
+  room = bt - head - top;
+  L.colW = colW; L.pitch = pitch; L.sh = sh; L.fs = fs; L.gap = gap; L.bt = bt; L.labH = labH;
+  if (room >= labH * 2 + 12) { L.labY = top + 2; L.labX0 = 6; L.banY = top + labH + 8 + (room - labH - 8) / 2; }
+  else { L.labY = Math.max(4, top - labH - 6); L.labX0 = 60; L.banY = L.labY + labH / 2; }
   return L;
 }
 
@@ -132,7 +150,7 @@ function bnDrLayout(vw, vh, top, bot) {
 function bnPlNewVu(u, L) {
   var lk = bnDrLook(u), p = L ? L.pos[u.side][u.row][u.col] : { x: 0, y: 0 };
   return {
-    id: u.id, side: u.side, name: u.name, troop: u.troop, fig: u.fig, row: u.row, col: u.col, px: p.x, py: p.y, tx: p.x, ty: p.y, dx: 0, dy: 0, hp: u.hp, mx: u.maxHp, hpShow: u.hp, morale: u.morale, moraleShow: u.morale,
+    id: u.id, side: u.side, name: u.name, troop: u.troop, fig: u.fig, row: u.row, col: u.col, px: p.x, py: p.y, tx: p.x, ty: p.y, dx: 0, dy: 0, hp: u.hp, mx: u.maxHp, hpShow: u.hp, hpLag: u.hp, lagHold: 0, hitGlow: 0, morale: u.morale, moraleShow: u.morale,
     alive: u.alive !== false, fade: 1, rot: 0, flash: 0, cast: 0, kb: 0, scale: 1, lunge: null, dying: -1, st: {}, shield: 0, look: lk, phase: (u.id * 1.713) % 6.28, sx: 1, sy: 1, sh: L ? L.sh : 100, nn: 0, hitAt: 0, ultReady: false, tone: ''
   };
 }
@@ -141,7 +159,8 @@ function bnPlNew(S, L, o) {
   o = o || {};
   P = {
     S: S, L: L, speed: o.speed || 1, clock: 0, wait: 0, vu: {}, order: [], tm: [], nums: [], fx: [], banner: null, cut: null, over: false, done: false, ended: false, endT: 0,
-    ei: 0, round: 0, actor: -1, hitN: 0, sk: null, chainN: 0, sfx: o.sfx !== false, hooks: o.hooks || {}, ultSeen: {}, ps: !!o.powerSave, skipped: false, nev: 0, endEv: null, shake: 0, flashT: 0, result: null
+    ei: 0, round: 0, actor: -1, hitN: 0, sk: null, chainN: 0, sfx: o.sfx !== false, hooks: o.hooks || {}, ultSeen: {}, ps: !!o.powerSave, skipped: false, nev: 0, endEv: null, shake: 0, flashT: 0, result: null,
+    lab: { A: { cur: null, q: [] }, B: { cur: null, q: [] } }
   };
   for (i = 0; i < BN_NUM_N; i++) P.nums.push({ on: false, x: 0, y: 0, vy: 0, t: 0, dur: 1, text: '', col: '#fff', size: 14, kind: 0 });
   for (i = 0; i < (P.ps ? BN_FX_N / 2 : BN_FX_N); i++) P.fx.push({ on: false, name: '', x: 0, y: 0, x2: 0, y2: 0, t: 0, dur: 0.4, size: 40, rot: 0, col: '#fff', mode: 0, delay: 0 });
@@ -170,13 +189,38 @@ function bnPlRelayout(P, L) {
 
 // 數字 / 文字物件池
 function bnPlText(P, v, text, col, size, kind, dur, dxj) {
-  var i, n = null, L = P.L;
+  var i, k, n = null, L = P.L;
   for (i = 0; i < P.nums.length; i++) if (!P.nums[i].on) { n = P.nums[i]; break; }
   if (!n) n = P.nums[0];
-  n.on = true; n.text = text; n.col = col; n.size = size || 1; n.kind = kind || 0; n.t = 0; n.dur = dur || 0.8; n.vy = kind === 2 ? -L.sh * 0.18 : -L.sh * 0.55;
+  n.on = true; n.uid = v.id; n.st = 0; n.text = text; n.col = col; n.size = size || 1; n.kind = kind || 0; n.t = 0; n.dur = dur || 0.8; n.vy = kind === 2 ? -L.sh * 0.18 : -L.sh * 0.55;
   n.x = v.px + v.dx + (dxj !== undefined ? dxj : ((v.nn++ % 3) - 1) * L.colW * 0.22);
-  n.y = v.py + v.dy - L.sh * 0.78 - (kind === 2 ? L.sh * 0.14 : 0);
+  n.y = v.py + v.dy - L.sh - 24 - (kind === 2 ? 16 : 0);   // 從兵力條上方浮起:不被人物 / 血條遮住,也不蓋血條
+  if (kind !== 2) {   // 同一人短時間內多個數字(連擊 / 治療):後出的往上錯開一格,不疊在一起
+    for (i = 0, k = 0; i < P.nums.length; i++) if (P.nums[i] !== n && P.nums[i].on && P.nums[i].uid === v.id && P.nums[i].kind !== 2 && P.nums[i].t < 0.35) k++;
+    n.y -= Math.min(2, k) * Math.max(BN_NUM_MIN, L.fs * 1.25) * 1.05;
+  }
   return n;
+}
+// 技能名標籤:每方一格(左方 = 左上角、右方 = 右上角),一次只顯示一個;後到的排隊,目前這個至少顯示 BNLAB.min 秒後淡出再換下一個(不堆疊)
+var BNLAB = { dur: 1.1, min: 0.45, fade: 0.15, qMax: 3 };
+// 陣營旗色(CARD_FAC 順序:魏 蜀 吳 黃巾 中立);無陣營 / 敵方小怪 = 中性色
+var BN_FAC_COL = ['#3a6ec8', '#2f9a5a', '#c8443a', '#d8b23a', '#8a8a8a'];
+var BN_FAC_NEUTRAL = '#8a8a8a';
+function bnPlLabel(P, v, text) {
+  var u = P.S && P.S.units[v.id], fac = u && u.fac >= 0 && u.fac <= 4 ? u.fac : -1, lb = P.lab[v.side], it;
+  if (!text || !lb) return;
+  it = { text: text, col: fac >= 0 ? BN_FAC_COL[fac] : BN_FAC_NEUTRAL, t: 0, out: -1 };
+  if (!lb.cur) lb.cur = it;
+  else { lb.q.push(it); if (lb.q.length > BNLAB.qMax) lb.q.shift(); }
+}
+function bnPlLabAnim(P, dt) {
+  ['A', 'B'].forEach(function (sd) {
+    var lb = P.lab[sd], c = lb.cur;
+    if (!c) return;
+    c.t += dt;
+    if (c.out < 0 && (c.t >= BNLAB.dur || (lb.q.length && c.t >= BNLAB.min))) c.out = 0;
+    if (c.out >= 0) { c.out += dt; if (c.out >= BNLAB.fade) lb.cur = lb.q.length ? lb.q.shift() : null; }
+  });
 }
 // 特效物件池。mode:0 圖(加色)1 箭 2 球 3 環 4 閃線(斬擊) 5 光柱
 function bnPlFx(P, name, x, y, o) {
@@ -244,11 +288,12 @@ function bnPlProj(P, vs, vt, e, delay) {
 // ───────── 事件處理:回等待秒數 ─────────
 function bnPlHit(P, e, vt) {
   var abs = e.abs | 0, v = e.v | 0, L = P.L, ty = e.ty, col;
+  if (v > 0) { vt.hpLag = Math.max(vt.hpLag, vt.hpShow, vt.hp); vt.lagHold = 0.4; vt.hitGlow = 1; }   // 殘影:舊血量淡紅段停 0.4 秒再縮;血條短暫加亮
   vt.hp = e.hp;
   if (abs > 0) { vt.shield = Math.max(0, vt.shield - abs); if (v <= 0) bnPlText(P, vt, '盾 -' + abs, '#8ec7ff', 1, 0, 0.8); else bnPlText(P, vt, '-' + abs, '#8ec7ff', 0.8, 0, 0.7, -L.colW * 0.3); bnPlSfx(P, 'shieldHit'); }
   if (v > 0) {
-    col = ty === 'dot' ? '#c38aff' : (ty === 'strat' ? '#9fb8ff' : '#fff1d0');
-    if (e.crit) { bnPlText(P, vt, '-' + v + '!', '#ffd25a', 1.35, 1, 0.95); P.shake = 0.12; }
+    col = BN_NUM_DMG;   // 扣血一律紅字黑框(攻擊 / 謀略 / 持續傷害皆同);暴擊更大
+    if (e.crit) { bnPlText(P, vt, '-' + v + '!', BN_NUM_DMG, 1.4, 1, 0.95); P.shake = 0.12; }
     else bnPlText(P, vt, '-' + v, col, 1, 0, 0.8);
     if (ty !== 'dot') { vt.flash = 1; vt.kb = 1; }
   }
@@ -286,8 +331,39 @@ function bnPlStatus(P, e) {
   if (!v) return 0;
   v.st[e.id] = 1;
   if (e.id === 'shield') return 0;
-  if (nm && e.id !== 'ccimm') bnPlText(P, v, nm, good ? '#9be39b' : '#ff9a8a', 0.7, 2, 0.75);
+  if (nm && e.id !== 'ccimm') bnPlStPop(P, v, e.id);
   return BNPL_T.status;
+}
+// 狀態浮字:「+中毒」「−防禦」…;同一人連續被施加時排隊(間隔 BNST_POP.gap)、水平錯開,小字快速淡出。
+// 時間用「模擬秒」:倍速時依 bnPlStK 拉長,實際停留不會閃一下就沒
+// 配色(使用者定案):增益 = 金色「+名」、減益 = 紫色「−名」,與傷害紅字 / 治療綠字分開;比數字小一號、飄得更短更快,一律黑色描邊
+var BNST_POP = { dur: 0.6, gap: 0.12, size: 0.8, good: '#ffd75a', bad: '#c890ff' };
+var BN_ST_POP = {
+  atk_up: '攻擊提升', def_up: '防禦提升', spd_up: '速度提升', crit_up: '暴擊提升', atk_down: '攻擊', def_down: '防禦', spd_down: '速度',
+  stun: '暈眩', fear: '威懾', confuse: '擾亂', timid: '怯戰', silence: '計窮', ult_lock: '封大招', mark: '標記', burn: '燃燒', poison: '中毒', bleed: '流血', heal_reduce: '禁療',
+  taunt: '嘲諷', guard: '援護', evade: '規避', ward: '抵禦', heal_hot: '回春', amp_atk: '增傷', shield: '護盾'
+};
+function bnPlStK(P) { var s = P.speed || 1; return s <= 1 ? 1 : 1 + (s - 1) * 0.6; }   // 3× → 2.2 倍模擬秒 ≈ 實際 0.44 秒
+function bnPlStPopTxt(id) { var nm = BN_ST_POP[id] || BN_ST_NAME[id] || ''; return nm ? (BN_ST_GOOD[id] ? '+' : '−') + nm : ''; }
+function bnPlStPop(P, v, id) {
+  var txt = bnPlStPopTxt(id), good = !!BN_ST_GOOD[id], k = bnPlStK(P), at, d, slot;
+  if (!txt) return;
+  at = Math.max(P.clock, v.stNext || 0);
+  v.stNext = at + BNST_POP.gap * k;
+  slot = (v.stN = ((v.stN || 0) + 1) % 3);
+  d = at - P.clock;
+  function go() {   // 同一人仍在畫面上的狀態字往上疊一格(最多 4 格),左右輕微交錯
+    var lane = 0, up, i, n, lh = Math.max(BN_NUM_MIN * 0.9, P.L.fs * 1.25) * BNST_POP.size + 3;
+    if (P.skipped) return;
+    for (i = 0; i < P.nums.length; i++) if (P.nums[i].on && P.nums[i].kind === 2 && P.nums[i].uid === v.id && P.nums[i].st) lane++;
+    n = bnPlText(P, v, txt, good ? BNST_POP.good : BNST_POP.bad, BNST_POP.size, 2, BNST_POP.dur * k, (slot - 1) * P.L.colW * 0.12);
+    n.st = 1;
+    up = Math.max(0, Math.floor((n.y - 12) / lh));   // 上方剩幾格(橫式第一列很靠頂):放不下就改排到左右兩側
+    lane = Math.min(3, lane);
+    if (lane <= up) n.y -= lane * lh;
+    else { n.y -= ((lane - up - 1) % (up + 1)) * lh; n.x += (Math.floor((lane - up - 1) / (up + 1)) % 2 ? -1 : 1) * P.L.colW * 0.55; }
+  }
+  if (d <= 0) go(); else bnPlAt(P, d, go);
 }
 function bnPlKill(P, e) {
   var v = P.vu[e.tgt], d;
@@ -304,7 +380,7 @@ function bnPlCutin(P, e) {
   v.tone = tone;
   dur = full ? BNPL_T.cutFull : BNPL_T.cutSmall;
   P.cut = { full: full, t: 0, dur: dur, side: v.side, name: v.name, fig: v.fig, skill: d ? d.name : '', tone: tone, uid: e.u, path: v.look.paths[0], big: !!v.fig };
-  if (!full) { bnPlFx(P, 'morale_burst', v.px, v.py - P.L.sh * 0.5, { size: P.L.sh * 1.3, dur: 0.5, delay: 0 }); bnPlText(P, v, d ? d.name : '大招', BN_TONE_COL[tone] || '#ffe9a8', 1.1, 2, 0.9); }
+  if (!full) { bnPlFx(P, 'morale_burst', v.px, v.py - P.L.sh * 0.5, { size: P.L.sh * 1.3, dur: 0.5, delay: 0 }); bnPlLabel(P, v, '大招·' + (d ? d.name : '')); }
   bnPlSfx(P, 'flag');
   bnPlHook(P, 'cut', P.cut);
   return dur;
@@ -346,7 +422,7 @@ function bnPlEvent(P, e) {
       P.sk = { id: e.id, kind: e.kind, cat: e.cat, tags: (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[e.id] && BN_SKILLS[e.id].tags) || [], name: e.name };
       if (!v) return 0;
       v.cast = 1;
-      if (e.cat !== 'ult') bnPlText(P, v, (e.rc ? '再放·' : (e.as !== undefined ? '補刀·' : '')) + (e.name || ''), '#ffe9a8', 0.95, 2, 1.0);
+      if (e.cat !== 'ult') bnPlLabel(P, v, (e.rc ? '再放·' : (e.as !== undefined ? '補刀·' : '')) + (e.name || ''));   // 技能名 → 己方天空角落標籤
       if (/^(heal|shield|buff|inspire|morale|cleanse|revive|guard|evade|reorder|taunt)/.test(e.kind || '')) { c = bnPlCenter(v); bnPlFx(P, 'morale_burst', c.x, c.y, { size: L.sh * 0.9, dur: 0.4 }); }
       if (P.sk.tags.indexOf('charge') >= 0) { bnPlFx(P, 'dust', v.px, v.py - L.sh * 0.1, { size: L.sh * 0.7, dur: 0.5 }); }
       return e.cat === 'ult' ? 0.12 : t.cast;
@@ -359,7 +435,7 @@ function bnPlEvent(P, e) {
       v = P.vu[e.tgt];
       if (!v) return 0;
       v.hp = e.hp;
-      if (e.v > 0) { bnPlText(P, v, '+' + e.v, '#8ff0a0', 1, 0, 0.85); c = bnPlCenter(v); bnPlFx(P, P.sk && P.sk.kind === 'heal_all' ? 'heal_motes' : 'heal_pillar', c.x, c.y, { size: L.sh * 0.9, dur: 0.5 }); }
+      if (e.v > 0) { bnPlText(P, v, '+' + e.v, BN_NUM_HEAL, 1, 0, 0.85); c = bnPlCenter(v); bnPlFx(P, P.sk && P.sk.kind === 'heal_all' ? 'heal_motes' : 'heal_pillar', c.x, c.y, { size: L.sh * 0.9, dur: 0.5 }); }
       return P.hitN++ === 0 ? t.heal : t.healMore;
     }
     case 'shield':
@@ -445,6 +521,10 @@ function bnPlAnim(P, dt) {
     }
     v.hpShow += (v.hp - v.hpShow) * Math.min(1, dt * 8);
     if (Math.abs(v.hp - v.hpShow) < 0.5) v.hpShow = v.hp;
+    if (v.lagHold > 0) v.lagHold = Math.max(0, v.lagHold - dt);
+    else if (v.hpLag > v.hpShow) { v.hpLag += (v.hpShow - v.hpLag) * Math.min(1, dt * 2.2); if (v.hpLag - v.hpShow < 0.5) v.hpLag = v.hpShow; }
+    if (v.hpLag < v.hpShow) v.hpLag = v.hpShow;
+    if (v.hitGlow > 0) v.hitGlow = Math.max(0, v.hitGlow - dt / 0.35);
     v.moraleShow += (v.morale - v.moraleShow) * Math.min(1, dt * 8);
     if (v.flash > 0) v.flash = Math.max(0, v.flash - dt / 0.2);
     if (v.kb > 0) v.kb = Math.max(0, v.kb - dt / 0.25);
@@ -482,6 +562,7 @@ function bnPlAnim(P, dt) {
     if (f.t >= f.dur) f.on = false;
   }
   if (P.banner) { P.banner.t += dt; if (P.banner.t >= P.banner.dur) P.banner = null; }
+  bnPlLabAnim(P, dt);
   if (P.shake > 0) P.shake = Math.max(0, P.shake - dt);
   if (P.cut) {
     P.cut.t += dt;
@@ -524,12 +605,12 @@ function bnPlSkip(P) {
   if (P.done) return;
   P.skipped = true;
   if (!S.over) bnRunToEnd(S);
-  P.ei = S.events.length; P.tm = []; P.cut = null; P.banner = null; bnPlHook(P, 'cut', null);
+  P.ei = S.events.length; P.tm = []; P.cut = null; P.banner = null; P.lab = { A: { cur: null, q: [] }, B: { cur: null, q: [] } }; bnPlHook(P, 'cut', null);
   for (i = 0; i < P.nums.length; i++) P.nums[i].on = false;
   for (i = 0; i < P.fx.length; i++) P.fx[i].on = false;
   for (id in P.vu) {
     v = P.vu[id]; u = S.units[id];
-    v.hp = u.hp; v.hpShow = u.hp; v.morale = u.morale; v.moraleShow = u.morale; v.alive = u.alive; v.lunge = null; v.flash = 0; v.kb = 0; v.cast = 0; v.st = {}; v.shield = 0;
+    v.hp = u.hp; v.hpShow = u.hp; v.hpLag = u.hp; v.lagHold = 0; v.hitGlow = 0; v.morale = u.morale; v.moraleShow = u.morale; v.alive = u.alive; v.lunge = null; v.flash = 0; v.kb = 0; v.cast = 0; v.st = {}; v.shield = 0;
     v.dying = u.alive ? -1 : 2; v.fade = u.alive ? 1 : 0; v.rot = u.alive ? 0 : 1.22 * (v.side === 'A' ? -1 : 1);
     if (u.alive) { Object.keys(u.st || {}).forEach(function (k) { v.st[k] = 1; }); if (u.st && u.st.shield) v.shield = u.st.shield.val; }
   }
@@ -647,24 +728,32 @@ function bnDrUnit(ctx, P, v, t, L, pw) {
   }
   ctx.restore();
 }
+// 兵力條幾何(測試也用):頭頂上方、不遮臉;粗 7~10px + 黑框
+function bnDrBarBox(v, L) {
+  var w = Math.max(32, Math.min(L.colW * 0.86, L.sh * 0.72)), bh = Math.max(7, Math.min(10, Math.round(L.sh * 0.075)));
+  return { x: v.px + v.dx - w / 2, y: v.py + v.dy - L.sh - bh - 6, w: w, h: bh };
+}
 function bnDrBars(ctx, P, v, t, L) {
-  var w = Math.max(34, L.colW * 0.82), x = v.px + v.dx - w / 2, y = v.py + v.dy - L.sh - 4, hp = Math.max(0, v.hpShow / v.mx), keys, n = 0, i, ic, k, sz = Math.max(12, L.fs * 1.05), ex;
+  var bb = bnDrBarBox(v, L), w = bb.w, x = bb.x, y = bb.y, bh = bb.h, hp = Math.max(0, Math.min(1, v.hpShow / v.mx)), lag = Math.max(hp, Math.min(1, (v.hpLag || 0) / v.mx)), keys, n = 0, i, ic, k, sz = Math.max(11, L.fs * 0.95), ex, iy;
   if (v.fade <= 0.05) return;
   ctx.globalAlpha = v.fade;
-  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(x - 1, y - 1, w + 2, 7);
-  ctx.fillStyle = hp > 0.5 ? '#5ed05e' : (hp > 0.25 ? '#e0b43a' : '#e0503a'); ctx.fillRect(x, y, w * hp, 5);
-  if (v.shield > 0) { ctx.fillStyle = 'rgba(142,199,255,.9)'; ctx.fillRect(x, y - 2, Math.min(w, w * v.shield / v.mx), 2); }
-  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(x - 1, y + 6, w + 2, 4);
-  ctx.fillStyle = v.morale >= 100 ? '#fff2a0' : '#d9a441'; ctx.fillRect(x, y + 7, w * Math.min(1, v.moraleShow / 100), 2);
-  keys = Object.keys(v.st);
+  ctx.fillStyle = '#000'; ctx.fillRect(x - 2, y - 2, w + 4, bh + 4);                         // 黑框
+  ctx.fillStyle = 'rgba(70,24,20,.9)'; ctx.fillRect(x, y, w, bh);                              // 空槽
+  if (lag > hp) { ctx.fillStyle = 'rgba(255,140,120,.85)'; ctx.fillRect(x + w * hp, y, w * (lag - hp), bh); }   // 殘影(舊血量淡紅段)
+  ctx.fillStyle = hp > 0.5 ? '#5ed05e' : (hp > 0.25 ? '#e0b43a' : '#e0503a'); ctx.fillRect(x, y, w * hp, bh);
+  if (v.hitGlow > 0) { ctx.globalAlpha = v.fade * v.hitGlow * 0.7; ctx.fillStyle = '#fff'; ctx.fillRect(x, y, w * lag, bh); ctx.globalAlpha = v.fade; ctx.strokeStyle = 'rgba(255,240,200,' + (0.9 * v.hitGlow) + ')'; ctx.lineWidth = 2; ctx.strokeRect(x - 2, y - 2, w + 4, bh + 4); }   // 受擊加亮
+  if (v.shield > 0) { ctx.fillStyle = 'rgba(142,199,255,.95)'; ctx.fillRect(x, y, Math.min(w, w * v.shield / v.mx), 2); }
+  ctx.fillStyle = '#000'; ctx.fillRect(x - 2, y + bh + 1, w + 4, 4);
+  ctx.fillStyle = v.morale >= 100 ? '#fff2a0' : '#d9a441'; ctx.fillRect(x, y + bh + 2, w * Math.min(1, v.moraleShow / 100), 2);
+  keys = Object.keys(v.st); iy = y - sz - 3;
   for (i = 0; i < keys.length && n < 3; i++) {
     k = keys[i]; ic = BN_ST_ICON[k];
     ex = ic ? bnDrImg('assets/bnfx/st_' + (ic === 1 ? k : ic) + '.webp') : null;
-    if (ex && ex.ok) ctx.drawImage(ex.img, x + n * (sz + 1), y - sz - 3, sz, sz);
-    else { ctx.fillStyle = BN_ST_GOOD[k] ? '#4a8a4a' : '#9a4a3a'; ctx.fillRect(x + n * (sz + 1), y - sz - 3, sz, sz); ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.round(sz * 0.7) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText((BN_ST_NAME[k] || k).charAt(0), x + n * (sz + 1) + sz / 2, y - sz / 2 - 3); }
+    if (ex && ex.ok) ctx.drawImage(ex.img, x + n * (sz + 1), iy, sz, sz);
+    else { ctx.fillStyle = BN_ST_GOOD[k] ? '#4a8a4a' : '#9a4a3a'; ctx.fillRect(x + n * (sz + 1), iy, sz, sz); ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.round(sz * 0.7) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText((BN_ST_NAME[k] || k).charAt(0), x + n * (sz + 1) + sz / 2, iy + sz / 2); }
     n++;
   }
-  if (keys.length > 3) { ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.round(sz * 0.7) + 'px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('+' + (keys.length - 3), x + 3 * (sz + 1), y - sz / 2 - 3); }
+  if (keys.length > 3) { ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.round(sz * 0.7) + 'px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('+' + (keys.length - 3), x + 3 * (sz + 1), iy + sz / 2); }
   ctx.fillStyle = '#f0e6cf'; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 3; ctx.font = Math.round(L.fs * 0.82) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.strokeText(v.name, v.px + v.dx, v.py + v.dy + 2); ctx.fillText(v.name, v.px + v.dx, v.py + v.dy + 2);
   if (v.morale >= 100 && v.alive) {
@@ -704,8 +793,38 @@ function bnDrFx(ctx, P, f, L) {
   }
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
 }
+// 技能名標籤:斜角色塊,靠牆的一半填陣營旗色(半透明)、另一半透明;文字描黑邊。回各方標籤的矩形(測試用)
+function bnDrLabRect(P, L, sd, tw) {
+  var h = L.labH || 26, w = tw + h * 1.4 + h * 0.45, x0 = sd === 'A' ? Math.max(0, (L.labX0 || 6) - 6) : L.vw - w;
+  return { x: x0, y: L.labY !== undefined ? L.labY : 4, w: w, h: h };
+}
+function bnDrLabels(ctx, P, L) {
+  var sides = ['A', 'B'], k, sd, c, a, h = L.labH || 26, fz, tw, R, sl = h * 0.45, half, maxW = L.vw / 2 - (L.gap || 28) / 2 - (L.labX0 || 6) - h * 1.9, slide;
+  if (!P.lab) return;
+  for (k = 0; k < 2; k++) {
+    sd = sides[k]; c = P.lab[sd].cur;
+    if (!c) continue;
+    a = Math.min(1, c.t / 0.12); if (c.out >= 0) a = Math.max(0, 1 - c.out / BNLAB.fade);
+    slide = (1 - Math.min(1, c.t / 0.15)) * 14 * (sd === 'A' ? -1 : 1);
+    fz = Math.round(h * 0.62);
+    ctx.font = 'bold ' + fz + 'px sans-serif';
+    tw = ctx.measureText(c.text).width;
+    if (tw > maxW && maxW > 20) { fz = Math.max(10, Math.floor(fz * maxW / tw)); ctx.font = 'bold ' + fz + 'px sans-serif'; tw = Math.min(maxW, ctx.measureText(c.text).width); }
+    R = bnDrLabRect(P, L, sd, tw); half = R.w / 2;
+    ctx.save();
+    ctx.globalAlpha = a * 0.55; ctx.fillStyle = c.col; ctx.beginPath();
+    if (sd === 'A') { ctx.moveTo(R.x + slide, R.y); ctx.lineTo(R.x + half + sl + slide, R.y); ctx.lineTo(R.x + half + slide, R.y + R.h); ctx.lineTo(R.x + slide, R.y + R.h); }
+    else { ctx.moveTo(R.x + R.w + slide, R.y); ctx.lineTo(R.x + half - sl + slide, R.y); ctx.lineTo(R.x + half + slide, R.y + R.h); ctx.lineTo(R.x + R.w + slide, R.y + R.h); }
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = a; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.fillStyle = '#fff3d0';
+    ctx.textAlign = sd === 'A' ? 'left' : 'right';
+    ctx.strokeText(c.text, sd === 'A' ? R.x + h * 0.6 + slide : R.x + R.w - h * 0.6 + slide, R.y + R.h / 2);
+    ctx.fillText(c.text, sd === 'A' ? R.x + h * 0.6 + slide : R.x + R.w - h * 0.6 + slide, R.y + R.h / 2);
+    ctx.restore();
+  }
+}
 function bnDrFrame(ctx, P, dpr, nowSec) {
-  var L = P.L, S0 = (typeof performance !== 'undefined') ? performance.now() : 0, list = [], id, i, v, n, bg, sx = 0, sy = 0, b, ps = P.ps, cut = P.cut;
+  var L = P.L, S0 = (typeof performance !== 'undefined') ? performance.now() : 0, list = [], id, i, v, n, bg, sx = 0, sy = 0, b, by, fz, ps = P.ps, cut = P.cut;
   bg = bnDrBgFor(L, dpr, ps);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (bg) ctx.drawImage(bg, 0, 0); else { ctx.fillStyle = '#3a4228'; ctx.fillRect(0, 0, L.vw * dpr, L.vh * dpr); }
@@ -721,22 +840,24 @@ function bnDrFrame(ctx, P, dpr, nowSec) {
     n = P.nums[i];
     if (!n.on) continue;
     ctx.globalAlpha = Math.max(0, Math.min(1, (n.dur - n.t) / 0.25));
-    ctx.font = 'bold ' + Math.round(L.fs * 1.25 * n.size) + 'px sans-serif';
-    ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(0,0,0,.8)'; ctx.strokeText(n.text, n.x, n.y);
+    fz = Math.round(Math.max(BN_NUM_MIN * (n.size < 1 ? 0.9 : 1), L.fs * 1.25) * n.size);
+    ctx.font = 'bold ' + fz + 'px sans-serif';
+    ctx.lineWidth = Math.max(3, fz * 0.22); ctx.strokeStyle = '#000'; ctx.strokeText(n.text, n.x, n.y);   // 黑色描邊(所有浮字)
     ctx.fillStyle = n.col; ctx.fillText(n.text, n.x, n.y);
   }
   ctx.globalAlpha = 1;
   b = P.banner;
+  by = L.banY !== undefined ? L.banY : L.top + (L.vh - L.top - L.bot) * 0.12;
   if (b) {
     ctx.globalAlpha = Math.max(0, Math.min(1, Math.min(b.t / 0.12, (b.dur - b.t) / 0.25)));
-    ctx.font = 'bold ' + Math.round(L.fs * (b.big ? 2.1 : 1.3)) + 'px sans-serif'; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,.75)';
-    ctx.strokeText(b.text, L.vw / 2, L.top + (L.vh - L.top - L.bot) * 0.12); ctx.fillStyle = '#ffe9a8'; ctx.fillText(b.text, L.vw / 2, L.top + (L.vh - L.top - L.bot) * 0.12);
+    ctx.font = 'bold ' + Math.round(Math.min(L.fs * (b.big ? 2.1 : 1.3), (L.labH || 30) * 1.1)) + 'px sans-serif'; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,.75)';
+    ctx.strokeText(b.text, L.vw / 2, by); ctx.fillStyle = '#ffe9a8'; ctx.fillText(b.text, L.vw / 2, by);
     ctx.globalAlpha = 1;
+  } else if (P.chainN > 0) {
+    ctx.font = 'bold ' + Math.round(Math.min(L.fs * 1.2, (L.labH || 30) * 0.8)) + 'px sans-serif'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.75)';
+    ctx.strokeText('連 ×' + (P.chainN + 1), L.vw / 2, by); ctx.fillStyle = '#ffb36a'; ctx.fillText('連 ×' + (P.chainN + 1), L.vw / 2, by);
   }
-  if (P.chainN > 0) {
-    ctx.font = 'bold ' + Math.round(L.fs * 1.2) + 'px sans-serif'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.75)';
-    ctx.strokeText('連 ×' + (P.chainN + 1), L.vw / 2, L.top + (L.vh - L.top - L.bot) * 0.22); ctx.fillStyle = '#ffb36a'; ctx.fillText('連 ×' + (P.chainN + 1), L.vw / 2, L.top + (L.vh - L.top - L.bot) * 0.22);
-  }
+  bnDrLabels(ctx, P, L);
   if (S0) { v = performance.now() - S0; BNDR.stats.lastMs = v; BNDR.stats.frames++; BNDR.stats.sumMs += v; if (v > BNDR.stats.maxMs) BNDR.stats.maxMs = v; if (BNDR.stats.samples.length < 600) BNDR.stats.samples.push(v); }
 }
 
