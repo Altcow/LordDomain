@@ -1807,6 +1807,7 @@ function tapObjectAt(sx, sy) {
   if (typeof interiorPackTap === 'function' && interiorPackTap(o)) return;   // 室內第一批:議事廳 / 研究院 / 工坊 / 客棧 / 縣衙(不可用時退回下面原行為)
   if (typeof lordhallTap === 'function' && lordhallTap(o)) return;
   if (typeof cardsUiTap === 'function' && cardsUiTap(o)) return;
+  if (typeof furnaceUiTap === 'function' && furnaceUiTap(o)) return;   // 卡片熔爐建築(furnaceui.js)
   if (o.type === LAB_TYPE) {
     toggleTechPanel(true);
     return;

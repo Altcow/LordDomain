@@ -57,6 +57,7 @@ function cuBagHtml(cs) {
   h += '<div class="cur"><span>卡包 <b>' + n + '/' + cap + '</b></span><span class="cusub">碎片 ' + cs.shards + ' · 指名券 ' + (cs.nameTokens | 0) + '</span></div>';
   h += '<div class="cusub">開批的卡直接放進卡包;酒令只在「任用」(卡包 → 名冊,名額 ' + cs.roster.length + '/' + cardsCap() + ')時花。<b>卡片熔爐</b>:放入不要的卡 → 預覽可得碎片 → 熔鍊。碎片可到名冊詳情強化武將(升星)、在下方兌換指名券,也用於學院進修。</div>';
   if (n + CARD_BAG.batchNeed > cap) h += '<div class="cuwarn">卡包空位不足 ' + CARD_BAG.batchNeed + ' 張,新批暫存不開;請先熔鍊或任用。</div>';
+  if (typeof furnaceUiOpen === 'function') h += '<button class="cub" data-a="tofurnace">🔥 前往卡片熔爐</button>';   // 熔爐面板(furnaceui.js)
   left = cardsExchangeLeft(cs, cuNow());
   h += '<div class="cubsec">碎片兌換(' + X.shards + ' 碎 = 1 張指名券;本週還可換 ' + left + '/' + X.weekMax + ' 張)</div>';
   h += '<button class="cub" data-a="bex"' + (left > 0 && cs.shards >= X.shards ? '' : ' disabled') + '>兌換指名券 ×1(' + X.shards + ' 碎)</button>';
@@ -117,6 +118,7 @@ function cuStarHtml(cs, e) {
 }
 function cuBagClick(a, b, cs) {
   var v = b.getAttribute('data-v'), id = b.getAttribute('data-id'), r, f;
+  if (a === 'tofurnace') { if (typeof furnaceUiOpen === 'function') furnaceUiOpen(); return true; }
   if (a === 'bauto') { cardsBagSetAuto(cs, +v); cuSave(); return true; }
   if (a === 'ble') { cu.ble = Math.max(0, Math.min(3, +v | 0)); cu.bpend = null; return true; }
   if (a === 'bledo') { cuBagAsk(cs, cardsBagPick(cs, cu.ble), false); return true; }

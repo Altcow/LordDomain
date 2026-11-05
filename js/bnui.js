@@ -6,7 +6,7 @@
 // 全域:BNUI bnUnlocked bnUiOpen bnUiLeave bnUiActive bnUiState bnUiLoad bnUiSave bnUiPref bnUiFoes bnUiAct bnUiBuild bnUiBonds bnUiStart bnUiResultData bnUiPause bnUiBack bnUiStats
 
 var BNUI = {
-  key: 'lorddomain.bn.v1', prefKey: 'lorddomain.bn.pref', fadeMs: 240, barH: 48, maxUnits: 5, stage: '1-1', minRoster: 3, minRank: 2, dprMax: 2, pixMax: 3.6e6,
+  key: 'lorddomain.bn.v1', prefKey: 'lorddomain.bn.pref', fadeMs: 240, barH: 48, maxUnits: 5, stage: 'P', minRoster: 3, minRank: 2, dprMax: 2, pixMax: 3.6e6,
   foeBase: ['bandit_chief', 'bandit_blade', 'bandit_hunter', 'bandit_blade', 'bandit_hunter'], foePos: [[0, 1], [0, 0], [2, 1], [0, 2], [2, 0]]
 };
 var BNUI_FOE = {
@@ -16,7 +16,7 @@ var BNUI_FOE = {
 };
 var bnu = {
   open: false, leaving: false, layer: null, cv: null, ctx: null, top: null, bar: null, backBtn: null, titleEl: null, subEl: null, strip: null, stripEls: [], roundEl: null, formEl: null, resEl: null, pauseEl: null, cutEl: null, cutParts: null,
-  btns: {}, phase: 'form', slots: [], sel: null, tp: {}, filter: '', data: null, pref: null, P: null, L: null, rec: null, raf: 0, last: 0, gate: null, paused: false, histOn: false, histSkip: false, snap: null, rz: [], dpr: 1,
+  btns: {}, mapEl: null, stg: { kind: 'practice', id: 'P' }, report: null, phase: 'form', slots: [], sel: null, tp: {}, filter: '', data: null, pref: null, P: null, L: null, rec: null, raf: 0, last: 0, gate: null, paused: false, histOn: false, histSkip: false, snap: null, rz: [], dpr: 1,
   vw: 0, vh: 0, result: null, msg: '', frames: 0, listeners: false, hudRound: ''
 };
 function bnUiActive() { return !!bnu.open; }
@@ -57,12 +57,13 @@ function bnUiRosterIds() {
   return ids;
 }
 function bnUiLoad() {
-  var raw = bnUiLsGet(BNUI.key), d = { v: 1, forms: [null, null, null], clear: {}, cur: null, last: null }, o, ids = bnUiRosterIds(), i;
+  var raw = bnUiLsGet(BNUI.key), d = { v: 1, forms: [null, null, null], clear: {}, cur: null, last: null, got: {}, day: null, bounty: null, wk: null, gold: null, books: {} }, o, ids = bnUiRosterIds(), i;
   if (raw) { try { o = JSON.parse(raw); } catch (e) { o = null; } }
   if (o && typeof o === 'object') {
     for (i = 0; i < 3; i++) d.forms[i] = (o.forms && o.forms[i]) ? bnUiNormForm(o.forms[i], ids) : null;
     d.cur = o.cur ? bnUiNormForm(o.cur, ids) : null;
     if (o.clear && typeof o.clear === 'object') Object.keys(o.clear).forEach(function (k) { var v = o.clear[k] | 0; if (v >= 0 && v <= 3) d.clear[k] = v; });
+    if (typeof bnStgNorm === 'function') bnStgNorm(o, d);
     if (o.last && typeof o.last === 'object') d.last = { stage: String(o.last.stage || ''), res: String(o.last.res || ''), rounds: o.last.rounds | 0, stars: o.last.stars | 0 };
   }
   bnu.data = d;
@@ -70,9 +71,9 @@ function bnUiLoad() {
 }
 // 有值才寫:沒有任何預設 / 通關 / 當前陣容 / 戰績時不寫鍵
 function bnUiSave() {
-  var d = bnu.data || bnUiLoad(), has = d.forms.some(function (f) { return f && f.slots.length; }) || Object.keys(d.clear).length || d.last || (d.cur && d.cur.slots.length);
+  var d = bnu.data || bnUiLoad(), has = d.forms.some(function (f) { return f && f.slots.length; }) || Object.keys(d.clear).length || d.last || (d.cur && d.cur.slots.length) || (typeof bnStgHas === 'function' && bnStgHas(d));
   if (!has) return false;
-  return bnUiLsSet(BNUI.key, JSON.stringify({ v: 1, forms: d.forms, clear: d.clear, cur: d.cur, last: d.last }));
+  return bnUiLsSet(BNUI.key, JSON.stringify(Object.assign({ v: 1, forms: d.forms, clear: d.clear, cur: d.cur, last: d.last }, typeof bnStgPack === 'function' ? bnStgPack(d) : {})));
 }
 function bnUiPref() {
   var raw, o, p = { spd: 1, autoUlt: 1 };
@@ -231,12 +232,25 @@ function bnUiFoes(mySpecs) {
   s = Math.round(s * 1000) / 1000;
   return { specs: base.map(function (x, k) { return bnUiFoeRaw(BNUI.foeBase[k], s, BNUI.foePos[k]); }), scale: s, power: Math.round(foe * s) };
 }
+// 目前關卡的敵將隊:討伐 = bn_stages 的關卡;每日流寇;練兵 = 山賊樣板依我方戰力縮放
+function bnUiCurFoes(mySpecs) {
+  var g = bnu.stg || { kind: 'practice' }, f, st;
+  if (g.kind === 'stage' && typeof bnStgFoes === 'function') {
+    f = bnStgFoes(g.id); st = f.stage;
+    return { specs: f.units, scale: 1, power: f.rec, label: '討伐 ' + st.id + ' ' + st.name, boss: st.boss, kind: 'stage' };
+  }
+  if (g.kind === 'bounty' && g.def) return { specs: g.def.units, scale: 1, power: g.def.rec, label: '每日流寇', kind: 'bounty' };
+  f = bnUiFoes(mySpecs);
+  f.label = '練兵'; f.kind = 'practice';
+  return f;
+}
+function bnUiStageLabel() { var g = bnu.stg || {}; return g.kind === 'stage' ? '討伐 ' + g.id : (g.kind === 'bounty' ? '每日流寇' : '練兵'); }
 function bnUiDayNo() { var d = new Date(); return d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate(); }
 function bnUiRec() {
-  var b = bnUiBuild(), foes = bnUiFoes(b.team.units), cs = (typeof cardsGet === 'function') ? cardsGet() : null, fp = bnu.slots.map(function (s) { return s.id + ':' + s.row + s.col + (s.troop || bnu.tp[s.id] || ''); }).join(',');
+  var b = bnUiBuild(), foes = bnUiCurFoes(b.team.units), cs = (typeof cardsGet === 'function') ? cardsGet() : null, fp = bnu.slots.map(function (s) { return s.id + ':' + s.row + s.col + (s.troop || bnu.tp[s.id] || ''); }).join(',');
   return {
     v: 1, seed: bnHash('bn', (cs && cs.seed) | 0, BNUI.stage, bnUiDayNo(), fp), teamA: b.team.units, teamB: foes.specs, opts: { autoUlt: bnUiPref().autoUlt !== 0, events: true, scene: '' },
-    meta: { stage: BNUI.stage, foePower: foes.power, scale: foes.scale, bonds: b.team.bonds, formation: b.team.formation }
+    meta: { stage: BNUI.stage, kind: (bnu.stg && bnu.stg.kind) || 'practice', ch: (bnu.stg && bnu.stg.def && bnu.stg.def.ch) || 0, foePower: foes.power, scale: foes.scale, bonds: b.team.bonds, formation: b.team.formation }
   };
 }
 
@@ -292,6 +306,19 @@ function bnUiCss() {
     '.bnf-foot{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.bnf-go{flex:1 1 140px;min-height:50px;border:none;border-radius:10px;background:#c9892f;color:#1b1308;font-size:18px;font-weight:bold}.bnf-go[disabled]{opacity:.4}' +
     '.bnf-msg{color:#ff9a8a;font-size:13px;margin:4px 0}' +
     '@media (orientation:landscape) and (min-width:700px){#bnForm{display:none}#bnLayer.ph-form #bnForm{display:grid;grid-template-columns:minmax(300px,1fr) minmax(300px,1.2fr);column-gap:14px;align-content:start}#bnForm .c1{grid-column:1}#bnForm .c2{grid-column:2}.bnf-roster{flex-wrap:wrap;overflow-x:visible}}' +
+    '#bnMap{position:relative;z-index:2;flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:8px calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));display:none}#bnLayer.ph-map #bnMap{display:block}' +
+    '.bnm-head{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;margin:0 0 6px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.07)}.bnm-head b{color:#ffd25a}' +
+    '.bnm-chs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin:0 0 6px}.bnm-chs::-webkit-scrollbar{display:none}.bnm-chs button{flex:0 0 auto;min-height:40px;min-width:44px;padding:0 10px;border:none;border-radius:8px;background:rgba(255,255,255,.12);color:#f4ead2;font-size:14px}.bnm-chs button.on{background:#c9892f;color:#1b1308;font-weight:bold}.bnm-chs button.lock{opacity:.45}' +
+    '.bnm-chn{font-size:14px;margin:0 0 4px}.bnm-chn small{opacity:.75;font-size:12px}.bnm-list{display:flex;flex-direction:column;gap:4px}' +
+    '.bnm-row{display:grid;grid-template-columns:34px 1fr auto;grid-template-rows:auto auto;column-gap:6px;align-items:center;min-height:50px;padding:4px 8px;border-radius:8px;border:2px solid rgba(255,255,255,.18);background:rgba(255,255,255,.07);color:#f4ead2;text-align:left;font-size:14px}' +
+    '.bnm-row .n{grid-row:1/3;font-size:15px;font-weight:bold;color:#ffd25a}.bnm-row .t{font-size:14px}.bnm-row .t i,.bnm-det h3 i{font-style:normal;font-size:11px;padding:0 5px;border-radius:6px;background:#a84a3a}.bnm-row .s{color:#ffd25a;font-size:13px;letter-spacing:1px}.bnm-row .p{grid-column:2/4;font-size:12px;opacity:.9}' +
+    '.bnm-row.sel{border-color:#ffd25a}.bnm-row.lock{opacity:.5}.bnm-row.clr{background:rgba(80,140,80,.2)}.bnm-row.boss .n{color:#ff9a8a}' +
+    '.g{color:#8fd9a0}.m{color:#ffd25a}.o{color:#ffb070}.b{color:#ff8a7a}em.g,em.m,em.o,em.b{font-style:normal;font-weight:bold}' +
+    '.bnm-det{margin-top:8px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.08)}.bnm-det h3{margin:0 0 4px;font-size:17px}.bnm-det p{margin:3px 0;font-size:14px;line-height:1.5}.bnm-det .sm,.bnm-foot .sm{font-size:12px;opacity:.85}' +
+    '.bnm-foes{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}.bnm-foes span{padding:2px 8px;border-radius:8px;background:rgba(168,74,58,.3);font-size:13px}.bnm-foes small{opacity:.8;margin-right:4px}.bnm-foes u{text-decoration:none;opacity:.8;font-size:11px}' +
+    '.bnm-foot{display:flex;flex-direction:column;gap:6px;margin-top:8px}.bnm-b{padding:6px 10px;border-radius:10px;background:rgba(255,255,255,.07);font-size:13px;line-height:1.6}.bnm-b small{opacity:.8}.bnm-b .bnbtn{display:block;margin-top:4px;width:100%}.bnm-b .bnbtn[disabled]{opacity:.4}' +
+    '.bnbox .rw{color:#ffd25a;font-size:14px}.bnbox .sm{font-size:12px;opacity:.8}' +
+    '@media (orientation:landscape) and (min-width:700px){.bnm-cols{display:grid;grid-template-columns:minmax(300px,1fr) minmax(300px,1fr);column-gap:14px;align-items:start}.bnm-det{margin-top:0}.bnm-foot{flex-direction:row}.bnm-b{flex:1}}' +
     '#bnCut{position:absolute;left:0;top:0;right:0;bottom:0;z-index:5;pointer-events:none;display:none;overflow:hidden;background:rgba(0,0,0,.6)}#bnCut .bg{position:absolute;left:-5%;top:-5%;width:110%;height:110%;background-size:cover;background-position:center;mix-blend-mode:screen}' +
     '#bnCut .fig{position:absolute;bottom:6%;height:62%;max-width:70%;object-fit:contain;filter:drop-shadow(0 0 14px rgba(255,220,120,.8))}#bnCut .nm{position:absolute;left:0;right:0;top:14%;text-align:center;font-size:38px;font-weight:bold;letter-spacing:6px;color:#fff3c4;text-shadow:0 0 12px #000,0 0 6px #c9892f}' +
     '#bnCut .sk{position:absolute;left:0;right:0;bottom:12%;text-align:center;font-size:28px;font-weight:bold;color:#ffd25a;text-shadow:0 0 10px #000,2px 2px 0 #000}' +
@@ -334,9 +361,10 @@ function bnUiBuildLayer() {
   bnu.cutParts.fig.setAttribute('alt', '');
   bnu.cutParts.fig.addEventListener('error', function () { var f = bnu.cutParts.fig, a = f.getAttribute('data-alt'); if (a) { f.removeAttribute('data-alt'); f.setAttribute('src', a); } else if (f.style) f.style.display = 'none'; });
   ['bg', 'fig', 'nm', 'sk'].forEach(function (k) { bnu.cutEl.appendChild(bnu.cutParts[k]); });
+  bnu.mapEl = bnUiMk('div', 'bnMap'); bnu.mapEl.addEventListener('click', bnUiFormClick);
   bnu.resEl = bnUiMk('div', 'bnRes'); bnu.resEl.addEventListener('click', bnUiFormClick);
   bnu.pauseEl = bnUiMk('div', 'bnPause'); bnu.pauseEl.addEventListener('click', bnUiFormClick);
-  layer.appendChild(cv); layer.appendChild(bnu.formEl); layer.appendChild(top); layer.appendChild(bnu.cutEl); layer.appendChild(bnu.resEl); layer.appendChild(bnu.pauseEl);
+  layer.appendChild(cv); layer.appendChild(bnu.formEl); layer.appendChild(bnu.mapEl); layer.appendChild(top); layer.appendChild(bnu.cutEl); layer.appendChild(bnu.resEl); layer.appendChild(bnu.pauseEl);
   cv.addEventListener('pointerup', bnUiCvTap);
   document.body.appendChild(layer);
   bnu.layer = layer; bnu.cv = cv; bnu.ctx = cv.getContext('2d'); bnu.top = top; bnu.bar = bar; bnu.strip = strip;
@@ -344,8 +372,8 @@ function bnUiBuildLayer() {
 function bnUiSetPhase(ph) {
   var cl = bnu.layer && bnu.layer.classList;
   bnu.phase = ph;
-  if (cl) { cl.remove('ph-form'); cl.remove('ph-fight'); cl.remove('ph-res'); cl.add('ph-' + ph); }
-  if (bnu.titleEl) bnu.titleEl.textContent = ph === 'form' ? '戰前布陣' : (ph === 'fight' ? '練習戰 ' + BNUI.stage : '戰果');
+  if (cl) { cl.remove('ph-form'); cl.remove('ph-map'); cl.remove('ph-fight'); cl.remove('ph-res'); cl.add('ph-' + ph); }
+  if (bnu.titleEl) bnu.titleEl.textContent = ph === 'map' ? '討伐' : (ph === 'form' ? '戰前布陣 · ' + bnUiStageLabel() : (ph === 'fight' ? bnUiStageLabel() : '戰果'));
   if (bnu.subEl) bnu.subEl.textContent = '';
 }
 
@@ -357,10 +385,10 @@ function bnUiRenderForm() {
   if (!el) return;
   ro = el.querySelector ? el.querySelector('.bnf-roster') : null;
   if (ro && ro.scrollLeft) keepL = ro.scrollLeft;
-  foes = bnUiFoes(build.team.units);
+  foes = bnUiCurFoes(build.team.units);
   build.team.units.forEach(function (x) { mineP += bnPower(x); });
-  h += '<div class="c1"><div class="bnf-foe">敵方:山賊(練習戰 ' + BNUI.stage + ')· 推薦戰力 <b>' + foes.power + '</b> · 我方 <b>' + mineP + '</b><br>' +
-    foes.specs.map(function (x) { return '<i>' + bnUiEsc(x.name) + ' ' + bnUiEsc(x.troop) + '</i>'; }).join('') + '</div>';
+  h += '<div class="c1"><div class="bnf-foe">' + (foes.kind === 'practice' ? '敵將:山賊(練兵)' : '敵將:' + bnUiEsc(foes.label)) + ' · 建議戰力 <b>' + foes.power + '</b> · 我方 <b>' + mineP + '</b><br>' +
+    foes.specs.map(function (x) { return '<i>' + (x.title ? bnUiEsc(x.title) + ' ' : '') + bnUiEsc(x.name) + ' ' + bnUiEsc(x.troop) + '</i>'; }).join('') + '</div>';
   h += '<div class="bnf-bonds">羈絆:' + (bonds.on.length ? bonds.on.map(function (x) { return '<i>' + bnUiEsc(x) + '</i>'; }).join('') : '<u>尚未成立</u>') + bonds.hint.map(function (x) { return '<u>' + bnUiEsc(x) + '</u>'; }).join('') + '</div>';
   h += '<div class="bnf-grid"><div class="bnf-gh">後排</div><div class="bnf-gh">中排</div><div class="bnf-gh">前排 ▶ 敵</div>';
   for (c = 0; c < 3; c++) {
@@ -403,6 +431,7 @@ function bnUiFormClick(e) {
 // 表單 / 對話框的統一動作入口(測試也直接呼叫)
 function bnUiDo(a, id, r, c, t, i) {
   var s, o;
+  if (typeof bnMapDo === 'function' && bnMapDo(a, id, r, c, t, i)) return;
   if (a === 'card') { bnu.sel = (bnu.sel === id) ? null : id; bnUiRenderForm(); }
   else if (a === 'cell') {
     s = bnUiSlotAt(r, c);
@@ -468,6 +497,8 @@ function bnUiCutRender(c) {
 function bnUiStart() {
   var msg = bnUiCheck(), rec, S, L, P, pr;
   if (msg) { bnUiToast(msg); return false; }
+  if (bnu.stg && bnu.stg.kind === 'stage' && typeof bnStgCanStart === 'function') { pr = bnStgCanStart(bnu.data || bnUiLoad(), bnu.stg.id, bnStgEnv(BNUI.env)); if (!pr.ok) { bnUiToast(pr.why); return false; } }
+  if (bnu.stg && bnu.stg.kind === 'bounty' && typeof bnStgBountyDone === 'function' && bnStgBountyDone(bnu.data || bnUiLoad(), bnStgEnv(BNUI.env))) { bnUiToast('今日流寇已討平'); return false; }
   rec = bnUiRec();
   bnu.rec = rec;
   S = bnInit(rec);
@@ -553,7 +584,7 @@ function bnUiResultData(S) {
 function bnUiShowRes(on) { if (bnu.resEl) bnu.resEl.classList.toggle('on', !!on); }
 function bnUiShowPause(on) { if (bnu.pauseEl) bnu.pauseEl.classList.toggle('on', !!on); }
 function bnUiShowResult() {
-  var S = bnu.P && bnu.P.S, d, h, w, d0;
+  var S = bnu.P && bnu.P.S, d, h, w, d0, rep, g;
   if (!S || !S.result || bnu.phase === 'res') return;
   d = bnUiResultData(S);
   bnu.result = d;
@@ -563,15 +594,21 @@ function bnUiShowResult() {
     '<p style="font-size:26px;color:#ffd25a;letter-spacing:6px">' + (d.winner === 'A' ? '★'.repeat(d.stars) + '☆'.repeat(3 - d.stars) : '') + '</p>' +
     '<p>' + (d.reason === 'limit' ? '回合上限判定' : '全滅決勝') + ' · 共 ' + d.rounds + ' 回合 · 我方存活 ' + d.alive + '/' + d.total + '</p>' +
     (d.mvp ? '<p>本場 MVP:<b>' + bnUiEsc(d.mvp.name) + '</b><br>傷害 ' + d.mvp.dmg + ' · 治療 ' + d.mvp.heal + ' · 承傷 ' + d.mvp.taken + ' · 擊倒 ' + d.mvp.kills + '</p>' : '') +
-    '<p style="opacity:.75;font-size:12px">練習戰不給獎勵(討伐獎勵將於後續開放)</p>' +
-    '<div class="row"><button data-a="again" class="pri">再戰</button><button data-a="leave">離開</button></div></div>';
+    '@RW@' +
+    '<div class="row"><button data-a="again" class="pri">再戰</button><button data-a="tomap">討伐地圖</button><button data-a="leave">離開</button></div></div>';
+  // 戰績與獎勵(有值才寫)。討伐 / 流寇依 bn_stages 規則結算;練兵不計戰績、不給獎勵
+  d0 = bnu.data || bnUiLoad();
+  rep = null;
+  g = bnu.stg || { kind: 'practice' };
+  if (g.kind === 'stage' && typeof bnStgSettle === 'function') rep = bnStgSettle(d0, g.id, { winner: d.winner, stars: d.stars, seed: bnu.rec ? bnu.rec.seed : 0 }, bnStgEnv(BNUI.env));
+  else if (g.kind === 'bounty' && typeof bnStgBountySettle === 'function') rep = bnStgBountySettle(d0, { winner: d.winner, ch: g.def ? g.def.ch : 1 }, bnStgEnv(BNUI.env));
+  bnu.report = rep;
+  h = h.replace('@RW@', rep ? bnMapRewardHtml(rep) : '<p style="opacity:.75;font-size:12px">練兵不計戰績、不給獎勵</p>');
   bnu.resEl.innerHTML = h;
   bnUiShowRes(true);
-  // 戰績(有值才寫)
-  d0 = bnu.data || bnUiLoad();
   d0.last = { stage: BNUI.stage, res: d.winner, rounds: d.rounds, stars: d.stars };
-  if (d.winner === 'A') d0.clear[BNUI.stage] = Math.max(d0.clear[BNUI.stage] | 0, d.stars);
   bnUiCurSave(); bnUiSave();
+  if (rep && rep.win && typeof saveWorld === 'function') { try { saveWorld(); } catch (e) { /* 略過 */ } }
   if (bnu.P) bnPlSfxEnd(d.winner);
   bnUiDrawOnce();
 }
@@ -583,6 +620,14 @@ function bnUiToForm() {
   bnu.paused = false;
   bnUiSetPhase('form');
   bnUiRenderForm();
+}
+function bnUiToMap() {
+  if (bnu.P) { bnPlDispose(bnu.P); bnu.P = null; }
+  bnUiStopLoop();
+  bnUiShowRes(false); bnUiShowPause(false); bnUiCutRender(null);
+  bnu.paused = false;
+  bnUiSetPhase('map');
+  if (typeof bnMapRender === 'function') bnMapRender();
 }
 function bnUiRetreat() {
   // 撤退 = 結果平手、不計戰績
@@ -604,6 +649,7 @@ function bnUiBack() {
   if (bnu.leaving || !bnu.open) return false;
   if (bnu.phase === 'fight') { bnUiPause(!bnu.paused); return true; }
   if (bnu.phase === 'res') { bnUiToForm(); return true; }
+  if (bnu.phase === 'form' && typeof bnMapRender === 'function') { bnUiToMap(); return true; }
   return bnUiLeave();
 }
 
@@ -639,7 +685,7 @@ function bnUiOnPop() {
   if (!bnu.open) return;
   if (bnu.histSkip) { bnu.histSkip = false; return; }
   bnu.histOn = false;
-  if (bnu.phase !== 'form') {
+  if (bnu.phase !== 'map' && !(bnu.phase === 'form' && typeof bnMapRender !== 'function')) {
     try { history.pushState({ bn: 1 }, ''); bnu.histOn = true; } catch (e) { /* 略過 */ }
     bnUiBack();
     return;
@@ -679,8 +725,9 @@ function bnUiOpen() {
   bnu.open = true; bnu.leaving = false;
   game.mode = 'bn';
   if (document.body.classList) document.body.classList.add('in-bn');
-  bnUiSetPhase('form');
-  bnUiRenderForm();
+  bnu.stg = { kind: 'practice', id: 'P' }; BNUI.stage = 'P';
+  if (typeof bnMapRender === 'function') { bnUiSetPhase('map'); bnMapRender(); }
+  else { bnUiSetPhase('form'); bnUiRenderForm(); }
   bnUiResize();
   bnUiSyncBtns();
   bnUiBind(true);
@@ -712,7 +759,7 @@ function bnUiLeave(immediate, fromPop) {
   bnu.snap = null;
   function done() {
     if (layer && layer.parentNode) layer.parentNode.removeChild(layer);
-    bnu.layer = null; bnu.cv = null; bnu.ctx = null; bnu.bar = null; bnu.top = null; bnu.backBtn = null; bnu.titleEl = null; bnu.subEl = null; bnu.roundEl = null; bnu.formEl = null; bnu.resEl = null; bnu.pauseEl = null; bnu.cutEl = null; bnu.cutParts = null; bnu.strip = null; bnu.stripEls = []; bnu.btns = {};
+    bnu.layer = null; bnu.cv = null; bnu.ctx = null; bnu.bar = null; bnu.top = null; bnu.backBtn = null; bnu.titleEl = null; bnu.subEl = null; bnu.roundEl = null; bnu.formEl = null; bnu.mapEl = null; bnu.resEl = null; bnu.pauseEl = null; bnu.cutEl = null; bnu.cutParts = null; bnu.strip = null; bnu.stripEls = []; bnu.btns = {};
     bnu.leaving = false; bnu.L = null;
     if (typeof saveWorld === 'function') { try { saveWorld(); } catch (e) { /* 略過 */ } }
   }
