@@ -130,6 +130,7 @@ function ethnicOfFig(id) {
 
 // 依區域權重(+可選地形旗標)抽族別;rnd 0..1。缺區域回 'han';pool=false 的族併入漢
 function ethnicPick(region, rnd, flags) {
+  if (typeof fantasyRace === 'function') { const fr = fantasyRace(); if (fr) return fr; } // 魔幻世界:整座城同一族(crowdparts_fantasy.js);歷史風格世界回 null = 不變
   const mix = CROWD_ETHNIC_MIX[region];
   if (!mix) return 'han';
   const w = {};

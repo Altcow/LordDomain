@@ -32,7 +32,9 @@ const LIFE_TYPES = {
   beggar:  { name: '乞丐', looks: ['beggar'], w: 3, spd: 0.5, to: { market: 2, palace: 2 } },
   smith:   { name: '工匠', looks: ['smith'], w: 5, spd: 0.8, to: { lumber: 2, quarry: 2, house: 1 }, needs: ['lumber', 'quarry'] },
   soldier: { name: '巡邏兵', looks: ['patrol'], w: 6, spd: 0.8, to: { palace: 2, archer: 1, shield: 1, cavalry: 1, siege: 1 }, needs: ['palace', 'archer', 'shield', 'cavalry', 'siege'] },
-  drunk:   { name: '醉漢', looks: ['man'], w: 4, spd: 0.5, to: { market: 2, house: 1 }, needs: ['market'], night: 'only' },
+  drunk:   { name: '醉漢', looks: ['man'], w: 4, spd: 0.5, to: { market: 2, house: 1, tavern: 2, shop_wine: 1 }, needs: ['market', 'tavern', 'shop_wine', 'inn'], night: 'only' },
+  // 更夫:夜間保底,只由 lifeNightTick 生成(w = 0,不參與一般抽籤),提燈沿兩個停點來回慢走
+  watch:   { name: '更夫', looks: ['elder'], w: 0, spd: 0.45, to: {}, night: 'only' },
   // 商隊只由邊界入口生成(lifeSpawnCaravan),不參與一般抽籤(w = 0)
   caravan: { name: '商隊', looks: ['porter'], w: 0, spd: 0.7, to: {} },
   // 苦力只由港口設施生成(lifePortTick),不參與一般抽籤(w = 0);人數另計,不占居民目標人數
@@ -70,13 +72,13 @@ const LIFE_ALT_TINTS = [
 ];
 
 // 可成為居民目的地的建築(門格存在才算;其餘建築不是目的地)
-const LIFE_DEST_TYPES = ['house', 'market', 'palace', 'research', 'lumber', 'quarry', 'archer', 'shield', 'cavalry', 'siege'];
+const LIFE_DEST_TYPES = ['house', 'market', 'palace', 'research', 'lumber', 'quarry', 'archer', 'shield', 'cavalry', 'siege', 'tavern', 'shop_wine', 'inn'];   // 後三者:酒館小聚與醉漢(夜間保底)
 
 // 外觀找不到 ART 時的占位服色
 const LIFE_PH_COL = {
   civ: '#6fa0c8', elder: '#a89a86', kid: '#ffd24a', farmer: '#c9a46a', vendor: '#7f9e4c',
   scholar: '#f4ead2', beggar: '#8a7a66', smith: '#6a5650', soldier: '#d23a2c',
-  drunk: '#9a7a4a', caravan: '#c8a060', coolie: '#b89868'
+  drunk: '#9a7a4a', watch: '#d8b24a', caravan: '#c8a060', coolie: '#b89868'
 };
 
 // ---------------- 街景角色(js/citytraffic.js 使用;資料表驅動) ----------------

@@ -897,6 +897,7 @@ function applyTemplate(id) {
   // 範本只能套用到同種現役棋盤；備份中（world 是別人的地圖）不套用
   if ((game.backup && !game.backup.draft) || kind !== world.board) return null;
   if (t.legacy === 'demo' && world.board !== 'estate') return null;
+  if (typeof tplThemeOk === 'function' && !tplThemeOk(t)) return null;   // 風格隔離:魔幻範本只在同風格世界,歷史範本不進魔幻世界
   const estate = world.board === 'estate';
   const ox = (boardW() - t.w) >> 1, oy = (boardH() - t.h) >> 1;
   const keep = Object.assign({}, world.res);

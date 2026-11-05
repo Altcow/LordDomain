@@ -1947,7 +1947,7 @@ function buildTplMenu() {
   restore.appendChild(rs);
   restore.disabled = !dflt;
   menu.appendChild(restore);
-  const list = TEMPLATES.filter(t => (t.kind || 'estate') === world.board && !t.hidden);
+  const list = TEMPLATES.filter(t => (t.kind || 'estate') === world.board && !t.hidden && (typeof tplThemeOk !== 'function' || tplThemeOk(t)));
   const ordered = list.filter(t => t.isDefault).concat(list.filter(t => !t.isDefault));
   let grp = null;
   for (const t of ordered) {
@@ -2911,7 +2911,8 @@ function editSideAct() {
 }
 // 設定「城市風格」列(theme_skin.js):依主題表輪替下一個風格(漢 → 北方 → 西域 → 南方 → 羌氐),純外觀
 function cycleThemeFromSettings() {
-  const ids = themeIds(), cur = themeGet();
+  const cur = themeGet(), ids = (typeof themeCycleIds === 'function') ? themeCycleIds(cur) : themeIds();   // 隔離:歷史世界只輪替歷史風格;魔幻世界建立後不可換
+  if (ids.length < 2) { showToast('城市風格:' + THEME_SKINS[cur].icon + THEME_SKINS[cur].name + '(建立世界時決定,之後不可更換)'); return; }
   const next = ids[(ids.indexOf(cur) + 1) % ids.length];
   if (!themeSet(next)) { showToast('目前無法切換城市風格'); return; }
   showToast('城市風格:' + THEME_SKINS[next].icon + THEME_SKINS[next].name + '(' + THEME_SKINS[next].desc + ')');

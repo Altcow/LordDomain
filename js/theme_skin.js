@@ -21,9 +21,16 @@ const THEME_SKINS = {
     pal: { roof: '#b8a060', wall: '#8a6a3a', trim: '#6a4a2a', cloth1: '#d8c47a', cloth2: '#3f8a5a', leather: '#6a4a2a', flag1: '#c8452f', flag2: '#3f8a5a', accent: '#e3b95c', pattern: 'stripe5' } },
   qiang: { name: '羌氐', icon: '🏔️', desc: '石砌碉房、氈白與黑邊', looks: 2,
     types: ['hut_mud', 'hut_plank', 'house_tile', 'tent', 'flagpole', 'cave_dwelling'],
-    pal: { roof: '#7a7a72', wall: '#8f8f84', trim: '#2a2623', cloth1: '#cfc8b8', cloth2: '#2a2623', leather: '#4a3a2a', flag1: '#cfc8b8', flag2: '#2a2623', accent: '#9a4a32', pattern: 'felt_diamond' } }
+    pal: { roof: '#7a7a72', wall: '#8f8f84', trim: '#2a2623', cloth1: '#cfc8b8', cloth2: '#2a2623', leather: '#4a3a2a', flag1: '#cfc8b8', flag2: '#2a2623', accent: '#9a4a32', pattern: 'felt_diamond' } },
+  // 魔幻三族(PLAN_FANTASY;realm: 'fantasy' = 魔幻世界,與歷史風格互相隔離,見 themeRealm / themeSet)。types 只留旗桿(PLAN_FANTASY Q5)
+  elf: { name: '精靈', icon: '🌳', desc: '活樹 · 白石 · 葉冠與藤橋(魔幻外觀 · 試玩)', looks: 1, realm: 'fantasy', types: ['flagpole'],
+    pal: { roof: '#5f9a4a', wall: '#ece6d6', trim: '#c9c7bc', cloth1: '#a8cf7a', cloth2: '#6f8fb8', leather: '#5a4030', flag1: '#5f9a4a', flag2: '#ece6d6', accent: '#e4ef9a', pattern: 'leaf_arc' } },
+  dwarf: { name: '矮人', icon: '⚒️', desc: '方石 · 鋼鐵與銅 · 熔爐火光(魔幻外觀 · 試玩)', looks: 1, realm: 'fantasy', types: ['flagpole'],
+    pal: { roof: '#3e4248', wall: '#7d766c', trim: '#b86a3a', cloth1: '#8a2e24', cloth2: '#6f7880', leather: '#4e4a46', flag1: '#8a2e24', flag2: '#6f7880', accent: '#f08a2a', pattern: 'forge_chevron' } },
+  kingdom: { name: '人類王國', icon: '🏰', desc: '石砌城堡 · 木骨白牆 · 紅藍旗(魔幻外觀 · 試玩)', looks: 1, realm: 'fantasy', types: ['flagpole'],
+    pal: { roof: '#5a6878', wall: '#b5a894', trim: '#5a3e28', cloth1: '#f2ede2', cloth2: '#2f5a9a', leather: '#8e8270', flag1: '#b23a32', flag2: '#2f5a9a', accent: '#e3b95c', pattern: 'crown_quarter' } }
 };
-const THEME_ORDER = ['han', 'bei', 'xiyu', 'nanman', 'qiang'];
+const THEME_ORDER = ['han', 'bei', 'xiyu', 'nanman', 'qiang', 'elf', 'dwarf', 'kingdom'];
 
 function themeSkinHas(id) {
   return typeof id === 'string' && Object.prototype.hasOwnProperty.call(THEME_SKINS, id);
@@ -34,10 +41,33 @@ function themeGet() {
   var c = (typeof world !== 'undefined' && world) ? world.city : null;
   return c && themeSkinHas(c.theme) ? c.theme : THEME_DEFAULT;
 }
-// 設定城市風格;未知 id 不動並回 false;設回漢 = 移除欄位(存檔不增)
-function themeSet(id) {
+// 風格所屬領域:'fantasy'(魔幻三族 elf / dwarf / kingdom)或 'history'(漢與歷史風格)
+function themeRealm(id) { return themeSkinHas(id) && THEME_SKINS[id].realm === 'fantasy' ? 'fantasy' : 'history'; }
+// 目前城市風格 cur 可否換成 to(隔離規則,PLAN_FANTASY Q7):同風格永遠可;歷史風格之間可互切;魔幻世界建立後不可換(含魔幻族之間),歷史世界也不可切到魔幻
+function themeSwitchOk(cur, to) {
+  if (!themeSkinHas(to)) return false;
+  cur = themeSkinHas(cur) ? cur : THEME_DEFAULT;
+  if (cur === to) return true;
+  return themeRealm(cur) === 'history' && themeRealm(to) === 'history';
+}
+// 設定「城市風格」輪替用清單:歷史世界 = 歷史風格;魔幻世界 = 只有自己(不可換)
+function themeCycleIds(cur) {
+  cur = themeSkinHas(cur) ? cur : themeGet();
+  return themeIds().filter(function (id) { return themeSwitchOk(cur, id); });
+}
+// 範本是否適用於風格 cur(範本有 theme 欄位):戰陣範本不受限;魔幻世界只列同風格範本(與無主題的預設範本);歷史世界不列魔幻範本
+function tplThemeOkFor(t, cur) {
+  var th = t && t.theme;
+  if (!t || (t.kind && t.kind !== 'estate')) return true;
+  if (themeRealm(cur) === 'fantasy') return th === cur || (!th && t.isDefault === true);
+  return !th || themeRealm(th) !== 'fantasy';
+}
+function tplThemeOk(t) { return tplThemeOkFor(t, themeGet()); }
+// 設定城市風格;未知 id 不動並回 false;設回漢 = 移除欄位(存檔不增)。跨領域 / 魔幻世界換風格被隔離規則擋下(回 false);新世界建立時用 opts.init = true 放行
+function themeSet(id, opts) {
   if (!themeSkinHas(id) || typeof world === 'undefined' || !world) return false;
   if (!world.city || typeof world.city !== 'object') return false;
+  if (!(opts && opts.init) && !themeSwitchOk(themeGet(), id)) return false;
   if (id === THEME_DEFAULT) delete world.city.theme; else world.city.theme = id;
   return true;
 }

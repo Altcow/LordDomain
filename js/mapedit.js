@@ -1196,7 +1196,7 @@ function draftBeginMod(rec, lv) {
 function draftTplRender(st) {
   const type = st.type;
   const h = ldNew('draftStartDlg', (type === 'camp' ? '推薦陣地 / 戰陣範本' : '經營範本') + '(載入到草稿)');
-  const list = TEMPLATES.filter(t => (t.kind || 'estate') === type && !t.hidden);
+  const list = TEMPLATES.filter(t => (t.kind || 'estate') === type && !t.hidden && (typeof tplThemeOk !== 'function' || tplThemeOk(t)));
   const ordered = list.filter(t => t.isDefault).concat(list.filter(t => !t.isDefault));
   h.box.classList.add('ld-wide');
   const col = ldRow(h, 'ld-col ld-scroll');

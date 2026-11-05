@@ -26,6 +26,11 @@ function lifeLowEnd() {
   return low;
 }
 
+// 夜市攤位:吃食 / 酒水 / 茶水
+function lifeNightStall(t) {
+  return t.indexOf('food_') === 0 || t === 'stall_wine' || t === 'stall_tea' || t === 'hawker_carrier' || t === 'stall_rice' || t === 'stall_fruit' || t === 'stall_meat' || t === 'food_table' || t === 'shop_wine';
+}
+
 function lifeTrafficReset() {
   LIFE.dockRes.clear();
   LIFE.spotRes.clear();
@@ -76,6 +81,8 @@ function lifeTrafficBuild(ok) {
     }
   }
   X.nStall = stallObjs.length;
+  X.nightN = 0;   // 夜市攤位數:吃食 / 酒水 / 茶水攤
+  for (k = 0; k < stallObjs.length; k++) if (lifeNightStall(stallObjs[k].type)) X.nightN++;
   X.crowdW = 0;
   X.crowdC = [];
   // 城中心:城主府中心,否則軍事建築平均位置,否則地圖中心
@@ -146,7 +153,7 @@ function lifeTrafficBuild(ok) {
   // 叫賣候選:市集 / 攤位 / 商鋪外圍一圈
   const sc = [];
   const wOf = function (m) { const od = (typeof OBJECTS !== 'undefined') ? OBJECTS[m.type] : null; return (od && od.crowdW > 0) ? od.crowdW : 1; };
-  sample(stallObjs, 40).forEach(function (m) { const w = wOf(m); ring(m, 'stall', function (c) { c.w = w; sc.push(c); }); });
+  sample(stallObjs, 40).forEach(function (m) { const w = wOf(m), nt = lifeNightStall(m.type); ring(m, 'stall', function (c) { c.w = w; c.night = nt; sc.push(c); }); });
   X.stallC = sample(sc, 80);
   // 人潮停留點:crowd:'market' 的設施(藝人圈地 / 說書台 / 叫賣台…)外圍,權重 = crowdW;圍觀者優先站這裡
   const cc = [];
@@ -190,7 +197,7 @@ function lifeXTargets(cnt) {
   const R = LIFE.road, X = R && R.x, d = lifeEffDensity(), mul = LIFE_XMUL[d] || 0;
   const tg = { peddler: 0, wagon: 0, rider: 0, guard_post: 0, guard_patrol: 0, hawker: 0, onlooker: 0 };
   if (!LIFE.on || mul <= 0 || !X) return tg;
-  const eff = mul * Math.max(0.35, LIFE.adj) * (lifeLowEnd() ? 0.5 : 1);
+  const eff = mul * (typeof lifeStreetMul === 'function' ? lifeStreetMul() : Math.max(0.35, LIFE.adj)) * (lifeLowEnd() ? 0.5 : 1);
   const night = LIFE.tod === 'night';
   const tm = (LIFE_TOD_MUL[LIFE.tod] || 1) * (lifeSeason() === 'winter' ? LIFE_WINTER_MUL : 1);
   const f = function (role, raw, m) {
@@ -206,8 +213,11 @@ function lifeXTargets(cnt) {
   }
   tg.guard_post = f('guard_post', Math.round(X.mil) + (X.palaceOk ? 2 : 0), 1);
   if (roadOk && X.mil >= 1 && X.keys.length >= 2) tg.guard_patrol = f('guard_patrol', 1 + Math.floor(X.mil / 6), 1);
+  // 夜市(夜間保底):只有吃食 / 酒水攤開張,叫賣者 ×0.4(至少 1)、圍觀 ×0.5(至少 1)
   if (X.stallC.length && !night) tg.hawker = f('hawker', Math.ceil(X.nStall * 0.8), tm);
+  else if (night && X.nightN > 0) tg.hawker = f('hawker', Math.min(X.nightN, Math.ceil(X.nStall * 0.8)), 0.4);
   if (!night) tg.onlooker = f('onlooker', 2 * (cnt.hawker || 0) + (X.crowdC.length ? Math.ceil(X.crowdW / 2) : 0), tm);
+  else if (tg.hawker > 0) tg.onlooker = f('onlooker', 2 * (cnt.hawker || 0), 0.5);
   return tg;
 }
 
@@ -219,8 +229,9 @@ function lifeXEmit(role, count, start, plan, entry, mid, o) {
   LIFE.live -= out.length; // lifeEmit 已計入一般居民;街景角色不占居民額度
   out.forEach(function (n) {
     n.ext = true; n.role = role;
-    if (typeof crowdSpecFor === 'function' && n.spec) { const eth = (typeof ethnicPick === 'function' && role === 'onlooker') ? ethnicPick((typeof world !== 'undefined' && world.ethRegion) || 'zhongyuan') : undefined; const cs = crowdSpecFor(role, n.spec, undefined, eth); if (cs) { n.spec = cs; LIFE.variantIds[cs.id] = true; } } // 路人零件化外觀(模組缺失時沿用舊外觀)
+    if (typeof crowdSpecFor === 'function' && n.spec) { const eth = (typeof fantasyRace === 'function' && fantasyRace()) || (typeof ethnicPick === 'function' && role === 'onlooker') ? ethnicPick((typeof world !== 'undefined' && world.ethRegion) || 'zhongyuan') : undefined; const cs = crowdSpecFor(role, n.spec, undefined, eth); if (cs) { n.spec = cs; LIFE.variantIds[cs.id] = true; } } // 路人零件化外觀(模組缺失時沿用舊外觀)
     n.bub = T.bub || ''; n.bubP = T.bubP || 6; n.frr = T.frr || 4;
+    if (LIFE.tod === 'night' && n.spec && (role === 'hawker' || role === 'onlooker') && typeof lifeLantern === 'function') { n.spec = lifeLantern(n.spec); }   // 夜市攤主與客人提燈
   });
   return out;
 }
@@ -325,7 +336,8 @@ function lifeXSpawnPeddler(mid) {
 
 function lifeXSpawnHawker() {
   const X = LIFE.road.x;
-  const free = X.stallC.filter(function (c) { return !LIFE.spotRes.has(c.cell); });
+  const night = LIFE.tod === 'night';
+  const free = X.stallC.filter(function (c) { return !LIFE.spotRes.has(c.cell) && (!night || c.night); });
   if (!free.length) return 0;
   let tot = 0;
   free.forEach(function (q) { tot += q.w || 1; });
@@ -464,9 +476,10 @@ function lifeXShed(role, k) {
   for (let pass = 0; pass < 2 && k > 0; pass++) {
     for (let i = 0; i < L.length && k > 0; i++) {
       const n = L[i];
-      if (n.role !== role || n.dead || n.st === 'fade' || n.st === 'enter' || n.st === 'exit') continue;
+      if (n.role !== role || n.dead || n.st === 'fade' || n.st === 'enter' || n.st === 'exit' || (typeof lifeRetiring === 'function' && lifeRetiring(n))) continue;
       if (pass === 0 && n.onS) continue;
       if (role === 'guard_patrol') removed += lifeXFadeSquad(n.squad);
+      else if (pass === 1 && n.onS && !n.stat && n.st === 'walk' && (role === 'wagon' || role === 'rider' || role === 'peddler') && lifeRetireStart(n)) removed++;   // 畫面內的車馬 / 走販走向最近出口再消失
       else { lifeFadeOut(n); removed++; }
       k--;
     }
@@ -489,7 +502,7 @@ function lifeTrafficTick(dt) {
     if (n.port && n.st !== 'fade') port++;
     if (!n.ext) continue;
     if (n.host && n.st !== 'fade' && (n.host.dead || n.host.st !== 'act')) { lifeFadeOut(n); continue; }
-    if (n.st === 'fade') continue;
+    if (n.st === 'fade' || (typeof lifeRetiring === 'function' && lifeRetiring(n))) continue;
     ext++;
     cnt[n.role] = (cnt[n.role] || 0) + 1;
     if (n.role === 'guard_patrol') squads.add(n.squad);

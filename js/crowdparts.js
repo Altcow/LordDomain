@@ -70,7 +70,7 @@ function crowdLook(job, seed, ethnic) {
   if (J.whiteHair || ((job === 'scholar' || job === 'official') && v % 4 === 3)) spec.beard = true;
   const p = J.props[accI];
   if (p) { spec.prop = p; if (p === 'staff') spec.staffCol = CROWD_ACCCOL[v]; }
-  if (ethnic && ethnic !== 'han') crowdEthnicApply(spec, job, J, jh, v, ethnic); // 缺 ETHNIC_LOOK / 不在白名單時原樣回漢外觀
+  if (ethnic && ethnic !== 'han' && !(typeof fantasyApply === 'function' && fantasyApply(spec, job, J, jh, v, ethnic))) crowdEthnicApply(spec, job, J, jh, v, ethnic); // 魔幻種族(crowdparts_fantasy.js)優先; 缺 ETHNIC_LOOK / 不在白名單時原樣回漢外觀
   return spec;
 }
 
@@ -141,7 +141,7 @@ function crowdSpecFor(role, base, rnd, ethnic) {
   let s = CROWD_SPECS[id];
   if (!s) {
     s = Object.assign({}, base, L, { id: id });
-    if (keep) { s.head = base.head; s.prop = base.prop; s.scale = base.scale; delete s.robe; }
+    if (keep) { if (!L.fr) { s.head = base.head; s.scale = base.scale; delete s.robe; } s.prop = base.prop; } // 魔幻種族保留自己的頭飾與體型
     CROWD_SPECS[id] = s;
   }
   return s;

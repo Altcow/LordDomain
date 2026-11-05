@@ -760,6 +760,44 @@ var ART = window.ART = (function () {
         ctx.beginPath(); ctx.arc(0, hy - 1, 10.4, Math.PI, 0); ctx.closePath(); ctx.fillStyle = hc; ctx.fill(); A.edge(ctx, 0.6);
         A.poly(ctx, [[-11, hy - 3], [11, hy - 3], [11, hy + 0.5], [-11, hy + 0.5]], '#f6f0e4', 0.6);
         break;
+      // ---- 魔幻世界人物頭飾(crowdparts_fantasy.js):leaf 葉形頭環 | dhelm 矮人鐵盔 | dhood 矮人風帽 | coif 布帽 | beret 軟帽 | kettle 寬簷鐵帽 ----
+      case 'leaf':
+        ctx.beginPath(); ctx.moveTo(-8.8, hy - 2.5); ctx.quadraticCurveTo(0, hy - 10.5, 8.8, hy - 2.5); ctx.strokeStyle = hc; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.stroke();
+        A.poly(ctx, [[-1.7, hy - 7.4], [0, hy - 13.4], [1.7, hy - 7.4], [0, hy - 6]], s.leafCol || '#a8cf7a', 0.5);
+        A.poly(ctx, [[-6.6, hy - 5.4], [-9, hy - 10], [-4.2, hy - 8]], s.leafCol || '#a8cf7a', 0.4);
+        A.poly(ctx, [[6.6, hy - 5.4], [9, hy - 10], [4.2, hy - 8]], s.leafCol || '#a8cf7a', 0.4);
+        break;
+      case 'dhelm':
+        ctx.beginPath(); ctx.arc(0, hy - 1, 10.5, Math.PI, 0); ctx.closePath(); ctx.fillStyle = hc; ctx.fill(); A.edge(ctx, 0.7);
+        A.poly(ctx, [[-10.9, hy - 3.2], [10.9, hy - 3.2], [10.9, hy - 0.4], [-10.9, hy - 0.4]], A.tone(hc, 0.7), 0.6);
+        A.ellipse(ctx, -4, hy - 7, 3, 1.5, A.tone(hc, 1.35));
+        A.line(ctx, [0, hy - 11.4], [0, hy - 4], A.tone(hc, 0.62), 1.8);
+        A.circle(ctx, -6.4, hy - 1.8, 0.9, '#d9a23c'); A.circle(ctx, 0, hy - 1.8, 0.9, '#d9a23c'); A.circle(ctx, 6.4, hy - 1.8, 0.9, '#d9a23c');
+        if (!back) A.poly(ctx, [[-1, hy - 0.4], [1, hy - 0.4], [1, hy + 4.2], [-1, hy + 4.2]], A.tone(hc, 0.85), 0.4);
+        break;
+      case 'dhood':
+        ctx.beginPath(); ctx.moveTo(-10.8, hy + 1); ctx.quadraticCurveTo(-10.6, hy - 12.8, 0, hy - 12.8); ctx.quadraticCurveTo(10.6, hy - 12.8, 10.8, hy + 1);
+        ctx.quadraticCurveTo(0, hy - 4, -10.8, hy + 1); ctx.fillStyle = hc; ctx.fill(); A.edge(ctx, 0.7);
+        A.ellipse(ctx, -3.8, hy - 8.4, 2.8, 1.5, A.tone(hc, 1.25));
+        A.poly(ctx, [[-10.8, hy - 1], [-12.6, hy + 5.4], [-8.6, hy + 4]], A.tone(hc, 0.85), 0.6);
+        A.poly(ctx, [[10.8, hy - 1], [12.6, hy + 5.4], [8.6, hy + 4]], A.tone(hc, 0.85), 0.6);
+        break;
+      case 'coif':
+        ctx.beginPath(); ctx.moveTo(-9.8, hy + 0.5); ctx.quadraticCurveTo(-10, hy - 11.2, 0, hy - 11.2); ctx.quadraticCurveTo(10, hy - 11.2, 9.8, hy + 0.5);
+        ctx.quadraticCurveTo(0, hy - 3.5, -9.8, hy + 0.5); ctx.fillStyle = hc; ctx.fill(); A.edge(ctx, 0.6);
+        A.line(ctx, [-9, hy - 1.2], [9, hy - 1.6], A.tone(hc, 0.75), 1);
+        A.ellipse(ctx, -3.5, hy - 7.6, 2.4, 1.3, A.tone(hc, 1.18));
+        break;
+      case 'beret':
+        A.ellipse(ctx, 2, hy - 8.4, 9.4, 4.2, hc, 0.7);
+        A.ellipse(ctx, -0.5, hy - 9.6, 4, 1.4, A.tone(hc, 1.22));
+        A.circle(ctx, 3.4, hy - 12.4, 1.2, A.tone(hc, 0.75));
+        break;
+      case 'kettle':
+        A.ellipse(ctx, 0, hy - 3, 13.4, 3.2, A.tone(hc, 0.78), 0.7);
+        ctx.beginPath(); ctx.arc(0, hy - 3.4, 8.4, Math.PI, 0); ctx.closePath(); ctx.fillStyle = hc; ctx.fill(); A.edge(ctx, 0.7);
+        A.ellipse(ctx, -3.4, hy - 8.4, 2.4, 1.3, A.tone(hc, 1.35));
+        break;
     }
     void back;
   }
@@ -775,7 +813,8 @@ var ART = window.ART = (function () {
       A.circle(ctx, -5.1, hy + 1.4, 0.6, '#ffffff'); A.circle(ctx, 1.1, hy + 1.4, 0.6, '#ffffff');
       if (s.fierce) { A.line(ctx, [-6.6, hy - 1], [-3, hy + 0.2], '#2a1a14', 1.3); A.line(ctx, [3.6, hy - 1], [0.2, hy + 0.2], '#2a1a14', 1.3); }
       ctx.globalAlpha = 0.55; A.ellipse(ctx, -6.6, hy + 5, 1.7, 1, C.blush); A.ellipse(ctx, 3.8, hy + 5, 1.7, 1, C.blush); ctx.globalAlpha = 1;
-      if (s.beard) {
+      if (s.beard && s.beard !== true) dwarfBeard(ctx, s.beard, hy, hair);
+      else if (s.beard) {
         ctx.beginPath(); ctx.moveTo(-6, hy + 5); ctx.quadraticCurveTo(-1, hy + 14, 4, hy + 5); ctx.quadraticCurveTo(-1, hy + 8, -6, hy + 5);
         ctx.fillStyle = hair; ctx.fill();
       } else A.line(ctx, [-2.2, hy + 6.2], [-0.4, hy + 6.4], '#a0503c', 1);
@@ -783,12 +822,45 @@ var ART = window.ART = (function () {
       A.ellipse(ctx, -2.5, hy - 3, 3.5, 2, A.tone(hair, 1.6));
     }
     headgear(ctx, s, hy, back);
+    if (s.ear === 'long') elfEars(ctx, hy);
+  }
+  // 魔幻人物:長鬍(long 垂胸 | braid 單辮 | twin 雙辮 | fork 分叉),皆帶小鬍髭;色同髮色
+  function dwarfBeard(ctx, kind, hy, hair) {
+    var hi = A.tone(hair, 1.3), tie = '#d9a23c', i;
+    if (kind === 'long') {
+      ctx.beginPath(); ctx.moveTo(-7.6, hy + 3); ctx.quadraticCurveTo(-9, hy + 14, -1.4, hy + 18.5); ctx.quadraticCurveTo(6.6, hy + 14, 6.2, hy + 3); ctx.quadraticCurveTo(-0.6, hy + 8.5, -7.6, hy + 3);
+      ctx.fillStyle = hair; ctx.fill(); A.edge(ctx, 0.5);
+      A.line(ctx, [-2, hy + 9], [-2.6, hy + 15], hi, 0.9); A.line(ctx, [2, hy + 9], [2.2, hy + 14], hi, 0.9);
+    } else if (kind === 'fork') {
+      ctx.beginPath(); ctx.moveTo(-7.4, hy + 3); ctx.quadraticCurveTo(-8.6, hy + 11, -5.6, hy + 17); ctx.lineTo(-1.6, hy + 11.6); ctx.lineTo(2.6, hy + 17); ctx.quadraticCurveTo(6.4, hy + 11, 6, hy + 3); ctx.quadraticCurveTo(-0.6, hy + 8, -7.4, hy + 3);
+      ctx.fillStyle = hair; ctx.fill(); A.edge(ctx, 0.5);
+    } else {
+      ctx.beginPath(); ctx.moveTo(-7.2, hy + 3); ctx.quadraticCurveTo(-8, hy + 11, -1.4, hy + 11.5); ctx.quadraticCurveTo(5.6, hy + 11, 5.8, hy + 3); ctx.quadraticCurveTo(-0.6, hy + 8, -7.2, hy + 3);
+      ctx.fillStyle = hair; ctx.fill(); A.edge(ctx, 0.5);
+      if (kind === 'braid') {
+        for (i = 0; i < 4; i++) A.circle(ctx, -1.4 + (i % 2) * 0.6, hy + 12 + i * 2.3, 1.7, i % 2 ? hair : hi, 0.4);
+        A.circle(ctx, -1.2, hy + 19.4, 1.1, tie);
+      } else { // twin
+        for (i = 0; i < 3; i++) { A.circle(ctx, -4.4 + (i % 2) * 0.5, hy + 11 + i * 2.4, 1.5, i % 2 ? hair : hi, 0.4); A.circle(ctx, 2.4 + (i % 2) * 0.5, hy + 11 + i * 2.4, 1.5, i % 2 ? hair : hi, 0.4); }
+        A.circle(ctx, -4.2, hy + 16.4, 1, tie); A.circle(ctx, 2.6, hy + 16.4, 1, tie);
+      }
+    }
+    A.ellipse(ctx, -3.2, hy + 5.2, 2.6, 1.1, hi); A.ellipse(ctx, 1.4, hy + 5.2, 2.6, 1.1, hi);
+  }
+  // 精靈尖耳:兩側耳尖,最後才畫(不被髮型 / 頭飾蓋住)
+  function elfEars(ctx, hy) {
+    var C = A.C;
+    A.poly(ctx, [[-8.6, hy + 3.4], [-17, hy - 5.6], [-9.4, hy - 1.4]], C.skin, 0.6);
+    A.poly(ctx, [[8.6, hy + 3.4], [17, hy - 5.6], [9.4, hy - 1.4]], C.skin, 0.6);
+    A.line(ctx, [-9.6, hy + 0.8], [-14.2, hy - 4], C.blush, 0.8); A.line(ctx, [9.6, hy + 0.8], [14.2, hy - 4], C.blush, 0.8);
   }
   // 畫「朝左下(SW)正面」或「朝左上(NW)背面」;右向由呼叫端水平翻轉
   A.chibiRaw = function (ctx, s, back, fr) {
     var C = A.C, bob = fr === 1 ? -1 : 0, l0 = fr === 1 ? 1.6 : 0;
     var tun = s.tunic, trim = s.trim || C.hanRed;
     if (!back && (s.weapon === 'spear' || s.weapon === 'ji')) pole(ctx, 8.6, -4 + bob, -38 + bob, s);
+    ctx.save(); // 體型(魔幻種族):slim 修長 / stout 矮壯,只縮放身體(頭另以 headDy 對位);head 前 restore
+    if (s.build === 'stout') ctx.scale(1.24, 0.84); else if (s.build === 'slim') ctx.scale(0.86, 1.1);
     if (s.cape && !back) A.poly(ctx, [[-6, -18 + bob], [6, -18 + bob], [10, -3], [-10, -3]], A.tone(s.cape, 0.8), 0.6);
     if (s.flag) { A.line(ctx, [7.5, -2 + bob], [8.5, -52 + bob], A.C.ink, 3); A.line(ctx, [7.5, -2 + bob], [8.5, -52 + bob], C.wood[1], 1.6); A.poly(ctx, [[8.5, -51 + bob], [20, -50 + bob], [19, -36 + bob], [8.5, -38 + bob]], s.flag, 0.8); A.circle(ctx, 14, -44 + bob, 3.2, C.gold, 0.4); }
     if (!s.mount) { leg(ctx, -3.6, 0 - l0, s.pants || C.wood[0]); leg(ctx, 3.4, 0, s.pants || C.wood[0]); }
@@ -805,12 +877,23 @@ var ART = window.ART = (function () {
     A.poly(ctx, [[-8.6, -9.6 + bob], [8.6, -9.6 + bob], [8.9, -7.4 + bob], [-8.9, -7.4 + bob]], s.belt || A.tone(C.wood[0], 1), 0.5);
     if (s.collar) A.ellipse(ctx, 0, -17.2 + bob, 7.6, 2.6, '#f6f0e4', 0.6);
     if (!back) A.circle(ctx, -1, -8.5 + bob, 1.2, C.gold);
+    if (s.apron) { // 皮圍裙(矮人 / 工匠):胸到膝,銅釦
+      A.poly(ctx, [[-5.4, -16 + bob], [5.4, -16 + bob], [6.4, -3.4], [-6.4, -3.4]], s.apron, 0.7);
+      A.line(ctx, [-5.4, -16 + bob], [5.4, -16 + bob], A.tone(s.apron, 0.7), 1);
+      if (!back) { A.circle(ctx, -2.6, -14 + bob, 0.9, '#d9a23c'); A.circle(ctx, 2.6, -14 + bob, 0.9, '#d9a23c'); A.circle(ctx, 0, -7, 0.9, '#d9a23c'); }
+    }
+    if (s.vine) { // 藤蔓飾帶(精靈):斜掛小葉
+      ctx.beginPath(); ctx.moveTo(-6, -17 + bob); ctx.quadraticCurveTo(0, -12 + bob, 6.6, -5.4); ctx.strokeStyle = s.vine; ctx.lineWidth = 1.3; ctx.stroke();
+      A.circle(ctx, -3.2, -13.6 + bob, 1.3, '#a8cf7a'); A.circle(ctx, 1.4, -10.6 + bob, 1.3, '#a8cf7a'); A.circle(ctx, 5, -7 + bob, 1.3, '#a8cf7a');
+    }
     if (s.cape && back) A.poly(ctx, [[-6.5, -18 + bob], [6.5, -18 + bob], [10.5, -3], [-10.5, -3]], s.cape, 0.7);
     A.ellipse(ctx, -8.6, -12.5 + bob, 3, 4.5, A.tone(tun, 0.92), 0.6);
     A.ellipse(ctx, 8.6, -12.5 + bob, 3, 4.5, A.tone(tun, 0.92), 0.6);
     A.circle(ctx, -9, -8.6 + bob, 2.2, C.skin, 0.6); A.circle(ctx, 9, -8.6 + bob, 2.2, C.skin, 0.6);
+    if (s.pauld) { A.ellipse(ctx, -8.4, -16.4 + bob, 3.6, 2.4, s.pauld, 0.7); A.ellipse(ctx, 8.4, -16.4 + bob, 3.6, 2.4, s.pauld, 0.7); A.circle(ctx, -8.4, -16.8 + bob, 0.8, '#d9a23c'); A.circle(ctx, 8.4, -16.8 + bob, 0.8, '#d9a23c'); }
     if (back && s.shield) A.ellipse(ctx, 0, -11 + bob, 6.5, 6.5, s.shieldCol || C.hanRed, 0.7);
-    head(ctx, s, bob, back);
+    ctx.restore();
+    head(ctx, s, bob + (s.headDy || 0), back);
     if (back && (s.weapon === 'spear' || s.weapon === 'ji')) pole(ctx, 8.6, -4 + bob, -38 + bob, s);
     if (!back && s.shield === 'rect') {
       var sc = s.shieldCol || C.hanRed;

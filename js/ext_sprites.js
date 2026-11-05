@@ -46,7 +46,11 @@ var EXT_SPRITES_TUNE = {
   s2_pen:      { base: 0.95 },
   s2_stone_yard: { base: 0.97 },
   s2_zhai_manor: { base: 0.97 },
-  s2_felt_camp: { base: 0.96 }
+  s2_felt_camp: { base: 0.96 },
+  // 魔幻三族(s8_ / s9_ / s10_):自動估 base 偏窄(< 0.82,底面收尖 / 外擴)者放大 base,使牆腳貼合佔地菱形;其餘沿用自動值(實機對位見 tools/fantasy_*.png,5×5 地標沿用自動值即貼合)
+  s8_loom_bower: { base: 0.88 },
+  s9_rock_house: { base: 0.88 },
+  s9_clan_yard: { base: 0.88 }
 };
 var EXT_SPRITES = {};
 (function () {

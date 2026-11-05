@@ -3,7 +3,7 @@
 // 不讀寫 world 的數據欄位、不寫主存檔(只可存 LIFE_KEY 的 {on, density})。
 
 const LIFE_KEY = 'lorddomain.life.v1';
-const LIFE_SPR_BUDGET = 12 * 1024 * 1024; // 居民 sprite 快取預算(bytes),超過以 LRU 淘汰居民 sprite
+const LIFE_SPR_BUDGET = 18 * 1024 * 1024; // 居民 sprite 快取預算(bytes),超過以 LRU 淘汰居民 sprite(PLAN_CITYLIFE_GATHER Q15:12 → 18 MB)
 const LIFE_LRU = 64;          // 距離場快取張數
 const LIFE_RES_MAX = 2;       // 居民 sprite 解析度上限(控制快取大小)
 const LIFE_GRID = 0.8;        // 閒聊粗格桶邊長(格);配對半徑 0.8 格,3×3 桶即可涵蓋
@@ -11,6 +11,13 @@ const LIFE_OFF_GAP = 0.75;    // 畫面外居民的粗更新間隔(秒)
 const LIFE_MAX_LIFE = 360;    // 單一居民壽命上限(秒),到時直接走向入口離場
 const LIFE_DOT_MAX = 80;      // 縮放 < 0.35 時最多畫的色點數
 const LIFE_IDLE_SPOTS = 12;   // 閒逛停點數(道路圖抽樣,避免每次隨機產生新距離場)
+const LIFE_AWAY_MS = 5 * 60 * 1000; // 離開(背景 / 非經營模式 / 隱藏建築)超過此時間才清空重擺;未滿則原樣繼續
+const LIFE_PREFILL = 0.85;    // 預布點比例:開機 / 久別重逢時第一幀就擺好目標人數的 85%
+const LIFE_RETIRE_SEC = 25;   // 減人時畫面內的人走向最近門口 / 城門的最長秒數
+const LIFE_RETIRE_CELLS = 14; // 最近出口超過此格數就原地淡出
+const LIFE_RETIRE_SPREAD = 12; // 目標下降時,畫面內的人錯開 0~12 秒陸續離場
+const LIFE_BAKE_MAX = 6;      // 每幀最多新烘焙幾個居民 sprite;超過的人先畫占位小人
+const LIFE_FLOOR_TOD = { dawn: 0.8, noon: 1, dusk: 1, night: 0.6 };   // 人口下限的時段倍率
 
 const LIFE = {
   inited: false, cfgOk: false, on: true, density: 'mid', active: false, placing: false,
@@ -19,7 +26,9 @@ const LIFE = {
   lastT: null, clock: 0, sigT: 0, spawnT: 0.5, chatT: 0, sprT: 0, statT: 0, tod: 'noon',
   bfsBudget: 1, dots: 0, pairCmp: 0, chatHead: null, chatNext: null, tradeAt: new Map(),
   portT: 0, portTarget: 0, xT: 0, xSeed: 6, xCd: {}, xTarget: null, dockRes: new Map(), spotRes: new Set(), lowEnd: undefined, drawAcc: 0, wallT: -1, fps: 0, perfLog: false, sprBytes: 0, specs: {}, variantIds: {},
-  perf: { ms: 0 }, card: null, cardFor: null, psFlip: false, psAcc: 0
+  perf: { ms: 0 }, card: null, cardFor: null, psFlip: false, psAcc: 0,
+  // P1 不空城:人口下限、降載階梯旗標、離開計時、夜間保底
+  floor: 0, runMs: 0, paused: false, expFps: 0, bakes: 0, bubN: 0, nightT: 0, offGap: LIFE_OFF_GAP, bubMax: 99, chatGap: 0.5, resMax: LIFE_RES_MAX, frrMul: 1, freeze: false, dotSkip: null
 };
 
 // 省電模式(perf.js isPowerSave)時密度降一級,只在運算時換算,不改使用者存的 LIFE.density
@@ -60,11 +69,7 @@ function lifeInit() {
   LIFE.inited = true;
   lifeLoadCfg();
   LIFE.perfLog = typeof location !== 'undefined' && !!location && /(^|[?&])perf(&|=|$)/.test(location.search || '');
-  if (typeof document !== 'undefined' && document.addEventListener) {
-    document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) LIFE.reseed = true;
-    });
-  }
+  // 回到前景不再整城清空:lifeFrame 用「上次執行距今」判斷(< LIFE_AWAY_MS 原樣繼續,否則清空並預布點)
 }
 
 function lifeGetDensity() {
@@ -77,7 +82,7 @@ function lifeSetDensity(k) {
   lifeLoadCfg();
   if (!Object.prototype.hasOwnProperty.call(LIFE_DENSITY, k)) return;
   LIFE.density = k;
-  LIFE.adj = 1; LIFE.level = 0; LIFE.healthy = 0;
+  LIFE.healthy = 0; lifeSetLevel(0);
   lifeSaveCfg();
   LIFE.tgtT = 0;
   if (k === 'off') lifeReset();
@@ -172,6 +177,28 @@ function lifeWalkObj(t) {
 // 可穿越的門類 3×1(中格可走,兩側為柱/牆不可走);通行軸由 rot 決定(0/2 南北、1/3 東西)
 const LIFE_PASS_TYPES = { gate: 1, paifang: 1, toll_gate: 1, gate_courtyard: 1 };
 
+// 多源距離場:來源 = 所有目的地門格 + 所有入口;exitAt[cell] = 最近來源編號(exitSrc[i] = {cell, door | ent})。
+// 減人時畫面內的人沿它下坡走到最近的門口(走進門淡出)或入口(走出城淡出)。改路時才重算一次
+function lifeExitBuild(R, N) {
+  const D = new Int16Array(N).fill(-1), A = new Int16Array(N).fill(-1), src = [], q = R.q;
+  let head = 0, tail = 0, i, s;
+  for (i = 0; i < R.dests.length; i++) src.push({ cell: R.dests[i].cell, door: R.dests[i], ent: null });
+  for (i = 0; i < R.ent.length; i++) src.push({ cell: R.ent[i].cell, door: null, ent: R.ent[i] });
+  for (i = 0; i < src.length && i < 32000; i++) {
+    s = src[i].cell;
+    if (D[s] >= 0 || !R.ok[s]) continue;
+    D[s] = 0; A[s] = i; q[tail++] = s;
+  }
+  while (head < tail) {
+    const c = q[head++];
+    for (let d = 0; d < 4; d++) {
+      const j = R.nb[c * 4 + d];
+      if (j >= 0 && D[j] < 0) { D[j] = D[c] + 1; A[j] = A[c]; q[tail++] = j; }
+    }
+  }
+  R.exitD = D; R.exitAt = A; R.exitSrc = src;
+}
+
 // 道路圖:可走格 + 4 鄰接(同高;高差 1 且任一格有階梯/斜坡才相連)+ 入口 + 門格 + 閒逛停點 + 固定巡邏路線
 function lifeRebuild() {
   const N = boardW() * boardH();
@@ -240,6 +267,7 @@ function lifeRebuild() {
     for (k = 0; k < ends.length && k < 3; k++) ent.push({ cell: ends[k], ox: 0, oy: 0 });
   }
   const dests = [], bcount = {}, pdoors = [], pcells = {};
+  let fHouses = 0;
   for (k = 0; k < world.objects.length; k++) {
     o = world.objects[k];
     if (LIFE_PORT_TYPES[o.type]) {
@@ -247,14 +275,19 @@ function lifeRebuild() {
       if (pdr) { pdoors.push({ type: o.type, cell: pdr.cell, bx: pdr.bx, by: pdr.by }); pcells[pdr.cell] = 1; }
     }
     const dk = lifeHouseKind(o.type);
+    if (dk === 'house') fHouses++;
+    else if (typeof OBJECTS !== 'undefined' && OBJECTS[o.type] && (OBJECTS[o.type].crowd === 'poor' || OBJECTS[o.type].crowd === 'common' || OBJECTS[o.type].crowd === 'rich')) fHouses += 0.5;
     if (LIFE_DEST_TYPES.indexOf(dk) < 0) continue;
     const d = lifeFindDoor(o, ok);
     if (!d) continue;
     dests.push({ type: dk, cell: d.cell, bx: d.bx, by: d.by });
     bcount[dk] = (bcount[dk] || 0) + 1;
   }
-  LIFE.road = { ok: ok, nb: nb, list: list, ent: ent, dests: dests, bcount: bcount, port: pdoors, portCells: pcells, dc: new Map(), q: new Int32Array(N), sig: lifeRoadSig(), spots: [], patrol: null };
+  LIFE.road = { ok: ok, nb: nb, list: list, ent: ent, dests: dests, bcount: bcount, port: pdoors, portCells: pcells, dc: new Map(), q: new Int32Array(N), sig: lifeRoadSig(), spots: [], patrol: null, exitD: null, exitAt: null, exitSrc: null, fBase: 0 };
   const R = LIFE.road;
+  // 人口下限基礎:6 + 1.2 × 屋 + 2 × 市集 + (有城主府 ? 2 : 0)(聚集點 P2 起再加)
+  R.fBase = 6 + 1.2 * fHouses + 2 * (bcount.market || 0) + (bcount.palace ? 2 : 0);
+  lifeExitBuild(R, N);
   // 閒逛停點:道路格等距抽樣(確定性),讓距離場數量有上限
   const step = Math.max(1, Math.floor(list.length / LIFE_IDLE_SPOTS));
   for (k = 0; k < list.length && R.spots.length < LIFE_IDLE_SPOTS; k += step) R.spots.push(list[k]);
@@ -315,6 +348,16 @@ function lifeField(g) {
 
 // 回傳 -2 = 距離場還沒算好(等待);-1 = 走不到;其餘為下一格
 function lifePickNext(n) {
+  if (n.ret > 0) {   // 走向最近出口:沿多源距離場下坡(不用逐目標距離場,沒有每幀預算問題)
+    const E = LIFE.road.exitD, e0 = E[n.cur];
+    if (e0 <= 0) return -1;
+    const cs = [];
+    for (let k = 0; k < 4; k++) {
+      const j = LIFE.road.nb[n.cur * 4 + k];
+      if (j >= 0 && E[j] === e0 - 1) cs.push(j);
+    }
+    return cs.length ? cs[Math.floor(Math.random() * cs.length)] : -1;
+  }
   const D = lifeField(n.goal);
   if (!D) return -2;
   const d0 = D[n.cur];
@@ -376,7 +419,7 @@ function lifePickEnt(from, avoid) {
 
 // 行程:(市集停點) → (閒逛停點) → 進門 或 出城
 function lifePlan(T, startCell, avoid) {
-  const plan = [];
+  const plan = [], R = LIFE.road;
   let prev = startCell;
   if (T.stop === 'market') {
     const md = lifePickDoor({ market: 1 }, prev);
@@ -389,6 +432,7 @@ function lifePlan(T, startCell, avoid) {
   }
   let fin = null;
   if (Object.keys(T.to).length && Math.random() < 0.6) fin = lifePickDoor(T.to, prev);
+  if (!fin && !R.ent.length) fin = lifePickDoor(R.bcount, prev) || lifePickDoor(T.to, prev);   // 沒有入口 / 城門的小城:一律回屋(否則補不到人,人數越走越少)
   if (fin) {
     plan.push({ cell: fin.cell, end: 'enter', door: fin });
   } else {
@@ -411,7 +455,7 @@ function lifePickType() {
     if (T.night === 'only' && !night) return;
     if (night && T.night === 'no') return;
     let w = T.w;
-    if (night && T.night !== 'only' && k !== 'soldier') w *= 0.05;
+    if (night && T.night !== 'only' && k !== 'soldier') w *= 0.25;   // 夜間保底:晚歸者不再幾乎歸零(提燈,見 lifeNew)
     if (k === 'beggar' && winter) w *= 2;
     keys.push(k); ws.push(w); tot += w;
   });
@@ -443,17 +487,29 @@ function lifeSpecFor(look, alt) {
   return s;
 }
 
+// 提燈外觀:同一外觀加 night:'lantern'(art.js 夜間才畫燈籠與光暈),變體 id 加 _ln
+function lifeLantern(spec) {
+  if (!spec || spec.night === 'lantern') return spec;
+  const vid = spec.id + '_ln';
+  let s = LIFE.specs[vid];
+  if (!s) { s = Object.assign({}, spec, { id: vid, night: 'lantern' }); LIFE.specs[vid] = s; }
+  LIFE.variantIds[vid] = true;
+  return s;
+}
+
 function lifeNew(key, T, start, plan) {
   const look = T.looks[Math.floor(Math.random() * T.looks.length)];
+  let spec = (typeof fantasyResidentSpec === 'function' && fantasyResidentSpec(key, look)) || lifeSpecFor(look);   // 魔幻世界居民外觀(非魔幻回 null)
+  if (LIFE.tod === 'night' && spec && T.night !== 'only' && key !== 'soldier' && T.w > 0 && Math.random() < 0.6) spec = lifeLantern(spec);   // 夜間 60% 晚歸者提燈
   return {
     id: ++LIFE.nid, type: key, name: LIFE_NAMES[Math.floor(Math.random() * LIFE_NAMES.length)],
-    look: look, spec: lifeSpecFor(look), col: LIFE_PH_COL[key] || (typeof LIFE_XPH_COL !== 'undefined' && LIFE_XPH_COL[key]) || '#888888',
+    look: look, spec: spec, col: LIFE_PH_COL[key] || (typeof LIFE_XPH_COL !== 'undefined' && LIFE_XPH_COL[key]) || '#888888',
     st: 'walk', t: 0, dur: 0, act: '', life: 0, alpha: 0, acc: 0, cd: 0, dead: false, onS: false,
     port: false, pa: -1, pb: -1, specL: null, specE: null,
     ext: false, role: '', stat: false, keep: false, dock: -1, pc: -1, host: null, hand: null, squad: 0, bub: '', bubP: 6, frr: 4, fid: false, bx: 0, by: 0, hh: 0,
     x: 0, y: 0, px: 0, py: 0, cur: start, nx: -1, tx: 0, ty: 0, goal: plan[0].cell, plan: plan, pi: 0,
     lane: 0.12, spd: T.spd, ph: Math.random() * 2, wait: 0, det: 0, loop: false, hold: 0,
-    fx: 0, fy: 0, ex: 0, ey: 0, ddx: 0, ddy: 0, ox: 0, oy: 0, pair: null, gi: -1,
+    fx: 0, fy: 0, ex: 0, ey: 0, ddx: 0, ddy: 0, ox: 0, oy: 0, pair: null, gi: -1, ret: 0, retAt: 0, retPend: false, retCut: false, lazy: null, lazyTry: 0, drink: -1, retN: 0,
     pp: { spec: null, x: 0, y: 0, f: 0, fr: 0, alpha: 1 }
   };
 }
@@ -507,7 +563,7 @@ function lifeSpawn(mid) {
   let start, ent = null, door = null;
   if (mid) {
     start = R.list[Math.floor(Math.random() * R.list.length)];
-  } else if (R.dests.length && Math.random() < 0.2) {
+  } else if (R.dests.length && (Math.random() < 0.2 || !R.ent.length)) {
     door = R.dests[Math.floor(Math.random() * R.dests.length)];
     start = door.cell;
   } else {
@@ -545,39 +601,85 @@ function lifeSpawnPatrol() {
   return lifeEmit(LIFE_TYPES.soldier, 'soldier', 1, P.a, plan, P.da, false, { det: 9001, loop: true });
 }
 
-// 目標人數 = 密度基礎 × 時段 × 季節,再受道路格數(÷3)與目的地數量上限約束;自適應降載只乘在上面,最低 12 人
-function lifeTarget() {
-  const base = LIFE_DENSITY[lifeEffDensity()] || 0;
-  const R = LIFE.road;
-  if (!LIFE.on || !base || !R) return 0;
-  const seasonMul = lifeSeason() === 'winter' ? LIFE_WINTER_MUL : 1;
-  const raw = Math.min(base * (LIFE_TOD_MUL[LIFE.tod] || 1) * seasonMul, Math.floor(R.list.length / 1.5), 12 + 10 * R.dests.length);
-  if (raw <= 0) return 0;
-  const floor = Math.min(12, Math.round(raw));
-  return Math.min(base, Math.max(floor, Math.round(raw * LIFE.adj)));
+// 人口下限(PLAN_CITYLIFE_GATHER §3.2):依住宅 / 市集 / 城主府算基礎,乘時段倍率,夾在「下限最小 ~ 密度基礎 × 0.5」;
+// 密度『少』最多 12;省電 / 低階機 ×0.75(仍 ≥ 下限最小);密度關 = 0。降載只能先砍細節,不得砍到下限以下
+function lifeFloor() {
+  const R = LIFE.road, user = LIFE_DENSITY[LIFE.density] || 0;
+  if (!LIFE.on || !user || !R) return 0;
+  const night = LIFE.tod === 'night';
+  const mn = night ? 6 : 8;
+  let f = Math.round(R.fBase * (LIFE_FLOOR_TOD[LIFE.tod] || 1));
+  const mx = LIFE.density === 'low' ? 12 : Math.round(user * 0.5);
+  f = Math.max(mn, Math.min(f, mx));
+  if ((typeof isPowerSave === 'function' && isPowerSave()) || (typeof lifeLowEnd === 'function' && lifeLowEnd())) f = Math.max(mn, Math.round(f * 0.75));
+  return Math.min(f, Math.floor(R.list.length / 1.5), 12 + 10 * R.dests.length);   // 路太少站不下就是站不下
 }
 
-// 重算目標;增加時補生成;減少時淡出多出的人(畫面外優先)
+// 目標人數 = max(下限, 密度基礎 × 時段 × 季節 × 降載係數),再受道路格數(÷1.5)與目的地數量上限約束,不超過使用者設定的密度基礎
+function lifeTarget() {
+  const base = LIFE_DENSITY[lifeEffDensity()] || 0, user = LIFE_DENSITY[LIFE.density] || 0;
+  const R = LIFE.road;
+  if (!LIFE.on || !user || !R) return 0;
+  const seasonMul = lifeSeason() === 'winter' ? LIFE_WINTER_MUL : 1;
+  const cap = Math.min(Math.floor(R.list.length / 1.5), 12 + 10 * R.dests.length);
+  const raw = Math.min(base * (LIFE_TOD_MUL[LIFE.tod] || 1) * seasonMul, cap);
+  const fl = lifeFloor();
+  LIFE.floor = fl;
+  if (raw <= 0 && fl <= 0) return 0;
+  return Math.min(user, cap, Math.max(fl, Math.round(raw * LIFE.adj)));
+}
+
+// 重算目標;增加時補生成;減少時讓多出的人走開(畫面外優先直接淡出,畫面內錯開走到最近門口 / 城門)
 function lifeRetarget() {
   const t = lifeTarget();
   const want = Math.floor(t * 0.6) - LIFE.live;
   if (t > LIFE.target && want > LIFE.seedLeft) LIFE.seedLeft = want;
   LIFE.target = t;
   const over = LIFE.live - t;
-  if (over > 0) lifeShed(over);
+  if (over > 0) lifeRetire(over);
 }
 
-function lifeShed(k) {
+function lifeRetiring(n) { return n.ret > 0 || n.retAt > 0 || n.retPend; }
+
+// 減人:第 1 輪先挑畫面外的(看不到,直接淡出),第 2 輪才挑畫面內的(排 0~12 秒後走向最近出口)。
+// hero / 在野名人 / 街景角色(ext)、苦力、縱隊後段不被挑中
+function lifeRetire(k) {
   const L = LIFE.npcs;
   for (let pass = 0; pass < 2 && k > 0; pass++) {
     for (let i = 0; i < L.length && k > 0; i++) {
       const n = L[i];
-      if (n.st !== 'walk' && n.st !== 'act' && n.st !== 'chat') continue;
-      if (n.hold > 0 || n.port || n.ext || (pass === 0 && n.onS)) continue;
-      lifeFadeOut(n);
+      if (n.dead || (n.st !== 'walk' && n.st !== 'act' && n.st !== 'chat')) continue;
+      if (n.hold > 0 || n.port || n.ext || lifeRetiring(n)) continue;
+      if (pass === 0) {
+        if (n.onS) continue;
+        lifeFadeOut(n);
+      } else {
+        n.retAt = LIFE.clock + 0.2 + Math.random() * LIFE_RETIRE_SPREAD;
+      }
       k--;
     }
   }
+}
+
+// 把 n 的行程換成「走向 cur 所在位置的最近出口」;走不到回傳 false(呼叫端原地淡出)。最多走 LIFE_RETIRE_CELLS 格 / LIFE_RETIRE_SEC 秒,還沒到就在當下位置淡出
+function lifeRetSet(n) {
+  const R = LIFE.road;
+  if (!R || !R.exitD || n.cur < 0) return false;
+  if (R.exitD[n.cur] < 0) return false;   // 孤島:走不到任何出口
+  const a = R.exitAt[n.cur];
+  if (a < 0 || !R.exitSrc[a]) return false;
+  const sc = R.exitSrc[a];
+  n.plan = [sc.door ? { cell: sc.cell, end: 'enter', door: sc.door } : { cell: sc.cell, end: 'exit', ent: sc.ent }];
+  n.pi = 0; n.goal = sc.cell; n.loop = false;
+  return true;
+}
+
+function lifeRetireStart(n) {
+  if (n.ext && typeof lifeTrafficLeave === 'function') lifeTrafficLeave(n);
+  if (!lifeRetSet(n)) return false;
+  n.ret = LIFE_RETIRE_SEC; n.retN = LIFE_RETIRE_CELLS; n.retAt = 0; n.retPend = false;
+  n.st = 'walk'; n.wait = 0;
+  return true;
 }
 
 // 港口苦力目標數:有門格的港口設施數 × per(進位),受 max 與密度(low 12→2、mid 60→12)約束,再乘時段與季節倍率;沒有就 0
@@ -644,6 +746,71 @@ function lifePortTick(dt) {
   }
 }
 
+// 夜間保底(PLAN_CITYLIFE_GATHER §3.5,最小可行版):每 2 秒檢查。
+//  更夫 `watch`:提燈沿兩個停點來回慢走(1~2 名,有城主府或軍事建築 2 名);天亮後陸續回家。
+//  酒館小聚:酒館 / 酒肆 / 客棧門口 2~4 人站著喝兩杯(頭上 happy 泡泡),夜間全額、黃昏 1 人;站夠時間再回家。
+//  夜市(吃食 / 酒水攤開張)在 citytraffic.js 的叫賣者 / 圍觀者目標;晚歸者提燈在 lifeNew。皆算居民額度(下限內)
+const LIFE_TAVERN_TYPES = { tavern: 1, shop_wine: 1, inn: 1 };
+function lifeNightTick(dt) {
+  LIFE.nightT -= dt;
+  if (LIFE.nightT > 0) return;
+  LIFE.nightT = 2;
+  const R = LIFE.road;
+  if (!R || LIFE.target <= 0 || !LIFE_TYPES.watch) return;
+  const night = LIFE.tod === 'night', dusk = LIFE.tod === 'dusk', L = LIFE.npcs;
+  let watch = 0, i;
+  const at = {};
+  for (i = 0; i < L.length; i++) {
+    const n = L[i];
+    if (n.dead || n.st === 'fade') continue;
+    if (n.type === 'watch') {
+      watch++;
+      if (!night && !lifeRetiring(n)) n.retAt = LIFE.clock + 0.5 + Math.random() * 10;   // 天亮了,更夫回家
+    } else if (n.drink >= 0 && n.st === 'act') at[n.drink] = (at[n.drink] || 0) + 1;
+  }
+  const room = LIFE.target - LIFE.live;
+  if (room <= 0 || !(night || dusk)) return;
+  const user = LIFE_DENSITY[LIFE.density] || 0;
+  if (night && R.spots.length >= 2) {
+    const want = Math.min(user <= 12 ? 1 : 2, ((R.bcount.palace || (R.x && R.x.mil >= 1)) ? 2 : 1), Math.max(1, Math.ceil(LIFE.target / 12)));
+    if (watch < want) {
+      const a = R.spots[Math.floor(Math.random() * R.spots.length)], D = lifeField(a);
+      let b = -1;
+      if (D) for (let t = 0; t < 6 && b < 0; t++) { const c = R.spots[Math.floor(Math.random() * R.spots.length)]; if (c !== a && D[c] >= 3) b = c; }
+      if (b >= 0) {
+        const plan = [{ cell: b, act: 'stand', dur: 3 + Math.random() * 3 }, { cell: a, act: 'stand', dur: 3 + Math.random() * 3 }];
+        if (lifeEmit(LIFE_TYPES.watch, 'watch', 1, a, plan, null, true, { loop: true, lane: 0.1 })) {
+          const n = L[L.length - 1];
+          n.keep = true; n.life = 0; n.alpha = 0; n.bub = 'talk'; n.bubP = 11;
+          if (n.spec) n.spec = lifeLantern(n.spec);
+          return;
+        }
+      }
+    }
+  }
+  // 酒館小聚
+  let cap = Math.max(2, Math.round(LIFE.target * 0.25));
+  const tavs = [];
+  for (i = 0; i < R.dests.length; i++) if (LIFE_TAVERN_TYPES[R.dests[i].type]) tavs.push(R.dests[i]);
+  if (!tavs.length) return;
+  let total = 0;
+  for (const k in at) total += at[k];
+  if (total >= cap) return;
+  const d = tavs[Math.floor(Math.random() * tavs.length)];
+  const wantHere = dusk ? 1 : 2 + (d.cell % 3);
+  if ((at[d.cell] || 0) >= wantHere) return;
+  const keys = ['civ', 'farmer', 'smith', 'scholar', 'drunk'].filter(function (k) { return LIFE_TYPES[k] && !(LIFE_TYPES[k].needs && !LIFE_TYPES[k].needs.some(function (b) { return R.bcount[b] > 0; })); });
+  if (!keys.length) return;
+  const key = keys[Math.floor(Math.random() * keys.length)], T = LIFE_TYPES[key];
+  const plan = [{ cell: d.cell, act: 'stand', dur: 35 + Math.random() * 50 }];
+  if (!lifeEmit(T, key, 1, d.cell, plan, null, true, { lane: 0.12 })) return;
+  const n = L[L.length - 1];
+  n.lazy = T; n.drink = d.cell; n.st = 'act'; n.act = 'stand'; n.dur = plan[0].dur; n.t = 0; n.fid = true;
+  n.bub = 'happy'; n.bubP = 7 + Math.random() * 3; n.life = 0; n.alpha = 0;
+  n.x += (Math.random() - 0.5) * 0.5; n.y += (Math.random() - 0.5) * 0.5;
+  if (n.spec && night) n.spec = lifeLantern(n.spec);
+}
+
 function lifeSpawnTick(dt) {
   if (LIFE.seedLeft > 0) {
     let tries = 0;
@@ -658,8 +825,12 @@ function lifeSpawnTick(dt) {
   LIFE.spawnT -= dt;
   if (LIFE.spawnT <= 0) {
     const deficit = LIFE.target - LIFE.live;
-    LIFE.spawnT = deficit > 0 ? (deficit > 20 ? 0.2 : 0.5) + Math.random() * 0.35 : 1 + Math.random() * 2;
-    if (deficit > 0 && !lifeSpawn(false)) LIFE.spawnT = 0.3;
+    LIFE.spawnT = deficit > 0 ? (LIFE.live < LIFE.floor ? 0.1 : deficit > 8 ? 0.2 : 0.5) + Math.random() * 0.35 : 1 + Math.random() * 2;
+    if (deficit > 0) {
+      let ok = lifeSpawn(false);
+      for (let t = 0; !ok && t < 2 && LIFE.live < LIFE.floor; t++) ok = lifeSpawn(false);   // 低於人口下限時多試幾次
+      if (!ok) LIFE.spawnT = 0.3;
+    }
   }
 }
 
@@ -671,8 +842,112 @@ function lifeReset() {
   LIFE.spawnT = 0.5;
   LIFE.portT = 0;
   LIFE.chatT = 0;
+  LIFE.nightT = 0;
+  LIFE.runMs = 0;
+  LIFE.healthy = 0; LIFE.adaptT = 0; LIFE.fps = 0;
+  lifeSetLevel(0);   // 重擺時降載等級歸零(舊版不歸零,回來時目標可能仍是下限)
   if (typeof lifeTrafficReset === 'function') lifeTrafficReset();
   lifeCardHide();
+}
+
+// ---------- 預布點(PLAN_CITYLIFE_GATHER §3.4) ----------
+function lifeHash(a, b) {
+  let h = (a ^ Math.imul(b | 0, 0x9e3779b1)) >>> 0;
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+// 種子 = hash(世界編號, 道路簽章, 日, 15 分鐘時段序號):同一時段重開 = 同一批人站在同樣的位置
+function lifeSeed() {
+  const now = Date.now();
+  let w = 1;
+  try { w = (typeof worldsActive === 'function') ? (worldsActive() | 0) : 1; } catch (e) { w = 1; }
+  let h = lifeHash(0x1f3d5b79, w);
+  h = lifeHash(h, LIFE.road ? LIFE.road.sig : 0);
+  h = lifeHash(h, Math.floor(now / 86400000));
+  return lifeHash(h, Math.floor(now / 900000));
+}
+
+function lifeRng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// 第一幀就有人:擺 max(下限, 目標 × 85%) 人。全部不需要距離場(行程延到第一次要走時才排,見 lifeNextStop 的 lazy);
+// 一部分站在攤位前 / 閒逛停點上(停留中),其餘在道路上(走路中)。其餘 15% 照常從入口 / 門口走進來。
+// 暫時把 Math.random 換成種子亂數 → 同種子同布點(確定性)。回傳擺出人數
+function lifePrefill() {
+  const R = LIFE.road;
+  if (!R || !R.list.length || LIFE.target <= 0) return 0;
+  const want = Math.min(LIFE.target, Math.max(LIFE.floor, Math.round(LIFE.target * LIFE_PREFILL)));
+  const rng = lifeRng(lifeSeed());
+  const rnd0 = Math.random;
+  let vis = null, placed = 0, tries = 0;
+  Math.random = rng;
+  try {
+    if (viewport.w > 0) {   // 40% 的路上人偏向目前畫面內的道路格(第一幀看得到;同視角仍是確定性的)
+      vis = [];
+      for (let i = 0; i < R.list.length; i++) {
+        const c = R.list[i], px = isoX((c % boardW()) + 0.5, Math.floor(c / boardW()) + 0.5), py = isoY((c % boardW()) + 0.5, Math.floor(c / boardW()) + 0.5, world.height[c]);
+        const sp = worldToScreen(px, py);
+        if (sp[0] > 0 && sp[0] < viewport.w && sp[1] > 0 && sp[1] < viewport.h) vis.push(c);
+      }
+      if (!vis.length) vis = null;
+    }
+    const mk = [];
+    for (let i = 0; i < R.dests.length; i++) if (R.dests[i].type === 'market') mk.push(R.dests[i].cell);
+    const perCell = {};
+    while (placed < want && tries++ < want * 8) {
+      const key = lifePickType();
+      if (!key) break;
+      const T = LIFE_TYPES[key];
+      if (key === 'caravan' || key === 'coolie') continue;
+      let cell, act = '', dur = 0;
+      const r = Math.random();
+      if (mk.length && T.stop === 'market' || (mk.length && r < 0.14)) {
+        cell = mk[Math.floor(Math.random() * mk.length)];
+        if ((perCell[cell] || 0) >= 3) continue;
+        perCell[cell] = (perCell[cell] || 0) + 1;
+        act = 'trade'; dur = 2 + Math.random() * 12;
+      } else if (R.spots.length && r < 0.3) {
+        cell = R.spots[Math.floor(Math.random() * R.spots.length)];
+        act = 'idle'; dur = 1 + Math.random() * 6;
+      } else if (vis && Math.random() < 0.4) {
+        cell = vis[Math.floor(Math.random() * vis.length)];
+      } else {
+        cell = R.list[Math.floor(Math.random() * R.list.length)];
+      }
+      if (!R.ok[cell]) continue;
+      const plan = [{ cell: cell, act: act || 'stand', dur: dur || 0.1 }];
+      if (!lifeEmit(T, key, 1, cell, plan, null, true, { lane: 0.12 + Math.random() * 0.13 })) continue;
+      const n = LIFE.npcs[LIFE.npcs.length - 1];
+      n.lazy = T;
+      const jx = (Math.random() - 0.5) * 0.4, jy = (Math.random() - 0.5) * 0.4;
+      n.x += jx; n.y += jy;
+      n.px = isoX(n.x, n.y); n.py = isoY(n.x, n.y, lifeHAt(n.x, n.y));
+      if (act) { n.st = 'act'; n.act = act; n.dur = dur; n.t = 0; n.fid = Math.random() < 0.5; }
+      else { n.st = 'act'; n.act = 'stand'; n.dur = Math.random() * 1.5; n.t = 0; }   // 路上的人 0~1.5 秒內陸續起步(行程此時才排)
+      n.alpha = 1;
+      placed++;
+    }
+    for (let k = 0; k < 6; k++) { LIFE.nightT = 0; lifeNightTick(2); }   // 夜間保底(更夫、酒館小聚)也預先擺
+    for (let k = 0; k < LIFE.npcs.length; k++) { const m = LIFE.npcs[k]; if (m.life < 1) { m.life = 1; m.alpha = 1; } }
+    if (typeof lifeTrafficTick === 'function') {   // 街景角色(衛兵、攤販、走販…)也預先擺一輪
+      LIFE.bfsBudget = 4;
+      for (let k = 0; k < 3; k++) { LIFE.xT = 0; lifeTrafficTick(0.5); }
+    }
+  } finally {
+    Math.random = rnd0;
+  }
+  LIFE.seedLeft = 0;
+  return placed;
 }
 
 function lifeArrive(n) {
@@ -704,6 +979,15 @@ function lifeArrive(n) {
 // 進行到行程的下一站;巡邏循環、超過壽命則改走向入口離場。回傳 false 表示無路可走
 function lifeNextStop(n) {
   if (n.ext && typeof lifeTrafficLeave === 'function') lifeTrafficLeave(n);
+  if (n.lazy) {   // 預布點的人:這時才排行程(距離場有每幀預算,排不到就再等一下,最多重試 8 次)
+    const p = lifePlan(n.lazy, n.cur, null);
+    if (p) {
+      n.lazy = null; n.plan = p; n.pi = 0; n.goal = p[0].cell; n.st = 'walk';
+      return true;
+    }
+    if (++n.lazyTry < 8) { n.t = 0; n.dur = 0.3; return true; }
+    n.lazy = null;
+  }
   if (n.pi + 1 < n.plan.length) {
     n.pi++;
   } else if (n.loop && (n.port || n.keep || n.life < LIFE_MAX_LIFE)) {
@@ -741,10 +1025,11 @@ function lifeWalk(n, dt) {
   let guard = 0;
   while (dt > 0 && n.st === 'walk' && guard++ < 8) {
     if (n.nx < 0) {
+      if (n.ret > 0 && n.cur !== n.goal && R.exitD[n.cur] === 0) lifeRetSet(n);   // 走到另一個更近的出口:改以它為終點
       if (n.cur === n.goal) { lifeArrive(n); return; }
       const j = lifePickNext(n);
-      if (j === -2) { n.wait += dt; if (n.wait > 3) lifeFadeOut(n); return; }
-      if (j < 0) { lifeFadeOut(n); return; }
+      if (j === -2) { n.wait += dt; if (n.wait > 3) lifeStuck(n); return; }
+      if (j < 0) { lifeStuck(n); return; }
       n.wait = 0;
       n.nx = j;
       const jx = (j % boardW()) + 0.5, jy = Math.floor(j / boardW()) + 0.5;
@@ -763,6 +1048,7 @@ function lifeWalk(n, dt) {
       if (n.spd > 0) dt -= d / n.spd;
       n.cur = n.nx; n.nx = -1;
       if (!R.ok[n.cur]) { lifeFadeOut(n); return; }
+      if (n.ret > 0 && n.cur !== n.goal && R.exitD[n.cur] !== 0 && --n.retN <= 0) { lifeFadeOut(n); return; }   // 走了 14 格還沒到出口:就地淡出
     } else {
       n.x += dx / d * step; n.y += dy / d * step;
       n.fx = dx / d; n.fy = dy / d;
@@ -771,11 +1057,26 @@ function lifeWalk(n, dt) {
   }
 }
 
+// 走不到 / 距離場等太久:畫面外照舊淡出;畫面內先原地站 2 秒,再走向最近出口(走不到才淡出)
+function lifeStuck(n) {
+  if (n.onS && !n.ret && !n.retPend && !n.ext && !n.port && n.cur >= 0) {
+    n.st = 'act'; n.act = 'stand'; n.t = 0; n.dur = 2; n.wait = 0; n.retPend = true;
+    return;
+  }
+  lifeFadeOut(n);
+}
+
 function lifeAdvance(n, dt) {
   // 縱隊的後段先隱藏等待
   if (n.hold > 0) { n.hold -= dt; n.alpha = 0; return; }
   n.life += dt;
   if (n.cd > 0) n.cd -= dt;
+  if (n.retAt > 0 && LIFE.clock >= n.retAt) { n.retAt = 0; n.retPend = true; }
+  if (n.retPend) {
+    if (n.st === 'walk') { n.retPend = false; if (!lifeRetireStart(n)) lifeFadeOut(n); }
+    else if ((n.st === 'act' || n.st === 'chat') && !n.retCut) { n.retCut = true; if (n.dur > n.t + 3) n.dur = n.t + 3; }   // 先把手上的事做完(最多 3 秒)
+  }
+  if (n.ret > 0 && n.st === 'walk') { n.ret -= dt; if (n.ret <= 0) { n.ret = 0; lifeFadeOut(n); return; } }
   if (n.st !== 'enter' && n.st !== 'exit' && n.st !== 'fade') n.alpha = Math.min(1, n.life / 0.5);
   switch (n.st) {
     case 'walk':
@@ -817,7 +1118,7 @@ function lifeAdvance(n, dt) {
 }
 
 function lifeChatOk(a) {
-  return a.st === 'walk' && a.cd <= 0 && a.life >= 1 && !a.dead && a.onS && !a.pair && !(a.hold > 0) && !a.ext;
+  return a.st === 'walk' && a.cd <= 0 && a.life >= 1 && !a.dead && a.onS && !a.pair && !(a.hold > 0) && !a.ext && !lifeRetiring(a);
 }
 
 function lifeCellOf(x, y, GW, GH) {
@@ -904,28 +1205,60 @@ function lifeSprTrim() {
   LIFE.sprBytes = bytes;
 }
 
-// 自適應降載:每幀耗時(更新 + 上一幀繪製)指數平均;壁鐘 FPS 只計連續幀
-// 慢 → 目標 ×0.8 (每 2 秒一級,最低 12 人);快 → 每 4 秒回升一級
+// 降載階梯(PLAN_CITYLIFE_GATHER §3.2):慢時一次升一級、快時一次降一級(每級 2 秒)。先砍細節、最後才減人,且人數不低於下限
+//  L1 畫面外更新間隔 0.75 → 1.5 秒  L2 泡泡同時 ≤ 3、閒聊配對 0.5 → 1 秒  L3 sprite 解析度上限 2 → 1.5
+//  L4 走路幀頻減半  L5 街景角色 ×0.6(citytraffic 讀 lifeStreetMul)  L6~12 在下限以上每級 ×0.8 減人
+//  L13 目標已降到下限仍慢 → 畫面外居民完全不更新(不減人)
+const LIFE_LEVEL_MAX = 13;
+function lifeSetLevel(lv) {
+  if (lv < 0) lv = 0; else if (lv > LIFE_LEVEL_MAX) lv = LIFE_LEVEL_MAX;
+  LIFE.level = lv;
+  LIFE.adj = lv >= 6 ? Math.pow(0.8, Math.min(lv, 12) - 5) : 1;
+  LIFE.offGap = lv >= 1 ? LIFE_OFF_GAP * 2 : LIFE_OFF_GAP;
+  LIFE.bubMax = lv >= 2 ? 3 : 99;
+  LIFE.chatGap = lv >= 2 ? 1 : 0.5;
+  LIFE.resMax = lv >= 3 ? 1.5 : LIFE_RES_MAX;
+  LIFE.frrMul = lv >= 4 ? 0.5 : 1;
+  LIFE.freeze = lv >= LIFE_LEVEL_MAX;
+}
+
+// 街景角色的降載係數(citytraffic.js 讀):L5 起 ×0.6,之後再乘居民降載,最低 0.35
+function lifeStreetMul() {
+  return LIFE.level >= 5 ? Math.max(0.35, 0.6 * LIFE.adj) : 1;
+}
+
+// 「應有幀率」:繪製被幀率閘限制(閒置 / 省電 30、操作中 30 或 60,錄影可到 60);省電時 lifeFrame 又隔幀才完整執行,量測間隔是兩個繪製幀
+function lifeExpFps(nowMs) {
+  let e = (typeof perfEffFps === 'function') ? perfEffFps(nowMs) : 60;
+  if (typeof isPowerSave === 'function' && isPowerSave() && LIFE.active) e *= 0.5;
+  return e;
+}
+
+// 自適應降載:每幀耗時(更新 + 上一幀繪製)指數平均;壁鐘 FPS 只計連續幀,並和「應有幀率」比(< 70% 才算慢),不再用固定 40
 function lifeAdapt(dt, t0) {
   const now = lifeNow();
   const total = (now - t0) + LIFE.drawAcc;
   LIFE.drawAcc = 0;
   LIFE.perf.ms = LIFE.perf.ms * 0.9 + total * 0.1;
-  if (LIFE.wallT >= 0) {
+  const exp = lifeExpFps(t0);
+  if (LIFE.expFps !== exp) { LIFE.expFps = exp; LIFE.fps = 0; }   // 應有幀率變了(閒置 ↔ 操作中)→ 重新量
+  else if (LIFE.wallT >= 0) {
     const w = t0 - LIFE.wallT;
-    if (w > 0 && w < 100) { const f = 1000 / w; LIFE.fps = LIFE.fps > 0 ? LIFE.fps * 0.9 + f * 0.1 : f; }
+    if (w > 0 && w < 100 * (exp < 25 ? 2 : 1)) { const f = 1000 / w; LIFE.fps = LIFE.fps > 0 ? LIFE.fps * 0.9 + f * 0.1 : f; }
   }
   LIFE.wallT = t0;
   LIFE.adaptT += dt;
   if (LIFE.adaptT >= 2) {
     LIFE.adaptT = 0;
-    const slow = LIFE.perf.ms > 3.5 || (LIFE.fps > 0 && LIFE.fps < 40);
+    const slow = LIFE.perf.ms > 3.5 || (LIFE.fps > 0 && LIFE.fps < 0.7 * exp);
     if (slow) {
       LIFE.healthy = 0;
-      if (LIFE.level < 12) { LIFE.level++; LIFE.adj = Math.pow(0.8, LIFE.level); }
+      // 已降到下限還慢:跳過其餘減人級,直接進入 L13(畫面外凍結)
+      if (LIFE.level >= 6 && LIFE.target <= LIFE.floor) lifeSetLevel(LIFE_LEVEL_MAX);
+      else lifeSetLevel(Math.min(LIFE.level + 1, LIFE_LEVEL_MAX - 1));
     } else if (LIFE.perf.ms < 2.5 && LIFE.level > 0) {
       LIFE.healthy++;
-      if (LIFE.healthy >= 2) { LIFE.healthy = 0; LIFE.level--; LIFE.adj = Math.pow(0.8, LIFE.level); }
+      if (LIFE.healthy >= 1) { LIFE.healthy = 0; lifeSetLevel(LIFE.level - 1); }
     }
   }
   LIFE.statT -= dt;
@@ -938,8 +1271,8 @@ function lifeAdapt(dt, t0) {
 // 開發用:?perf 時每 2 秒印到 console;也可直接呼叫
 function lifeStats() {
   return {
-    n: LIFE.npcs.length, target: LIFE.target, ms: Math.round(LIFE.perf.ms * 100) / 100,
-    fps: Math.round(LIFE.fps), level: LIFE.level, ext: LIFE.npcs.filter(n => n.ext).length
+    n: LIFE.npcs.length, target: LIFE.target, floor: LIFE.floor, live: LIFE.live, ms: Math.round(LIFE.perf.ms * 100) / 100,
+    fps: Math.round(LIFE.fps), expFps: LIFE.expFps, level: LIFE.level, ext: LIFE.npcs.filter(n => n.ext).length
   };
 }
 
@@ -950,6 +1283,8 @@ function lifeFrame(time) {
   LIFE.lastT = time;
   LIFE.placing = typeof ui !== 'undefined' && ui.tool !== null && ui.tool !== undefined;
   LIFE.dots = 0;
+  LIFE.bakes = 0;
+  LIFE.bubN = 0;
   LIFE.bfsBudget = 1;
   // 省電模式:居民邏輯與走路動畫每 2 幀更新一次(中間幀沿用上次位置與分桶,只重畫),dt 累積補上
   if (typeof isPowerSave === 'function' && isPowerSave() && LIFE.active) {
@@ -959,15 +1294,23 @@ function lifeFrame(time) {
     LIFE.psAcc = 0;
   } else LIFE.psAcc = 0;
   if (!lifeActive()) {
+    if (LIFE.active) LIFE.paused = true;   // 切模式 / 隱藏建築:暫停(人物陣列留著,不更新不畫);< 5 分鐘回來原樣繼續
     LIFE.active = false;
     LIFE.drawAcc = 0;
     LIFE.wallT = -1;
     if (typeof caravanVisClear === 'function') caravanVisClear();
-    if (LIFE.npcs.length) lifeReset();
+    if (LIFE.npcs.length && (!LIFE.on || !LIFE_DENSITY[LIFE.density])) lifeReset();   // 使用者把居民關掉才清空
     return;
   }
   LIFE.active = true;
-  if (LIFE.reseed) { LIFE.reseed = false; lifeReset(); }
+  // 離開多久:背景 / 非經營模式 / 隱藏建築期間 lifeFrame 不會跑,用上次執行的壁鐘時間判斷。< 5 分鐘原樣繼續,否則清空並預布點
+  const wall = Date.now();
+  const away = LIFE.runMs > 0 ? wall - LIFE.runMs : 0;
+  LIFE.runMs = wall;
+  if (LIFE.reseed) { LIFE.reseed = false; lifeReset(); LIFE.runMs = wall; }
+  else if (LIFE.npcs.length && (away >= LIFE_AWAY_MS || away < 0)) { lifeReset(); LIFE.runMs = wall; }
+  else if (LIFE.paused && LIFE.npcs.length && LIFE.road && lifeRoadSig() !== LIFE.road.sig) { lifeReset(); LIFE.runMs = wall; }   // 暫停期間換了城(參觀 ↔ 領地)
+  LIFE.paused = false;
   if (!LIFE.road) lifeRebuild();
   LIFE.sigT -= dt;
   if (LIFE.sigT <= 0) {
@@ -980,16 +1323,19 @@ function lifeFrame(time) {
   if (LIFE.tgtT <= 0 || !LIFE.seeded) { LIFE.tgtT = 1; lifeRetarget(); }
   if (!LIFE.seeded) {
     LIFE.seeded = true;
-    LIFE.seedLeft = Math.max(0, Math.floor(LIFE.target * 0.6) - LIFE.live);
+    if (lifeRoadSig() !== LIFE.road.sig) { lifeRebuild(); lifeRetarget(); }   // 換存檔 / 換城後第一次擺人:先確認道路圖是新的
+    LIFE.seedLeft = 0;
+    lifePrefill();
   }
   lifeSpawnTick(dt);
+  lifeNightTick(dt);
   lifePortTick(dt);
   if (typeof lifeTrafficTick === 'function') lifeTrafficTick(dt);
   if (typeof npcHeroTick === 'function') npcHeroTick(dt);   // 名冊人物 hero(npcinteract.js)
   if (typeof npcVisitTick === 'function') npcVisitTick(dt);   // 在野名人路過(npcvisit.js)
   if (typeof caravanVisTick === 'function') caravanVisTick(dt);   // 走鏢車隊視覺(caravan_vis.js)
   LIFE.chatT -= dt;
-  if (LIFE.chatT <= 0) { LIFE.chatT = 0.5; lifeChatCheck(); }
+  if (LIFE.chatT <= 0) { LIFE.chatT = LIFE.chatGap; lifeChatCheck(); }
 
   // 更新:畫面內逐幀;畫面外每 0.75 秒一次,且每幀最多 1/4 的畫面外居民
   const L = LIFE.npcs;
@@ -1005,9 +1351,11 @@ function lifeFrame(time) {
     if (n.onS) {
       n.acc = 0;
       lifeAdvance(n, dt);
+    } else if (LIFE.freeze && (n.st === 'walk' || n.st === 'act' || n.st === 'chat') && !n.ext) {
+      n.acc = 0;   // L13:畫面外居民完全不更新(不減人)
     } else {
       n.acc += dt;
-      if (n.acc >= LIFE_OFF_GAP && offBudget > 0) {
+      if (n.acc >= LIFE.offGap && offBudget > 0) {
         offBudget--;
         const h = n.acc;
         n.acc = 0;
@@ -1030,7 +1378,7 @@ function lifeFrame(time) {
       continue;
     }
     L[w++] = n;
-    if (!n.port && !n.ext && (n.st === 'walk' || n.st === 'act' || n.st === 'chat')) live++;
+    if (!n.port && !n.ext && (n.st === 'walk' || n.st === 'act' || n.st === 'chat') && !lifeRetiring(n)) live++;
     if (n.st === 'act' && n.act === 'trade') tradeAt.set(n.goal, (tradeAt.get(n.goal) || 0) + 1);
   }
   L.length = w;
@@ -1060,17 +1408,34 @@ function lifeFaceF(fx, fy) {
   return away ? (right ? 2 : 1) : (right ? 3 : 0);
 }
 
+function lifeSprCached(spec, f, fr, res, tod, season) {
+  return !!(ART.cache && ART.cache['chibi|' + spec.id + '|' + f + '|' + fr + '|' + (tod || 'noon') + '|' + (season || '') + '|' + res]);
+}
+
+function lifeBubOk() {
+  if (LIFE.bubN >= LIFE.bubMax) return false;
+  LIFE.bubN++;
+  return true;
+}
+
 // 畫一個居民。ART 只有兩張原畫(正 0 / 背 1),右向以水平翻轉取代(2、3 由 0、1 翻轉而來),快取數量減半
 function lifeDrawOne(ctx, n, res, tod, season, useArt, alpha) {
   if (useArt && n.spec) {
     const pp = n.pp, f = lifeFaceF(n.fx, n.fy), flip = f === 2 || f === 3;
     pp.spec = n.spec; pp.x = n.px; pp.y = n.py; pp.f = (f === 1 || f === 2) ? 1 : 0;
-    pp.fr = n.st === 'walk' ? Math.floor(LIFE.clock * n.frr + n.ph) % 2 : (n.fid ? Math.floor(LIFE.clock * 0.8 + n.ph * 2) % 2 : 0);
+    pp.fr = n.st === 'walk' ? Math.floor(LIFE.clock * n.frr * LIFE.frrMul + n.ph) % 2 : (n.fid ? Math.floor(LIFE.clock * 0.8 + n.ph * 2) % 2 : 0);
     pp.alpha = alpha;
-    if (flip) { rqSave(ctx); rqTranslate(ctx, n.px, 0); rqScale(ctx, -1, 1); rqTranslate(ctx, -n.px, 0); }
-    ART.chibiPose(ctx, pp, res, tod, season);
-    if (flip) rqRestore(ctx);
-    return;
+    // 每幀最多新烘焙 LIFE_BAKE_MAX 個外觀:超過且尚未快取的人這一幀先畫占位小人(開場預布點不卡頓)
+    if (LIFE.bakes >= LIFE_BAKE_MAX && !lifeSprCached(n.spec, pp.f, pp.fr, res, tod, season)) {
+      useArt = false;
+    } else {
+      const c0 = ART.cacheCount;
+      if (flip) { rqSave(ctx); rqTranslate(ctx, n.px, 0); rqScale(ctx, -1, 1); rqTranslate(ctx, -n.px, 0); }
+      ART.chibiPose(ctx, pp, res, tod, season);
+      if (flip) rqRestore(ctx);
+      if (ART.cacheCount !== c0) LIFE.bakes++;
+      return;
+    }
   }
   // 占位小人;縮放 < 0.5 時(LIFE.small)縮成約 8px 高的小人
   const k = LIFE.small ? 0.6 : 1;
@@ -1091,19 +1456,41 @@ function lifeDrawDiag(ctx, d, time) {
   const dots = z < 0.35;
   LIFE.small = z < 0.5;
   const useArt = !dots && z >= 0.5 && typeof ART !== 'undefined' && !!ART.chibiPose && !!ART.resBucket;
-  const res = useArt ? Math.min(LIFE_RES_MAX, ART.resBucket(z * dpr)) : 1;
+  const res = useArt ? Math.min(LIFE.resMax, ART.resBucket(z * dpr)) : 1;
   const tod = LIFE.tod, season = lifeSeason();
   const mult = LIFE.placing ? 0.5 : 1;
+  let skip = null;
+  if (dots && list.length >= 3) {
+    if (!LIFE.dotSkip || LIFE.dotSkip.length < list.length) LIFE.dotSkip = new Uint8Array(Math.max(64, list.length * 2));
+    skip = LIFE.dotSkip; skip.fill(0, 0, list.length);
+  }
   for (let k = 0; k < list.length; k++) {
     const n = list[k];
     const alpha = n.alpha * mult;
     if (alpha <= 0) continue;
     if (n.vis && npcVisitHidden()) continue;   // 在野名人:縮放 < 0.5 / 拍照 / 錄影不畫(照常走)
     if (dots) {
-      if (LIFE.dots >= LIFE_DOT_MAX) continue;
+      if (LIFE.dots >= LIFE_DOT_MAX) break;
+      if (skip && skip[k]) continue;
+      // 同一格 ≥ 3 人 → 畫成一團人影(扁橢圓 + 3 個頭點),只算 1 個色點額度
+      const fx = Math.floor(n.x), fy = Math.floor(n.y);
+      let same = 0;
+      if (skip) for (let j = k + 1; j < list.length; j++) if (Math.floor(list[j].x) === fx && Math.floor(list[j].y) === fy) same++;
       LIFE.dots++;
       rqAlpha(ctx, alpha);
-      rqDisc(ctx, n.px, n.py - 5, 2.2, 2.2, n.col);
+      if (same >= 2) {
+        let cnt = 1;
+        rqDisc(ctx, n.px, n.py - 3, 6.5, 3, 'rgba(40,30,20,0.35)');
+        rqDisc(ctx, n.px - 3.2, n.py - 5, 2.3, 2.3, n.col);
+        for (let j = k + 1; j < list.length; j++) {
+          const m = list[j];
+          if (Math.floor(m.x) !== fx || Math.floor(m.y) !== fy) continue;
+          skip[j] = 1;
+          if (cnt < 3) { rqDisc(ctx, n.px - 3.2 + cnt * 3.2, n.py - 5 - (cnt === 1 ? 1.6 : 0), 2.3, 2.3, m.col); cnt++; }
+        }
+      } else {
+        rqDisc(ctx, n.px, n.py - 5, 2.2, 2.2, n.col);
+      }
       rqAlpha(ctx, 1);
       continue;
     }
@@ -1125,13 +1512,13 @@ function lifeDrawDiag(ctx, d, time) {
     if (n.vis) npcVisitStar(ctx, n, alpha);
     if (useArt && n.spec && ART.bubble) {
       if (n.st === 'act' && n.act === 'trade') {
-        ART.bubble(ctx, n.px, n.py, 'trade', LIFE.clock, res, n.spec.scale || 1);
+        if (lifeBubOk()) ART.bubble(ctx, n.px, n.py, 'trade', LIFE.clock, res, n.spec.scale || 1);
       } else if (n.type === 'vendor' && n.st === 'walk' && ((LIFE.clock + n.ph * 3) % 7) < 1.6) {
         // 挑擔商販沿路叫賣
-        ART.bubble(ctx, n.px, n.py, 'talk', LIFE.clock, res, n.spec.scale || 1);
+        if (lifeBubOk()) ART.bubble(ctx, n.px, n.py, 'talk', LIFE.clock, res, n.spec.scale || 1);
       } else if (n.bub && (n.st === 'walk' || n.st === 'act') && ((n.act === 'hawk' && n.st === 'act') || ((LIFE.clock + n.ph * 3) % n.bubP) < 1.6)) {
         // 街景角色(走販 / 叫賣者 / 圍觀者)的頭上泡泡
-        ART.bubble(ctx, n.px, n.py, n.bub, LIFE.clock, res, n.spec.scale || 1);
+        if (lifeBubOk()) ART.bubble(ctx, n.px, n.py, n.bub, LIFE.clock, res, n.spec.scale || 1);
       }
     }
   }

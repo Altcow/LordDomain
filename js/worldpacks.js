@@ -36,7 +36,26 @@ var WORLD_PACKS = [
     buildings: ['s2_stone_house', 's2_felt_tent', 's2_stone_tower', 's2_zhai_manor'], buildingsPending: false,
     people: [{ id: 'mateng', name: '馬騰', src: 'assets/portraits/mateng.webp' }, { id: 'xumu_a', name: '牧人', src: 'assets/portraits/generic/xumu_a.webp' }, { id: 'nongshi_a', name: '農人', src: 'assets/portraits/generic/nongshi_a.webp' }],
     flag: { shape: 'rect', pat: 'felt_diamond', c: ['#cfc8b8', '#2a2623', '#9a4a32'] },
-    feats: ['起手建築:石砌碉房、白氈黑邊帳、石砌碉樓、寨堡大宅', '特色:純外觀風格,數值不變;另有依山梯屋、石院、牲畜圍欄與白氈大帳院', '適合:喜歡山地、石砌與牧耕氣氛的玩法'], tpl: '' }
+    feats: ['起手建築:石砌碉房、白氈黑邊帳、石砌碉樓、寨堡大宅', '特色:純外觀風格,數值不變;另有依山梯屋、石院、牲畜圍欄與白氈大帳院', '適合:喜歡山地、石砌與牧耕氣氛的玩法'], tpl: '' },
+  // 魔幻三族(PLAN_FANTASY;換皮世界:只換建築 / 旗幟 / 範本外觀,名人卡、科技、事件仍是東漢內容,標『魔幻外觀 · 試玩』;與歷史風格互相隔離)
+  { id: 'elf', name: '精靈 · 世界樹森林', sub: '活樹 · 白石 · 葉冠與藤橋', fantasy: true, tag: '魔幻外觀 · 試玩',
+    intro: '古老巨樹撐起整片森林,精靈把家蓋在樹幹、樹根與枝冠之間,只拾倒木、不砍活樹。(魔幻外觀 · 試玩:只換外觀,名人卡、科技與事件仍是東漢內容。)',
+    buildings: ['s8_treehouse', 's8_canopy_hall', 's8_moon_manor', 's8_world_tree'], buildingsPending: false,
+    people: [{ id: 'linmu_a', name: '拾木人', src: 'assets/portraits/generic/linmu_a.webp' }, { id: 'yuewu_b', name: '歌者', src: 'assets/portraits/generic/yuewu_b.webp' }, { id: 'yishu_a', name: '藥師', src: 'assets/portraits/generic/yishu_a.webp' }],
+    flag: { shape: 'rect', pat: 'leaf_arc', c: ['#5f9a4a', '#ece6d6', '#e4ef9a'] },
+    feats: ['起手建築:樹屋、樹冠宅院、月光大宅、世界樹(地標限 1 座)', '特色:魔幻外觀 · 試玩;純外觀,數值不變;建立後不可與歷史風格互換', '適合:喜歡森林、樹屋與有機曲線佈局的玩法'], tpl: 'tpl_elfgrove' },
+  { id: 'dwarf', name: '矮人 · 鋼鐵礦城', sub: '方石 · 鋼鐵與銅 · 熔爐火光', fantasy: true, tag: '魔幻外觀 · 試玩',
+    intro: '山腹裡的工匠氏族沿著階梯礦坑往下挖,石牆守著山門,熔爐日夜不熄。(魔幻外觀 · 試玩:只換外觀,名人卡、科技與事件仍是東漢內容。)',
+    buildings: ['s9_rock_house', 's9_smelter', 's9_hall_manor', 's9_great_forge'], buildingsPending: false,
+    people: [{ id: 'yetie_a', name: '礦匠', src: 'assets/portraits/generic/yetie_a.webp' }, { id: 'bingshi_a', name: '山門守衛', src: 'assets/portraits/generic/bingshi_a.webp' }, { id: 'niangzao_a', name: '釀酒師', src: 'assets/portraits/generic/niangzao_a.webp' }],
+    flag: { shape: 'rect', pat: 'forge_chevron', c: ['#8a2e24', '#6f7880', '#c89a48'] },
+    feats: ['起手建築:嵌岩石屋、冶煉爐、山廳大宅、大熔爐殿(地標限 1 座)', '特色:魔幻外觀 · 試玩;純外觀,數值不變;建立後不可與歷史風格互換', '適合:喜歡礦坑、石牆與工坊氣氛的玩法'], tpl: 'tpl_dwarfhold' },
+  { id: 'kingdom', name: '人類 · 王國城堡', sub: '石砌城堡 · 木骨白牆 · 紅藍旗', fantasy: true, tag: '魔幻外觀 · 試玩',
+    intro: '河谷高地上的石砌城堡守著一座城牆小鎮,騎士在營裡操練,市集街熱鬧,城外是風車與麥田。(魔幻外觀 · 試玩:只換外觀,名人卡、科技與事件仍是東漢內容。)',
+    buildings: ['s10_cottage', 's10_market_row', 's10_manor', 's10_castle_keep'], buildingsPending: false,
+    people: [{ id: 'bingshi_b', name: '衛兵', src: 'assets/portraits/generic/bingshi_b.webp' }, { id: 'nongshi_b', name: '農夫', src: 'assets/portraits/generic/nongshi_b.webp' }, { id: 'shangcai_b', name: '商人', src: 'assets/portraits/generic/shangcai_b.webp' }],
+    flag: { shape: 'rect', pat: 'crown_quarter', c: ['#b23a32', '#2f5a9a', '#e3b95c'] },
+    feats: ['起手建築:茅頂木骨屋、市集街廊、騎士莊園、王國城堡主堡(地標限 1 座)', '特色:魔幻外觀 · 試玩;純外觀,數值不變;建立後不可與歷史風格互換', '適合:喜歡城牆、城堡與田園小鎮佈局的玩法'], tpl: 'tpl_kingdom' }
 ];
 
 function worldPackIds() { return WORLD_PACKS.map(function (p) { return p.id; }); }
@@ -82,6 +101,22 @@ function flagColorAt(f, X, Y, A) {
   }
   if (f.pat === 'stripe5') {         // 南方:五色橫條
     return c[Math.min(c.length - 1, Math.floor(Y * c.length))];
+  }
+  if (f.pat === 'leaf_arc') {        // 精靈:葉綠底、白色同心弧形葉脈、嫩黃綠點
+    d = Math.sqrt(X * X + (Y - 1) * (Y - 1)) / 0.42;
+    fx = flagFrac(d);
+    if (fx < 0.07) return c[2];
+    if (Math.abs(fx - 0.55) < 0.07) return c[1];
+    return c[0];
+  }
+  if (f.pat === 'forge_chevron') {   // 矮人:深紅底、鋼灰山形折線、銅點
+    d = flagFrac((Y + 0.9 * Math.abs(X - A / 2)) * 3);
+    if (d > 0.62 && d < 0.72) return c[2];
+    return d > 0.18 && d < 0.5 ? c[1] : c[0];
+  }
+  if (f.pat === 'crown_quarter') {   // 人類:紅藍四分格、金色細邊(無紋章與文字)
+    if (edge < 0.05 || Math.abs(X - A / 2) < 0.03 || Math.abs(Y - 0.5) < 0.03) return c[2];
+    return ((X < A / 2) === (Y < 0.5)) ? c[0] : c[1];
   }
   // felt_diamond 羌氐:灰白氈底、黑邊、黑菱形連紋與赭點
   if (edge < 0.1) return c[1];

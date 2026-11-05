@@ -1,7 +1,7 @@
 // worldwizard.js — 「建立新世界 / 重新開始」精靈面板:選世界風格 → 即時預覽(旗幟、副標、簡介、代表建築、代表人物、特色)→ 取名、選起手範本 → 確認(沿用 saveslots 的先備份流程)。
 // 資料在 worldpacks.js(WORLD_PACKS / flagDraw);世界 meta(packs / fresh)在 saveslots.js。面板走 panelmgr.js(panelRegister / panelOpen kind:'big');沒有 panelmgr 時自管顯示 / 關閉。
 // 風格寫入:確認後把 {pack, tpl} 記進 worlds.v1 的 fresh[n];該世界下次「全新啟動」時 main.js 呼叫 worldWizardBoot(true) → themeSet(風格)+ 套用起手範本。ES2017;載入時只宣告。
-// 新範本來源(typeof 守衛):全域陣列 TEMPLATES112(js/templates112.js),每筆 {id, name, note};不存在時只有預設「空白起手(city_lv01)」。
+// 新範本來源(typeof 守衛):全域陣列 TEMPLATES112(若有),每筆 {id, name, note};沒有時取 TEMPLATES 內 112×112 經營範本(js/templates112.js 以 TEMPLATES.push 加入);皆無時只有預設「空白起手(city_lv01)」。範本依風格過濾(tplThemeOkFor)。
 
 var wwEl = null, wwBody = null, wwBusy = false, wwOpen = false, wwSt = null, wwRefs = null;
 
@@ -25,6 +25,8 @@ function wwCss() {
     '#wwPanel .wwtt{flex:1 1 auto;min-width:0}' +
     '#wwPanel .wwpn{font-size:17px;font-weight:bold;color:#f0b45a;word-break:break-all}' +
     '#wwPanel .wwsub{margin-top:2px;font-size:12px;opacity:.85;word-break:break-all}' +
+    '#wwPanel .wwtag{margin-top:6px;font-size:12px;color:#9fd47a;word-break:break-all}' +
+    '#wwPanel .wwtag[hidden]{display:none}' +
     '#wwPanel .wwintro{margin:10px 0 0;line-height:1.6;word-break:break-all}' +
     '#wwPanel .wwsec{margin:12px 0 4px;font-size:12px;opacity:.75;font-weight:bold}' +
     '#wwPanel .wwrow{display:flex;gap:6px;min-width:0}' +
@@ -71,10 +73,14 @@ function wwImgBox(box, src, alt, glyph) {
   return box;
 }
 
-// 起手範本清單:預設 + 新範本(若有)
-function wwTemplates() {
-  var list = [{ id: 'city_lv01', name: '空白起手(city_lv01)', note: '從 1 級小村開始(預設)' }], src = (typeof TEMPLATES112 !== 'undefined' && Array.isArray(TEMPLATES112)) ? TEMPLATES112 : [];
+// 起手範本清單:預設 + 新範本(若有);依選到的風格過濾(魔幻風格只列同風格範本,歷史風格不列魔幻範本;pid 省略且精靈未開 = 不過濾)
+function wwTemplates(pid) {
+  var list = [{ id: 'city_lv01', name: '空白起手(city_lv01)', note: '從 1 級小村開始(預設)' }], src = [];
+  if (typeof TEMPLATES112 !== 'undefined' && Array.isArray(TEMPLATES112)) src = TEMPLATES112;
+  else if (typeof TEMPLATES !== 'undefined' && Array.isArray(TEMPLATES)) src = TEMPLATES.filter(function (t) { return t && t.w === 112 && (!t.kind || t.kind === 'estate') && !t.hidden; });   // js/templates112.js 實際是 TEMPLATES.push(...)(TEMPLATES112 不存在):改取 TEMPLATES 內 112×112 經營範本
+  pid = pid || (wwSt && wwSt.pack) || '';
   src.forEach(function (t) {
+    if (pid && typeof tplThemeOkFor === 'function' && !tplThemeOkFor(t, pid)) return;
     if (t && typeof t.id === 'string' && /^[A-Za-z0-9_]{1,40}$/.test(t.id) && t.id !== 'city_lv01' && !list.some(function (x) { return x.id === t.id; }))
       list.push({ id: t.id, name: String(t.name || t.id), note: String(t.note || '') });
   });
@@ -107,7 +113,7 @@ function wwEnsure() {
   sel = wwNode('select', 'wwsel');
   sel.setAttribute('aria-label', '世界風格');
   ids = WORLD_PACKS.map(function (p) { return p.id; });
-  for (i = 0; i < ids.length; i++) { o = wwNode('option', '', WORLD_PACKS[i].name); o.value = ids[i]; sel.appendChild(o); }
+  for (i = 0; i < ids.length; i++) { o = wwNode('option', '', WORLD_PACKS[i].name + (WORLD_PACKS[i].fantasy ? '(魔幻 · 試玩)' : '')); o.value = ids[i]; sel.appendChild(o); }
   sel.addEventListener('change', function () { wwSelect(sel.value); });
   wwRefs.sel = sel;
   b.appendChild(sel);
@@ -123,12 +129,14 @@ function wwEnsure() {
   wwRefs.tt.appendChild(wwRefs.psub);
   wwRefs.top.appendChild(wwRefs.flag);
   wwRefs.top.appendChild(wwRefs.tt);
+  wwRefs.tag = wwNode('div', 'wwtag', '');
   wwRefs.intro = wwNode('p', 'wwintro', '');
   wwRefs.blds = wwNode('div', 'wwrow');
   wwRefs.pend = wwNode('div', 'wwpend', '');
   wwRefs.ppl = wwNode('div', 'wwrow');
   wwRefs.feats = wwNode('ul', 'wwfeat');
   wwRefs.prev.appendChild(wwRefs.top);
+  wwRefs.prev.appendChild(wwRefs.tag);
   wwRefs.prev.appendChild(wwRefs.intro);
   wwRefs.prev.appendChild(wwNode('div', 'wwsec', '代表建築'));
   wwRefs.prev.appendChild(wwRefs.blds);
@@ -182,6 +190,9 @@ function wwSelect(id) {
   if (R.sel && R.sel.value !== p.id) R.sel.value = p.id;
   R.pname.textContent = p.name;
   R.psub.textContent = p.sub;
+  R.tag.textContent = p.fantasy ? '✦ ' + (p.tag || '魔幻外觀 · 試玩') + '(建立後不可與歷史風格互換)' : '';
+  R.tag.hidden = !p.fantasy;
+  wwFillTpl(p.id);
   R.intro.textContent = p.intro;
   try { flagDraw(R.flag, p.id, 96, 64); } catch (e) { /* 無 canvas:略過旗幟 */ }
   wwClear(R.blds);
@@ -208,6 +219,17 @@ function wwSelect(id) {
   wwClear(R.feats);
   for (i = 0; i < p.feats.length; i++) R.feats.appendChild(wwNode('li', '', p.feats[i]));
   return true;
+}
+
+// 依風格重填起手範本下拉:保留仍可選的目前值,否則回空白起手
+function wwFillTpl(pid) {
+  var R = wwRefs, list = wwTemplates(pid), i, op, keep;
+  if (!R || !R.tpl) return;
+  keep = R.tpl.value;
+  wwClear(R.tpl);
+  for (i = 0; i < list.length; i++) { op = wwNode('option', '', list[i].name); op.value = list[i].id; R.tpl.appendChild(op); }
+  R.tpl.value = list.some(function (x) { return x.id === keep; }) ? keep : 'city_lv01';
+  wwTplNote();
 }
 
 function wwTplNote() {
@@ -238,7 +260,7 @@ function worldWizardOpen(opts) {
   nm = w.names[n] || '';
   wwRefs.name.value = nm || wwDefaultName(n);
   wwClear(wwRefs.tpl);
-  list = wwTemplates();
+  list = wwTemplates(wwSt.pack);
   for (i = 0; i < list.length; i++) { op = wwNode('option', '', list[i].name); op.value = list[i].id; wwRefs.tpl.appendChild(op); }
   wwRefs.tpl.value = 'city_lv01';
   wwTplNote();
@@ -346,7 +368,7 @@ function worldWizardBoot(fresh) {
     delete w.fresh[w.active];
     worldsPackPrune(w);
     if (fresh) {
-      if (typeof themeSet === 'function') themeSet(f.pack);
+      if (typeof themeSet === 'function') themeSet(f.pack, { init: true });   // 新世界建立風格:放行隔離規則(之後不可跨領域 / 魔幻換風格)
       if (f.tpl && typeof applyTemplate === 'function') {
         t = (typeof TEMPLATES !== 'undefined') ? TEMPLATES : null;
         if (t && !t.some(function (x) { return x.id === f.tpl; }) && typeof TEMPLATES112 !== 'undefined' && Array.isArray(TEMPLATES112)) {
