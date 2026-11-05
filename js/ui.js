@@ -179,10 +179,7 @@ function uiApplyMode() {
 function uiSetMode(m) {
   m = uiValidMode(m, '');
   if (!m || m === uiMode) return;
-  if (m === 'photo' && ui.editing) {
-    editGuard(() => uiSetMode('photo'));
-    return;
-  }
+  // 拍照只是隱藏介面:草稿布置中也可直接拍,不離開草稿(舊版先 editGuard 離開草稿,畫面會跳回使用中的版面、有變更還彈離開對話框)
   if (m === 'photo') {
     uiPrevMode = uiMode;
     uiStorageSet(UI_PREV_KEY, uiPrevMode);

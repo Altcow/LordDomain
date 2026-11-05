@@ -614,6 +614,18 @@ body.ui-compact { --stack: 40px; --side-w: 80px; }
 #topbar #btnMenu::after, #topbar #btnHide::after { content: ""; position: absolute; top: 50%; height: 44px; transform: translateY(-50%); }
 #topbar #btnMenu::after { left: -6px; right: -4px; }   /* 34 + 10 = 44;右側 4px 不超出頂列 padding,不產生橫向捲動 */
 #topbar #btnHide::after { left: -7px; right: -3px; }
+/* ⚙ 釘在頂列最右端:絕對定位(頂列本身 position:fixed,等同釘在畫面右上角;依 safe-area 讓位),頂列右側預留其寬度;
+   頂列其他項目放不下時自己縮(資源列先縮、徽章再縮),再多就被裁掉,任何情況下 ⚙ 都完整可見、觸控區 >=44px。
+   頂列改 overflow-x:clip / overflow-y:visible:橫向仍裁切(不產生橫捲),縱向讓 ⚙ 的 44px 觸控區不被頂列高度截掉(不支援 clip 的舊瀏覽器退回 hidden)。 */
+#topbar { padding-right: calc(max(4px, env(safe-area-inset-right)) + 44px); overflow: hidden; overflow: clip visible; }
+#topbar #btnMenu { position: absolute; z-index: 1; right: max(4px, env(safe-area-inset-right)); top: calc(env(safe-area-inset-top) + var(--top-h) / 2); transform: translateY(-50%); margin: 0; flex: none; }
+#topbar #btnMenu::after { top: calc(50% + 5px); height: 44px; left: -7px; right: -5px; }   /* 觸控區 44×44(按鈕 34 含邊框 → 絕對定位相對內距框,左右各外擴 7 / 5 才湊滿 44);整體下移 5px:橫版無瀏海時頂端剛好貼齊畫面上緣、不被截掉 */
+#topbar > * { min-width: 0; }
+#topbar > button, #topbar > select { min-width: 30px; }
+#topbar #resbar { flex-shrink: 3; }
+#topbar #csChip, #topbar #progChip { flex: 0 1 auto; overflow: hidden; }
+#progChip .prog-dot { top: 1px; right: 2px; }
+#csChip .prog-dot { top: 1px; right: 2px; }
 /* 直版:縣丞警示圖示 🧭 靠左上(緊接世界標籤),不放在頂列正中央 */
 @media (orientation: portrait) { #topbar #worldTag { order: -2; } #topbar #advChip { order: -1; } }
 @media (orientation: landscape) and (max-height: 500px) {
@@ -849,14 +861,18 @@ body.atk-mode #toast, body.sandbox #toast { top: auto; bottom: calc(92px + env(s
 .ld-box button small { display: block; font-size: 11px; opacity: .75; margin-top: 2px; white-space: normal; }
 /* 範本卡片:每個範本一張卡(名稱一行、簡述分行、尺寸另起一行),不被壓縮、長字換行 */
 .ld-row.ld-col > button { flex: 0 0 auto; }
-.ld-box button.tpl-card { display: block; width: 100%; min-height: 56px; padding: 10px 12px; white-space: normal; overflow-wrap: anywhere; word-break: break-word; text-align: left; line-height: 1.4; }
+.ld-box button.tpl-card { display: flex; align-items: flex-start; gap: 12px; width: 100%; min-height: 64px; padding: 12px; white-space: normal; overflow-wrap: anywhere; word-break: break-word; text-align: left; line-height: 1.4; }
+.ld-box button.tpl-card .tc-ic { flex: 0 0 44px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: rgba(0, 0, 0, .25); font-size: 26px; line-height: 1; }
+.ld-box button.tpl-card .tc-ic:empty { display: none; }
+.ld-box button.tpl-card .tc-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .ld-box button.tpl-card .tc-name { display: block; font-size: 15px; font-weight: bold; line-height: 1.35; }
-.ld-box button.tpl-card .tc-ic { display: inline-block; min-width: 1.6em; margin-right: 10px; text-align: center; }
-.ld-box button.tpl-card small { display: block; margin-top: 6px; font-size: 12px; line-height: 1.5; opacity: .8; }
-.ld-box button.tpl-card .tc-sz { display: block; margin-top: 4px; font-size: 11px; opacity: .6; }
+.ld-box button.tpl-card .tc-desc { display: block; font-size: 12px; line-height: 1.5; opacity: .8; }
+.ld-box button.tpl-card .tc-sz { display: block; font-size: 11px; opacity: .6; }
+.ld-box .tpl-group { margin: 6px 0 -2px; font-size: 12px; opacity: .75; text-align: center; }
 .ld-row.ld-scroll { gap: 8px; }
 .ld-box.ld-wide { width: min(560px, 100%); }
 .ld-box.ld-wide .ld-row.ld-scroll { max-height: 56vh; }
+@media (orientation: landscape) and (max-height: 520px) { .ld-box.ld-wide .ld-row.ld-scroll { max-height: calc(100vh - 160px); } }
 .ld-box button.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; font-weight: bold; }
 .ld-box button:disabled { opacity: .4; }
 .ld-box button.slot.empty { opacity: .75; }
@@ -1293,3 +1309,12 @@ body.panel-big-landscape #svPanel .svlist > .svsec { grid-column: 1 / -1; }
 #stRoot .st-body :is(button, select, .st-range) { min-height: 44px; }
 #stRoot .st-body .st-bgm-p { min-width: 44px; }
 #stRoot .st-body .st-seg button, #stRoot .st-body .st-sw { min-width: 44px; }
+
+/* ===== 小地圖(js/minimap.js):右下角(被擋時 JS 換位)的小全圖 + 視野框;拍照 / 錄影 / 室內 / 橫版大面板 / 戰鬥畫面隱藏 ===== */
+#miniMap { position: fixed; z-index: 3; right: calc(6px + env(safe-area-inset-right)); bottom: calc(var(--stack) + 6px + env(safe-area-inset-bottom)); width: 122px; box-sizing: border-box; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .35); background: rgba(20, 26, 36, .62); box-shadow: 0 2px 8px rgba(0, 0, 0, .35); overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; cursor: pointer; }
+#miniMap[hidden] { display: none !important; }
+#miniMap canvas { display: block; pointer-events: none; }
+#miniMap .mm-view { position: absolute; left: 0; top: 0; box-sizing: border-box; border: 1.5px solid #ffd56a; background: rgba(255, 213, 106, .14); pointer-events: none; }
+#miniMap.mm-drag { border-color: #ffd56a; }
+body.ui-compact #miniMap { width: 98px; }
+body:is(.photo-mode, .shooting, .in-interior, .panel-big-landscape, .panel-fs, .atk-mode, .replay-mode, .sandbox) #miniMap { display: none !important; }

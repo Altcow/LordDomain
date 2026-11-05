@@ -20,6 +20,7 @@ function chainVisStats() { return CV.stats; }
 function chainVisNow() { return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now(); }
 
 // 能不能畫(省電 / 拍照 / 錄影乾淨 / 全景 / 縮放太小 / 非經營模式 / 非城主領地都不畫)
+var CV_ICONS_DEFAULT = false;   // true = 一般模式也畫瓶頸圖示與流向點(舊行為);預設關閉
 function chainVisAllowed() {
   if (typeof game !== 'undefined' && game && game.mode !== 'estate') return false;
   if (typeof isCityOnly === 'function' && !isCityOnly()) return false;
@@ -28,6 +29,7 @@ function chainVisAllowed() {
   if (typeof recCleanActive === 'function' && recCleanActive()) return false;
   if (typeof pano !== 'undefined' && pano && pano.open) return false;
   if (typeof view !== 'undefined' && view && view.zoom < CV_ZOOM_MIN) return false;
+  if (!CV.on && !CV_ICONS_DEFAULT) return false;   // 預設關閉(使用者要求):瓶頸圖示與運貨小點只在『生產視圖』開啟時才畫與可點
   return true;
 }
 

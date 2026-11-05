@@ -8,9 +8,9 @@ function setSeason(name) {
 
 const view = { x: 0, y: 0, zoom: 1 };
 const ZOOM_ABS_MIN = 0.35, ZOOM_MIN_CAP = 1.5, ZOOM_MAX = 2.5;
-// 一般遊玩縮放範圍(降低最壞繪製成本與記憶體):手機 / 觸控 0.55~1.6;桌機大視窗(窗寬 >= 1000 且非觸控)0.45~2.0。
+// 一般遊玩縮放範圍(降低最壞繪製成本與記憶體):手機 / 觸控 0.4~1.6;桌機大視窗(窗寬 >= 1000 且非觸控)0.35~2.0。
 // 拍照 / 錄影運鏡 / 全景一律用寬範圍(zoomAbsMin()~ZOOM_MAX)。所有設定 view.zoom 的路徑都經 clampZoom() / zoomLimits()
-const ZOOM_PLAY_MIN = 0.55, ZOOM_PLAY_MAX = 1.6, ZOOM_PLAY_MIN_WIDE = 0.45, ZOOM_PLAY_MAX_WIDE = 2.0, ZOOM_DESKTOP_W = 1000;
+const ZOOM_PLAY_MIN = 0.4, ZOOM_PLAY_MAX = 1.6, ZOOM_PLAY_MIN_WIDE = 0.35, ZOOM_PLAY_MAX_WIDE = 2.0, ZOOM_DESKTOP_W = 1000;
 const ZOOM_ABS_MIN_BIG = 0.15;   // 經營大板(邊長 > MAP_W)的全景縮放下限(PLAN_BIGMAP §7.1);戰陣 / 戰鬥板維持 ZOOM_ABS_MIN
 function zoomAbsMin() { return boardW() > MAP_W ? ZOOM_ABS_MIN_BIG : ZOOM_ABS_MIN; }
 // 視圖範圍(格座標 [x0, y0, x1, y1],x1 / y1 不含):大板的經營模式在土地未全開時限制在「土地外框 + 6 格」,其餘為整張板子
@@ -24,7 +24,7 @@ function viewCells() {
   return [0, 0, W, H];
 }
 // 縮放低於此值:不畫地格邊線(細線會閃爍)、建築改畫色塊
-const TILE_EDGE_MIN_ZOOM = 0.35, OBJ_BLOB_ZOOM = 0.35;
+const TILE_EDGE_MIN_ZOOM = 0.45, OBJ_BLOB_ZOOM = 0.45;
 let zoomMin = ZOOM_ABS_MIN, zoomMax = ZOOM_MAX;
 let zoomLimKey = '';   // 目前生效的縮放範圍簽名(模式 / 視窗改變時重算 zoomMin、zoomMax)
 // 拍照 / 錄影 / 全景(含離屏渲染中)為寬範圍模式

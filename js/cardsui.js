@@ -181,10 +181,11 @@ function cuVenueHtml(cs, v) {
 }
 
 // 抽卡特效掛點(js/cardsreveal.js 提供 cardsRevealPlay(cards, onDone));沒有該函式就直接 done。done 只會執行一次
-function cuRevealThen(cards, done) {
+// quick = true:不播特效直接 done(全部開啟的第 2 批起,避免連播多次漫長特效;結果進摘要)
+function cuRevealThen(cards, done, quick) {
   var fin = false;
   function once() { if (fin) return; fin = true; cu.revealing = false; try { done(); } catch (e) { /* 略過 */ } }
-  if (typeof cardsRevealPlay !== 'function') { once(); return; }
+  if (quick || typeof cardsRevealPlay !== 'function') { once(); return; }
   cu.revealing = true;
   try { cardsRevealPlay(cards, once); } catch (e) { once(); }
 }

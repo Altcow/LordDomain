@@ -71,7 +71,7 @@ function cuChainRun(first) {
     cuRevealThen(r.cards, function () {
       cuFinishBatch(v, '全部開啟', first, 'O');
       cuChainRun(false);
-    });
+    }, !first);   // 只有第一批播完整特效,其餘直接入包 + 摘要
     return;
   }
   cu.chain = false; cu.tab = 'O';

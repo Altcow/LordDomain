@@ -1200,30 +1200,42 @@ function draftTplRender(st) {
   const ordered = list.filter(t => t.isDefault).concat(list.filter(t => !t.isDefault));
   h.box.classList.add('ld-wide');
   const col = ldRow(h, 'ld-col ld-scroll');
+  let grp = null;
   ordered.forEach(t => {
-    const b = ldBtn(h, col, 'tpl:' + t.id, t.name + (t.isDefault ? ' ★預設' : ''), () => draftBeginFrom(type, 'tpl:' + t.id), 'tpl-card', !tplFitsBoard(t), t.desc || '');
-    // 卡片排版:圖示 / 名稱同一行、簡述另起、尺寸再一行(textContent 重組,不改 data-ld 與事件)
+    // 群組標題(與設定側 #tplMenu 相同:「── 特色範本 ──」)
+    if (t.group && t.group !== grp) {
+      grp = t.group;
+      const gh = document.createElement('div');
+      gh.className = 'tpl-group';
+      gh.textContent = '── ' + grp + ' ──';
+      col.appendChild(gh);
+    }
+    const b = ldBtn(h, col, 'tpl:' + t.id, '', () => draftBeginFrom(type, 'tpl:' + t.id), 'tpl-card', !tplFitsBoard(t));
+    // 卡片排版:左側圖示(縮圖)格 + 右側三行(名稱 / 簡述 / 尺寸);textContent 組裝,不改 data-ld 與事件
     const label = t.name + (t.isDefault ? ' ★預設' : '');
     const m = /^(\S+)\s+(.+)$/.exec(label);
-    const sm = b.querySelector('small');
-    b.textContent = '';
+    const hasIc = !!m && !/^[一-鿿\w]/.test(m[1]);
+    const ic = document.createElement('span');
+    ic.className = 'tc-ic';
+    ic.textContent = hasIc ? m[1] : '';
+    b.appendChild(ic);
+    const bd = document.createElement('span');
+    bd.className = 'tc-body';
     const nm = document.createElement('span');
     nm.className = 'tc-name';
-    if (m && !/^[一-鿿\w]/.test(m[1])) {
-      const ic = document.createElement('span');
-      ic.className = 'tc-ic';
-      ic.textContent = m[1];
-      nm.appendChild(ic);
-      const nt = document.createElement('span');
-      nt.textContent = m[2];
-      nm.appendChild(nt);
-    } else nm.textContent = label;
-    b.appendChild(nm);
-    if (sm) b.appendChild(sm);
+    nm.textContent = hasIc ? m[2] : label;
+    bd.appendChild(nm);
+    if (t.desc) {
+      const sm = document.createElement('span');
+      sm.className = 'tc-desc';
+      sm.textContent = t.desc;
+      bd.appendChild(sm);
+    }
     const sz = document.createElement('span');
     sz.className = 'tc-sz';
     sz.textContent = t.w + '×' + t.h;
-    b.appendChild(sz);
+    bd.appendChild(sz);
+    b.appendChild(bd);
   });
   const foot = ldRow(h, 'ld-foot');
   ldBtn(h, foot, 'back', '返回', () => { st.view = 'main'; draftStartRender(st); }, '');

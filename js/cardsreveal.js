@@ -169,8 +169,9 @@ function rvTap() {
   if (s.timer) { clearTimeout(s.timer); s.timer = null; }
   rvNext();
 }
-function rvFire() {
-  var s = rvS, cbs;
+function rvFire() { rvFireOf(rvS); }
+function rvFireOf(s) {
+  var cbs;
   if (!s || s.fired) return;
   s.fired = true; cbs = s.cbs.slice();
   cbs.forEach(function (f) { try { f(); } catch (e) { if (typeof console !== 'undefined') console.error(e); } });
@@ -189,14 +190,15 @@ function rvClose() {
   if (s.timer) { clearTimeout(s.timer); s.timer = null; }
   if (s.root.parentNode) s.root.parentNode.removeChild(s.root);
   if (document.body && document.body.classList) document.body.classList.remove('cards-reveal');
-  rvFire();
-  rvS = null;
+  rvS = null;   // 先清狀態再通知:onDone 內可能立刻再開下一場(連開 / 全部開啟),不可被事後的清除蓋掉
+  rvFireOf(s);
 }
 
 function cardsRevealActive() { return !!rvS; }
 function cardsRevealLog() { return rvLastLog.slice(); }
 function cardsRevealPlay(cards, onDone) {
   var s, root, main, grid, top, bot, plan, power, list, st;
+  if (rvS && !rvS.closed && rvS.fired) rvClose();   // 上一場已略過(onDone 已通知)、停在最終排列頁:直接收掉再開新的,否則新批的 onDone 會掛在已結束的場次上永不呼叫
   if (rvS && !rvS.closed) { if (typeof onDone === 'function') rvS.cbs.push(onDone); return false; }   // 重複呼叫不疊加:只共用這一場,結束時一併通知
   list = Array.isArray(cards) ? cards.filter(function (c) { return c && typeof c === 'object'; }) : [];
   if (!list.length || typeof document === 'undefined' || !document.body) { if (typeof onDone === 'function') { try { onDone(); } catch (e) { /* 呼叫端錯誤不影響 */ } } return false; }
