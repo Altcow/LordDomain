@@ -6,7 +6,8 @@
 //          cardsDiscardBatch cardsCost cardsCap cardsClaimGift cardsRelease cardsUndoRelease cardsRecall cardsUpgradeCheck cardsUpgrade cardsStats cardsJobSlots
 //          cardsGenNamed cardsNamedDraw cardsNamedOpen cardsAddNameTokens cardsNamedGive cardsNamedRankCheck cardsNamedTick cardsNamedKeyOk
 //          cardsBagCap cardsBagRoom cardsBagAutoLv cardsBagSetAuto cardsBagStage cardsBagCommit cardsBagOpen cardsBagFlush cardsBagPut cardsBagFind cardsBagList cardsBagPick cardsBagEnlist
-//          cardsBagDissolve cardsBagDissolveValue cardsBagFeed cardsShardGain cardFigWeight
+//          cardsBagDissolve cardsBagDissolveValue cardsFurnaceValue cardsFurnaceSum cardsShardGain cardFigWeight
+//          cardsWeekNo cardsStarLv cardsStarCost cardsStarUp cardsStarBonus cardsExchangeLeft cardsExchange
 //          cardsFind cardsSyncTalents cardsTalents cardsPatrolTalents cardsAccept cardsJobLine cardsAddTokens cardsOnTechDone cardsRankLv CARD_PIN
 
 var CARD_PIN = ['上上', '上中', '上下', '中上', '中中', '中下', '下上', '下中', '下下'];
@@ -43,7 +44,7 @@ function cardWPick(r, items, wf) {
 function cardsStateNew(seed) {
   var s = (typeof seed === 'number' && isFinite(seed)) ? (seed >>> 0) : ((Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0);
   return {
-    v: 1, seed: s, seq: 0, tok: CARD_WINE.startGift, nameTokens: 0, namedCount: 0, shards: 0, shardWk: { w: -1, n: 0 }, gift: { day: -1 },
+    v: 1, seed: s, seq: 0, tok: CARD_WINE.startGift, nameTokens: 0, namedCount: 0, shards: 0, gift: { day: -1 },
     clock: { maxSeen: 0 }, tokenGiven: {}, last: { T: -1, E: -1, G: -1 }, acc: { T: [], E: [], G: [] }, cur: { T: null, E: null, G: null },
     pity: { T: 0, E: 0, G: 0 }, fame: { G: 0, E: 0 }, stars: { E: 1 }, roster: [], wait: [], wander: [], bag: [], lastRel: null
   };
@@ -456,35 +457,48 @@ function cardsJobSlots(e) {
   return { used: used, cap: Math.max(used, CARD_GRADE[e.gr].jobSlots[1]) };
 }
 // ───────── 卡包(cs.bag):開批的卡直接入包,不再先花酒令挑人;從卡包『任用』到名冊才花酒令(任用成本 = cardsCost) ─────────
-// 流程:cardsBagStage(開批,批次暫放 cs.cur[v])→(可選)抽卡特效→ cardsBagCommit(入包:重複名人轉信物 / 碎片、白階依設定自動分解)。cardsBagOpen = 兩步連做(無特效 / 離線路徑)。
+// 流程:cardsBagStage(開批,批次暫放 cs.cur[v])→(可選)抽卡特效→ cardsBagCommit(入包:重複名人轉信物 / 碎片、白階依設定自動熔爐)。cardsBagOpen = 兩步連做(無特效 / 離線路徑)。
 function cardsBagCap() {   // 容量 = capBase + (官階等級 − 1) × capPerRank,上限 capMax;缺官階資料 = capBase
   var lv = cardsRankLv(), B = CARD_BAG;
   return lv > 0 ? Math.min(B.capMax, B.capBase + (lv - 1) * B.capPerRank) : B.capBase;
 }
 function cardsBagRoom(cs) { return Math.max(0, cardsBagCap() - cs.bag.length); }
-function cardsBagAutoLv(cs) {   // 自動分解門檻:-1 = 關,0~autoMax = 品階 ≤ 此值的路人自動分解(未設定 = autoDefault)
+function cardsBagAutoLv(cs) {   // 自動熔爐門檻:-1 = 關,0~autoMax = 品階 ≤ 此值的路人自動熔爐(未設定 = autoDefault)
   var a = cs.bagAuto;
   return (typeof a !== 'number' || !isFinite(a)) ? CARD_BAG.autoDefault : Math.max(-1, Math.min(CARD_BAG.autoMax, a | 0));
 }
-function cardsBagSetAuto(cs, lv) {   // 回設定後的值;等於預設時刪欄位(有值才寫)
+function cardsBagSetAuto(cs, lv) {   // 自動熔爐門檻;回設定後的值;等於預設時刪欄位(有值才寫)
   lv = Math.max(-1, Math.min(CARD_BAG.autoMax, lv | 0));
   if (lv === CARD_BAG.autoDefault) delete cs.bagAuto; else cs.bagAuto = lv;
   return lv;
 }
-function cardsBagDissolveValue(c) { return Math.round(cardsCost(c) * CARD_WINE.refundRate * CARD_WINE.shardPerToken); }   // 沿用請辭回收 20 %(碎片)
-// 碎片入帳:capped = 受每週上限(shardWeekCap)限制(分解 / 自動分解);5 碎 = 1 令。回 {shards 實得, tokens 轉出的令, lost 超出上限而損失}
-function cardsShardGain(cs, shards, now, capped) {
-  var add = Math.max(0, shards | 0), wk, dTok;
-  if (capped) {
-    wk = Math.floor(((now || 0) - cardsTz(now || 0)) / (7 * 86400000));
-    if (cs.shardWk.w !== wk) cs.shardWk = { w: wk, n: 0 };
-    add = Math.max(0, Math.min(add, CARD_WINE.shardWeekCap - cs.shardWk.n));
-    cs.shardWk.n += add;
-  }
+// 卡片熔爐碎片(碎片值集中於 carddata.js CARD_FURNACE):路人 白2 青4 藍8 紫16(宗師型 +8)、帶星(starLv)額外 +星數 × 品階基礎 × 0.5;名人手動熔 紫20 金40
+function cardsFurnaceValue(c) {
+  var F = CARD_FURNACE, base, v;
+  if (c.fig) return F.fig[c.gr] || F.fig[4];
+  base = F.shard[Math.min(c.gr, F.shard.length - 1)];
+  v = base + (c.learn === 3 ? F.zongBonus : 0);
+  if (c.starLv > 0) v += Math.round(c.starLv * base * F.starHalf);
+  return v;
+}
+function cardsBagDissolveValue(c) { return cardsFurnaceValue(c); }   // 舊名保留(= cardsFurnaceValue)
+// 熔爐預覽:ids 為卡包 bid;figOk = false 時名人不計入(skippedFig)。回 {n, shards, top, figs, skippedFig}
+function cardsFurnaceSum(cs, ids, figOk) {
+  var o = { n: 0, shards: 0, top: 0, figs: 0, skippedFig: 0 }, seen = {};
+  (ids || []).forEach(function (id) {
+    var f = cardsBagFind(cs, id);
+    if (!f || seen[id]) return;
+    seen[id] = 1;
+    if (f.c.fig) { if (!figOk) { o.skippedFig++; return; } o.figs++; }
+    o.n++; o.shards += cardsFurnaceValue(f.c); if (f.c.gr > o.top) o.top = f.c.gr;
+  });
+  return o;
+}
+// 碎片入帳:同一碎片池 cs.shards(無週上限,不再自動轉酒令)。回 {shards 實得, tokens 0, lost 0}(後兩欄保留給舊呼叫端)
+function cardsShardGain(cs, shards) {
+  var add = Math.max(0, shards | 0);
   cs.shards += add;
-  dTok = Math.floor(cs.shards / CARD_WINE.shardPerToken);
-  cs.shards -= dTok * CARD_WINE.shardPerToken; cs.tok += dTok;
-  return { shards: add, tokens: dTok, lost: Math.max(0, (shards | 0) - add) };
+  return { shards: add, tokens: 0, lost: 0 };
 }
 function cardsBagFind(cs, bid) {
   var i;
@@ -509,9 +523,9 @@ function cardsBagStage(cs, venue) {
   b = cardsOpenBatch(cs, venue);
   return { ok: true, batch: b, cards: b.cands };
 }
-// 把待入包批次放進卡包。o {now, noAuto}。每張的去向 how:bag 入包 / auto 自動分解 / token 名人重複 → 信物 +1 / shard 名人重複且信物已滿 → 碎片 / skip 舊批次已處理
+// 把待入包批次放進卡包。o {now, noAuto}。每張的去向 how:bag 入包 / auto 自動熔爐 / token 名人重複 → 信物 +1 / shard 名人重複且信物已滿 → 碎片 / skip 舊批次已處理
 function cardsBagCommit(cs, venue, o) {
-  var b = cs.cur[venue], opt = o || {}, auto = opt.noAuto ? -1 : cardsBagAutoLv(cs), res, raw = 0, figShards = 0, g, g2;
+  var b = cs.cur[venue], opt = o || {}, auto = opt.noAuto ? -1 : cardsBagAutoLv(cs), res, raw = 0, figShards = 0, g;
   if (!b) return { ok: false, reason: 'none' };
   cs.cur[venue] = null;
   res = { ok: true, venue: venue, key: b.key, items: [], added: 0, dissolved: 0, tokenN: 0, shardN: 0, shards: 0, tokens: 0, lost: 0 };
@@ -525,13 +539,12 @@ function cardsBagCommit(cs, venue, o) {
       res.items.push({ c: c, how: how, shards: how === 'shard' ? sh : 0 });
       return;
     }
-    if (!c.fig && auto >= 0 && c.gr <= auto) { sh = cardsBagDissolveValue(c); raw += sh; res.dissolved++; res.items.push({ c: c, how: 'auto', shards: sh }); return; }
+    if (!c.fig && auto >= 0 && c.gr <= auto) { sh = cardsFurnaceValue(c); raw += sh; res.dissolved++; res.items.push({ c: c, how: 'auto', shards: sh }); return; }
     put = cardsBagPut(cs, c, venue, b.key);
     res.added++;
     res.items.push({ c: c, how: 'bag', bid: put.bid });
   });
-  if (raw > 0) { g = cardsShardGain(cs, raw, opt.now, true); res.shards += g.shards; res.tokens += g.tokens; res.lost += g.lost; }
-  if (figShards > 0) { g2 = cardsShardGain(cs, figShards, opt.now, false); res.shards += g2.shards; res.tokens += g2.tokens; }
+  if (raw + figShards > 0) { g = cardsShardGain(cs, raw + figShards); res.shards += g.shards; }
   cs.lastRel = null;
   return res;
 }
@@ -561,27 +574,25 @@ function cardsBagList(cs, f) {
   });
   return list;
 }
-// 一鍵分解的候選:路人且品階 ≤ maxGr(名人永不入選);回 bid 陣列
+// 一鍵熔爐的候選:路人且品階 ≤ maxGr(名人永不入選);回 bid 陣列
 function cardsBagPick(cs, maxGr) {
   return cs.bag.filter(function (c) { return !c.fig && c.gr <= maxGr; }).map(function (c) { return c.bid; });
 }
-// 分解(單張 / 批量):路人 → 碎片(受每週上限),名人不可分解。o {now}。回 {ok, n, shards, tokens, lost, skippedFig, reason?}
+// 熔鍊(單張 / 批量;函式名沿用 Dissolve):路人 → 碎片(無週上限)。名人預設不熔(reason fig),o.figOk = true(UI 二次確認後)才熔並給較高碎片。o {figOk}。回 {ok, n, shards, tokens, lost, skippedFig, reason?}
 function cardsBagDissolve(cs, ids, o) {
   var opt = o || {}, drop = {}, n = 0, raw = 0, skippedFig = 0, g;
   (ids || []).forEach(function (id) {
     var f = cardsBagFind(cs, id);
     if (!f || drop[id]) return;
-    if (f.c.fig) { skippedFig++; return; }
-    drop[id] = 1; n++; raw += cardsBagDissolveValue(f.c);
+    if (f.c.fig && !opt.figOk) { skippedFig++; return; }
+    drop[id] = 1; n++; raw += cardsFurnaceValue(f.c);
   });
   if (!n) return { ok: false, reason: skippedFig ? 'fig' : 'none', n: 0, shards: 0, tokens: 0, lost: 0, skippedFig: skippedFig };
   cs.bag = cs.bag.filter(function (c) { return !drop[c.bid]; });
-  g = cardsShardGain(cs, raw, opt.now, true);
+  g = cardsShardGain(cs, raw);
   cs.lastRel = null;
-  return { ok: true, n: n, shards: g.shards, tokens: g.tokens, lost: g.lost, skippedFig: skippedFig };
+  return { ok: true, n: n, shards: g.shards, tokens: 0, lost: 0, skippedFig: skippedFig };
 }
-// 餵養入口(預留,尚未實作;UI 不顯示):之後以卡包內的路人卡當素材強化名冊人物
-function cardsBagFeed() { return { ok: false, reason: 'todo' }; }
 // 名冊項目:由卡包卡建立(id 依 cs.seq 遞增)
 function cardsMakeEntry(cs, c, pool, key, cost) {
   var e = {
@@ -621,9 +632,9 @@ function cardsClaimGift(cs, now) {
   n = days * CARD_WINE.dailyGift; cs.tok += n; cs.gift.day = day;
   return n;
 }
-// 請辭:opts {unassign, now}。路人回收 20 %(碎片,每週上限);名人轉流浪不給碎片。回 {ok, reason?, shards?, tokens?}
+// 請辭:opts {unassign}。路人回收 20 %(碎片,無每週上限:碎片已不能換酒令,剝削迴圈不成立);名人轉流浪不給碎片。回 {ok, reason?, shards?, tokens?}
 function cardsRelease(cs, id, opts) {
-  var f = cardsFind(cs, id), e, o = opts || {}, shards, wk, add, dTok, snapS, snapW;
+  var f = cardsFind(cs, id), e, o = opts || {}, shards, snapS;
   if (!f || f.list === 'wander') return { ok: false, reason: 'none' };
   e = f.e;
   if (e.star) return { ok: false, reason: 'locked' };
@@ -632,16 +643,11 @@ function cardsRelease(cs, id, opts) {
   cs[f.list].splice(f.idx, 1);
   e.at = null;
   if (e.fig) { cs.wander.push(e); cs.lastRel = { e: e, list: f.list, idx: f.idx, wander: true }; return { ok: true, shards: 0, tokens: 0 }; }
-  wk = Math.floor(((o.now || 0) - cardsTz(o.now || 0)) / (7 * 86400000));
-  snapS = cs.shards; snapW = { w: cs.shardWk.w, n: cs.shardWk.n };
-  if (cs.shardWk.w !== wk) cs.shardWk = { w: wk, n: 0 };
+  snapS = cs.shards;
   shards = Math.round((e.cost || CARD_GRADE[e.gr].cost) * CARD_WINE.refundRate * CARD_WINE.shardPerToken);
-  add = Math.max(0, Math.min(shards, CARD_WINE.shardWeekCap - cs.shardWk.n));
-  cs.shardWk.n += add; cs.shards += add;
-  dTok = Math.floor(cs.shards / CARD_WINE.shardPerToken);
-  cs.shards -= dTok * CARD_WINE.shardPerToken; cs.tok += dTok;
-  cs.lastRel = { e: e, list: f.list, idx: f.idx, dTok: dTok, snapS: snapS, snapW: snapW };
-  return { ok: true, shards: add, tokens: dTok };
+  cs.shards += shards;
+  cs.lastRel = { e: e, list: f.list, idx: f.idx, dTok: 0, snapS: snapS };
+  return { ok: true, shards: shards, tokens: 0 };
 }
 function cardsUndoRelease(cs) {
   var L = cs.lastRel, arr;
@@ -649,8 +655,7 @@ function cardsUndoRelease(cs) {
   arr = cs[L.list];
   if (L.wander) cs.wander = cs.wander.filter(function (x) { return x !== L.e; });
   else {
-    if (cs.tok < L.dTok) return false;
-    cs.tok -= L.dTok; cs.shards = L.snapS; cs.shardWk = L.snapW;
+    cs.shards = L.snapS;
   }
   arr.splice(Math.min(L.idx, arr.length), 0, L.e);
   cs.lastRel = null;
@@ -697,6 +702,52 @@ function cardsUpgrade(e, ctx) {
   e.skn = Math.max(e.skn || 0, CARD_GRADE[e.gr].skn);
   cardsRefreshEntry(e);
   return chk;
+}
+
+// ───────── 卡片熔爐:強化武將(升星)與碎片兌換指名券(數值在 carddata.js CARD_FURNACE,PLACEHOLDER) ─────────
+// 星等欄位 = entry.starLv(0~5,有值才寫);注意 entry.star 是『鎖定防誤請辭』旗標(PLAN_BATTLE_A §2),兩者無關、不可混用。
+function cardsWeekNo(now) { return Math.floor(((now || 0) - cardsTz(now || 0)) / (7 * 86400000)); }
+function cardsStarLv(e) { return Math.max(0, Math.min(CARD_FURNACE.starMax, (e && e.starLv) | 0)); }
+// 下一星花費:base = 表值(名人 × figMul)、off = 信物折抵(每個 tokOff,上限 tokOffMax)、cost = 實付(至少 1)。滿星回 {max: true}
+function cardsStarCost(e) {
+  var F = CARD_FURNACE, lv = cardsStarLv(e), base, pct, cost;
+  if (lv >= F.starMax) return { max: true, lv: lv, cost: 0, base: 0, off: 0 };
+  base = F.starCost[Math.min(e.gr, F.starCost.length - 1)][lv] * (e.fig ? F.figMul : 1);
+  pct = Math.min(F.tokOffMax, Math.max(0, (e.tok | 0) * F.tokOff));
+  cost = Math.max(1, Math.ceil(base * (1 - pct) - 1e-9));
+  return { max: false, lv: lv, base: base, off: base - cost, cost: cost };
+}
+// 升星(名冊 / 待定席皆可,流浪不可)。reason:none 查無 / max 已滿星 / shards 碎片不足。成功回 {ok, lv, cost}
+function cardsStarUp(cs, id) {
+  var f = cardsFind(cs, id), e, c;
+  if (!f || f.list === 'wander') return { ok: false, reason: 'none' };
+  e = f.e; c = cardsStarCost(e);
+  if (c.max) return { ok: false, reason: 'max' };
+  if (cs.shards < c.cost) return { ok: false, reason: 'shards', need: c.cost };
+  cs.shards -= c.cost;
+  e.starLv = c.lv + 1;
+  return { ok: true, lv: e.starLv, cost: c.cost };
+}
+// 星加成係數(給戰鬥引擎讀;乘算 1 + 值):{lv, atk, def, hp, skill(3 星起技能強化旗標), mark(5 星專屬標記)}
+function cardsStarBonus(e) {
+  var B = CARD_FURNACE.starBonus, lv = cardsStarLv(e);
+  return { lv: lv, atk: lv * B.atk, def: lv * B.def, hp: lv * B.hp, skill: lv >= B.skillStar, mark: lv >= B.markStar };
+}
+// 碎片兌換指名券:每週上限 exchange.weekMax 張(cs.exWk = {w 週序, n 本週已換},首次兌換才寫)
+function cardsExchangeLeft(cs, now) {
+  var X = CARD_FURNACE.exchange, wk = cardsWeekNo(now);
+  return Math.max(0, X.weekMax - ((cs.exWk && cs.exWk.w === wk) ? cs.exWk.n : 0));
+}
+function cardsExchange(cs, n, now) {
+  var X = CARD_FURNACE.exchange, wk = cardsWeekNo(now), left = cardsExchangeLeft(cs, now);
+  n = Math.max(1, n | 0);
+  if (left < 1) return { ok: false, reason: 'week' };
+  if (n > left) return { ok: false, reason: 'week', left: left };
+  if (cs.shards < n * X.shards) return { ok: false, reason: 'shards', need: n * X.shards };
+  cs.shards -= n * X.shards;
+  cardsAddNameTokens(cs, n);
+  cs.exWk = { w: wk, n: ((cs.exWk && cs.exWk.w === wk) ? cs.exWk.n : 0) + n };
+  return { ok: true, n: n, shards: n * X.shards };
 }
 
 // ───────── 派工接口(talents) ─────────
@@ -746,7 +797,7 @@ function cardNormCard(c, isEntry, isBag) {
   if (isEntry) {
     o.id = String(c.id || ''); if (!o.id) return null;
     o.no = cardNum(c.no, 0, 1e9, 0) | 0; o.pool = (c.pool === 'T' || c.pool === 'E' || c.pool === 'G') ? c.pool : 'T'; o.key = String(c.key || '').slice(0, 20);
-    o.at = (typeof c.at === 'string' && c.at) ? c.at.slice(0, 40) : null; o.star = c.star ? 1 : 0; o.tok = cardNum(c.tok, 0, CARD_CFG.tokMax, 0) | 0;
+    o.at = (typeof c.at === 'string' && c.at) ? c.at.slice(0, 40) : null; o.star = c.star ? 1 : 0; if (cardNum(c.starLv, 0, CARD_FURNACE.starMax, 0) | 0) o.starLv = cardNum(c.starLv, 0, CARD_FURNACE.starMax, 0) | 0; o.tok = cardNum(c.tok, 0, CARD_CFG.tokMax, 0) | 0;
     if (cardNum(c.sn, 0, 9999, 0) | 0) o.sn = cardNum(c.sn, 0, 9999, 0) | 0;   // 學院進修次數(有值才寫)
     if (!o.fig && c.study && typeof c.study === 'object' && (c.study.k === 'up' || c.study.k === 'learn' || c.study.k === 'adv') && (c.study.k === 'up' || CARD_JOB_BY_ID[c.study.j])) {   // 進修中(academy.js):k 類別 j 職業 n 課數 l 已完成 p 本課已累積秒 cs/cc 已付碎片 / 金幣
       o.study = { k: c.study.k, n: cardNum(c.study.n, 1, 9, 1) | 0, l: 0, p: Math.round(cardNum(c.study.p, 0, 1e5, 0)), cs: cardNum(c.study.cs, 0, 1e6, 0) | 0, cc: cardNum(c.study.cc, 0, 1e9, 0) | 0 };
@@ -774,8 +825,8 @@ function cardsNormSave(v) {
   var n, k, V;
   if (!v || typeof v !== 'object') return null;
   n = cardsStateNew(typeof v.seed === 'number' ? v.seed : undefined);
-  n.seq = cardNum(v.seq, 0, 1e9, 0) | 0; n.tok = cardNum(v.tok, 0, 1e6, 0) | 0; n.nameTokens = cardNum(v.nameTokens, 0, 1e6, 0) | 0; n.namedCount = cardNum(v.namedCount, 0, 1e9, 0) | 0; n.shards = cardNum(v.shards, 0, 1e6, 0) | 0;
-  if (v.shardWk) n.shardWk = { w: cardNum(v.shardWk.w, -1, 1e9, -1) | 0, n: cardNum(v.shardWk.n, 0, 1e6, 0) | 0 };
+  n.seq = cardNum(v.seq, 0, 1e9, 0) | 0; n.tok = cardNum(v.tok, 0, 1e6, 0) | 0; n.nameTokens = cardNum(v.nameTokens, 0, 1e6, 0) | 0; n.namedCount = cardNum(v.namedCount, 0, 1e9, 0) | 0; n.shards = cardNum(v.shards, 0, 1e7, 0) | 0;
+  if (v.exWk && typeof v.exWk === 'object' && (cardNum(v.exWk.n, 0, 1e6, 0) | 0) > 0) n.exWk = { w: cardNum(v.exWk.w, -1, 1e9, -1) | 0, n: cardNum(v.exWk.n, 0, CARD_FURNACE.exchange.weekMax, 0) | 0 };   // 碎片兌換券的本週計數(有值才寫);舊存檔的 shardWk(請辭週上限)已廢,讀檔時丟棄
   if (v.gift) n.gift.day = cardNum(v.gift.day, -1, 1e9, -1) | 0;
   if (v.clock) n.clock.maxSeen = cardNum(v.clock.maxSeen, 0, 1e15, 0);
   if (v.tokenGiven && typeof v.tokenGiven === 'object') Object.keys(v.tokenGiven).slice(0, 600).forEach(function (k) {
@@ -809,7 +860,7 @@ function cardsNormSave(v) {
     var seen = {};
     n[l] = Array.isArray(v[l]) ? v[l].map(function (c) { return cardNormCard(c, true); }).filter(function (c) { if (!c || seen[c.id]) return false; seen[c.id] = 1; return true; }) : [];
   });
-  // 卡包:正規化現有 cs.bag,再把殘留的 cur.*(舊候選批次)轉入(不自動分解;重複名人依信物規則)
+  // 卡包:正規化現有 cs.bag,再把殘留的 cur.*(舊候選批次)轉入(不自動熔爐;重複名人依信物規則)
   if (Array.isArray(v.bag)) {
     var seenB = {};
     n.bag = v.bag.slice(0, 600).map(function (c) { return cardNormCard(c, false, true); }).filter(function (c) { if (!c || seenB[c.bid]) return false; seenB[c.bid] = 1; return true; });

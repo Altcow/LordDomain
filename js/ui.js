@@ -198,7 +198,6 @@ function uiSetMode(m) {
 let uiSideExpanded = false;
 const UI_SIDE_ITEMS = [
   { key: 'slots', icon: '🏘', label: '經營', title: '版面選擇(3 格):點一下打開,再點一次關閉', scope: 'all', special: 'slots' },
-  { key: 'quest', icon: '📋', label: '任務', title: '任務清單(並重新顯示左上任務提示條)', scope: 'all', special: 'quest' },
   { key: 'edit', icon: '🔨', label: '布置', title: '草稿布置(單一草稿,存到版面格)', scope: 'all', special: 'edit' },
   { key: 'hide', icon: '👁', label: '建築', title: '隱藏建築（整地用，H）', top: true, scope: 'all', target: 'btnHide' },
   { key: 'fish', icon: '🎣', label: '釣魚', title: '釣魚', top: true, scope: 'estate', target: 'btnFish', gate: 'fishing' },
@@ -208,6 +207,7 @@ const UI_SIDE_ITEMS = [
   { key: 'tech', icon: '📜', label: '科技', title: '科技樹與研發序列', scope: 'estate', special: 'tech' },
   { key: 'goods', icon: '📦', label: '庫房', title: '庫房(貨品與工坊狀態)', scope: 'estate', target: 'btnGoods' },
   { key: 'caravan', icon: '🛻', label: '走鏢', title: '走鏢(鏢師、馬車與高階貨品)', scope: 'estate', target: 'btnCaravan', gate: 'caravan' },
+  { key: 'bn', icon: '⚔', label: '戰鬥', title: '戰鬥(5v5 回合制練習戰)', scope: 'estate', special: 'bn', gate: 'battleA' },
   { key: 'save', icon: '💾', label: '存檔', title: '布置存檔', scope: 'estate', target: 'btnLayoutSave' },
   { key: 'season', icon: '🌤', label: '季節', title: '季節與時段', scope: 'estate', target: 'seasonBtn' },
   { key: 'help', icon: '❓', label: '說明', title: '戰鬥布置工具說明', scope: 'camp', target: 'btnToolHelp' },
@@ -283,9 +283,9 @@ function uiSideAct(key) {
   if (it.special === 'mode') uiSetMode(uiMode === 'compact' ? 'normal' : 'compact');
   else if (it.special === 'edit') editSideAct();
   else if (it.special === 'slots') { if (typeof slotPopToggle === 'function') slotPopToggle(); }
-  else if (it.special === 'quest') { if (typeof progQuestEntry === 'function') progQuestEntry(); }
   else if (it.special === 'tech') { if (typeof techPanelToggle === 'function') techPanelToggle(); }
   else if (it.special === 'photo') uiSetMode('photo');
+  else if (it.special === 'bn') { if (typeof bnUiOpen === 'function') bnUiOpen(); }
   else {
     const t = document.getElementById(it.target);
     if (t) t.click();
@@ -321,14 +321,13 @@ function syncSideBar() {
     let hid = it.target ? (!orig || !!orig.hidden) : false;
     if (it.special === 'slots') hid = typeof slotPopAvail === 'function' ? !slotPopAvail() : true;
     if (it.gate && !isUnlocked('feature', it.gate)) hid = true;
-    if (it.special === 'quest' && game.mode !== 'battleDesign' && typeof nsGet === 'function') hid = true;   // 經營板 / 城建專注:任務由右上角「推薦下一步」取代(戰陣板不動)
     b.hidden = hid;
     const slotsOn = it.special === 'slots' && typeof slotPopIsOpen === 'function' && slotPopIsOpen();
     b.classList.toggle('on', it.special === 'edit' ? !!ui.editing : (it.special === 'slots' ? slotsOn : !!(orig && orig.classList.contains('on'))));
     b.querySelector('.ic').textContent = icon;
     b.querySelector('.lb').textContent = label;
   });
-  // 正常模式最多 6 顆:依序捨棄 季節 → 存檔 → 任務(拍照保留;任務由下一步提示卡取代,精簡展開列仍有)(精簡模式的展開列都還在);頂列項目與另一畫面的項目不算
+  // 正常模式最多 6 顆:依序捨棄 季節 → 存檔(拍照保留,精簡展開列仍有)(精簡模式的展開列都還在);頂列項目與另一畫面的項目不算
   if (!uiIsCompact()) {
     const camp = game.mode === 'battleDesign';
     const vis = key => {
@@ -337,7 +336,7 @@ function syncSideBar() {
     };
     const count = () => UI_SIDE_ITEMS.filter(it => !it.top && (it.scope === 'all' || (it.scope === 'camp') === camp) && vis(it.key)).length;
     const overflow = count() > 6;
-    if (!uiSideExpanded) ['season', 'save', 'quest'].forEach(k => { if (count() > 6 && vis(k)) vis(k).hidden = true; });
+    if (!uiSideExpanded) ['season', 'save', 'bn'].forEach(k => { if (count() > 6 && vis(k)) vis(k).hidden = true; });
     const ex = document.getElementById('sideExpand');
     if (ex) { ex.hidden = !overflow; ex.textContent = uiSideExpanded ? '▴ 收合' : '▾ 全部'; ex.title = uiSideExpanded ? '收合側欄' : '展開全部功能'; side.classList.toggle('expanded', uiSideExpanded && overflow); }
   } else {
@@ -354,6 +353,7 @@ const FEAT_GATE = [
   { id: 'pet', name: '仙獸苑', btn: 'btnPet' },
   { id: 'shop', name: '商店', btn: 'btnShop' },
   { id: 'photo', name: '拍照', btn: null },
+  { id: 'battleA', name: '戰鬥', btn: null },
   { id: 'recorder', name: '錄影', btn: null }
 ];
 const featOpenPrev = {};

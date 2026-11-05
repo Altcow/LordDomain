@@ -216,7 +216,7 @@ function bnStatusApply(S, src, t, id, data, o) {
   data = data || {};
   data.id = id; data.src = src ? src.id : -1;
   if (cat) {
-    S.stats.negTry++;
+    S.stats.negTry++; S.stats.negTryBy[t.side]++;
     if (fromHb) S.stats.hbTry++;
     if (bnImmuneHit(S, t, id)) { bnEv(S, 'immune', { tgt: t.id, id: id }); S.stats.immuneBlock++; return false; }
     if (BN_STRONG[id] && t.st.ccimm) { bnEv(S, 'ccimm', { tgt: t.id, id: id }); S.stats.ccimmBlock++; return false; }
@@ -225,7 +225,7 @@ function bnStatusApply(S, src, t, id, data, o) {
       w.layers--;
       if (w.layers <= 0) delete t.st.ward;
       bnEv(S, 'resist', { tgt: t.id, id: id, layers: w.layers || 0 });
-      S.stats.resistBlock++; S.stats.wardUsed++;
+      S.stats.resistBlock++; S.stats.wardUsed++; S.stats.resistBlockBy[t.side]++;
       if (fromHb) S.stats.hbBlockedByWard++;
       return false;
     }
@@ -270,7 +270,7 @@ function bnShield(S, src, t, nominal, o) {
 }
 function bnHeal(S, src, t, nominal, o) {
   var hr, ratio = 0, amt, cap, n, lim, fat, nom0, xl = o && o.xl;
-  if (!t.alive || nominal <= 0) return 0;
+  if (!t.alive || nominal <= 0 || t.hp >= t.maxHp) return 0;
   hr = t.st.heal_reduce;
   if (hr) ratio = hr.val / 100;
   S.stats.healEvents[t.side]++;
@@ -299,7 +299,7 @@ function bnHeal(S, src, t, nominal, o) {
 // ───────── 傷害(§3.4) ─────────
 // h: {ty:'phys'|'strat', mul, kind, sk, basic, pierce, ignoreDef, dot, counter, forceCrit, noGuard, rx(已選反應)}
 function bnHit(S, a, t, h) {
-  var ty = h.ty, base, defv, prey = 1, outM = 1, tk, r1, r2, crit = false, dmg, absorbed = 0, hpLost = 0, shield, viaId, gdmg, sk = h.sk, mo = a.mods, tm = t.mods, derived = S.chain && S.chain.dv > 0, rk, i, cdm;
+  var ty = h.ty, base, defv, prey = 1, outM = 1, tk, r1, r2, crit = false, dmg, absorbed = 0, hpLost = 0, shield, viaId, gdmg, sk = h.sk, mo = a ? a.mods : {}, tm = t.mods, derived = S.chain && S.chain.dv > 0, rk, i, cdm;
   if (!t.alive) return null;
   // 援護:先算對原目標的傷害,再依比例分給援護者
   var guard = t.st.guard, guardian = null;
@@ -539,7 +539,7 @@ function bnNewStats() {
     dmg: { A: 0, B: 0 }, dmgTaken: { A: 0, B: 0 }, healNom: { A: 0, B: 0 }, healAct: { A: 0, B: 0 }, healEvents: { A: 0, B: 0 }, healBlockedEvents: { A: 0, B: 0 }, hbLoss: { A: 0, B: 0 },
     shieldGiven: { A: 0, B: 0 }, kills: { A: 0, B: 0 }, roundKills: 0, killsPerRound: [], oneRoundKills: 0, evaded: 0, revives: 0, guardShared: 0,
     negTry: 0, resistBlock: 0, immuneBlock: 0, ccimmBlock: 0, wardUsed: 0, wardGiven: 0, hbTry: 0, hbApplied: 0, hbOn: 0, hbTurnsSum: 0, hbBlockedByWard: 0,
-    hbCasts: 0, skillUse: {}, chainLens: [], chainCap: 0, chainDmgPct: [], actions: 0, ults: 0, recasts: 0, assists: 0, reactions: 0, bondFires: 0, healCasts: { A: 0, B: 0 }, hasHealer: { A: false, B: false }
+    hbCasts: 0, fullHpUnitRounds: 0, hasHB: { A: false, B: false }, hbSrc: { A: 0, B: 0 }, hasWard: { A: false, B: false }, negTryBy: { A: 0, B: 0 }, resistBlockBy: { A: 0, B: 0 }, hbRollOK: 0, actDmg: [], skillUse: {}, chainLens: [], chainCap: 0, chainDmgPct: [], actions: 0, ults: 0, recasts: 0, assists: 0, reactions: 0, bondFires: 0, healCasts: { A: 0, B: 0 }, hasHealer: { A: false, B: false }
   };
 }
 function bnNewCnt() { return { assist: {}, bond: {}, rx: {}, extraUnit: {}, extraTeam: { A: 0, B: 0 }, ctr: {}, rxTeam: { A: 0, B: 0 } }; }
@@ -563,15 +563,21 @@ function bnNext(S, side) {
 function bnStartRound(S) {
   var i, u, nextA, nextB, first;
   S.round++;
+  S.chain = null;
   S.cnt = bnNewCnt();
   S.stats.roundKills = 0;
   S.units.forEach(function (x) {
+    if (x.alive && x.hp >= x.maxHp) S.stats.fullHpUnitRounds++;
     x.acted = false; x.healCnt = 0; x.healRound = 0; x.dmgRound = 0; x.hpAtRoundStart = x.hp; x.chainMorale = 0; x.counterHit = {}; x.targetedRound = false;
     if (x.reorderNext) { x.reorder = true; x.reorderNext = false; } else x.reorder = false;
     x.pendingHeal = x.pendingHeal || 0;
   });
   nextA = bnNext(S, 'A'); nextB = bnNext(S, 'B');
-  first = (nextB && nextA && bnSpd(S, nextB) > bnSpd(S, nextA)) || (!nextA && nextB) ? 'B' : 'A';
+  // 同速時由種子決定先手(確定性;與 PLAN §3.2「同速我方先手」不同,使用者決議以消除鏡像先手偏差)
+  if (nextA && nextB) {
+    var sa = bnSpd(S, nextA), sb = bnSpd(S, nextB);
+    first = sb > sa ? 'B' : (sa > sb ? 'A' : (bnHash(S.seed, 'first', S.round) % 2 ? 'B' : 'A'));
+  } else first = nextB && !nextA ? 'B' : 'A';
   S.turnSide = first;
   bnEv(S, 'round', { n: S.round, fat: bnFatigue(S), first: first });
   S.units.forEach(function (x) { if (x.alive && x.mods.roundStartRowMorale) S.teams[x.side].units.forEach(function (y) { if (y.alive && y.row === x.row) bnMorale(S, y, x.mods.roundStartRowMorale, 'aura', true); }); });
@@ -581,6 +587,7 @@ function bnStartRound(S) {
 }
 function bnEndRound(S) {
   var i, u, k, st, ids;
+  S.chain = null;
   S.stats.killsPerRound.push(S.stats.roundKills);
   S.units.forEach(function (x) {
     if (!x.alive) return;
@@ -634,7 +641,7 @@ function bnAct(S, u, o) {
   var i, inst, tgt, hit, acted = false, tr;
   if (!u.alive) return;
   S.actNo++;
-  S.chain = { step: 0, depth: 0, dv: 0, queue: [], dd: {}, dteam: 0, hits: 0, kills: [], actor: u.id, ult: false };
+  S.chain = { step: 0, depth: 0, dv: 0, queue: [], dd: {}, dteam: 0, hits: 0, kills: [], actor: u.id, ult: false, d0: S.stats.dmg[u.side] };
   S.stats.actions++;
   bnEv(S, 'act', { u: u.id, x: o.extra ? 1 : undefined });
   S.cnt.ctr = S.cnt.ctr || {};
@@ -726,6 +733,7 @@ function bnActEnd(S, u) {
   if (!S.over) bnDrain(S);
   if (S.chain) {
     S.stats.chainLens.push(S.chain.step);
+    S.stats.actDmg.push((S.stats.dmg[u.side] - S.chain.d0) / S.teams[bnOpp(u.side)].maxHpSum);
     S.chain.queue = [];
   }
   // 追加行動
@@ -788,6 +796,7 @@ function bnRateOf(S, u, inst) {
   if (d.prep) r += BN_DATA.rate.prepBonus;
   if (u.troop === '謀' && cat === 'active') r += BN_DATA.mageRateBonus;
   r += (u.mods.rateBonus || 0);
+  if (cat === 'active' && /^heal_[sah]/.test(d.kind)) r += BN_DATA.rate.healBoost || 0;
   if (u.st.rate_down) r -= u.st.rate_down.val;
   return bnClamp(r, 0, BN_DATA.rate.cap);
 }

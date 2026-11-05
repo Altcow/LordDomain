@@ -144,6 +144,7 @@ function bnCast(S, u, inst, o) {
     if (P.fallback) { eff = { kind: P.fallback.kind, power: P.fallback.power, params: {}, target: P.fallback.target, sk: d }; }
     else return false;
   }
+  if (u.mods.skillPlus && (d.cat === 'active' || d.cat === 'pursuit' || d.cat === 'ult')) o = Object.assign({}, o, { scale: (o.scale || 1) * (1 + u.mods.skillPlus) });
   mt = bnTargetsFor(S, u, eff, res, o);
   if (!mt.length && eff.kind !== 'revive' && eff.kind !== 'summon' && eff.kind !== 'trap' && eff.kind !== 'extra_turn') return false;
   res.main = mt;
@@ -475,7 +476,7 @@ function bnDispel(S, u, t, n, prefer, stripShield) {
 function bnApplyHealBlock(S, u, t, ratio, turns) {
   var left = turns === 'battle' ? 999 : turns;
   if (ratio >= 100 && turns !== 'battle' && turns > BN_DATA.hb.ratio100Turns && !(u && u.ult && S.chain && S.chain.ult)) left = BN_DATA.hb.ratio100Turns;
-  return bnStatusApply(S, u, t, 'heal_reduce', { val: ratio, left: left, noRes: true }, {});
+  return bnStatusApply(S, u, t, 'heal_reduce', { val: ratio, left: left, noRes: true }, { noExtend: true });
 }
 function bnGrantWard(S, u, t, layers, guard, dur) {
   var w = t.st.ward;
@@ -542,7 +543,7 @@ function bnAttachParams(S, u, eff, res, o) {
     list = res.main.filter(function (x) { return x.alive && x.side !== u.side; });
     for (i = 0; i < list.length; i++) {
       S.stats.hbCasts++;
-      if (S.rng() < rate) bnApplyHealBlock(S, u, list[i], P.healBlock.ratio, P.healBlock.turns);
+      if (S.rng() < rate) { if (bnApplyHealBlock(S, u, list[i], P.healBlock.ratio, P.healBlock.turns)) S.stats.hbRollOK++; }
     }
   }
   if (P.resist) {
@@ -755,11 +756,27 @@ function bnQueueAssists(S, u, sk, res, o) {
   tgt = res && res.main ? res.main.filter(function (x) { return x.alive && x.side !== u.side; })[0] : null;
   for (i = 0; i < combos.length; i++) {
     c = combos[i];
-    if (c.casters.indexOf(u.fig) < 0) continue;
+    var generic = c.casters[0].indexOf('ally:') === 0;
+    if (!generic && c.casters.indexOf(u.fig) < 0) continue;
+    if (generic && c.casters[0] !== 'ally:any' && u.troop !== c.casters[0].slice(5)) continue;
     if (c.on && c.on.cast && c.on.cast !== 'active' && c.on.cast !== sk.id) continue;
+    if (c.on && c.on.castKind && c.on.castKind.indexOf(sk.kind) < 0) continue;
+    if (c.on && c.on.castTag && !(sk.tags && sk.tags.indexOf(c.on.castTag) >= 0)) continue;
     if (c.on && c.on.cast === 'active' && sk.cat !== 'active' && sk.cat !== 'ult') continue;
+    as = null;
     if (c.assister && c.assister.fig) as = S.units.filter(function (x) { return x.side === u.side && x.alive && x.fig === c.assister.fig && x !== u; })[0];
-    else if (c.assister && c.assister.bond) {
+    else if (c.assister && (c.assister.hasKind || c.assister.troop)) {
+      as = S.units.filter(function (x) {
+        if (x.side !== u.side || !x.alive || x === u) return false;
+        if (c.assister.troop && x.troop !== c.assister.troop) return false;
+        if (c.assister.row === 'same' && x.row !== u.row) return false;
+        if (c.assister.hasKind && !x.act.concat(x.pas).some(function (it) { return it.def.kind === c.assister.hasKind; })) return false;
+        return true;
+      });
+      as.sort(function (p, q) { return bnSpd(S, q) - bnSpd(S, p); });
+      as = as[0];
+    }
+    if (!as && c.assister && c.assister.bond) {
       as = S.units.filter(function (x) { return x.side === u.side && x.alive && x !== u && x.fig && c.casters.indexOf(x.fig) >= 0; });
       as.sort(function (p, q) { return bnSpd(S, q) - bnSpd(S, p); });
       as = as[0];
@@ -929,7 +946,8 @@ function bnSetupBattle(S) {
   // 偵測治療者
   S.units.forEach(function (x) {
     var all = x.act.concat(x.pas).concat(x.ult ? [x.ult] : []);
-    all.forEach(function (it) { if (/^heal_|^revive|^shield_|^cleanse/.test(it.def.kind)) S.stats.hasHealer[x.side] = true; });
+    all.forEach(function (it) {
+      if (it.def.kind === 'resist' || (it.def.params && (it.def.params.resist || it.def.params.immuneHealBlock))) S.stats.hasWard[x.side] = true; if (it.def.cat !== 'passive' && /^heal_[sah]|^revive/.test(it.def.kind)) S.stats.hasHealer[x.side] = true; if (it.def.kind === 'heal_reduce' || (it.def.params && it.def.params.healBlock)) { S.stats.hasHB[x.side] = true; if (!x.hbCounted) { x.hbCounted = true; S.stats.hbSrc[x.side]++; } } });
   });
   bnSetupBonds(S);
   for (i = 0; i < order.length; i++) {
@@ -972,6 +990,7 @@ function bnSetupBattle(S) {
       if (kind === 'stealth') { bnApplyEffect(S, o, { kind: 'stealth', power: d.power, params: P, target: 'self', sk: d }, { main: null, kills: [] }, { perm: false }); if (P.extra) bnSetupExtras(S, o, d, P, cat === 'passive'); continue; }
       if (kind === 'cd_reduce') { bnSetupCdReduce(S, o, d, P); continue; }
       if (kind === 'revive' || kind === 'extra_turn' || kind === 'trap') continue;
+      if (P.trigger === 'battle_start') continue;   // 由 bnFire('battle_start') 統一執行
       // 一般:指揮 = 開戰一次(數回合),被動 = 整場(×0.5)
       tg = P.target || d.target;
       eff = bnPasTargetEff(S, o, inst, {}, 'battle_start');
@@ -1041,6 +1060,9 @@ function bnSetupBonds(S) {
       var fb = BN_FIG_SKILLS[x.fig] && BN_FIG_SKILLS[x.fig].bonds;
       if (!fb) return;
       fb.forEach(function (bd) {
+        // 去重:與 combos partB 同成員(或被其涵蓋)的組合以 partB 為準,略過 fac 內 bonds,避免雙重加成
+        var setK = bd.members.concat([x.fig]);
+        if (BN_COMBOS.bonds.some(function (pb) { return setK.every(function (m) { return pb.members.indexOf(m) >= 0; }); })) return;
         var pres = bd.members.filter(function (m) { return mineSet[m]; }), need = bd.need, okb;
         okb = need === 'all' ? pres.length === bd.members.length : (need === 'any' ? pres.length >= 1 : (need === 'each' ? pres.length >= 1 : pres.length >= need));
         var eff = okb ? bd.effect : bd.fallback;

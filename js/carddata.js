@@ -3,7 +3,7 @@
 // 驗證:node tools/test_cards.js(含名人表 lint)。不寫 DOM、不讀時間。ES2017;不用 ?. ??。
 // 【占位,待手填】名人的職業欄位(CARD_FIGS 無 ja/main)目前由五維自動推導(cards.js cardFigJobs);之後可逐位寫入 CARD_FIG_JOB_OVERRIDE 覆寫,不必改 CARD_FIGS。
 // 全域名稱:CARD_GRADE CARD_STATS CARD_LEARN CARD_FAC CARD_ROWS CARD_JOB_TIERPCT CARD_JOBS CARD_JOB_BY_ID CARD_JOB_PORTRAIT CARD_POST_GROUP CARD_VENUE_ORDER CARD_VENUES
-//          CARD_EXAM_SUBJECTS CARD_COST CARD_WINE CARD_CFG CARD_BAG CARD_FIG_WEIGHT CARD_UPGRADE CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_SKILLS CARD_SKILL_BY_ID CARD_SKILL_BY_ROW CARD_FIGS CARD_FIG_BY_ID CARD_FIG_JOB_OVERRIDE CARD_VISIT
+//          CARD_EXAM_SUBJECTS CARD_COST CARD_WINE CARD_CFG CARD_BAG CARD_FURNACE CARD_FIG_WEIGHT CARD_UPGRADE CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_SKILLS CARD_SKILL_BY_ID CARD_SKILL_BY_ROW CARD_FIGS CARD_FIG_BY_ID CARD_FIG_JOB_OVERRIDE CARD_VISIT
 
 // 品階(§3A.1):lo/hi 生成參數;stCap 單項基礎上限;tai 才帶;jobSlots 職業詞條槽;jobMax 職業最高階;learn 學養型分布(通才/偏才/專才/宗師 %);trN 一般詞條數;skn 技能數(第一階段只記數量)
 var CARD_GRADE = [
@@ -108,9 +108,8 @@ var CARD_COST = { zongBonus: 4 };
 var CARD_WINE = {
   startGift: 6,                    // 開館禮(PLACEHOLDER,待使用者決定)
   dailyGift: 2, dailyDaysMax: 7,   // 每日小禮 +2,最多存 7 天
-  shardPerToken: 5,                // 5 碎 = 1 令
-  shardWeekCap: 50,                // 請辭碎片每週上限
-  refundRate: 0.2,                 // 請辭返還成本 20 %(碎片計:成本 c 令 → c 碎)
+  shardPerToken: 5,                // 請辭回收的換算尺度(成本 c 令 → c 碎 = c × refundRate × 此值);碎片不再自動轉酒令
+  refundRate: 0.2,                 // 請辭返還成本 20 %(碎片計:成本 c 令 → c 碎;無每週上限)
   techGift: 1, techGiftEra: 3, techGiftHi: 2,   // 每完成一項科技 +1 令,科技所屬時代 ≥ 3 起 +2(每個節點只發一次,記 cards.tokenGiven)
   mileGift: 10                     // 完成一個里程碑(mg_*)+10 令
 };
@@ -132,7 +131,7 @@ var CARD_UPGRADE = [
   { from: 3, to: 4, route: '立傳',     academy: 0, lv: 20, jobMin: 4, xue: 1500, coin: 30000, lessons: 0, flag: 'lizhuan' }
 ];
 // 學院(§7B;數值皆 PLACEHOLDER,集中於此)。院級 = 學舍 / 學宮 / 精舍建築數 + 科技(academyLevel);進修花費以『碎片』與金幣為主
-// (碎片 = 卡包分解所得;cs.shards 滿 5 碎會自動轉酒令,故以『碎』計價,付費時先扣碎片零頭再拆酒令,1 令 = CARD_WINE.shardPerToken 碎)
+// (碎片 = 卡片熔爐所得,同一碎片池 cs.shards;碎片不再自動轉酒令,付費直接扣 cs.shards)
 var CARD_ACADEMY = {
   lessonSec: 300,      // 1 課 = 遊玩中 300 秒(離線 / 分頁關閉不推進,尚無『旬報』時的替代;之後接旬報再改)
   rushRate: 0.5,       // 速成:剩餘課數立即結業,額外花 原碎片 × 此值
@@ -359,9 +358,22 @@ var CARD_VISIT = {
 var CARD_BAG = {
   capBase: 100, capPerRank: 80, capMax: 500,   // 容量 = 100 + (官階等級 − 1) × 80,上限 500(官階表 6 階:100/180/260/340/420/500;缺官階資料 = 100)
   batchNeed: 7,                // 開一批需要的空位(一批 7 張;空位不足則該批暫存不開)
-  autoDefault: 0,              // 自動分解預設:品階 ≤ 白(0);-1 = 關
-  autoMax: 2,                  // 自動分解最高可設到藍(紫以上不提供自動)
+  autoDefault: 0,              // 自動熔爐預設:品階 ≤ 白(0);-1 = 關
+  autoMax: 2,                  // 自動熔爐最高可設到藍(紫以上不提供自動)
   figDupShard: { 3: 8, 4: 16 } // 名人重複且信物已滿(CARD_CFG.tokMax)時轉成的碎片數(= 同品階任用成本)
+};
+// 卡片熔爐(使用者決議;卡包的『分解』整合改名『卡片熔爐』,碎片可 (1)強化武將升星 (2)兌換指名券)。數字皆 PLACEHOLDER。
+//   shard[品階 0~3] = 路人熔鍊碎片(白青藍紫);zongBonus = 宗師型(learn 3)額外;starHalf = 帶星的卡額外 +星數 × 品階基礎 × 此值;fig[品階] = 手動熔名人(二次確認,不入一鍵 / 自動)
+//   starCost[品階][星 0→1 … 4→5] = 升星碎片;figMul = 名人 ×;tokOff = 每個信物抵費用比例,上限 tokOffMax(信物仍上限 CARD_CFG.tokMax、不可直接兌換)
+//   starBonus = 每星攻 / 防 / HP 加成(乘算係數),skillStar 星起解鎖技能強化旗標,markStar 星 = 專屬標記;starMax 星上限
+//   exchange = 碎片換指名券:shards 碎 = 1 張,weekMax 張 / 週(週界線同既有 7 日週:cards.js cardsWeekNo)
+var CARD_FURNACE = {
+  shard: [2, 4, 8, 16], zongBonus: 8, starHalf: 0.5, fig: { 3: 20, 4: 40 },
+  starMax: 5,
+  starCost: [[10, 20, 40, 80, 160], [15, 30, 60, 120, 240], [20, 40, 80, 160, 320], [30, 60, 120, 240, 480], [40, 80, 160, 320, 640]],   // 白 青 藍 紫 金(金 = 白 ×4)
+  figMul: 2, tokOff: 0.3, tokOffMax: 0.9,
+  starBonus: { atk: 0.04, def: 0.04, hp: 0.04, skillStar: 3, markStar: 5 },
+  exchange: { shards: 120, weekMax: 3 }
 };
 var CARD_FIG_BY_ID = {};
 CARD_FIGS.forEach(function (f) { CARD_FIG_BY_ID[f.id] = f; });

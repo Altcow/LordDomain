@@ -289,16 +289,6 @@ function techUiChainHtml(id) {
   c.tiers.forEach(function (t) { p.push('第' + (t.tier + 1) + '階貨品 ×' + t.n + (t.have < t.n ? '(缺 ' + (t.n - t.have) + ')' : '')); });
   return '<div class="tu-c tu-chain">研發到這裡共 ' + c.count + ' 項,總需求:' + tuEsc(p.join('　')) + '</div>';
 }
-function techUiRoutes(n) {   // 此節點所屬路線的進度:[{id,name,done,tot}]
-  var out = [], rs = (typeof TECH_ROUTES !== 'undefined' && TECH_ROUTES) ? TECH_ROUTES : [];
-  (n.route || []).forEach(function (r) {
-    var nm = r, d = 0, t = 0, i;
-    for (i = 0; i < rs.length; i++) if (rs[i].id === r) nm = rs[i].name || r;
-    CITY_TECHS.forEach(function (x) { if (x.route && x.route.indexOf(r) >= 0) { t++; if (techDone(x.id)) d++; } });
-    if (t) out.push({ id: r, name: nm, done: d, tot: t });
-  });
-  return out;
-}
 function techUiBuildable(n) {   // 已研成後可直接去蓋的物件 id(最多 3 個)
   var out = [];
   (n.unlock || []).forEach(function (u) { if (out.length < 3 && typeof OBJECTS !== 'undefined' && OBJECTS[u] && !OBJECTS[u].retired && out.indexOf(u) < 0) out.push(u); });
@@ -470,7 +460,6 @@ function tuDetailHtml() {
   else h += '<div class="tu-c">' + tuEsc(tuCostText(n.id)) + '　時長 ' + tuDurText(techDurationOf(n.id)) + '</div>';
   if (tu.sugSet[n.id] && tu.sugWhy[n.id]) h += '<div class="tu-sg">★ 建議先研:' + tuEsc(tu.sugWhy[n.id]) + '</div>';
   if (un.length) h += '<div class="tu-u">解鎖:' + tuEsc(un.join('、')) + '</div>';
-  techUiRoutes(n).forEach(function (r) { h += '<div class="tu-rt">路線〈' + tuEsc(r.name) + '〉 ' + r.done + '/' + r.tot + '</div>'; });
   pr = function (r) { return '<button class="tu-pr ' + (techDone(r) ? 'ok' : 'no') + '" data-tu="goto" data-id="' + r + '">' + (techDone(r) ? '✓ ' : '✗ ') + tuEsc(tuNodeName(r)) + '</button>'; };
   if (n.req && n.req.length) h += '<div class="tu-pq">前置:' + n.req.map(pr).join('') + (n.reqOr && n.reqOr.length ? ' <b>或</b> ' + n.reqOr.map(pr).join('') : '') + '</div>';
   if (st.k === 'req') h += '<div class="tu-lk">前置未滿:' + tuEsc(st.miss.join('、')) + (n.reqOr && n.reqOr.length ? '(或 ' + tuEsc(n.reqOr.map(tuNodeName).join('、')) + ')' : '') + '</div>';
@@ -617,7 +606,7 @@ var TU_CSS = '#techTreePanel{position:fixed;left:50%;top:3%;transform:translateX
   '.tu-st{font-size:.85em;border-radius:8px;padding:0 6px;background:#3a2f1a}.tu-st.ready{background:#2f5a2f}.tu-st.done{background:#2a4a6a}.tu-st.cur,.tu-st.queued{background:#6a5a1a}.tu-st.mega{background:#5a3a5a}.tu-st.era{background:#444}' +
   '.tu-n.ready{background-color:#294a29;border-color:#7fd37f}.tu-n.done{background-color:#1f3550}.tu-n.cur,.tu-n.queued{background-color:#52461a;border-color:#f0b45a}.tu-n.req{background-color:#2b2418;opacity:.85}.tu-n.era{background-color:#2a2a2a;opacity:.75}.tu-n.mega{background-color:#4a2f4a;border-color:#c89ac8}' +
   '.tu-n.focus{outline:2px solid #f0b45a}.tu-n.sel{outline:3px solid #fff}.tu-n.dim{opacity:.25}.tu-n.hl{opacity:1}' +
-  '.tu-ec[data-tu]{cursor:pointer}.tu-n{position:relative}.tu-n.sug::after{content:"★";position:absolute;right:3px;top:0;color:#ffd36a;font-size:14px;line-height:1}.tu-sg{margin-top:3px;color:#ffd36a}.tu-rt{margin-top:3px;color:#d8c6ff}.tu-chain{color:#ffd9a0}' +
+  '.tu-ec[data-tu]{cursor:pointer}.tu-n{position:relative}.tu-n.sug::after{content:"★";position:absolute;right:3px;top:0;color:#ffd36a;font-size:14px;line-height:1}.tu-sg{margin-top:3px;color:#ffd36a}.tu-chain{color:#ffd9a0}' +
   '.tu-xb{display:block;box-sizing:border-box;width:100%;font-size:10px;line-height:16px;color:#cfe3ff;background:#2a3a55;border-radius:8px;margin-top:1px;padding:0 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}' +
   '.tu-e path{fill:none;stroke-width:2}.tu-e text{fill:#e8c6ff;font-size:11px;text-anchor:middle}.tu-e.done path{stroke:#f0b45a}.tu-e.ready path{stroke:#7fd37f}.tu-e.todo path{stroke:#6c675c;stroke-dasharray:5 4}.tu-e.or path{stroke-dasharray:7 3}.tu-e.or.todo path{stroke:#9a7ab0}.tu-e.dim{opacity:.1}.tu-e.hl path{stroke-width:3}' +
   '.tu-dt{display:flex;align-items:center;gap:6px}.tu-d,.tu-c,.tu-u,.tu-lk,.tu-pq,.tu-hint{margin-top:3px;opacity:.92}.tu-hint{opacity:.7}.tu-lk{color:#ffb4a0}.tu-u{color:#cfe3ff}#techTreePanel .tu-pr.ok{border-color:#7fd37f}#techTreePanel .tu-pr.no{border-color:#c0705a}' +

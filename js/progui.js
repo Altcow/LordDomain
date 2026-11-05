@@ -1,8 +1,8 @@
 // js/progui.js — 城市等級介面(PLAN_PROGRESSION §2.5、§7):頂列 Lv 晶片、升級抽屜、測試工具、鎖頭角標與解鎖紅點、FTUE 泡泡。
 // 只讀 prog.js / progdata.js 的函式與常數,數字一律不寫在本檔。DOM 全由本檔建立(index.html 只載入本檔)。
 // 外部全域(ui.js、battleui.js 等)一律 typeof 守衛;本檔在載入時建立介面,呼叫端可隨時呼叫 progLockBadge / progSeenMark。
-// 新手任務:左上任務提示條(單行、透明)、歡迎泡泡、全畫面任務清單(#questList,分頁可擴充)。
-// 全域名稱:initProgUI progUiTick progUiRefresh progUiOpen progUiClose progLockBadge progSeenMark progFtueTick progFtueShow progFtueHide progQuestOpen progQuestEntry;其餘內部一律 pui / puiXxx。
+// 新手指引:左上任務提示條(單行、透明)、歡迎泡泡、全畫面任務清單(#questList,分頁可擴充)。
+// 全域名稱:initProgUI progUiTick progUiRefresh progUiOpen progUiClose progLockBadge progSeenMark progFtueTick progFtueShow progFtueHide progQuestOpen;其餘內部一律 pui / puiXxx。
 
 var pui = {
   inited: false, open: false, toolsOpen: false, timer: 0,
@@ -15,8 +15,8 @@ var pui = {
   quest: null, questOpen: false, qTab: 'tutorial', qTabs: null, qList: null, qProg: null, qMsg: null, taskBtn: null
 };
 
-// 清單分頁登錄:之後加「日常任務」等,在此登錄並於 puiQuestItems 實作即可;目前只放新手任務
-var PUI_QUEST_TABS = [{ id: 'tutorial', name: '新手任務' }];
+// 清單分頁登錄:之後加「日常任務」等,在此登錄並於 puiQuestItems 實作即可;目前只放新手指引
+var PUI_QUEST_TABS = [{ id: 'tutorial', name: '新手指引' }];
 var PUI_STATE_NAME = { done: '已完成', cur: '進行中', todo: '未開始' };
 var PUI_DONE_MS = 5000;   // 全部完成後提示條停留的毫秒數,之後自動收起(prog.ftue.off)
 
@@ -101,7 +101,7 @@ function puiSrcText(from) {
 }
 
 // 城建專注模式(js/cityonly.js)是否開啟
-// 「推薦下一步」(nextstep.js)取代經營板 / 城建專注模式的新手任務提示條與清單入口(戰陣板不動)
+// 「推薦下一步」(nextstep.js)取代經營板 / 城建專注模式的新手指引提示條與清單入口(戰陣板不動)
 function puiNsReplaces() { return typeof nsGet === 'function' && (puiCity() || (typeof game !== 'undefined' && game && game.mode === 'estate')); }
 function puiCity() { return typeof isCityOnly === 'function' && isCityOnly(); }
 
@@ -345,7 +345,7 @@ function puiBuildDrawer() {
   pui.list = puiEl('div', 'pg-list');
   pui.req = puiEl('div', 'pg-req');
   pui.unl = puiEl('div', 'pg-unl');
-  pui.taskBtn = puiBtn('pg-tt', '📋 新手任務清單 ▸', function () { progUiClose(); progQuestOpen(); });
+  pui.taskBtn = puiBtn('pg-tt', '📋 新手指引清單 ▸', function () { progUiClose(); progQuestOpen(); });
   pui.list.appendChild(pui.req);
   pui.list.appendChild(pui.unl);
   pui.list.appendChild(pui.taskBtn);
@@ -363,13 +363,14 @@ function puiBuildDrawer() {
 function puiModeOk() {
   var b = document.body, m = (typeof game !== 'undefined' && game) ? game.mode : 'estate';
   if (['attack', 'replay', 'fishing', 'pet', 'interior'].indexOf(m) >= 0) return false;
+  if (m === 'bn') return false;   // 戰鬥 A 全螢幕畫面
   if (typeof game !== 'undefined' && game && game.backup) return false;
   if (b && b.classList && (b.classList.contains('photo-mode') || b.classList.contains('atk-mode') ||
       b.classList.contains('replay-mode') || b.classList.contains('sandbox'))) return false;
   return true;
 }
 
-// 新手任務各項目(依 PROG_FTUE_REQ 順序):state = done / cur(當前關) / todo
+// 新手指引各項目(依 PROG_FTUE_REQ 順序):state = done / cur(當前關) / todo
 function puiQuestItems(tabId) {
   var p = progGet(), out = [], cur = PROG_FTUE_REQ[p.lv], curQ = null;
   if (tabId !== 'tutorial') return out;
@@ -401,7 +402,7 @@ function puiTaskModel() {
     return { kind: 'step', text: cur, n: n, total: items.length };
   }
   if (!cur) return { kind: 'none', text: '', n: n, total: items.length };
-  if (n === items.length) return { kind: 'done', text: '🎉 新手任務完成', n: n, total: items.length };
+  if (n === items.length) return { kind: 'done', text: '🎉 新手指引完成', n: n, total: items.length };
   if (p.ftue.done[cur]) return { kind: 'ready', text: '✓ 本步完成,點頂列 Lv 升級', n: n, total: items.length };
   return { kind: 'step', text: PROG_FTUE_TEXT[cur], n: n, total: items.length };
 }
@@ -474,7 +475,7 @@ function puiQuestRender() {
     pui.qList.appendChild(row);
   });
   pui.qProg.textContent = m.n + '/' + m.total;
-  pui.qMsg.textContent = puiCity() ? (m.kind === 'done' ? '🎉 城建任務完成!繼續蓋出更多種類的建築、擴大城市,就能一路升級' : '') : m.kind === 'done' ? '🎉 新手任務完成!點頂列 Lv 升級' : (m.kind === 'ready' ? '✓ 本步完成,點頂列 Lv 升級' : '');
+  pui.qMsg.textContent = puiCity() ? (m.kind === 'done' ? '🎉 城建任務完成!繼續蓋出更多種類的建築、擴大城市,就能一路升級' : '') : m.kind === 'done' ? '🎉 新手指引完成!點頂列 Lv 升級' : (m.kind === 'ready' ? '✓ 本步完成,點頂列 Lv 升級' : '');
   pui.qMsg.hidden = !pui.qMsg.textContent;
 }
 
@@ -647,21 +648,6 @@ function progFtueHide() {
 // 開啟全畫面任務清單(升級抽屜、結算畫面皆可呼叫;不受提示條是否關閉影響)
 function progQuestOpen() {
   if (!pui.inited) return false;
-  puiQuestOpen();
-  return true;
-}
-
-// 右側邊欄「📋 任務」入口:打開任務清單,並讓左上提示條重新顯示(任務已全部完成則只開清單)
-function progQuestEntry() {
-  var p, m;
-  if (!pui.inited) return false;
-  p = progGet();
-  m = puiTaskModel();
-  if (p.ftue.off && m.kind !== 'done' && m.kind !== 'none') {
-    p.ftue.off = false;
-    progSave();
-    puiTaskRender();
-  }
   puiQuestOpen();
   return true;
 }

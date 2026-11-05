@@ -1,8 +1,8 @@
-const VERSION = 'v42';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v43';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
-const RUNTIME_PATHS = ['/assets/buildings/', '/assets/portraits/', '/assets/ui/', '/assets/terrain/'];
+const RUNTIME_PATHS = ['/assets/buildings/', '/assets/portraits/', '/assets/ui/', '/assets/terrain/', '/assets/fullbody/', '/assets/bnfx/'];
 const PRECACHE = [
   './',
   './index.html',
@@ -138,6 +138,13 @@ const PRECACHE = [
   './js/tavern_scene.js',
   './js/interiors_pack1_data.js',
   './js/interiors_pack1.js',
+  './js/bn_data.js',
+  './js/bn_skills_data.js',
+  './js/bn_units.js',
+  './js/bn_engine.js',
+  './js/bn_effects.js',
+  './js/bndraw.js',
+  './js/bnui.js',
   './js/minimap.js',
   './js/main.js',
   './js/pwa.js',

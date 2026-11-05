@@ -3,7 +3,7 @@
 // 全域:BN_DATA(係數)BN_TRAIT_MODS(詞條 → 戰鬥修正)BN_BONDS(陣營 / 職業標籤 / 特殊組合羈絆)。B1 範圍:僅純邏輯。
 var BN_DATA = {
   v: 1,
-  K: 1.6,                      // 傷害總係數(§3.4)
+  K: 1.73,                     // 傷害總係數(§3.4);B1 調參 1.6 → 1.73(配合治療增強,維持 5~7 回合)
   maxRound: 8,                 // 回合上限
   critMul: 1.5,
   jitter: 0.10,                // 浮動 ±5 %:0.95 + 0.10 × r
@@ -40,7 +40,7 @@ var BN_DATA = {
   // 目標選擇
   pickPrey: 100, pickLowHp: 50,
   // 戰法發動率 / 冷卻預設(§4.2)
-  rate: { active: { S: 0.50, M: 0.40, L: 0.35, XL: 0.35 }, pursuit: { S: 0.40, M: 0.35, L: 0.30, XL: 0.30 }, prepBonus: 0.10, cap: 0.70 },
+  rate: { active: { S: 0.50, M: 0.40, L: 0.35, XL: 0.35 }, pursuit: { S: 0.40, M: 0.35, L: 0.30, XL: 0.30 }, prepBonus: 0.10, cap: 0.70, healBoost: 0.25 },   // healBoost:主動治療戰法的發動率加成(調參用)
   cd: { S: 1, M: 2, L: 3, XL: 3 },
   passiveMul: 0.5,             // 被動 / 持續指揮的數值 = 主動同 power × 0.5
   defaultRounds: 3,            // 指揮戰法預設持續
@@ -48,12 +48,13 @@ var BN_DATA = {
   clamp: { lo: -0.5, hi: 0.6 }, spdMin: 30,
   // kind 倍率表 [S, M, L, XL](§4.3)
   kinds: {
-    atk_single: [1.3, 1.7, 2.2, 2.8], atk_front: [0.6, 0.8, 1.0, 1.3], atk_back: [1.0, 1.3, 1.7, 2.2], atk_all: [0.4, 0.55, 0.7, 0.9],
-    atk_pierce: [0.6, 0.8, 1.0, 1.3], atk_cross: [0.5, 0.7, 0.9, 1.1], atk_multi: [0.45, 0.55, 0.7, 0.85], atk_snipe: [1.1, 1.4, 1.8, 2.3],
-    atk_exec: [1.0, 1.3, 1.6, 2.0], execute_chain: [1.0, 1.35, 1.75, 2.2], lifesteal: [1.3, 1.7, 2.2, 2.8], dot_spread: [0.4, 0.55, 0.7, 0.9],
+    atk_single: [1.3, 1.7, 2.2, 2.38], atk_front: [0.6, 0.8, 1.0, 1.1], atk_back: [1.0, 1.3, 1.7, 1.87], atk_all: [0.4, 0.55, 0.7, 0.77],
+    atk_pierce: [0.6, 0.8, 1.0, 1.1], atk_cross: [0.5, 0.7, 0.9, 0.94], atk_multi: [0.45, 0.55, 0.7, 0.72], atk_snipe: [1.1, 1.4, 1.8, 1.96],
+    atk_exec: [1.0, 1.3, 1.6, 1.7],   // 攻擊類 XL 檔(大招)B1 調參 ×0.85
+    execute_chain: [1.0, 1.35, 1.75, 2.2], lifesteal: [1.3, 1.7, 2.2, 2.8], dot_spread: [0.4, 0.55, 0.7, 0.9],
     stun: [0, 0.5, 0.8, 1.0],
-    heal_single: [1.0, 1.4, 1.8, 2.4], heal_all: [0.4, 0.55, 0.7, 1.0], heal_hot: [0.2, 0.3, 0.4, 0.5],
-    shield_single: [1.0, 1.5, 2.0, 2.5], shield_all: [0.4, 0.6, 0.8, 1.1],
+    heal_single: [4.0, 5.6, 7.2, 9.6], heal_all: [1.6, 2.2, 2.8, 4.0], heal_hot: [0.8, 1.2, 1.6, 2.0],   // B1 調參 ×4(實際多半被單次 35% 上限截斷)
+    shield_single: [1.0, 1.5, 2.0, 2.5], shield_all: [0.4, 0.6, 0.8, 0.9],   // shield_all XL 1.1 → 0.9(金城湯池過強)
     cleanse: [1, 2, 99, 99], revive: [0.2, 0.3, 0.4, 0.5],
     buff_atk: [0.10, 0.15, 0.20, 0.30], buff_def: [0.10, 0.15, 0.20, 0.30], buff_spd: [8, 12, 16, 22], buff_crit: [0.08, 0.12, 0.16, 0.24], buff_all: [0.05, 0.08, 0.10, 0.15], buff_all_spd: [5, 8, 10, 15],
     morale_up: [15, 25, 35, 50], inspire: [10, 15, 20, 30], inspire_atk: [0.06, 0.08, 0.10, 0.15],
@@ -71,8 +72,8 @@ var BN_DATA = {
   healCap: { single: 0.35, xl: 0.50, round: 0.40, second: 0.7, third: 0.5 },
   shieldDur: 2, shieldCap: 0.40, pierceShield: 1.5,
   // 禁療 / 抵禦(§4.11、SCHEMA C):發動率與持續集中在 skills json 的 params.healBlock / params.resist;此處只放引擎參數
-  hb: { rateScale: 1.0, defaultRatio: 50, defaultTurns: 3, ratio100Turns: 2 },
-  ward: { maxLayers: 2, dur: 3, rateScale: 1.0 },
+  hb: { rateScale: 2.0, defaultRatio: 50, defaultTurns: 3, ratio100Turns: 2 },   // rateScale B1 調參 1 → 2(讓覆蓋率進入 20% 附近)
+  ward: { maxLayers: 2, dur: 3, rateScale: 5.0 },   // B1 調參 1 → 5(抵禦來源稀少,否則擋下率 < 2%)
   ccImmRounds: 1,              // 強控後抗控
   // 疲兵(§4.11):第 5 回合起 受傷 +10 %/回合、受療 −10 %/回合,累加
   fatigue: { start: 5, dmg: 0.10, heal: 0.10 },
@@ -83,6 +84,7 @@ var BN_DATA = {
   cd0AllL: true,
   // 召喚 / 伏兵等雜項
   summonMax: 2,
+  starSkillPlus: 0.05,         // 升星 3 星起「戰法強化」:主動 / 追擊 / 大招效果檔位視為 +5 %(PLACEHOLDER)
   stackKillAtk: 0.05,
   bonusVs: { S: 0.2, M: 0.4, L: 0.7, XL: 1.0 },       // params.bonusVsStatus.mult 檔位 → 加成
   stepMul: { S: 0.05, M: 0.08, L: 0.12, XL: 0.15 },   // perFacAlly / perAlly / crowd_scale 每階加成
@@ -161,7 +163,7 @@ var BN_BONDS = {
     '官僚': { res: 0.08 }, '方士': { morale0: 15 }, '商賈': { gold: 0.10 }, '水軍': { spd: 5 }
   },
   special: [   // 名人組合(戰前算好,戰中只查表)
-    { id: 'sp_enruo', name: '恩若兄弟', members: ['liubei', 'guanyu', 'zhangfei'], need: 3, moraleGain: 0.20 },
+    { id: 'sp_enruo', name: '桃園結義', members: ['liubei', 'guanyu', 'zhangfei'], need: 3, moraleGain: 0.20 },
     { id: 'sp_tiangong', name: '天公地公人公', members: ['zhangjiao', 'zhangbao', 'zhangliang'], need: 3, strat: 0.12 },
     { id: 'sp_yingchuan', name: '潁川之士', members: ['xunyu', 'xunyou', 'guojia', 'zhongyao'], need: 2, cdMinus: 1 },
     { id: 'sp_baima', name: '白馬義從', members: ['gongsunzan', 'zhaoyun'], need: 2, cavSpd: 8 }

@@ -159,6 +159,16 @@ function bnUnitSpec(card, o) {
     spec.ult = bnUltFor(card, troop);
   }
   spec.skills = skills;
+  // 升星加成(卡片熔爐 cardsStarBonus;缺函式 / 缺欄位 = 0)。注意 entry.star 是鎖定旗標,不是星等,不讀
+  var sb = (typeof cardsStarBonus === 'function') ? cardsStarBonus(card) : null;
+  if (sb && (sb.atk || sb.def || sb.hp)) {
+    spec.stats.atk = bnRound(spec.stats.atk * (1 + (sb.atk || 0))); spec.stats.mag = bnRound(spec.stats.mag * (1 + (sb.atk || 0)));
+    spec.stats.def = bnRound(spec.stats.def * (1 + (sb.def || 0))); spec.stats.sres = bnRound(spec.stats.sres * (1 + (sb.def || 0)));
+    spec.stats.hp = bnRound(spec.stats.hp * (1 + (sb.hp || 0)));
+  }
+  if (sb && sb.lv) spec.starLv = sb.lv;
+  if (sb && sb.skill) spec.mods.skillPlus = BN_DATA.starSkillPlus;   // 3 星起:戰法強化
+  if (sb && sb.mark) spec.starMark = true;                            // 5 星:專屬標記(僅供 UI)
   if (card.tok >= 3) spec.mods.rateBonus = (spec.mods.rateBonus || 0) + 0.05;
   if (card.tok >= 5) spec.mods.ultPlus = 0.10;
   if (o.scene) bnApplyScene(spec, o.scene);

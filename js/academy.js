@@ -1,8 +1,8 @@
 // js/academy.js — 學院系統引擎(PLAN_CARDS §7B、第四批決議 P4/P8;PLAN_INTERIORS §4 P6 請託『送學院進修』、P7 成長訓練)。
 // 院級 1~5 依學舍 / 學宮 / 精舍建築數與科技決定(不另蓋『學院』建築,無升級按鈕);課程:升階(白→青、青→藍)、精進(職業 +1 階)、習藝(新增職業 I 階)。
-// 花費以『碎片』(卡包分解所得)與金幣為主(碎片零頭先扣、不足再拆酒令,1 令 = CARD_WINE.shardPerToken 碎);數值全在 carddata.js 的 CARD_ACADEMY(PLACEHOLDER)。
+// 花費以『碎片』(卡片熔爐所得,同一碎片池 cs.shards;碎片不再自動轉酒令,付費只扣 cs.shards)與金幣為主;數值全在 carddata.js 的 CARD_ACADEMY(PLACEHOLDER)。
 // 進修狀態寫在名冊 entry.study(只有進修中才有欄位)、entry.sn(累計送去進修次數,>0 才寫);在學者不能派駐 / 請辭。1 課 = 遊玩中 CARD_ACADEMY.lessonSec 秒(離線不推進)。
-// 名人不進修;餵養(cardsBagFeed)與信物功能不在此實作。全部以 typeof 守衛外部模組。ES2017(不使用可選串接與空值合併運算子)。
+// 名人不進修;升星(cards.js cardsStarUp)與信物功能不在此實作。全部以 typeof 守衛外部模組。ES2017(不使用可選串接與空值合併運算子)。
 // 全域名稱:academyLevel academySeats academyUsed academyCtx academyCheck academyStart academyRush academyQuit academyTick academyFinish academyErrandOk academyShardTotal academyInfo
 
 function acadObjs() { return (typeof world !== 'undefined' && world && Array.isArray(world.objects)) ? world.objects : []; }
@@ -41,18 +41,16 @@ function academyCtx() {
   var res = acadRes() || {};
   return { academy: academyLevel(), lv: 99, cityLv: 99, xue: 1e9, coin: 1e9, lessons: 99 };
 }
-// 碎片總額(碎):cs.shards + 酒令 × shardPerToken;付費先扣零頭,不足再拆酒令,找零回碎片
-function academyShardTotal(cs) { return (cs.shards | 0) + (cs.tok | 0) * CARD_WINE.shardPerToken; }
+// 碎片總額(碎)= cs.shards(碎片是核心貨幣,不再與酒令互換;酒令只用於任用)。付費直接扣 cs.shards
+function academyShardTotal(cs) { return cs.shards | 0; }
 function acadPayShards(cs, n) {
-  var per = CARD_WINE.shardPerToken, total = academyShardTotal(cs);
   if (n <= 0) return true;
-  if (total < n) return false;
-  total -= n;
-  cs.tok = Math.floor(total / per); cs.shards = total % per;
+  if (academyShardTotal(cs) < n) return false;
+  cs.shards -= n;
   return true;
 }
 function acadRefundShards(cs, n) {
-  if (n > 0) cardsShardGain(cs, n, 0, false);   // 不受每週上限,滿 5 碎轉酒令
+  if (n > 0) cardsShardGain(cs, n);
 }
 function acadJobName(id) { var j = CARD_JOB_BY_ID[id]; return j ? j.name : id; }
 function acadTierName(id, t) { var j = CARD_JOB_BY_ID[id]; return j ? j.t[Math.max(0, Math.min(3, t - 1))] : ''; }
@@ -105,7 +103,7 @@ function academyCheck(cs, e, kind, arg, now) {
     if (sl.used + 1 > sl.cap) acadAddWhy(why, '職業槽已滿');
   } else acadAddWhy(why, '未知課程');
   if (cost) {
-    if (academyShardTotal(cs) < cost.shards) acadAddWhy(why, '碎片需 ' + cost.shards + '(現有 ' + academyShardTotal(cs) + ',5 碎 = 1 酒令)');
+    if (academyShardTotal(cs) < cost.shards) acadAddWhy(why, '碎片需 ' + cost.shards + '(現有 ' + academyShardTotal(cs) + ';到卡包熔爐熔卡可得)');
     if (!res || (res.coin || 0) < cost.coin) acadAddWhy(why, '金幣需 ' + cost.coin);
   }
   return { ok: why.length === 0, reasons: why, cost: cost, label: label, kind: kind, arg: arg };

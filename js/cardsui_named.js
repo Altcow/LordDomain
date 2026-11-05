@@ -2,7 +2,7 @@
 // 掛在 cardsui.js(cuOverviewHtml / cuNamedHtml / cuNamedClick / cuChainRun 由其 typeof 守衛呼叫)。引擎在 cards.js(cardsNamedDraw 等)。不發聲、不推播。ES2017;不用 ?. ??。
 // 全域名稱:cuOverviewHtml cuNamedHtml cuNamedClick cuChainRun CU_CHAIN_ORDER
 var CU_CHAIN_ORDER = ['E', 'T'];   // 全部開啟順序:縣試 → 酒館(指名要選條件、花券,不納入連開)
-var CU_NAMED_MSG = { closed: '指定池尚未開放(需研發對應科技)', bad: '請先選擇陣營或職業分類', busy: '上一批還在開啟中', bagfull: '卡包空位不足,先分解或任用', ticket: '指名券不足' };
+var CU_NAMED_MSG = { closed: '指定池尚未開放(需研發對應科技)', bad: '請先選擇陣營或職業分類', busy: '上一批還在開啟中', bagfull: '卡包空位不足,先熔鍊或任用', ticket: '指名券不足' };
 
 function cuNamedCss() {
   if (typeof document === 'undefined' || !document.head || document.getElementById('cuNamedStyle')) return;
@@ -53,7 +53,7 @@ function cuNamedHtml(cs) {
   h += '<div class="cusub">' + (fac ? '指定陣營:該陣營的人物,金 / 紫檔可能出現該陣營名人(重複者化為信物)。' : '指定職業分類:主職業取自該分類;不出名人。') + '</div>';
   canDraw = !b && tk >= 1 && !full;
   if (!b) h += '<button class="cub" data-a="ndraw"' + (canDraw ? '' : ' disabled') + '>招募一次(消耗 1 券)</button>';
-  if (!b && full) h += '<div class="cuwarn">卡包空位不足 ' + CARD_BAG.batchNeed + ' 張,先分解或任用卡包裡的人(不會扣券)。</div>';
+  if (!b && full) h += '<div class="cuwarn">卡包空位不足 ' + CARD_BAG.batchNeed + ' 張,先熔鍊或任用卡包裡的人(不會扣券)。</div>';
   if (cu.msg) h += '<div class="cuwarn">' + cuEsc(cu.msg) + '</div>';
   return h + cuLastHtml('N');
 }

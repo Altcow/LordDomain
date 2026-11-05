@@ -13,7 +13,7 @@ function cuAcCourseRow(chk, attrs, btn) {
 function cuAcademyHtml(cs, e) {
   var A = CARD_ACADEMY, I = academyInfo(cs), s = e.study, h = '<div class="cusec">學院進修</div>', now = Date.now(), min = Math.round(A.lessonSec / 60), chk, k, first = null, rows = '', chips = '';
   h += '<div class="cusub" style="opacity:1">' + (I.lv ? '學院:' + cuEsc(I.name) + '(院級 ' + I.lv + ')· 進修席 ' + I.used + '/' + I.seats : '學院尚未開放(研〈郡國學校〉並建學舍)') +
-    ' · 已進修 ' + (e.sn | 0) + ' 次 · 升階 ' + (e.up | 0) + '/' + CARD_CFG.upMax + '<br>1 課約遊玩 ' + min + ' 分鐘(離線不推進);花費以碎片(卡包分解所得)與金幣支付。</div>';
+    ' · 已進修 ' + (e.sn | 0) + ' 次 · 升階 ' + (e.up | 0) + '/' + CARD_CFG.upMax + '<br>1 課約遊玩 ' + min + ' 分鐘(離線不推進);花費以碎片(卡片熔爐所得)與金幣支付。</div>';
   if (e.fig) return h + '<div class="cusub">名人不進修、不升階。</div>';
   if (s) {
     h += '<div class="cusub" style="opacity:1"><b>進修中</b>:' + cuEsc(s.k === 'up' ? '升階 ' + CARD_GRADE[e.gr].name + '→' + CARD_GRADE[Math.min(4, e.gr + 1)].name : (s.k === 'adv' ? '精進 ' : '習藝 ') + acadJobName(s.j)) +

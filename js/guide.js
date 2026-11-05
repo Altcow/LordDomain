@@ -1,5 +1,5 @@
 // js/guide.js — 新手指引教學:功能第一次開放(或第一次進到該畫面)時,以聚光孔 + 說明氣泡「引導一次」。
-// 與新手任務(progui.js 的任務條 / 任務清單)是不同系統,互不影響;狀態存 localStorage 'lorddomain.guide.v1' = {seen:{主題id:1}, off:0/1}。
+// 與新手指引任務條(progui.js 的任務條 / 任務清單)是不同系統,互不影響;狀態存 localStorage 'lorddomain.guide.v1' = {seen:{主題id:1}, off:0/1}。
 // 主題一律寫在下面 GUIDE_TOPICS(日後新增功能的教學只要加一項)。開放等級不寫死:feat 對應 PROG_UNLOCK_FEATURE,等級由 progUnlockLv 取。
 // 全域名稱:GUIDE_TOPICS guidePlay guideQueue guideTick guideSkip guideActive guideOff guideSetOff guideReset guideListOpen guideListClose guideTopicLv;其餘內部一律 gd / gdXxx。
 // UI 層檔案,可使用 Date.now / setInterval(不碰模擬層)。
@@ -28,7 +28,6 @@ var GUIDE_TOPICS = [
   ] },
   { id: 'sidebar', title: '右側按鈕列', feat: null, mode: 'estate', steps: [
     { target: ['#sideBar [data-px="slots"]', '#sideMore'], text: '這顆是版面選擇:可以存 3 份經營布置,點一格就換成那份。' },
-    { target: '#sideBar [data-px="quest"]', text: '任務:打開任務清單,看現在該做什麼。' },
     { target: '#sideBar [data-px="edit"]', text: '布置:另開一份草稿慢慢設計,不影響正在用的城。' },
     { target: '#sideBar [data-px="shop"]', text: '商店:在這裡買東西。' },
     { target: '#sideBar [data-px="mode"]', text: '精簡:把介面縮小,讓畫面更大。' }

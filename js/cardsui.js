@@ -12,8 +12,8 @@ var CU_LIVE_CITY = '城建類:資料已備,派駐於對口建築時計入;產出
 var CU_LIVE_WAR = '戰事重開後生效(城建專注模式不啟用)';
 var cuMiss = {};
 var cu = { open: false, tab: 'O', detail: null, confirm: null, el: null, timer: 0, msg: '', info: null, chain: false, nmode: 'fac', nkey: 0, revealing: false, last: null,
-  bf: -1, br: '', bs: 'gr', bn: 1, bsel: {}, bid: null, ble: 0, bpend: null };   // bf.. = 卡包分頁狀態(品階 / 職業分類篩選、排序、頁數、勾選、詳情、一鍵分解門檻、待確認)
-var CU_OPEN_MSG = { none: '尚無新批次', busy: '上一批還在開啟中', bagfull: '卡包空位不足,先分解或任用', closed: '尚未開放', bad: '請先選擇陣營或職業分類', ticket: '指名券不足' };
+  bf: -1, br: '', bs: 'gr', bn: 1, bsel: {}, bid: null, ble: 0, bpend: null };   // bf.. = 卡包分頁狀態(品階 / 職業分類篩選、排序、頁數、勾選、詳情、一鍵熔鍊門檻、待確認)
+var CU_OPEN_MSG = { none: '尚無新批次', busy: '上一批還在開啟中', bagfull: '卡包空位不足,先熔鍊或任用', closed: '尚未開放', bad: '請先選擇陣營或職業分類', ticket: '指名券不足' };
 
 function cuEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function cardsUiFmtCd(ms) {
@@ -175,7 +175,7 @@ function cuVenueHtml(cs, v) {
   if (v === 'E') h += '<div class="cusub">文鬥小遊戲尚未實作,評等暫以 1 星計</div>';
   h += cuBagLine(cs);
   h += '<button class="cub" data-a="open" data-v="' + v + '"' + (n && !full ? '' : ' disabled') + '>' + (n ? '開啟下一批(' + V.batch + ' 張入卡包)' : '尚無新批次') + '</button>';
-  if (n && full) h += '<div class="cuwarn">卡包空位不足 ' + CARD_BAG.batchNeed + ' 張,新批暫存不開;請先分解或任用卡包裡的人。</div>';
+  if (n && full) h += '<div class="cuwarn">卡包空位不足 ' + CARD_BAG.batchNeed + ' 張,新批暫存不開;請先熔鍊或任用卡包裡的人。</div>';
   if (cu.msg) h += '<div class="cuwarn">' + cuEsc(cu.msg) + '</div>';
   return h + cuLastHtml(v);
 }
@@ -189,7 +189,7 @@ function cuRevealThen(cards, done, quick) {
   cu.revealing = true;
   try { cardsRevealPlay(cards, once); } catch (e) { once(); }
 }
-// 結果摘要累計:chain 時多批合併成一份。items 的 how:bag 入包 auto 自動分解 token 化為信物 shard 信物已滿轉碎片
+// 結果摘要累計:chain 時多批合併成一份。items 的 how:bag 入包 auto 自動熔爐 token 化為信物 shard 信物已滿轉碎片
 function cuLastAdd(label, tab, res, fresh) {
   var L = cu.last;
   if (fresh || !L) L = cu.last = { label: label, tab: tab, batches: 0, items: [], added: 0, dissolved: 0, tokenN: 0, shardN: 0, shards: 0, tokens: 0, lost: 0 };
@@ -220,7 +220,7 @@ function cuDoOpen(cs, v) {
 function cuItemRow(it) {
   var c = it.c, G = CARD_GRADE[c.gr], j = CARD_JOB_BY_ID[c.main], corner = '', i, tag;
   for (i = 0; i < G.corner; i++) corner += '◆';
-  tag = { bag: '入卡包', auto: '自動分解 +' + (it.shards | 0) + ' 碎', token: '已有此人 → 信物 +1', shard: '信物已滿 → ' + (it.shards | 0) + ' 碎' }[it.how] || '';
+  tag = { bag: '入卡包', auto: '自動熔爐 +' + (it.shards | 0) + ' 碎', token: '已有此人 → 信物 +1', shard: '信物已滿 → ' + (it.shards | 0) + ' 碎' }[it.how] || '';
   return '<div class="cur" style="border-left:5px solid var(--gr' + c.gr + ');padding-left:6px"><span><b>' + G.ch + corner + '</b> ' + cuEsc(c.name) + (c.fig ? ' <span class="cusub">名人</span>' : '') +
     '<span class="cusub"> ' + (j ? j.t[(c.ja[c.main] || 1) - 1] : '') + '</span></span><span class="cusub">' + tag + '</span></div>';
 }
@@ -230,11 +230,11 @@ function cuLastHtml(tab) {
   if (!L || (tab && L.tab !== tab)) return '';
   n = L.items.length;
   h = '<div class="cusec">' + cuEsc(L.label) + ' · 開 ' + L.batches + ' 批 ' + n + ' 張</div>';
-  h += '<div class="cusub">入卡包 ' + L.added + (L.dissolved ? ' · 自動分解 ' + L.dissolved : '') + (L.tokenN ? ' · 化為信物 ' + L.tokenN : '') + (L.shardN ? ' · 信物滿轉碎片 ' + L.shardN : '') +
-    (L.shards || L.tokens ? ' · 碎片 +' + L.shards + (L.tokens ? '(酒令 +' + L.tokens + ')' : '') : '') + (L.lost ? ' · 超出本週上限 ' + L.lost + ' 碎未計' : '') + '</div>';
+  h += '<div class="cusub">入卡包 ' + L.added + (L.dissolved ? ' · 自動熔爐 ' + L.dissolved : '') + (L.tokenN ? ' · 化為信物 ' + L.tokenN : '') + (L.shardN ? ' · 信物滿轉碎片 ' + L.shardN : '') +
+    (L.shards ? ' · 碎片 +' + L.shards : '') + '</div>';
   show = n <= 7 ? L.items : L.items.filter(function (it) { return it.c.gr >= 3 || it.c.fig; }).slice(0, 24);
   show.forEach(function (it) { h += cuItemRow(it); });
-  if (show.length < n) h += '<div class="cusub">(其餘 ' + (n - show.length) + ' 張為青藍以下,已入卡包或自動分解)</div>';
+  if (show.length < n) h += '<div class="cusub">(其餘 ' + (n - show.length) + ' 張為青藍以下,已入卡包或自動熔爐)</div>';
   return h;
 }
 
@@ -253,7 +253,7 @@ function cuRosterHtml(cs) {
 function cuRowHtml(e, wait, wander) {
   var G = CARD_GRADE[e.gr], j = CARD_JOB_BY_ID[e.main], corner = '', i;
   for (i = 0; i < G.corner; i++) corner += '◆';
-  return '<div class="cur" data-a="detail" data-id="' + e.id + '" style="border-left:5px solid var(--gr' + e.gr + ');padding-left:6px;min-height:44px;cursor:pointer"><span><b>' + G.ch + corner + '</b> ' + cuEsc(e.name) + ' ' + (e.star ? '🔒' : '') +
+  return '<div class="cur" data-a="detail" data-id="' + e.id + '" style="border-left:5px solid var(--gr' + e.gr + ');padding-left:6px;min-height:44px;cursor:pointer"><span><b>' + G.ch + corner + '</b> ' + cuEsc(e.name) + ' ' + (e.star ? '🔒' : '') + (e.starLv ? '★' + e.starLv + ' ' : '') +
     '<span class="cusub"> ' + (j ? j.t[(e.ja[e.main] || 1) - 1] : '') + (e.at ? ' · 派駐' : '') + (e.study ? ' · 進修中' : '') + '</span></span><span class="cusub">才 ' + e.tai + (wait ? ' · 待定' : '') + (wander ? ' · 流浪' : '') + '</span></div>';
 }
 function cuDetailHtml(cs, f) {
@@ -268,6 +268,7 @@ function cuDetailHtml(cs, f) {
   chk = cardsUpgradeCheck(e, cardsUiCtx());
   if (typeof cuAcademyHtml === 'function' && f.list === 'roster') h += cuAcademyHtml(cs, e);   // 學院進修 / 升階(academyui.js)
   else h += '<div class="cusec">升階</div><div class="cusub" style="opacity:1">' + (chk.ok ? '條件已達' : cuEsc(chk.reasons.join(';'))) + '</div>';
+  if (typeof cuStarHtml === 'function' && f.list !== 'wander') h += cuStarHtml(cs, e);   // 強化(升星,卡片熔爐碎片;cardsui_bag.js)
   if (typeof cuNpcDetailHtml === 'function') h += cuNpcDetailHtml(cs, e, f);   // 親近 / 所在 / 請託 / 升階(npcui.js)
   h += '<div class="cusec">管理</div>';
   if (f.list === 'wait') h += '<button class="cub" data-a="accept" data-id="' + e.id + '"' + (cs.roster.length >= cardsCap() ? ' disabled' : '') + '>收入名冊</button>';
@@ -275,7 +276,8 @@ function cuDetailHtml(cs, f) {
   if (f.list !== 'wander') h += '<button class="cub" data-a="star" data-id="' + e.id + '">' + (e.star ? '🔒 已鎖定(點此解除)' : '鎖定(防止誤請辭)') + '</button>';
   if (f.list !== 'wander' && cu.confirm !== e.id) h += '<button class="cub warn" data-a="rel" data-id="' + e.id + '">請辭</button>';
   if (cu.confirm === e.id) {
-    var back = e.fig ? '名人將轉為流浪,可花酒令請回。' : '返還 ' + Math.round((e.cost || 0) * CARD_WINE.refundRate * CARD_WINE.shardPerToken) + ' 酒令碎片(5 碎 = 1 令,每週有上限)。';
+    var back = e.fig ? '名人將轉為流浪,可花酒令請回。' : '返還 ' + Math.round((e.cost || 0) * CARD_WINE.refundRate * CARD_WINE.shardPerToken) + ' 碎片。';
+    if (e.starLv) back += '已投入升星的碎片不退還。';
     h += '<div class="cuwarn">確定請辭「' + cuEsc(e.name) + '」?' + back + (e.at ? ' 目前派駐中,將一併卸任。' : '') + '</div><button class="cub" data-a="relno">否</button><button class="cub warn" data-a="relyes" data-id="' + e.id + '">是,請辭</button>';
   }
   if (cu.msg) h += '<div class="cuwarn">' + cuEsc(cu.msg) + '</div>';
@@ -352,6 +354,7 @@ function cardsUiInfo(kind, key) {
     o.lines.push(['技能', '戰場技能,張數依品階;' + CU_LIVE_WAR]);
     o.lines.push(['武略', '戰、統、謀類詞條,折疊顯示;' + CU_LIVE_WAR]);
     o.lines.push(['🔒', '名冊鎖定,鎖定中無法請辭']);
+    o.lines.push(['★', '強化星數(0~' + CARD_FURNACE.starMax + '),用卡片熔爐的碎片在名冊詳情升星;每星攻 / 防 / HP +' + Math.round(CARD_FURNACE.starBonus.atk * 100) + ' %,' + CARD_FURNACE.starBonus.skillStar + ' 星起技能強化、' + CARD_FURNACE.starBonus.markStar + ' 星專屬標記;與 🔒 無關']);
     o.lines.push(['點擊', '詞條、技能、職業、才字都可以點開看說明']);
     return o;
   }
