@@ -1,7 +1,7 @@
 // glr.js — 經營板繪圖後端:薄介面 rq*(R0.5)+ WebGL 合成原型(R1)。PLAN_RENDER.md「R0.5/R1 實作紀錄」
 // 載入順序:art.js 之後、render.js 之前。本檔只在 draw() 執行期被呼叫,載入時不碰 DOM。
 //
-// 架構(旗標 RENDER.backend = 'c2d' | 'gl',預設 'c2d';localStorage 'lorddomain.render',網址 ?gl=1 / ?gl=0 暫時覆蓋):
+// 架構(旗標 RENDER.backend = 'c2d' | 'gl',預設 'gl'(沒存過偏好時;不支援/失敗會自動退回 c2d 並寫入偏好);localStorage 'lorddomain.render',網址 ?gl=1 / ?gl=0 暫時覆蓋):
 //   c2d  :rq* 全部直接轉成原本的 ctx 呼叫(drawImage / fill / save / translate…),輸出與改前逐指令相同。
 //   gl   :三層疊放 —— #game(2D,底:背景 + 地形 + 其他 2D)→ GL 畫布(中:物件 sprite、遠景色塊、居民 sprite 與色點)
 //          → 疊加層 2D 畫布(頂:預覽 / 草稿 / 光暈 / 動畫件 / HUD)。物件與居民依畫家順序進同一個批次,一幀一次 drawElements。
@@ -11,7 +11,7 @@
 
 var RENDER_KEY = 'lorddomain.render';
 var RENDER = {
-  backend: 'c2d',      // 偏好旗標('c2d' | 'gl');設定頁與網址參數寫這裡
+  backend: 'gl',       // 偏好旗標('c2d' | 'gl');設定頁與網址參數寫這裡
   active: false,       // 本幀實際走 GL
   status: 'off',       // off | init | ready | lost | failed | disabled
   reason: '',          // 最近一次停用 / 失敗原因
@@ -47,7 +47,7 @@ var RENDER = {
 
   // ---------- 旗標存取 ----------
   function prefLoad() {
-    var v = 'c2d';
+    var v = 'gl';
     try { if (typeof localStorage !== 'undefined') { var s = localStorage.getItem(RENDER_KEY); if (s === 'gl' || s === 'c2d') v = s; } } catch (e) { /* 私密模式等:用預設 */ }
     try {
       if (typeof location !== 'undefined' && location.search) {

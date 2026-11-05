@@ -13,6 +13,7 @@
 var TRS_DIR = 'assets/traffic/';
 var TRS_FILL = 0.9;     // 圖寬 = 視覺佔地菱形寬 × 此比例
 var TRS_AY = 0.9;       // 錨點(腳底)在圖高的比例
+var TRS_FLOOR = 3;   // 小城保底車馬數(受 trafficCap 約束,夜間 / 低階 / 省電隨 cap 下降)
 var TRS_CAP = { off: 0, low: 2, mid: 4, high: 6, crowd: 6 };   // 街景車馬(組)上限,依有效密度
 var TRS_KINDS = {
   horse:       { fp: [1, 1], rw: 96,  name: '馬' },
@@ -180,11 +181,16 @@ function trafficCap() {
 }
 // wagon + rider 的目標合計不超過 trafficCap();騎馬者佔約 1/3,至少 1(上限 1 時只留一輛車)
 function trafficTargetsClamp(tg) {
-  var cap = trafficCap(), rd, wg;
+  var cap = trafficCap(), rd, wg, fl;
   if (cap <= 0) { tg.wagon = 0; tg.rider = 0; return tg; }
   if (cap === 1) { rd = 0; wg = 1; } else { rd = Math.max(1, Math.floor(cap / 3)); wg = cap - rd; }
   if (tg.rider > rd) tg.rider = rd;
   if (tg.wagon > wg) tg.wagon = wg;
+  // 保底:有路網時(原始需求 > 0)小城也至少常有 min(cap, 3) 輛車馬(車 2 : 馬 1),不再被小城的低需求拉到 1~2 輛
+  if (tg.wagon + tg.rider > 0 && cap >= 2) {
+    fl = Math.min(cap, TRS_FLOOR);
+    while (tg.wagon + tg.rider < fl) { if (tg.wagon <= tg.rider * 2 && tg.wagon < wg) tg.wagon++; else if (tg.rider < rd) tg.rider++; else tg.wagon++; }
+  }
   return tg;
 }
 

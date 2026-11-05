@@ -63,7 +63,7 @@ function gthCapUpdate() {
 }
 function gthMemberCap() {
   const base = (GATHER.prefilling || LIFE.live <= 0) ? LIFE.target : LIFE.live;
-  return Math.min(GATHER.cap.members, Math.floor(Math.max(base, 6) * GATHER_MEMBER_RATIO + 0.5));
+  return Math.min(GATHER.cap.members, Math.floor(Math.max(base, GATHER_MEMBER_BASE[GATHER.tier]) * GATHER_MEMBER_RATIO[GATHER.tier] + 0.5));
 }
 // 閘門:拍照 / 錄影 / 全景不畫提示圖示(人與棋局照畫)
 function gthUiOk() {

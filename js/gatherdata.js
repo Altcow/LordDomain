@@ -27,7 +27,8 @@ const GATHER_CAP = {
   few:  { groups: 2, members: 6,  per: 4,  pose: 6,  watch: 2 }
 };
 const GATHER_SPOT_MAX = 12;       // 每種聚集點最多幾個(超過依雜湊等距抽樣)
-const GATHER_MEMBER_RATIO = 0.55; // 聚集成員 ≤ 目前居民數 × 55%(保留一半以上的人在路上走)
+const GATHER_MEMBER_RATIO = { high: 0.8, mid: 0.8, low: 0.55, save: 0.55, few: 0.55 }; // 聚集成員 ≤ 目前居民數 × 比例(高 / 一般 80%,小城也熱鬧;低階 / 省電 / 少 維持 55%)
+const GATHER_MEMBER_BASE = { high: 8, mid: 8, low: 6, save: 6, few: 6 };  // 居民數保底(小城居民不足時以此計,仍受 GATHER_CAP.members 與 ≤ 居民數 約束)
 
 // 物件 → 聚集點。k = 種類;seats = 座位數(人坐在物件上);gz = 坐下時身體抬高(px);bz = 棋盤面高度(px,畫棋子用)
 //   shade = 樹蔭(站在四周乘涼)、well = 井邊站著聊、tea = 茶座(站著喝茶)、cargo = 港口貨堆(苦力歇腳)

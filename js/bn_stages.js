@@ -2,7 +2,7 @@
 // 設計原則:戰鬥沒有小兵,每個單位都是一位武將;敵方每關 = 3~5 位『敵將』(各有名字、稱號、外觀鍵 foe:*)。兵種(盾步騎弓謀)只代表武將的戰鬥類型。
 // 依賴(載入順序):carddata.js、cards.js(可缺)、bn_data.js、bn_skills_data.js、bn_units.js。純邏輯、無 DOM;外部全域(world cardsGet 等)一律 typeof 守衛,測試以 env 注入。
 // 所有數字 PLACEHOLDER(v 陣列由 tools/bn_stage_check.js 解出,見 tools/bn_stage_report.md)。ES2017;不用 ?. ??。
-// 全域:BN_STG BN_STG_ARCH BN_CHAPTERS BN_STAGES BN_STG_BY_ID bnStgById bnStgFoes bnStgSolveV bnStgBountyDef bnStgEnv bnStgDayNo bnStgWeekNo bnStgNorm bnStgPack bnStgOrders bnStgRepLeft bnStgUnlock bnStgCanStart bnStgRewards bnStgSettle bnStgBountySettle bnStgChapterStars
+// 全域:BN_STG BN_STG_ARCH BN_CHAPTERS BN_STAGES BN_STG_BY_ID BN_STG_SKILL_OVR bnStgById bnStgFoes bnStgFoeSkills bnStgSkPoolsbnStgSolveV bnStgBountyDef bnStgEnv bnStgDayNo bnStgWeekNo bnStgNorm bnStgPack bnStgOrders bnStgRepLeft bnStgUnlock bnStgCanStart bnStgRewards bnStgSettle bnStgBountySettle bnStgChapterStars
 
 var BN_STG = {
   perDay: 5, store: 5,                       // 軍令:每日 +5、最多存 store(=perDay 即每日重置;PLAN 預設存 10 可改此值)
@@ -11,34 +11,38 @@ var BN_STG = {
   shards1: 5, shardsRep: 1, bookRepP: 0.05, matRepP: 0.5,
   bounty: { gold: 200, shards: 1, goods: 1, lo: 0.95, hi: 1.05, k: 1.15 },   // 敵方戰力 × k = 建議戰力口徑(流寇敵將編制較整齊、無名人,實測 k=1.15 使最強隊勝率約 45~55%)
   // 敵將五維基準 v(逐關,36 個;由 tools/bn_stage_check.js 解出);grOf = 各章敵將品階
-  v: [26.8,30.5,22.5,28.6,33.2,32.5,37.7,41.9,51.4,45,47.4,45.2,41.4,41.9,45.6,47.7,51,47.6,49.5,51.3,60.7,59.5,59.4,61.5,50.5,55,68.3,60.5,68.6,76.1,63.5,66.4,68.8,70.5,67.7,69],
+  v: [30.5,37.7,29.5,29.5,35,38.3,44.5,47.6,54.3,48.1,45.9,44.3,44.1,45.9,46.9,54.5,55.6,50.5,46.5,47.5,52.6,57,52.6,50.6,65.6,58.7,63.9,65,69.4,72.1,65.9,59.5,58.6,70.5,63.9,65],
   grOf: [0, 0, 1, 1, 2, 2, 3],
-  // 各章第 j 關起,敵將多帶一個戰法(依站位輪替)
+  // 各章第 j 關起,小怪 / 精英多抽一個戰法
   extraFrom: 3,
-  rk: [1.193,1.194,1.035,0.983,0.986,1.05,1.168,1.133,0.99,1.057,1.005,1.05,1.128,1.171,1.033,1.104,1.05,1.067,1.063,1.088,1,0.983,1.025,0.993,1.121,1.106,0.986,1.06,1.014,1,1.042,1.014,1,0.98,1.083,1.019],                                    // 逐關建議戰力校正(36 個;使『我方戰力 = 建議戰力』約 50% 勝率,由 bn_stage_check --tune 解出)
+  // 敵將戰法(關卡固定,不走名冊 autoLearn):依『關卡 id + 站位』雜湊抽取,同一關每次一致。
+  // hardKinds / L 級 = 強戰法(只給精英 / 頭目);bossAdd = 各兵種頭目額外可抽的強戰法;bossN = 非名人頭目戰法數(依章);名人頭目保留名人戰法再加 bossFigAdd 個
+  foeSk: { hardKinds: ['stun', 'silence', 'fear', 'reorder'], hardPow: ['L', 'XL'], bossN: [0, 3, 3, 3, 3, 3, 3], bossFigAdd: 1,
+    bossAdd: { '步': ['g_chongfeng', 'g_huwei', 'g_haoling'], '騎': ['g_chongfeng', 'g_huwei', 'g_jixing'], '弓': ['g_banma', 'g_yibing', 'g_huwei'], '盾': ['g_jianbi', 'g_huwei', 'g_zhenshe'], '謀': ['g_chuanxi', 'g_haoling', 'g_miaoshou'] } },
+  rk: [1.161,1.1,0.95,1.01,0.993,0.981,1.1,1.093,0.993,1.061,1.06,1.086,1.117,1.138,1.043,1.045,1.021,1.05,1.142,1.175,1.134,1.045,1.142,1.144,0.979,1.089,1.064,1.042,1.037,1.042,1.04,1.114,1.142,1,1.157,1.07],                                    // 逐關建議戰力校正(36 個;使『我方戰力 = 建議戰力』約 50% 勝率,由 bn_stage_check --tune 解出)
   recK: 1.0                                  // 建議戰力 = 敵將隊戰力 × recK(使『我方戰力 = 建議戰力』約 50% 勝率;由 bn_stage_check --kfit 解出)
 };
 
-// 敵將類型(只是戰鬥類型 + 外觀 + 戰法):prof = 五維相對比例 [統 武 智 政 魅]
+// 敵將類型(只是戰鬥類型 + 外觀 + 戰法):prof = 五維相對比例 [統 武 智 政 魅];skills = 該類型的招牌戰法(併入抽取池,keep = 一定帶);elite = 精英(抽強戰法)
 var BN_STG_ARCH = {
   bd_blade: { look: 'bandit_blade', troop: '步', prof: [1, 1.1, 0.8, 0.8, 0.9], skills: ['g_zhan'], ult: 'u_inf' },
   bd_hunter: { look: 'bandit_hunter', troop: '弓', prof: [0.9, 1.1, 0.9, 0.8, 0.9], skills: ['g_lianshe'], ult: 'u_arc' },
-  bd_chief: { look: 'bandit_chief', troop: '步', prof: [1.1, 1.15, 0.85, 0.85, 1], hpK: 1.2, skills: ['g_chongfeng'], ult: 'u_inf' },
+  bd_chief: { look: 'bandit_chief', troop: '步', prof: [1.1, 1.15, 0.85, 0.85, 1], hpK: 1.2, elite: 1, skills: ['g_chongfeng'], ult: 'u_inf' },
   yt_blade: { look: 'yt_blade', troop: '步', prof: [1, 1.1, 0.8, 0.85, 0.9], skills: ['g_zhan'], ult: 'u_inf' },
   yt_brute: { look: 'yt_brute', troop: '盾', prof: [1.15, 1, 0.7, 0.8, 0.9], skills: ['g_tiebi'], ult: 'u_shield' },
   yt_mystic: { look: 'yt_mystic', troop: '謀', prof: [0.8, 0.7, 1.15, 1, 0.9], skills: ['g_huogong'], ult: 'u_str' },
-  yt_healer: { look: 'yt_mystic', troop: '謀', prof: [0.85, 0.7, 1.05, 1.15, 0.9], skills: ['g_liaoshang'], ult: 'u_heal' },
+  yt_healer: { look: 'yt_mystic', troop: '謀', prof: [0.85, 0.7, 1.05, 1.15, 0.9], keep: 1, skills: ['g_liaoshang'], ult: 'u_heal' },
   cl_shield: { look: 'clan_shield', troop: '盾', prof: [1.15, 1, 0.75, 0.9, 0.9], skills: ['g_gushou'], ult: 'u_shield' },
   cl_xbow: { look: 'clan_xbow', troop: '弓', prof: [0.9, 1.1, 0.95, 0.85, 0.9], skills: ['g_qishe'], ult: 'u_arc' },
   cl_scholar: { look: 'clan_retainer', troop: '謀', prof: [0.8, 0.7, 1.15, 1.05, 0.95], skills: ['g_lijian'], ult: 'u_str' },
-  cl_retainer: { look: 'clan_retainer', troop: '騎', prof: [1, 1.15, 0.9, 0.85, 1], hpK: 1.1, skills: ['g_xianzhen'], ult: 'u_cav' },
+  cl_retainer: { look: 'clan_retainer', troop: '騎', prof: [1, 1.15, 0.9, 0.85, 1], hpK: 1.1, elite: 1, skills: ['g_xianzhen'], ult: 'u_cav' },
   hu_rider: { look: 'hu_rider', troop: '騎', prof: [0.95, 1.15, 0.8, 0.8, 0.95], skills: ['g_chongfeng'], ult: 'u_cav' },
   hu_archer: { look: 'hu_archer', troop: '弓', prof: [0.9, 1.1, 0.9, 0.8, 0.9], skills: ['g_chuanyun'], ult: 'u_arc' },
   hu_shaman: { look: 'hu_shaman', troop: '謀', prof: [0.8, 0.7, 1.15, 1, 0.95], skills: ['g_leifa'], ult: 'u_str' },
-  rb_captain: { look: 'clan_retainer', troop: '步', prof: [1.1, 1.1, 0.85, 0.9, 1], hpK: 1.15, skills: ['g_poqiang'], ult: 'u_inf' }
+  rb_captain: { look: 'clan_retainer', troop: '步', prof: [1.1, 1.1, 0.85, 0.9, 1], hpK: 1.15, elite: 1, skills: ['g_poqiang'], ult: 'u_inf' }
 };
 
-// 章資料:roster 項目 = [類型, 名字, 稱號] 或 {fig, title}(名人敵將,用名人戰法);extra = 後段關卡加帶的戰法;mats = 材料(主, 副);books = 兵書(戰法 id)
+// 章資料:roster 項目 = [類型, 名字, 稱號] 或 {fig, title, skills?}(名人敵將,用名人戰法;skills = 手動覆寫);extra = 該章敵將戰法抽取池的章節特色戰法;mats = 材料(主, 副);books = 兵書(戰法 id)
 var BN_CHAPTERS = [
   { n: 1, name: '山賊', sub: '盤踞山林的劫道匪首', rank: 1, extra: ['g_poqiang'], mats: ['g_tiekuang', 'mat_niupi'], books: ['g_zhan', 'g_lianshe', 'g_chongfeng'],
     roster: [['bd_blade', '虎三', '山賊刀客'], ['bd_blade', '黑牛', '山賊悍匪'], ['bd_hunter', '賈七', '山賊獵手'], ['bd_hunter', '山貓', '山賊弓匪'], ['bd_chief', '周大膽', '山賊頭目'], ['bd_chief', '鐵頭陳', '黑風寨主']] },
@@ -115,16 +119,48 @@ function bnStgV(st) {
 }
 
 // ───────── 敵將產生 ─────────
-function bnStgMakeFoe(ent, v, ch, pos, st) {
+// 手動覆寫敵將戰法:BN_STG_SKILL_OVR['章-關'][站位] = [戰法 id...](站位 = 該關 foeIdx 的順序,0 起);roster 條目為物件時也可帶 skills
+var BN_STG_SKILL_OVR = {};
+function bnStgHardSk(id) { var d = BN_SKILLS[id], F = BN_STG.foeSk; return !!d && (F.hardPow.indexOf(d.power) >= 0 || F.hardKinds.indexOf(d.kind) >= 0); }
+// 敵將戰法抽取池:normal = 小怪可抽(非強控、非 L 級);strong = 精英 / 頭目專屬強戰法
+function bnStgSkPools(troop, arch, ch) {
+  var nm = [], sg = [], F = BN_STG.foeSk;
+  function add(id) { var d = BN_SKILLS[id]; if (!d || d.cat === 'passive' || nm.indexOf(id) >= 0 || sg.indexOf(id) >= 0) return; (bnStgHardSk(id) ? sg : nm).push(id); }
+  (arch ? arch.skills : []).forEach(add);
+  BN_GENERIC.skills.forEach(function (id) { var f = BN_SKILLS[id].fit || {}; if (f.troops && f.troops.indexOf(troop) >= 0) add(id); });
+  (ch.extra || []).forEach(function (id) { var f = BN_SKILLS[id] && BN_SKILLS[id].fit || {}; if (!f.troops || f.troops.indexOf(troop) >= 0) add(id); });   // 章節特色:不限兵種或兵種相符者
+  (F.bossAdd[troop] || []).forEach(function (id) { if (BN_SKILLS[id] && BN_SKILLS[id].cat !== 'passive' && nm.indexOf(id) < 0 && sg.indexOf(id) < 0) sg.push(id); });
+  return { normal: nm, strong: sg };
+}
+// 依種子(關卡 id + 站位)確定性抽取。kind = 'minion' | 'elite' | 'boss' | 'figboss'。回戰法 id 陣列(名人頭目回『額外』戰法)
+function bnStgFoeSkills(sk, pos, kind, troop, arch, ch, more) {
+  var P = bnStgSkPools(troop, arch, ch), rng = bnRng(bnHash('bnfoe', sk, pos)), out = [], n, nStrong, all;
+  function pick(pool) { var k; pool = pool.filter(function (id) { return out.indexOf(id) < 0; }); if (!pool.length) return; k = Math.floor(rng() * pool.length); out.push(pool[k]); }
+  if (arch && arch.keep) out.push(arch.skills[0]);
+  if (kind === 'figboss') { n = BN_STG.foeSk.bossFigAdd; nStrong = n; }
+  else if (kind === 'boss') { n = BN_STG.foeSk.bossN[ch.n] || 2; nStrong = 1; }
+  else if (kind === 'elite') { n = more ? 2 : 1; nStrong = 1; }
+  else { n = more ? 2 : 1; nStrong = 0; }
+  all = P.strong.concat(P.normal);
+  while (out.length < n) {
+    var before = out.length;
+    pick(out.length < nStrong + (arch && arch.keep ? 1 : 0) && P.strong.length ? P.strong : (kind === 'minion' ? P.normal : all));
+    if (out.length === before) break;
+  }
+  return out;
+}
+function bnStgMakeFoe(ent, v, ch, pos, st, sk) {
   var fig = ent.fig ? BN_FIG_SKILLS[ent.fig] : null, arch = fig ? null : BN_STG_ARCH[ent[0]], troop = fig ? fig.troop : arch.troop, p = arch ? arch.prof : [1, 1, 1, 1, 1],
-    gr = BN_STG.grOf[ch.n] | 0, vk = ent.vk || (st && st.boss && pos === 0 ? 1.05 : 1), card, spec, apt = {}, i, ex;
+    gr = BN_STG.grOf[ch.n] | 0, boss = !!(st && st.boss && pos === 0), vk = ent.vk || (boss ? 1.05 : 1), card, spec, apt = {}, ov, more = !!(st && st.idx >= BN_STG.extraFrom);
   card = { id: 'foe', name: fig ? fig.name : ent[1], fig: fig ? ent.fig : '', fac: fig ? fig.fac : 4, gr: gr, st: p.map(function (x) { return Math.max(1, Math.round(v * vk * x)); }), tok: 0, up: 0, ja: {}, tr: [], main: '', learn: 0, sex: '' };
   if (!fig) apt[troop] = 'A';
-  spec = bnUnitSpec(card, { troop: troop, apt: fig ? undefined : apt });
+  spec = bnUnitSpec(card, { troop: troop, apt: fig ? undefined : apt, learned: [] });   // learned: [] = 敵將不走名冊 autoLearn
+  sk = sk || (st ? st.id : 'x');
+  ov = (st && BN_STG_SKILL_OVR[st.id] && BN_STG_SKILL_OVR[st.id][pos]) || (!Array.isArray(ent) && ent.skills);
+  if (ov) spec.skills = ov.filter(function (id) { return !!BN_SKILLS[id]; });
+  else if (fig) { if (boss) bnStgFoeSkills(sk, pos, 'figboss', troop, null, ch, more).forEach(function (id) { if (spec.skills.indexOf(id) < 0) spec.skills.push(id); }); }
+  else spec.skills = bnStgFoeSkills(sk, pos, boss ? 'boss' : (arch.elite ? 'elite' : 'minion'), troop, arch, ch, more);
   if (!fig) {
-    spec.skills = arch.skills.slice();
-    ex = ch.extra;
-    if (st && st.idx >= BN_STG.extraFrom && ex.length) { ex = ex[pos % ex.length]; if (spec.skills.indexOf(ex) < 0) spec.skills.push(ex); }
     spec.ult = arch.ult;
     if (arch.hpK) spec.stats.hp = Math.round(spec.stats.hp * arch.hpK);
   }
@@ -135,8 +171,8 @@ function bnStgMakeFoe(ent, v, ch, pos, st) {
 }
 var BN_STG_FIG_LOOK = { '步': 'bandit_chief', '盾': 'yt_brute', '騎': 'clan_retainer', '弓': 'hu_archer', '謀': 'yt_mystic' };
 // 依 roster 條目與基準 v 組成敵方隊伍。回 {units, power, list, bonds}
-function bnStgBuildTeam(ents, v, ch, st) {
-  var specs = ents.map(function (e, k) { return bnStgMakeFoe(e, v, ch, k, st); }), team, power = 0;
+function bnStgBuildTeam(ents, v, ch, st, sk) {
+  var specs = ents.map(function (e, k) { return bnStgMakeFoe(e, v, ch, k, st, sk); }), team, power = 0;
   bnAutoLayout(specs, null);
   team = bnBuildTeam(specs);
   team.units.forEach(function (u) { power += bnPower(u); });
@@ -153,11 +189,11 @@ function bnStgFoes(id, vOverride) {
   return r;
 }
 // 解出讓隊伍戰力 = target 的 v(二分)
-function bnStgSolveV(ents, ch, st, target) {
+function bnStgSolveV(ents, ch, st, target, sk) {
   var lo = 8, hi = 160, mid, k, p;
   for (k = 0; k < 16; k++) {
     mid = (lo + hi) / 2;
-    p = bnStgBuildTeam(ents, mid, ch, st).power;
+    p = bnStgBuildTeam(ents, mid, ch, st, sk).power;
     if (p < target) lo = mid; else hi = mid;
   }
   return (lo + hi) / 2;
@@ -170,13 +206,14 @@ function bnStgSolveStage(id, target) {
 // ───────── 每日流寇(種子 = hash(世界種子, 日號);敵方戰力 = 我方最強隊 × 0.95~1.05)─────────
 // 回 {id:'B', name, desc, ch, units, power, list, seedKey}
 function bnStgBounty(worldSeed, dayNo, myPower, maxCh) {
-  var rng = bnRng(bnHash('bnbounty', worldSeed | 0, dayNo | 0)), cn = 1 + Math.floor(rng() * Math.max(1, Math.min(6, maxCh || 1))), ch = bnStgChapter(cn), pool = [], ents = [], k, r, tgt, v, team;
+  var rng = bnRng(bnHash('bnbounty', worldSeed | 0, dayNo | 0)), cn = 1 + Math.floor(rng() * Math.max(1, Math.min(6, maxCh || 1))), ch = bnStgChapter(cn), pool = [], ents = [], k, r, tgt, v, team, sk;
   for (k = 0; k < ch.roster.length; k++) if (!ch.roster[k].fig) pool.push(ch.roster[k]);
   while (ents.length < 5 && pool.length) { k = Math.floor(rng() * pool.length); ents.push(pool.splice(k, 1)[0]); }
   r = rng();
   tgt = Math.max(300, (myPower || 1500)) * (BN_STG.bounty.lo + (BN_STG.bounty.hi - BN_STG.bounty.lo) * r) / BN_STG.bounty.k;
-  v = bnStgSolveV(ents, ch, null, tgt);
-  team = bnStgBuildTeam(ents, v, ch, null);
+  sk = 'B:' + (worldSeed | 0) + ':' + (dayNo | 0);   // 流寇戰法種子 = 世界種子 + 日號(同日固定)
+  v = bnStgSolveV(ents, ch, null, tgt, sk);
+  team = bnStgBuildTeam(ents, v, ch, null, sk);
   team.rec = Math.round(team.power * BN_STG.bounty.k);
   team.id = 'B'; team.name = '每日流寇'; team.ch = cn; team.desc = '今日出沒的' + ch.name + '流寇,實力與你的最強隊伍相當。'; team.scene = '';
   return team;
