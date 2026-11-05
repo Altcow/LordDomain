@@ -93,9 +93,19 @@ function bnTraitFold(card, troop) {
 
 // 戰法欄位(§4.8):名人 = json 全部;路人 = 自帶 1 + 學習欄
 function bnSlotCount(card) {
-  var base = [0, 0, 1, 1, 2][card.gr] || 0;
-  if (card.learn === 3 || (card.up | 0) >= 2) base += 1;
-  return Math.min(2, base);
+  var S = BN_DATA.slots, base = S.learnByGr[card.gr] || 0;
+  if (card.learn === 3 || (card.up | 0) >= 2) base += S.learnBonus;
+  return Math.min(S.learnCap, base);
+}
+// 自動學習(BN_DATA.slots.autoLearn):沒有指定 learned 的路人,依卡面雜湊從通用戰法池補滿學習欄。確定性、不改卡
+function bnAutoLearn(card, troop, native, n) {
+  var pool = BN_GENERIC.skills.filter(function (id) {
+    var d = BN_SKILLS[id], f = d.fit || {};
+    return d.cat !== 'passive' && native.indexOf(id) < 0 && ((f.troops && f.troops.indexOf(troop) >= 0) || (f.jobs && card.ja && f.jobs.some(function (j) { return card.ja[j]; })));
+  }), out = [], h = 2166136261, s = String(card.name) + '|' + (card.no || '') + '|' + (card.main || '') + '|' + card.gr, i, k;
+  for (i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0;
+  while (out.length < n && pool.length) { k = h % pool.length; out.push(pool[k]); pool.splice(k, 1); h = (Math.imul(h, 1664525) + 1013904223) >>> 0; }
+  return out;
 }
 function bnNativeSkills(card, troop) {
   var ids = Object.keys(card.ja || {}), main = card.main, out = [], pr, j;
@@ -153,8 +163,9 @@ function bnUnitSpec(card, o) {
     spec.ult = fg.ult;
   } else {
     skills = bnNativeSkills(card, troop);
-    learned = o.learned || card.bnLearn || [];
+    learned = o.learned || card.bnLearn;
     sl = bnSlotCount(card);
+    if (!learned) learned = BN_DATA.slots.autoLearn ? bnAutoLearn(card, troop, skills, sl) : [];
     for (i = 0; i < learned.length && i < sl; i++) if (BN_SKILLS[learned[i]] && skills.indexOf(learned[i]) < 0) skills.push(learned[i]);
     spec.ult = bnUltFor(card, troop);
   }

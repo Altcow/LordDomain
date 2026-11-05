@@ -291,6 +291,7 @@ function advSnapshot() {
   else if (typeof world !== 'undefined' && world && world.objects) objs = world.objects;
   for (i = 0; i < objs.length; i++) {
     o = objs[i]; t = o.type; s.buildings++;
+    if (typeof fxAsList === 'function' && !hs[t] && fxAsList(t).length) { if (fxAsList(t).indexOf('paifang') >= 0) s.hasPaifang = true; t = fxLike(t) || t; }   // 魔幻件視同漢式功能件(市集 / 水井 / 牌坊…)
     if (hs[t]) s.houses++;
     else if (t === 'field_sprout' || t === 'field_millet' || t === 'field_wheat' || t === 'vegetable_plot') { s.fields++; if (t === 'field_millet') s.hasMillet = true; }
     else if (t === 'well' || t === 'well_sweep' || t === 'waterwheel') s.hasWell = true;
@@ -421,7 +422,7 @@ function advGoPlan(go, s) {
     if (go.target === 'center' || !(s && s.worst)) { if (bw) p.cell = { x: Math.floor(bw / 2), y: Math.floor(bw / 2) }; }
     else p.cell = { x: s.worst.x, y: s.worst.y };
   }
-  if (go.kind === 'build') p.tool = go.type;
+  if (go.kind === 'build') p.tool = (typeof fxGoType === 'function') ? fxGoType(go.type) : go.type;   // 魔幻世界:被隱藏的漢式物件換成看得到的魔幻件
   if (go.kind === 'panel') p.panel = go.id;
   if (go.kind === 'tech') p.tech = go.id;
   if (go.kind === 'help') p.stat = go.stat;

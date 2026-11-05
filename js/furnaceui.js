@@ -47,6 +47,7 @@ function furnacePick(cs) {
   if (sel.length) return { ids: sel, src: 'sel' };
   return { ids: cardsBagPick(cs, fu.ble), src: 'le' };
 }
+function furnaceOverFmt(cs) { var m = cardsOverMin(cs, Date.now()), t = Math.max(0, Math.ceil((m.ms || 0) / 60000)); return Math.floor(t / 60) + ':' + (t % 60 < 10 ? '0' : '') + (t % 60); }
 function furnaceSum(cs, ids) { var o = cardsFurnaceSum(cs, ids, false); return { n: o.n, raw: o.shards, top: o.top }; }
 
 function furnaceCss() {
@@ -78,6 +79,7 @@ function furnaceUiHtml(cs) {
   h += '<div class="fustate">' + stateTxt + '</div></div><div class="fuctl">';
   h += '<div class="furow">' + furnaceIcon('shard_crate.webp', 'fuico', '📦', '碎片箱') + '<span>碎片 <b>' + shards + '</b></span>&nbsp;' + furnaceIcon('nameticket.webp', 'fuico', '🎫', '指名券') + '<span>指名券 <b>' + (cs.nameTokens | 0) + '</b></span></div>';
   h += '<div class="fusec">放入要熔的卡(' + (P.src === 'sel' ? '使用卡包內勾選的卡;名人不入' : '點品階一鍵挑選,再點取消;名人不入,需到卡包詳情手動熔') + ')</div>';
+  if (cs.bagOver && cs.bagOver.length) h += '<div class="fuwarn">溢出區 ' + cs.bagOver.length + ' 張(最短剩 ' + furnaceOverFmt(cs) + '),品階挑選與勾選都包含溢出區的卡;熔掉後騰出的空位會自動納入溢出卡。</div>';
   if (P.src === 'sel') h += '<div class="furow"><button data-a="fselclr"' + (running ? ' disabled' : '') + '>清除勾選,改用品階</button></div>';
   else h += '<div class="furow">' + FURNACE_LE.map(function (e) { return '<button' + (fu.ble === e[0] ? ' class="on"' : '') + ' data-a="fle" data-v="' + e[0] + '">品階 ≤ ' + e[1] + '</button>'; }).join('') + '</div>';
   h += '<div class="furow"><span>預覽:<b>' + sum.n + '</b> 張,可得 <b>' + sum.raw + '</b> 碎</span></div>';
@@ -152,7 +154,7 @@ function furnaceAsk(cs) {
   furnaceDo(cs, P.ids);
 }
 function furnaceDo(cs, ids) {
-  var before = cs.shards, r = cardsBagDissolve(cs, ids, { figOk: false }), seq;
+  var before = cs.shards, r = cardsBagDissolve(cs, ids, { figOk: false, now: Date.now() }), seq;
   fu.pend = null;
   if (!r.ok) { fu.msg = (typeof CU_BAG_MSG !== 'undefined' && CU_BAG_MSG[r.reason]) || '無法熔鍊'; return; }
   if (typeof cu !== 'undefined' && cu.bsel) ids.forEach(function (id) { delete cu.bsel[id]; });

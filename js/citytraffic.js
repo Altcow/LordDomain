@@ -37,6 +37,7 @@ function lifeTrafficReset() {
   LIFE.xT = 0;
   LIFE.xSeed = 6;
   LIFE.xCd = {};
+  if (typeof trafficReset === 'function') trafficReset();
 }
 
 // 站得住的格子:可走道路格,或沒有物件的草地 / 道路,且高度與參考相同
@@ -185,6 +186,7 @@ function lifeTrafficBuild(ok) {
     for (i = 0; i < N; i++) if (D2[i] >= 0) { comp++; if (D2[i] > gd) gd = D2[i]; }
     X.span = gd; X.comp = comp;
   }
+  if (typeof trafficBuildZones === 'function') trafficBuildZones(ok);   // 車馬地點:伐木 / 市集 / 庫房驛站碼頭門格(traffic_sprites.js)
 }
 
 function lifeXRoadOk() {
@@ -218,6 +220,7 @@ function lifeXTargets(cnt) {
   else if (night && X.nightN > 0) tg.hawker = f('hawker', Math.min(X.nightN, Math.ceil(X.nStall * 0.8)), 0.4);
   if (!night) tg.onlooker = f('onlooker', 2 * (cnt.hawker || 0) + (X.crowdC.length ? Math.ceil(X.crowdW / 2) : 0), tm);
   else if (tg.hawker > 0) tg.onlooker = f('onlooker', 2 * (cnt.hawker || 0), 0.5);
+  if (typeof trafficTargetsClamp === 'function') trafficTargetsClamp(tg);   // 車馬(wagon + rider)合計上限:高 6 / 一般 4 / 低階省電 2,夜間減半
   return tg;
 }
 
@@ -228,7 +231,7 @@ function lifeXEmit(role, count, start, plan, entry, mid, o) {
   const out = LIFE.npcs.slice(before);
   LIFE.live -= out.length; // lifeEmit 已計入一般居民;街景角色不占居民額度
   out.forEach(function (n) {
-    n.ext = true; n.role = role;
+    n.ext = true; n.role = role; n.tv = null;   // tv:街景車馬的外部圖車型(traffic_sprites.js),無則沿用程式繪製
     if (typeof crowdSpecFor === 'function' && n.spec) { const eth = (typeof fantasyRace === 'function' && fantasyRace()) || (typeof ethnicPick === 'function' && role === 'onlooker') ? ethnicPick((typeof world !== 'undefined' && world.ethRegion) || 'zhongyuan') : undefined; const cs = crowdSpecFor(role, n.spec, undefined, eth); if (cs) { n.spec = cs; LIFE.variantIds[cs.id] = true; } } // 路人零件化外觀(模組缺失時沿用舊外觀)
     n.bub = T.bub || ''; n.bubP = T.bubP || 6; n.frr = T.frr || 4;
     if (LIFE.tod === 'night' && n.spec && (role === 'hawker' || role === 'onlooker') && typeof lifeLantern === 'function') { n.spec = lifeLantern(n.spec); }   // 夜市攤主與客人提燈
@@ -274,10 +277,12 @@ function lifeXSpawnWagon(mid) {
     const c = X.dock.filter(function (d) { return d.cell !== s.start && D[d.cell] >= 0 && (LIFE.dockRes.get(d.cell) || 0) < d.cap; });
     if (c.length) dock = c[Math.floor(Math.random() * c.length)];
   }
-  const ex = lifeXPickExit(dock ? dock.cell : s.start, s.ent);
+  const tz = (typeof trafficWagonPick === 'function') ? trafficWagonPick(dock, s, D) : null;   // 車型與沿途停靠格(伐木 / 市集 / 庫房附近)
+  const ex = lifeXPickExit(dock ? dock.cell : (tz && tz.cell >= 0 ? tz.cell : s.start), s.ent);
   if (!ex) return 0;
   const plan = [];
   if (dock) plan.push({ cell: dock.cell, act: 'park', dur: LIFE_PARK.min + Math.random() * (LIFE_PARK.max - LIFE_PARK.min) });
+  else if (tz && tz.cell >= 0) plan.push({ cell: tz.cell, act: 'stand', dur: 3 + Math.random() * 4 });
   plan.push({ cell: ex.cell, end: 'exit', ent: ex });
   if (dock) LIFE.dockRes.set(dock.cell, (LIFE.dockRes.get(dock.cell) || 0) + 1);
   const out = lifeXEmit('wagon', 1, s.start, plan, s.ent, s.mid, { lane: 0 });
@@ -286,6 +291,7 @@ function lifeXSpawnWagon(mid) {
     return 0;
   }
   if (dock) out[0].dock = dock.cell;
+  if (tz) out[0].tv = trafficMake(tz.kind);
   return 1;
 }
 
@@ -313,7 +319,10 @@ function lifeXSpawnRider(mid) {
   for (let k = 0; k < R.dests.length; k++) if (R.dests[k].type === 'palace') { pd = R.dests[k]; break; }
   if (pd && pd.cell !== s.start && D[pd.cell] >= 0 && Math.random() < 0.3) plan.push({ cell: pd.cell, act: 'stand', dur: 1.5 + Math.random() * 2 });
   plan.push({ cell: ex.cell, end: 'exit', ent: ex });
-  return lifeXEmit('rider', 1, s.start, plan, s.ent, s.mid, { lane: 0.08 }) ? 1 : 0;
+  const out = lifeXEmit('rider', 1, s.start, plan, s.ent, s.mid, { lane: 0.08 });
+  if (!out) return 0;
+  if (typeof trafficMake === 'function') out[0].tv = trafficMake('horse');
+  return 1;
 }
 
 function lifeXSpawnPeddler(mid) {
@@ -533,8 +542,8 @@ function lifeTrafficTick(dt) {
     switch (role) {
       case 'guard_post': made = lifeXSpawnPost(walkers, tg.guard_post); break;
       case 'guard_patrol': made = lifeXSpawnSquad(budget); break;
-      case 'wagon': made = lifeXSpawnWagon(mid); break;
-      case 'rider': made = lifeXSpawnRider(mid); break;
+      case 'wagon': made = typeof trafficSeeded === 'function' ? trafficSeeded('wagon', function () { return lifeXSpawnWagon(trafficMid('wagon')); }) : lifeXSpawnWagon(mid); break;   // 車馬生成決策用種子亂數(世界 + 日 + 時段)
+      case 'rider': made = typeof trafficSeeded === 'function' ? trafficSeeded('rider', function () { return lifeXSpawnRider(trafficMid('rider')); }) : lifeXSpawnRider(mid); break;
       case 'peddler': made = lifeXSpawnPeddler(mid); break;
       case 'hawker': made = lifeXSpawnHawker(); break;
       case 'onlooker': made = lifeXSpawnOnlooker(); break;

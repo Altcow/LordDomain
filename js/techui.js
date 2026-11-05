@@ -7,8 +7,11 @@ var TU_STATE_TXT = { done: '已研', cur: '研發中', queued: '排隊中', read
 
 function tuEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function tuToast(t) { if (typeof showToast === 'function') showToast(t); }
-function tuEraName(e) { var r = (typeof NL_ERA_RULE !== 'undefined' && NL_ERA_RULE) ? NL_ERA_RULE[e] : null; return r && r.name ? r.name : ''; }
-function tuNodeName(id) { var n = typeof techNode === 'function' ? techNode(id) : null; return n ? n.name : id; }
+function tuEraName(e) { var f = (typeof fxEraName === 'function') ? fxEraName(e) : null, r; if (f) return f.replace(/\(終局\)$/, ''); r = (typeof NL_ERA_RULE !== 'undefined' && NL_ERA_RULE) ? NL_ERA_RULE[e] : null; return r && r.name ? r.name : ''; }
+function tuLabel(n) { return typeof techLabelOf === 'function' ? techLabelOf(n) : n.name; }   // 節點顯示名(魔幻世界讀覆寫)
+function tuDesc(n) { var f = (typeof fxTechDesc === 'function') ? fxTechDesc(n.id) : null; return f !== null ? f : n.desc; }
+function tuBrName(b) { var f = (typeof fxBranchName === 'function') ? fxBranchName(b.id) : null; return f !== null ? f : b.name; }
+function tuNodeName(id) { var n = typeof techNode === 'function' ? techNode(id) : null; return n ? tuLabel(n) : id; }
 
 // ───────── 狀態 ─────────
 // 回傳 { k: done|cur|queued|ready|req|era|mega, miss: [未滿足前置名] }
@@ -28,10 +31,14 @@ function techUiState(id) {
 }
 
 // 解鎖內容中文名(NL_UNLOCK_NAMES → 物件名 → 原 id)
+function techUiUnlockList(n) {   // 魔幻世界:漢式清單去隱藏物件 + 本族風格件 + 特色解鎖;歷史世界原樣
+  var f = (typeof fxTechUnlock === 'function') ? fxTechUnlock(n.id, n.unlock || []) : null;
+  return f || n.unlock || [];
+}
 function techUiUnlockNames(n) {
   var out = [];
-  (n.unlock || []).forEach(function (u) {
-    var nm = (typeof NL_UNLOCK_NAMES !== 'undefined' && NL_UNLOCK_NAMES[u]) || (typeof OBJECTS !== 'undefined' && OBJECTS[u] && OBJECTS[u].name) || (typeof NL_NEW_OBJECTS !== 'undefined' && NL_NEW_OBJECTS[u] && NL_NEW_OBJECTS[u].name) || u;
+  techUiUnlockList(n).forEach(function (u) {
+    var nm = (typeof fxUnlockName === 'function' && fxUnlockName(u)) || (typeof NL_UNLOCK_NAMES !== 'undefined' && NL_UNLOCK_NAMES[u]) || (typeof OBJECTS !== 'undefined' && OBJECTS[u] && OBJECTS[u].name) || (typeof NL_NEW_OBJECTS !== 'undefined' && NL_NEW_OBJECTS[u] && NL_NEW_OBJECTS[u].name) || u;
     if (out.indexOf(nm) < 0) out.push(nm);
   });
   return out;
@@ -53,7 +60,7 @@ function techObjLockText(type) {
   var id = techNodeOfObj(type), n;
   if (!id) return '';
   n = techNode(id);
-  return '需研發〈' + n.name + '〉(第 ' + n.era + ' 時代)';
+  return '需研發〈' + tuLabel(n) + '〉(第 ' + n.era + ' 時代)';
 }
 function techFeatLockText(fid, name) {
   var g = (typeof NL_FEATURE_GATE !== 'undefined' && NL_FEATURE_GATE) ? NL_FEATURE_GATE[fid] : null;
@@ -87,7 +94,7 @@ function techLockedNames(items) {
     if (!best || rank < best.rank) best = { id: x, rank: rank };
   });
   bn = best ? techNode(best.id) : null;
-  return { lv: 0, names: names, techName: bn ? bn.name : '', nodeId: best ? best.id : '' };
+  return { lv: 0, names: names, techName: bn ? tuLabel(bn) : '', nodeId: best ? best.id : '' };
 }
 
 // ───────── 取消與退款提示 ─────────
@@ -97,7 +104,7 @@ function techCancelHint(id) {
     c = s.cur[i].paid || {};
     if (c.coin) p.push('金 ' + c.coin);
     if (c.xue) p.push('學識 ' + c.xue);
-    Object.keys(c.goods || {}).forEach(function (g) { p.push(((typeof GOODS !== 'undefined' && GOODS[g] && GOODS[g].name) || g) + ' ×' + c.goods[g]); });
+    Object.keys(c.goods || {}).forEach(function (g) { p.push(((typeof GOODS !== 'undefined' && GOODS[g] && (typeof goodsName === 'function' ? goodsName(g) : GOODS[g].name)) || g) + ' ×' + c.goods[g]); });
     return '取消將全額退還:' + (p.length ? p.join('、') : '(無)');
   }
   return '從序列移除(尚未扣費)';
@@ -116,7 +123,7 @@ function techUiParents(n) {   // req + reqOr(去重)
 }
 function techUiBranchName(b) {
   var i, nm = b;
-  for (i = 0; i < TECH_BRANCHES.length; i++) if (TECH_BRANCHES[i].id === b) nm = TECH_BRANCHES[i].name;
+  for (i = 0; i < TECH_BRANCHES.length; i++) if (TECH_BRANCHES[i].id === b) nm = tuBrName(TECH_BRANCHES[i]);
   return nm;
 }
 // 回傳 { pos:{id:{x,y,w,h,col}}, cols:[[id…]], depth:{id:欄}, edges:[{from,to,key,or}], ext:{id:[{id,branch,or}]}, w, h, Z };結果依 (分支, 縮放) 快取、決定性
@@ -291,7 +298,7 @@ function techUiChainHtml(id) {
 }
 function techUiBuildable(n) {   // 已研成後可直接去蓋的物件 id(最多 3 個)
   var out = [];
-  (n.unlock || []).forEach(function (u) { if (out.length < 3 && typeof OBJECTS !== 'undefined' && OBJECTS[u] && !OBJECTS[u].retired && out.indexOf(u) < 0) out.push(u); });
+  techUiUnlockList(n).forEach(function (u) { if (out.length < 3 && typeof OBJECTS !== 'undefined' && OBJECTS[u] && !OBJECTS[u].retired && out.indexOf(u) < 0) out.push(u); });
   return out;
 }
 
@@ -321,14 +328,14 @@ function tuQueueHtml() {
   if (!s.cur.length && !s.queue.length) h += '<div class="tu-empty">序列是空的。點樹上節點,在下方詳情按「研發」。</div>';
   s.cur.forEach(function (c) {
     var n = techNode(c.id), pct = c.total > 0 ? Math.max(0, Math.min(100, Math.round((1 - c.left / c.total) * 100))) : 0;
-    h += '<div class="tu-q cur"><div class="tu-qn">⏳ ' + (n ? tuBrIcon(n.branch, 20) : '') + tuEsc(n ? n.name : c.id) + '<small class="tu-left" data-left="' + c.id + '"> 剩 ' + techFmtTime(c.left) + '</small></div><div class="tu-bar"><i data-bar="' + c.id + '" style="width:' + pct + '%"></i></div>';
+    h += '<div class="tu-q cur"><div class="tu-qn">⏳ ' + (n ? tuBrIcon(n.branch, 20) : '') + tuEsc(n ? tuLabel(n) : c.id) + '<small class="tu-left" data-left="' + c.id + '"> 剩 ' + techFmtTime(c.left) + '</small></div><div class="tu-bar"><i data-bar="' + c.id + '" style="width:' + pct + '%"></i></div>';
     if (tu.confirm === c.id) h += '<div class="tu-cf">' + tuEsc(techCancelHint(c.id)) + '<button data-tu="cancelyes" data-id="' + c.id + '">確定取消</button><button data-tu="cancelno">不取消</button></div>';
     else h += '<button data-tu="cancel" data-id="' + c.id + '">取消</button>';
     h += '</div>';
   });
   s.queue.forEach(function (id, i) {
     var n = techNode(id), wait = techCanStart(id) ? '' : '(等待)';
-    h += '<div class="tu-q"><div class="tu-qn">' + (i + 1) + '. ' + (n ? tuBrIcon(n.branch, 20) : '') + tuEsc(n ? n.name : id) + '<small> ' + wait + ' ' + tuDurText(techDurationOf(id)) + '</small></div>';
+    h += '<div class="tu-q"><div class="tu-qn">' + (i + 1) + '. ' + (n ? tuBrIcon(n.branch, 20) : '') + tuEsc(n ? tuLabel(n) : id) + '<small> ' + wait + ' ' + tuDurText(techDurationOf(id)) + '</small></div>';
     if (tu.confirm === id) h += '<div class="tu-cf">' + tuEsc(techCancelHint(id)) + '<button data-tu="cancelyes" data-id="' + id + '">確定移除</button><button data-tu="cancelno">不移除</button></div>';
     else h += (i > 0 ? '<button data-tu="up" data-id="' + id + '">上移</button>' : '') + '<button data-tu="cancel" data-id="' + id + '">取消</button>';
     h += '</div>';
@@ -350,7 +357,7 @@ function tuTickQueue() {
 function tuStripRes() { var s = techState(), coin = (typeof world !== 'undefined' && world.res && world.res.coin) || 0; return '金 ' + Math.floor(coin) + '　學識 ' + Math.floor(s.xue); }
 function tuStripCur() {
   var s = techState(), c = s.cur[0], n;
-  if (c) { n = techNode(c.id); return '⏳ 進行中:' + (n ? n.name : c.id) + ' 剩 ' + techFmtTime(c.left) + (s.cur.length + s.queue.length > 1 ? '(+' + (s.cur.length + s.queue.length - 1) + ')' : ''); }
+  if (c) { n = techNode(c.id); return '⏳ 進行中:' + (n ? tuLabel(n) : c.id) + ' 剩 ' + techFmtTime(c.left) + (s.cur.length + s.queue.length > 1 ? '(+' + (s.cur.length + s.queue.length - 1) + ')' : ''); }
   if (techLabCount() <= 0) return '⚠ 需建研究院才能研發';
   return s.queue.length ? '排隊中 ' + s.queue.length + ' 項' : '研發序列是空的';
 }
@@ -374,8 +381,8 @@ function tuTabsHtml() {
   TECH_BRANCHES.forEach(function (b) {
     var done = 0, tot = 0;
     CITY_TECHS.forEach(function (n) { if (n.branch === b.id) { tot++; if (techDone(n.id)) done++; } });
-    if (ic) h += '<button class="tu-tab ic' + (tu.branch === b.id ? ' on' : '') + '" data-tu="tab" data-id="' + b.id + '" title="' + tuEsc(b.name) + '" aria-label="' + tuEsc(b.name) + '">' + tuBrIcon(b.id, 32, b.name.charAt(0)) + '<span class="tu-tn">' + tuEsc(b.name) + '</span><small> ' + done + '/' + tot + '</small></button>';
-    else h += '<button class="tu-tab' + (tu.branch === b.id ? ' on' : '') + '" data-tu="tab" data-id="' + b.id + '">' + tuEsc(b.name) + '<small> ' + done + '/' + tot + '</small></button>';
+    if (ic) h += '<button class="tu-tab ic' + (tu.branch === b.id ? ' on' : '') + '" data-tu="tab" data-id="' + b.id + '" title="' + tuEsc(tuBrName(b)) + '" aria-label="' + tuEsc(tuBrName(b)) + '">' + tuBrIcon(b.id, 32, tuBrName(b).charAt(0)) + '<span class="tu-tn">' + tuEsc(tuBrName(b)) + '</span><small> ' + done + '/' + tot + '</small></button>';
+    else h += '<button class="tu-tab' + (tu.branch === b.id ? ' on' : '') + '" data-tu="tab" data-id="' + b.id + '">' + tuEsc(tuBrName(b)) + '<small> ' + done + '/' + tot + '</small></button>';
   });
   return ic ? '<div class="tu-tr">' + h + '</div>' : h;
 }
@@ -411,7 +418,7 @@ function tuTreeInner(branch, zoom) {
     if (n.branch !== branch) return;
     var p = lay.pos[n.id], st = techUiState(n.id);
     h += '<div class="tu-nw" style="left:' + p.x + 'px;top:' + p.y + 'px;width:' + Z.w + 'px"><div class="' + tuNodeClass(n.id, hs, st) + '" data-tu="sel" data-id="' + n.id + '" data-node="' + n.id + '" style="height:' + Z.h + 'px">' +
-      '<span class="tu-nm">' + tuEsc(n.name) + '</span><span class="tu-nf"><span class="tu-era">第' + n.era + '階</span><i class="tu-lock">🔒</i><span class="tu-st ' + st.k + '">' + TU_STATE_TXT[st.k] + '</span></span></div>';
+      '<span class="tu-nm">' + tuEsc(tuLabel(n)) + '</span><span class="tu-nf"><span class="tu-era">第' + n.era + '階</span><i class="tu-lock">🔒</i><span class="tu-st ' + st.k + '">' + TU_STATE_TXT[st.k] + '</span></span></div>';
     (lay.ext[n.id] || []).forEach(function (x) {
       h += '<span class="tu-xb" data-tu="goto" data-id="' + x.id + '" style="height:' + (TU_BADGE_H - 1) + 'px">' + (x.or ? '或 ' : '') + '← ' + tuEsc(techUiBranchName(x.branch)) + '·' + tuEsc(tuNodeName(x.id)) + '</span>';
     });
@@ -420,7 +427,7 @@ function tuTreeInner(branch, zoom) {
   return h;
 }
 function tuBuildTree(force) {
-  var key = tu.branch + ':' + tu.zoom, lay;
+  var key = tu.branch + ':' + tu.zoom + ':' + ((typeof fxPack === 'function' && fxPack()) || ''), lay;
   if (!tu.cvEl || (!force && tu.treeKey === key)) return;
   lay = techUiLayout(tu.branch, tu.zoom);
   tu.cvEl.innerHTML = tuTreeInner(tu.branch, tu.zoom);
@@ -454,8 +461,8 @@ function tuDetailHtml() {
   var n = tu.sel ? techNode(tu.sel) : null, st, h, un, c, pr;
   if (!n) return '<div class="tu-hint">點選節點看條件、成本與解鎖內容;選取後會高亮它的前置路徑與後繼,其餘淡化。</div>';
   st = techUiState(n.id); un = techUiUnlockNames(n);
-  h = '<div class="tu-dt"><b>' + tuEsc(n.name) + '</b><span class="tu-era">第' + n.era + '階</span><span class="tu-st ' + st.k + '">' + TU_STATE_TXT[st.k] + '</span><span class="tu-sp"></span><button data-tu="desel">收起</button></div>';
-  if (n.desc) h += '<div class="tu-d">' + tuEsc(n.desc) + '</div>';
+  h = '<div class="tu-dt"><b>' + tuEsc(tuLabel(n)) + '</b><span class="tu-era">第' + n.era + '階</span><span class="tu-st ' + st.k + '">' + TU_STATE_TXT[st.k] + '</span><span class="tu-sp"></span><button data-tu="desel">收起</button></div>';
+  if (tuDesc(n)) h += '<div class="tu-d">' + tuEsc(tuDesc(n)) + '</div>';
   if (st.k === 'mega') h += '<div class="tu-c">條件:' + tuEsc((n.cost && n.cost.goodsText) || '大工程達成') + '</div><div class="tu-d">里程碑不走研發序列,由大工程完成後記入。</div>';
   else h += '<div class="tu-c">' + tuEsc(tuCostText(n.id)) + '　時長 ' + tuDurText(techDurationOf(n.id)) + '</div>';
   if (tu.sugSet[n.id] && tu.sugWhy[n.id]) h += '<div class="tu-sg">★ 建議先研:' + tuEsc(tu.sugWhy[n.id]) + '</div>';
@@ -476,7 +483,7 @@ function techUiHtml() {
 
 function tuSig() {
   var s = techState();
-  return [Object.keys(s.done).length, s.cur.map(function (c) { return c.id; }).join(','), s.queue.join(','), techEra(), techLabCount(), tu.branch, tu.zoom, tu.confirm, tu.msg, tu.focus, tu.sel, tu.sug].join('|');
+  return [Object.keys(s.done).length, s.cur.map(function (c) { return c.id; }).join(','), s.queue.join(','), techEra(), techLabCount(), tu.branch, tu.zoom, tu.confirm, tu.msg, tu.focus, tu.sel, tu.sug, (typeof fxPack === 'function' && fxPack()) || ''].join('|');
 }
 function tuRender(rebuild) {
   var qs;

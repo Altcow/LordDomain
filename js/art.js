@@ -855,15 +855,17 @@ var ART = window.ART = (function () {
     A.line(ctx, [-9.6, hy + 0.8], [-14.2, hy - 4], C.blush, 0.8); A.line(ctx, [9.6, hy + 0.8], [14.2, hy - 4], C.blush, 0.8);
   }
   // 畫「朝左下(SW)正面」或「朝左上(NW)背面」;右向由呼叫端水平翻轉
+  // fr:0/1 站立與走路;2 坐(膝蓋朝前、身體下移 5px);3 雙臂上舉(鼓掌 / 叫好 / 表演);4 單臂前伸(落子 / 指點 / 舉杯 / 張貼)。2~4 供聚集行為使用(PLAN_CITYLIFE_GATHER §4.7,與 PLAN_CROWD CR4 共用)
   A.chibiRaw = function (ctx, s, back, fr) {
-    var C = A.C, bob = fr === 1 ? -1 : 0, l0 = fr === 1 ? 1.6 : 0;
+    var C = A.C, sit = fr === 2, up = fr === 3, fwd = fr === 4, bob = fr === 1 ? -1 : (sit ? 5 : 0), l0 = fr === 1 ? 1.6 : 0;
     var tun = s.tunic, trim = s.trim || C.hanRed;
     if (!back && (s.weapon === 'spear' || s.weapon === 'ji')) pole(ctx, 8.6, -4 + bob, -38 + bob, s);
     ctx.save(); // 體型(魔幻種族):slim 修長 / stout 矮壯,只縮放身體(頭另以 headDy 對位);head 前 restore
     if (s.build === 'stout') ctx.scale(1.24, 0.84); else if (s.build === 'slim') ctx.scale(0.86, 1.1);
     if (s.cape && !back) A.poly(ctx, [[-6, -18 + bob], [6, -18 + bob], [10, -3], [-10, -3]], A.tone(s.cape, 0.8), 0.6);
     if (s.flag) { A.line(ctx, [7.5, -2 + bob], [8.5, -52 + bob], A.C.ink, 3); A.line(ctx, [7.5, -2 + bob], [8.5, -52 + bob], C.wood[1], 1.6); A.poly(ctx, [[8.5, -51 + bob], [20, -50 + bob], [19, -36 + bob], [8.5, -38 + bob]], s.flag, 0.8); A.circle(ctx, 14, -44 + bob, 3.2, C.gold, 0.4); }
-    if (!s.mount) { leg(ctx, -3.6, 0 - l0, s.pants || C.wood[0]); leg(ctx, 3.4, 0, s.pants || C.wood[0]); }
+    if (!s.mount && !sit) { leg(ctx, -3.6, 0 - l0, s.pants || C.wood[0]); leg(ctx, 3.4, 0, s.pants || C.wood[0]); }
+    else if (sit && !s.mount) { A.ellipse(ctx, -4.4, -2.2, 3.4, 2.4, s.pants || C.wood[0], 0.5); A.ellipse(ctx, 4.4, -2.2, 3.4, 2.4, s.pants || C.wood[0], 0.5); A.ellipse(ctx, -4.4, 0.2, 2.8, 1.5, C.wood[0], 0.5); A.ellipse(ctx, 4.4, 0.2, 2.8, 1.5, C.wood[0], 0.5); }
     if (s.robe && !s.mount) { ctx.beginPath(); ctx.moveTo(-9, -8 + bob); ctx.lineTo(9, -8 + bob); ctx.quadraticCurveTo(11, -3, 10, -1.5); ctx.quadraticCurveTo(0, 0, -10, -1.5); ctx.quadraticCurveTo(-11, -3, -9, -8 + bob); ctx.fillStyle = A.tone(s.tunic, 0.92); ctx.fill(); A.edge(ctx, 0.7); }
     ctx.beginPath(); ctx.moveTo(-6, -18 + bob); ctx.lineTo(6, -18 + bob);
     ctx.quadraticCurveTo(9, -10 + bob, 9.8, -4.5); ctx.quadraticCurveTo(0, -3, -9.8, -4.5); ctx.quadraticCurveTo(-9, -10 + bob, -6, -18 + bob);
@@ -887,9 +889,17 @@ var ART = window.ART = (function () {
       A.circle(ctx, -3.2, -13.6 + bob, 1.3, '#a8cf7a'); A.circle(ctx, 1.4, -10.6 + bob, 1.3, '#a8cf7a'); A.circle(ctx, 5, -7 + bob, 1.3, '#a8cf7a');
     }
     if (s.cape && back) A.poly(ctx, [[-6.5, -18 + bob], [6.5, -18 + bob], [10.5, -3], [-10.5, -3]], s.cape, 0.7);
+    if (up || fwd) {   // 手臂動作幀:被移動的手以「肩 → 手」的粗線表示,另一側維持原樣
+      var armC = A.tone(tun, 0.92), lh = [-9, -8.6 + bob], rh = [9, -8.6 + bob];
+      if (up) { lh = [-11, -24 + bob]; rh = [11, -24 + bob]; } else if (back) lh = [-11.5, -13 + bob]; else rh = [11.5, -13 + bob];
+      if (lh[1] !== -8.6 + bob) { A.line(ctx, [-6.5, -16 + bob], lh, C.ink, 3.8); A.line(ctx, [-6.5, -16 + bob], lh, armC, 2.5); } else A.ellipse(ctx, -8.6, -12.5 + bob, 3, 4.5, armC, 0.6);
+      if (rh[1] !== -8.6 + bob) { A.line(ctx, [6.5, -16 + bob], rh, C.ink, 3.8); A.line(ctx, [6.5, -16 + bob], rh, armC, 2.5); } else A.ellipse(ctx, 8.6, -12.5 + bob, 3, 4.5, armC, 0.6);
+      A.circle(ctx, lh[0], lh[1], 2.2, C.skin, 0.6); A.circle(ctx, rh[0], rh[1], 2.2, C.skin, 0.6);
+    } else {
     A.ellipse(ctx, -8.6, -12.5 + bob, 3, 4.5, A.tone(tun, 0.92), 0.6);
     A.ellipse(ctx, 8.6, -12.5 + bob, 3, 4.5, A.tone(tun, 0.92), 0.6);
     A.circle(ctx, -9, -8.6 + bob, 2.2, C.skin, 0.6); A.circle(ctx, 9, -8.6 + bob, 2.2, C.skin, 0.6);
+    }
     if (s.pauld) { A.ellipse(ctx, -8.4, -16.4 + bob, 3.6, 2.4, s.pauld, 0.7); A.ellipse(ctx, 8.4, -16.4 + bob, 3.6, 2.4, s.pauld, 0.7); A.circle(ctx, -8.4, -16.8 + bob, 0.8, '#d9a23c'); A.circle(ctx, 8.4, -16.8 + bob, 0.8, '#d9a23c'); }
     if (back && s.shield) A.ellipse(ctx, 0, -11 + bob, 6.5, 6.5, s.shieldCol || C.hanRed, 0.7);
     ctx.restore();

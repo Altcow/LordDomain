@@ -66,6 +66,15 @@ function caravanRng(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+// 魔幻世界外觀改名(FX_CARAVAN,fx_goods_data.js;fxPack() 為 null 時回原名;只換顯示名,數值不變)
+function caravanFx() {
+  var p = (typeof goodsPackNow === 'function') ? goodsPackNow() : null;
+  return p && typeof FX_CARAVAN !== 'undefined' && FX_CARAVAN[p] ? FX_CARAVAN[p] : null;
+}
+function caravanOfficeName() { var f = caravanFx(); return f && f.office ? f.office : '走鏢'; }
+function caravanEscortTitle() { var f = caravanFx(); return f && f.escortTitle ? f.escortTitle : '鏢師'; }
+function caravanCartTitle(c) { var f = caravanFx(); return (f && f.carts && f.carts[c.id]) || c.title; }
+function caravanRouteName(r) { var f = caravanFx(); return (f && f.routes && f.routes[r.id]) || r.name; }
 function caravanCart(id) {
   for (var i = 0; i < CARAVAN_CARTS.length; i++) if (CARAVAN_CARTS[i].id === id) return CARAVAN_CARTS[i];
   return null;
@@ -87,7 +96,7 @@ function caravanPool(tier) {
   var t = tier, ids;
   if (typeof GOODS === 'undefined') return [];
   while (t >= 1) {
-    ids = Object.keys(GOODS).filter(function (g) { return GOODS[g].tier === t && !GOODS[g].res && !GOODS[g].legacy; }).sort();
+    ids = (typeof goodsIds === 'function' ? goodsIds() : Object.keys(GOODS)).filter(function (g) { return GOODS[g].tier === t && !GOODS[g].res && !GOODS[g].legacy; }).sort();
     if (ids.length) return ids;
     t--;
   }

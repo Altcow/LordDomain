@@ -1,0 +1,39 @@
+// js/fx_goods_data.js — 魔幻世界貨品覆寫表(PLAN_FANTASY_B.md §3,B-2)。**產生檔**:由 tools/gen_fx_goods.js 讀 tools/fantasy_b/goods_map.json 產生,請勿手改。
+// 載入順序:goodsdata.js、theme_skin.js 之後、goods.js 之前(index.html、sw.js PRECACHE 同步)。ES2017;不用 ?. ??。
+// 規則:既有 GOODS id 全部保留(庫房存檔鍵、科技貨品成本不變),魔幻只換名稱 / 圖示;6 種特色貨品(id fx_*,帶 pack)併入 GOODS / RECIPES / GOODS_SOURCES,
+//   但所有列舉與查詢(goodsdata.js goodsAvail / goodsRecipesFor…)只在 fxPack() === 該族時才看得到,歷史世界輸出不變;特色貨品不可抵付科技成本(techGoodsIds 排除 pack 貨品)。
+// 數字全部 PLACEHOLDER(平衡最後統一做)。fxPack()(js/fxpack.js,B-1)尚未載入時一律視為歷史世界,覆寫不生效。
+
+// 名稱 / 圖示覆寫:FX_GOODS_NAME[pack | common][貨品 id] = [名稱, 圖示];族名優先於 common
+var FX_GOODS_NAME = {"common":{"wood":["木材","🪵"],"stone":["石材","🧱"],"g_liang":["糧食","🌾"],"g_ma":["亞麻","🌿"],"g_tiekuang":["鐵礦","⛏️"],"g_taotu":["陶土","🟤"],"g_zhu":["蘆葦","🎋"],"g_muban":["木板","🪵"],"mat_mabu":["亞麻布","🧵"],"mat_tieding":["鐵錠","⬛"],"g_nongju":["工具","🔧"],"g_yifu":["衣物","👕"],"g_qiqi":["彩釉器","🏺"],"g_jin":["絲綢","🎀"],"g_ciqi":["白瓷","🍶"],"g_zhi":["羊皮紙","📜"],"g_yuqi":["魔晶","💎"],"g_yinqi":["秘銀","🥈"],"g_mingjiu":["陳釀","🍷"],"mat_zhujian":["卷軸","📜"],"mat_niupi":["獸皮","🟫"],"mat_niujin":["弓弦","〰️"],"mat_tongyou":["燈油","🛢️"],"mat_qingtong":["黃銅","🟨"],"mat_shengqi":["樹脂","🟧"],"mat_jianyu":["羽毛","🪶"]},"elf":{"wood":["倒木","🪵"],"stone":["白石","🪨"],"g_liang":["林果","🍎"],"g_ma":["藤絲","🌿"],"g_tiekuang":["月銀礦","🌙"],"g_muban":["靈木","🪵"],"mat_mabu":["藤紗布","🧵"],"mat_tieding":["月銀錠","🔘"],"g_nongju":["園藝刀具","✂️"],"g_yifu":["葉紋衣","🍃"],"g_qiqi":["琥珀器","🟠"],"g_jin":["月紗","🌙"],"g_zhi":["葉紙","🍂"],"g_mingjiu":["月露酒","🍷"]},"dwarf":{"wood":["坑木","🪵"],"stone":["花崗岩","🪨"],"g_liang":["菇糧","🍄"],"g_ma":["岩麻","🌿"],"g_muban":["坑道木板","🪵"],"mat_mabu":["粗麻布","🧵"],"g_nongju":["礦鎬","⛏️"],"g_yifu":["皮圍裙","🦺"],"g_qiqi":["銅器","🥉"],"g_jin":["金線布","🧶"],"g_ciqi":["石雕器","🗿"],"g_yuqi":["寶石","💎"],"g_mingjiu":["陳年麥酒","🍺"]},"kingdom":{"g_liang":["麥穀","🌾"],"g_nongju":["農具","🔧"],"g_yifu":["布衣","👕"],"g_jin":["錦緞","🎀"],"g_mingjiu":["蜂蜜酒","🍯"]}};
+// 特色貨品(併入 GOODS;pack 限定該族)
+var FX_GOODS_SPECIAL = {"fx_elixir":{"name":"林露藥劑","icon":"🧪","tier":2,"cap":80,"price":18,"w":1,"pack":"elf"},"fx_spiritbow":{"name":"靈木長弓","icon":"🏹","tier":3,"cap":40,"price":54,"w":2,"pack":"elf"},"fx_rune":{"name":"符文石","icon":"🔷","tier":3,"cap":40,"price":54,"w":3,"pack":"dwarf"},"fx_starsteel":{"name":"星鐵","icon":"✴️","tier":4,"cap":20,"price":160,"w":3,"pack":"dwarf"},"fx_flour":{"name":"麵粉","icon":"🌾","tier":1,"cap":150,"price":6,"w":1,"pack":"kingdom"},"fx_armor":{"name":"騎士鎧甲","icon":"🛡️","tier":3,"cap":40,"price":54,"w":3,"pack":"kingdom"}};
+// 特色配方(併入 RECIPES;unlock = 預計解鎖節點,僅供 lint / 文件,不參與判定)
+var FX_RECIPES_SPECIAL = {"r_fx_elixir":{"name":"林露藥劑","bld":["s8_herb_garden"],"in":{"g_liang":2,"g_ma":1},"out":{"fx_elixir":1},"rate":1,"lv":1,"jobs":4,"tech":null,"opt":null,"pack":"elf","unlock":"md_bencao"},"r_fx_spiritbow":{"name":"靈木長弓","bld":["s8_woodcraft"],"in":{"g_muban":3,"mat_mabu":1},"out":{"fx_spiritbow":1},"rate":1,"lv":1,"jobs":6,"tech":null,"opt":null,"pack":"elf","unlock":"cr_qiqi"},"r_fx_rune":{"name":"符文石","bld":["s9_anvil_smithy"],"in":{"stone":20,"mat_tieding":1},"out":{"fx_rune":1},"rate":1,"lv":1,"jobs":6,"tech":null,"opt":null,"pack":"dwarf","unlock":"rl_daoguan"},"r_fx_starsteel":{"name":"星鐵","bld":["s9_smelter"],"in":{"mat_tieding":3,"fx_rune":1},"out":{"fx_starsteel":1},"rate":0.5,"lv":1,"jobs":6,"tech":null,"opt":null,"pack":"dwarf","unlock":"cr_guangang"},"r_fx_flour":{"name":"麵粉","bld":["s10_windmill"],"in":{"g_liang":3},"out":{"fx_flour":1},"rate":2,"lv":1,"jobs":4,"tech":null,"opt":null,"pack":"kingdom","unlock":"e_shigong"},"r_fx_armor":{"name":"騎士鎧甲","bld":["s10_blacksmith"],"in":{"mat_tieding":2,"mat_mabu":1},"out":{"fx_armor":1},"rate":1,"lv":1,"jobs":6,"tech":null,"opt":null,"pack":"kingdom","unlock":"cr_chaogang"}};
+// 既有配方追加本族生產建築:FX_RECIPE_BLD[pack][配方 id] = [建築 type…]
+var FX_RECIPE_BLD = {"elf":{"r_muban":["s8_woodcraft"],"r_mabu":["s8_loom_bower"],"r_yifu":["s8_loom_bower"],"r_jin":["s8_loom_bower"]},"dwarf":{"r_tieding":["s9_smelter","s9_anvil_smithy"],"r_nongju":["s9_anvil_smithy"],"r_mingjiu":["s9_brewery"],"r_yinqi":["s9_smelter"],"r_yuqi":["s9_anvil_smithy"]},"kingdom":{"r_tieding":["s10_blacksmith"],"r_nongju":["s10_blacksmith"],"r_mingjiu":["s10_tavern"]}};
+// 配方顯示名:FX_RECIPE_NAME[pack | common][配方 id]
+var FX_RECIPE_NAME = {"common":{"r_muban":"木板","r_mabu":"亞麻布","r_tieding":"鐵錠","r_yifu":"衣物","r_nongju":"工具","r_qiqi":"彩釉器","r_jin":"絲綢","r_ciqi":"白瓷","r_zhi":"羊皮紙","r_yuqi":"魔晶","r_yinqi":"秘銀","r_mingjiu":"陳釀"},"elf":{"r_muban":"靈木","r_mabu":"藤紗布","r_tieding":"月銀錠","r_yifu":"葉紋衣","r_nongju":"園藝刀具","r_qiqi":"琥珀器","r_jin":"月紗","r_zhi":"葉紙","r_mingjiu":"月露酒"},"dwarf":{"r_muban":"坑道木板","r_mabu":"粗麻布","r_yifu":"皮圍裙","r_nongju":"礦鎬","r_qiqi":"銅器","r_jin":"金線布","r_ciqi":"石雕器","r_yuqi":"寶石","r_mingjiu":"陳年麥酒"},"kingdom":{"r_yifu":"布衣","r_nongju":"農具","r_jin":"錦緞","r_mingjiu":"蜂蜜酒"}};
+// 本族原料點(併入 GOODS_SOURCES;pack 限定)
+var FX_SOURCES = {"e_fx_herb":{"bld":"s8_herb_garden","out":{"g_liang":2},"lv":1,"pack":"elf"},"e_fx_mushroom":{"bld":"s9_mushroom_cellar","out":{"g_liang":3},"lv":1,"pack":"dwarf","farm":true},"e_fx_mine":{"bld":"s9_mine_shaft","out":{"g_tiekuang":3},"lv":1,"pack":"dwarf","near":{"type":"ore_iron","r":6}}};
+// 頂列資源(木 / 石)的本族生產建築(只供鏈條頁顯示):FX_RES_SOURCES[pack][建築 type] = 資源 id
+var FX_RES_SOURCES = {"elf":{"s8_woodcraft":"wood"},"dwarf":{},"kingdom":{}};
+// 大工程貨品組合的魔幻版(PLACEHOLDER;東漢原表待對映,尚未接成本判定,先供科技頁 / 文案取字用)
+var FX_MEGA_GOODS = {"note":"大工程貨品組合的魔幻版(id 為 GOODS id;件數沿用東漢 mg_lishi,其餘四項東漢原表也尚未對映,一併 PLACEHOLDER)","mg_lishi":{"common":{"g_muban":30,"mat_mabu":20,"g_yifu":20,"g_nongju":10},"elf":{"g_muban":30,"mat_mabu":20,"g_yifu":20,"fx_elixir":10},"dwarf":{"g_muban":30,"mat_tieding":20,"g_nongju":20,"g_yifu":10},"kingdom":{"g_muban":30,"fx_flour":30,"g_yifu":20,"g_nongju":10}},"mg_zhucheng":{"elf":{"stone":300,"g_muban":60,"fx_spiritbow":6},"dwarf":{"stone":400,"mat_tieding":60,"fx_rune":6},"kingdom":{"stone":400,"mat_tieding":40,"fx_armor":6}},"mg_kaiqu":{"elf":{"stone":200,"g_muban":80,"mat_mabu":40},"dwarf":{"stone":300,"g_muban":80,"mat_tieding":30},"kingdom":{"stone":250,"g_muban":80,"mat_mabu":40}},"mg_xuegong":{"elf":{"g_zhi":20,"g_jin":10,"fx_elixir":20},"dwarf":{"g_zhi":20,"fx_rune":12,"g_qiqi":10},"kingdom":{"g_zhi":24,"g_ciqi":10,"fx_armor":6}},"mg_didu":{"elf":{"g_yuqi":6,"g_mingjiu":10,"fx_spiritbow":10},"dwarf":{"g_yuqi":6,"fx_starsteel":6,"g_mingjiu":10},"kingdom":{"g_yuqi":6,"g_yinqi":6,"fx_armor":10}}};
+// 走鏢外觀與文案(只覆寫顯示名,數值不變)
+var FX_CARAVAN = {"elf":{"office":"林道商隊","carts":{"white":"藤編小車","green":"鹿拉篷車","blue":"月紗廂車","purple":"樹冠大車","gold":"世界樹貢車"},"routes":{"near":"林間小徑","hill":"溪谷藤橋","far":"遠林商道"},"escortTitle":"護林人"},"dwarf":{"office":"山道護鏢行","carts":{"white":"手推礦車","green":"騾馱隊","blue":"鐵輪貨車","purple":"鋼甲大車","gold":"熔金王車"},"routes":{"near":"坑道近路","hill":"山脊棧道","far":"深山商道"},"escortTitle":"護鏢石衛"},"kingdom":{"office":"傭兵護衛行會","carts":{"white":"木輪板車","green":"帆布篷車","blue":"雙馬貨車","purple":"王家篷車","gold":"金冠馬車"},"routes":{"near":"王國大道","hill":"河谷小路","far":"邊境商路"},"escortTitle":"護衛傭兵"}};
+
+// 併入主資料表(已存在則不覆蓋)
+(function () {
+  if (typeof GOODS === 'undefined' || typeof RECIPES === 'undefined' || typeof GOODS_SOURCES === 'undefined') return;
+  Object.keys(FX_GOODS_SPECIAL).forEach(function (id) { if (!GOODS[id]) GOODS[id] = FX_GOODS_SPECIAL[id]; });
+  Object.keys(FX_RECIPES_SPECIAL).forEach(function (id) { if (!RECIPES[id]) RECIPES[id] = FX_RECIPES_SPECIAL[id]; });
+  Object.keys(FX_SOURCES).forEach(function (id) { if (!GOODS_SOURCES[id]) GOODS_SOURCES[id] = FX_SOURCES[id]; });
+})();
+
+// 大工程魔幻貨品組合文字(例:「靈木 30、藤紗布 20…」);歷史世界 / 無資料回 ''。參數 mgId = 'mg_lishi' 等
+function fxMegaGoodsText(mgId) {
+  var p = (typeof goodsPackNow === 'function') ? goodsPackNow() : null, m = FX_MEGA_GOODS[mgId], t = m && p ? (m[p] || m.common) : null;
+  if (!t) return '';
+  return Object.keys(t).map(function (id) { return goodsName(id) + ' ' + t[id]; }).join('、');
+}

@@ -663,7 +663,7 @@ function buildCatIds(catId, top) {
 
 // 經營建築分類的完整清單(不看等級開放,供鎖頭提示計數);經營側判定同 sideOk
 function buildCatAllIds(catId, top) {
-  const ok = k => hasType(k) && !OBJECTS[k].retired && (sideOf(k) === 'estate' || sideOf(k) === 'both') && !varIsFollower(k) && (typeof objPackOk !== 'function' || objPackOk(k));   // 風格件不符目前城市風格者不列入(不算鎖頭提示)
+  const ok = k => hasType(k) && !OBJECTS[k].retired && (sideOf(k) === 'estate' || sideOf(k) === 'both') && !varIsFollower(k) && (typeof objPackOk !== 'function' || objPackOk(k)) && !(typeof fxHiddenObj === 'function' && fxHiddenObj(k));   // 風格件不符目前城市風格者、魔幻世界被取代的漢式物件不列入(不算鎖頭提示)
   const t = top || (topIsBuild(ui.top) ? ui.top : null);
   if (catId === 'combo') return t === BUILD_TOP.combo && typeof comboAllIds === 'function' ? comboAllIds() : [];
   if (catId === 'all') {
@@ -1805,6 +1805,7 @@ function tapObjectAt(sx, sy) {
   if (!n) return;
   const o = world.objects[n - 1];
   if (typeof interiorPackTap === 'function' && interiorPackTap(o)) return;   // 室內第一批:議事廳 / 研究院 / 工坊 / 客棧 / 縣衙(不可用時退回下面原行為)
+  if (typeof interiorPack2Tap === 'function' && interiorPack2Tap(o)) return;   // 室內第二批:學宮 / 倉廩 / 醫署藥肆 / 市集 / 驛站 / 觀星臺(不可用時退回下面原行為)
   if (typeof lordhallTap === 'function' && lordhallTap(o)) return;
   if (typeof cardsUiTap === 'function' && cardsUiTap(o)) return;
   if (typeof furnaceUiTap === 'function' && furnaceUiTap(o)) return;   // 卡片熔爐建築(furnaceui.js)

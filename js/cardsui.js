@@ -9,11 +9,11 @@ var CU_TYPE_TAB = { tavern: 'T', kao_chang: 'E', dian_shi_tai: 'N' };   // 酒�
 var CU_CLS = { war: '戰', cmd: '統', plan: '謀', econ: '經', life: '生', trait: '性', odd: '怪' };
 var CU_ROMAN = ['', 'I', 'II', 'III', 'IV'];
 var CU_LIVE_CITY = '城建類:資料已備,派駐於對口建築時計入;產出數值結算尚在接入(巡視綠光已有)';
-var CU_LIVE_WAR = '戰事重開後生效(城建專注模式不啟用)';
+var CU_LIVE_WAR = '討伐戰鬥中生效';
 var cuMiss = {};
 var cu = { open: false, tab: 'O', detail: null, confirm: null, el: null, timer: 0, msg: '', info: null, chain: false, nmode: 'fac', nkey: 0, revealing: false, last: null,
-  bf: -1, br: '', bs: 'gr', bn: 1, bsel: {}, bid: null, ble: 0, bpend: null };   // bf.. = 卡包分頁狀態(品階 / 職業分類篩選、排序、頁數、勾選、詳情、一鍵熔鍊門檻、待確認)
-var CU_OPEN_MSG = { none: '尚無新批次', busy: '上一批還在開啟中', bagfull: '卡包空位不足,先熔鍊或任用', closed: '尚未開放', bad: '請先選擇陣營或職業分類', ticket: '指名券不足' };
+  bf: -1, br: '', bs: 'gr', bn: 1, bsel: {}, bid: null, ble: 0, bpend: null, omsg: '' };   // bf.. = 卡包分頁狀態(品階 / 職業分類篩選、排序、頁數、勾選、詳情、一鍵熔鍊門檻、待確認)
+var CU_OPEN_MSG = { none: '尚無新批次', busy: '上一批還在開啟中', bagfull: '卡包與溢出區空位合計不足,先熔鍊或任用', closed: '尚未開放', bad: '請先選擇陣營或職業分類', ticket: '指名券不足' };
 
 function cuEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function cardsUiFmtCd(ms) {
@@ -41,7 +41,7 @@ function cardsUiCss() {
     '#cardsPanel .cuav img{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover}#cardsPanel .cuname{font-weight:bold;font-size:16px}#cardsPanel .cugr{display:inline-block;min-width:22px;text-align:center;border:2px solid var(--g);border-radius:4px;font-weight:bold;margin-right:4px;color:var(--cu-ink)}' +
     '#cardsPanel .cucor{position:absolute;right:6px;top:2px;letter-spacing:1px;color:var(--g);filter:brightness(.8)}#cardsPanel .custat{display:flex;flex-wrap:wrap;gap:4px 8px;margin:4px 0;font-size:13px}' +
     '#cardsPanel .cujob{display:inline-block;margin:2px 4px 0 0;padding:1px 6px;border:1px solid var(--cu-ink);border-radius:4px;font-size:12px}#cardsPanel .cujob.zong{border-color:var(--gr4);box-shadow:0 0 0 1px var(--gr4)}' +
-    '#cardsPanel .cutr{font-size:12px;margin-top:3px}#cardsPanel .cuchip{display:inline-flex;align-items:center;min-height:36px;margin:2px 4px 2px 0;padding:0 8px;border:1px solid var(--cu-ink);border-radius:6px;font-size:12px;cursor:pointer}#cardsPanel .cuchip.sk{background:rgba(54,95,163,.14)}#cardsPanel .cuchip.neg{border-style:dashed}#cardsPanel .cutag{font-style:normal;font-size:10px;margin-right:3px;padding:0 3px;border-radius:3px;background:var(--cu-ink);color:var(--cu-paper)}#cardsPanel details{margin-top:4px;font-size:12px;opacity:.85}#cardsPanel .cuink{color:var(--cu-ink)}#cardsPanel .cuwarn{color:#f0a060}#cardsPanel .cuinfo{position:absolute;left:0;right:0;top:0;bottom:0;z-index:2;overflow-y:auto;overscroll-behavior:contain;padding:10px;border-radius:10px;background:rgba(32,30,26,.985);color:#eee}#cardsPanel .cuinfo h4{margin:0 0 6px;font-size:16px}#cardsPanel .cuinfo .cuil{margin:5px 0;font-size:13px;line-height:1.5}#cardsPanel .cuinfo .cuil b{color:#f0b45a}#cardsPanel .cuinfo .cuit{display:inline-block;margin:0 4px 4px 0;padding:0 6px;border:1px solid rgba(255,255,255,.4);border-radius:4px;font-size:11px}';
+    '#cardsPanel .cutr{font-size:12px;margin-top:3px}#cardsPanel .cuchip{display:inline-flex;align-items:center;min-height:36px;margin:2px 4px 2px 0;padding:0 8px;border:1px solid var(--cu-ink);border-radius:6px;font-size:12px;cursor:pointer}#cardsPanel .cuchip.sk{background:rgba(54,95,163,.14)}#cardsPanel .cuchip.neg{border-style:dashed}#cardsPanel .cutag{font-style:normal;font-size:10px;margin-right:3px;padding:0 3px;border-radius:3px;background:var(--cu-ink);color:var(--cu-paper)}#cardsPanel details{margin-top:4px;font-size:12px;opacity:.85}#cardsPanel .cuink{color:var(--cu-ink)}#cardsPanel .cuwarn{color:#f0a060}#cardsPanel .cuinfo{position:absolute;left:0;right:0;top:0;bottom:0;z-index:2;overflow-y:auto;overscroll-behavior:contain;padding:10px;border-radius:10px;background:rgba(32,30,26,.985);color:#eee}#cardsPanel .cuinfo h4{margin:0 0 6px;font-size:16px}#cardsPanel .cuinfo .cuil{margin:5px 0;font-size:13px;line-height:1.5}#cardsPanel .cuinfo .cuil b{color:#f0b45a}#cardsPanel .cuinfo .cuit{display:inline-block;margin:0 4px 4px 0;padding:0 6px;border:1px solid rgba(255,255,255,.4);border-radius:4px;font-size:11px}' + ((typeof BN_TEXT_CSS === 'string') ? BN_TEXT_CSS : '');
   document.head.appendChild(st);
 }
 function cuEnsure() {
@@ -52,6 +52,7 @@ function cuEnsure() {
   el.id = 'cardsPanel';
   el.hidden = true;
   el.addEventListener('click', cuClick);
+  if (document.addEventListener) document.addEventListener('keydown', function (e) { if (e && e.key === 'Escape' && cu.open && cu.info) { cu.info = null; cardsUiRender(); } });   // Esc 關閉說明彈窗
   document.body.appendChild(el);
   cu.el = el;
   if (typeof panelRegister === 'function') panelRegister('cards', { kind: 'big', el: el, close: function () { cardsUiClose(true); } });
@@ -59,10 +60,12 @@ function cuEnsure() {
 }
 function cuNow() { return Date.now(); }
 function cuCs() {
-  var cs = cardsGet();
+  var cs = cardsGet(), r;
   if (cs) {
     cardsSync(cs, cuNow(), cardsVenueOpen);
     if (!cu.revealing && cardsBagFlush(cs, { now: cuNow() }) > 0) cuSave();   // 中斷 / 無特效時殘留的待入包批次:直接入包
+    r = cardsOverSettle(cs, cuNow());   // 溢出區結算:到期熔碎片 / 有空位就納入
+    if (r.expired || r.filled) cuSave();
   }
   return cs;
 }
@@ -89,22 +92,26 @@ function cuSkillChips(c) {
   l.forEach(function (k) { h += '<span class="cuchip sk" data-a="info" data-k="skill" data-key="' + k.id + '"><i class="cutag">技能</i>' + cuEsc(k.n) + '</span>'; });
   return h ? '<div class="cutr">' + h + '</div>' : '';
 }
-function cuTraitsHtml(c, full) {
-  var city = [], war = [], list = [];
+// 戰法區塊(bn_text.js bnSkillsBlockHtml;所有卡都顯示)
+function cuBnSkills(c, mini) { return (typeof bnSkillsBlockHtml === 'function') ? bnSkillsBlockHtml(c, mini) : cuSkillChips(c); }
+function cuTraitsHtml(c, full, mini) {
+  var list = [], h = '';
   if (c.trn) c.trn.forEach(function (t, i) {
     var f = null, k;
     for (k = 0; k < CARD_TRAITS.length; k++) if (CARD_TRAITS[k].n === t[0]) { f = CARD_TRAITS[k]; break; }
-    if (!t[1] && f) list.push({ n: f.n, d: f.d, ex: 0, city: f.city ? 1 : 0, neg: f.neg, k: 'trait', key: f.id });
-    else list.push({ n: t[0], d: t[2], ex: t[1], city: 1, k: 'xtrait', key: (c.fig || '') + '|' + i });
+    if (!t[1] && f) list.push({ n: f.n, d: cuTraitDesc(f), ex: 0, neg: f.neg, k: 'trait', key: f.id });
+    else list.push({ n: t[0], d: (typeof bnXTraitText === 'function') ? bnXTraitText(t[2]) : t[2], ex: t[1], k: 'xtrait', key: (c.fig || '') + '|' + i });
   });
-  c.tr.forEach(function (id) { var t = CARD_TRAIT_BY_ID[id]; if (t && !(c.trn && c.trn.some(function (x) { return x[0] === t.n; }))) list.push({ n: t.n, d: t.d, ex: 0, city: t.city ? 1 : 0, neg: t.neg, k: 'trait', key: id }); });
-  list.forEach(function (t) { (t.city ? city : war).push(t); });
-  function one(t) { return '<span class="cuchip' + (t.neg ? ' neg' : '') + '" data-a="info" data-k="' + t.k + '" data-key="' + cuEsc(t.key) + '">' + (t.ex ? '<i class="cutag">專屬</i>' : '') + cuEsc(t.n) + (full && t.d ? '(' + cuEsc(t.d) + ')' : '') + '</span>'; }
-  var h = '';
-  if (city.length) h += '<div class="cutr">' + city.map(one).join('') + '</div>';
-  if (war.length) h += '<details><summary>武略 ▸ ' + war.length + ' 條(戰事重開後生效)</summary>' + war.map(one).join('') + '</details>';
+  c.tr.forEach(function (id) { var t = CARD_TRAIT_BY_ID[id]; if (t && !(c.trn && c.trn.some(function (x) { return x[0] === t.n; }))) list.push({ n: t.n, d: cuTraitDesc(t), ex: 0, neg: t.neg, k: 'trait', key: id }); });
+  list = list.filter(function (t) { return t.d !== null || t.k === 'xtrait'; });   // 一般詞條 d === null = 只與舊戰鬥系統有關、新戰鬥沒有對應 → 隱藏
+  function one(t) { return '<span class="cuchip' + (t.neg ? ' neg' : '') + '"' + (mini ? '' : ' data-a="info" data-k="' + t.k + '" data-key="' + cuEsc(t.key) + '"') + '>' + (t.ex ? '<i class="cutag">專屬</i>' : '') + cuEsc(t.n) + '</span>'; }
+  if (!list.length) return '';
+  if (!full) return '<div class="cutr">' + list.map(one).join('') + '</div>';
+  list.forEach(function (t) { h += '<div class="cutr cutd">' + one(t) + (t.d ? '<span class="cutx">' + cuEsc(t.d) + '</span>' : '') + '</div>'; });
   return h;
 }
+// 詞條白話說明:bn_text.js 的 bnTraitText(null = 隱藏);缺 bn_text.js 時退回原說明
+function cuTraitDesc(t) { return (typeof bnTraitText === 'function') ? bnTraitText(t.id) : (t.d || ''); }
 // 頭像變體 a|b|c:先照舊雜湊算 v0;卡有 sex 時,若 v0 的頭像性別不符則往後(循環)找同性別者。
 // 舊卡 sex 由 cards.js 依「舊雜湊頭像」補上,故 v0 必符、頭像不變。該職業 3 張都沒有該性別頭像時,cardsUiPortraitJob 已先換成相近職業(CUI_SEX_ALT)。
 function cardsUiAvatarVar(c, pj) {
@@ -157,17 +164,17 @@ function cardsUiHtmlCard(c, opt) {
   h += '<div class="cuhead">' + cuAvatarHtml(c) + '<div><div><span class="cugr">' + G.ch + '</span><span class="cuname">' + cuEsc(c.name) + '</span>' +
     (c.zi ? '<span class="cusub">(' + cuEsc(c.zi) + ')</span>' : '') + '</div><div class="cusub cuink">' + CARD_FAC[c.fac] + ' · ' + CARD_LEARN[c.learn] + ' · <span class="cuchip" style="min-height:28px;margin:0" data-a="info" data-k="legend" data-key="tai">才 ' + c.tai + '</span>' + (c.fig ? ' · 名人' : '') + '</div></div></div>';
   h += '<div class="custat">' + CARD_STATS.map(function (n, k) { return '<span>' + n + ' ' + st[k] + '</span>'; }).join('') + '</div>';
-  h += '<div>' + cuJobChips(c) + '</div>' + cuSkillChips(c) + cuTraitsHtml(c, !!(opt && opt.full));
+  h += '<div>' + cuJobChips(c) + '</div>' + cuBnSkills(c, !!(opt && opt.mini)) + cuTraitsHtml(c, !!(opt && opt.full), !!(opt && opt.mini));
   return h + (opt && opt.extra ? opt.extra : '') + '</div>';
 }
 
 // ---------- 招募頁 ----------
 function cuBagLine(cs) {
-  var cap = cardsBagCap(), n = cs.bag.length;
-  return '<div class="cur"><span>卡包 <b>' + n + '/' + cap + '</b></span><button class="cub" data-a="tab" data-t="B" style="margin:0">查看卡包</button></div>';
+  var cap = cardsBagCap(), n = cs.bag.length, ov = cs.bagOver ? cs.bagOver.length : 0;
+  return '<div class="cur"><span>卡包 <b>' + n + '/' + cap + '</b>' + (ov ? ' <span class="cusub">· 溢出 ' + ov + ' 張</span>' : '') + '</span><button class="cub" data-a="tab" data-t="B" style="margin:0">查看卡包</button></div>';
 }
 function cuVenueHtml(cs, v) {
-  var V = CARD_VENUES[v], now = cuNow(), no = cardsPeriodNo(v, now), th = cardsVenueTheme(v, no), n = cs.acc[v].length, h = '', nx, full = cs.bag.length + CARD_BAG.batchNeed > cardsBagCap();
+  var V = CARD_VENUES[v], now = cuNow(), no = cardsPeriodNo(v, now), th = cardsVenueTheme(v, no), n = cs.acc[v].length, h = '', nx, full = !cardsBagCanOpen(cs);
   if (!cardsVenueOpen(v)) return '<div class="cur"><span>' + V.name + '尚未開放(需研發對應科技)</span></div>';
   nx = cardsNextIn(cs, v, now);
   h += '<div class="cur"><span>' + V.alias + ' · 每 ' + V.unit + '一批</span><span class="cusub">' + cuEsc(th.text) + '</span></div>';
@@ -175,7 +182,8 @@ function cuVenueHtml(cs, v) {
   if (v === 'E') h += '<div class="cusub">文鬥小遊戲尚未實作,評等暫以 1 星計</div>';
   h += cuBagLine(cs);
   h += '<button class="cub" data-a="open" data-v="' + v + '"' + (n && !full ? '' : ' disabled') + '>' + (n ? '開啟下一批(' + V.batch + ' 張入卡包)' : '尚無新批次') + '</button>';
-  if (n && full) h += '<div class="cuwarn">卡包空位不足 ' + CARD_BAG.batchNeed + ' 張,新批暫存不開;請先熔鍊或任用卡包裡的人。</div>';
+  if (n && full) h += '<div class="cuwarn">卡包與溢出區空位合計不足 ' + CARD_BAG.batchNeed + ' 張,新批暫存不開;請先熔鍊或任用卡包裡的人。</div>';
+  else if (n && cardsBagRoom(cs) < CARD_BAG.batchNeed) h += '<div class="cusub">卡包空位不足 ' + CARD_BAG.batchNeed + ' 張:多出的卡會進溢出區(24 小時內沒空位納入就熔成碎片)。</div>';
   if (cu.msg) h += '<div class="cuwarn">' + cuEsc(cu.msg) + '</div>';
   return h + cuLastHtml(v);
 }
@@ -192,8 +200,8 @@ function cuRevealThen(cards, done, quick) {
 // 結果摘要累計:chain 時多批合併成一份。items 的 how:bag 入包 auto 自動熔爐 token 化為信物 shard 信物已滿轉碎片
 function cuLastAdd(label, tab, res, fresh) {
   var L = cu.last;
-  if (fresh || !L) L = cu.last = { label: label, tab: tab, batches: 0, items: [], added: 0, dissolved: 0, tokenN: 0, shardN: 0, shards: 0, tokens: 0, lost: 0 };
-  L.batches++; L.added += res.added; L.dissolved += res.dissolved; L.tokenN += res.tokenN; L.shardN += res.shardN; L.shards += res.shards; L.tokens += res.tokens; L.lost += res.lost;
+  if (fresh || !L) L = cu.last = { label: label, tab: tab, batches: 0, items: [], added: 0, overN: 0, dissolved: 0, tokenN: 0, shardN: 0, shards: 0, tokens: 0, lost: 0 };
+  L.batches++; L.added += res.added; L.overN += (res.over | 0); L.dissolved += res.dissolved; L.tokenN += res.tokenN; L.shardN += res.shardN; L.shards += res.shards; L.tokens += res.tokens; L.lost += res.lost;
   res.items.forEach(function (it) { if (it.how !== 'skip') L.items.push(it); });
   return L;
 }
@@ -220,7 +228,7 @@ function cuDoOpen(cs, v) {
 function cuItemRow(it) {
   var c = it.c, G = CARD_GRADE[c.gr], j = CARD_JOB_BY_ID[c.main], corner = '', i, tag;
   for (i = 0; i < G.corner; i++) corner += '◆';
-  tag = { bag: '入卡包', auto: '自動熔爐 +' + (it.shards | 0) + ' 碎', token: '已有此人 → 信物 +1', shard: '信物已滿 → ' + (it.shards | 0) + ' 碎' }[it.how] || '';
+  tag = { bag: '入卡包', over: '溢出區(24 小時)', auto: '自動熔爐 +' + (it.shards | 0) + ' 碎', token: '已有此人 → 信物 +1', shard: '信物已滿 → ' + (it.shards | 0) + ' 碎' }[it.how] || '';
   return '<div class="cur" style="border-left:5px solid var(--gr' + c.gr + ');padding-left:6px"><span><b>' + G.ch + corner + '</b> ' + cuEsc(c.name) + (c.fig ? ' <span class="cusub">名人</span>' : '') +
     '<span class="cusub"> ' + (j ? j.t[(c.ja[c.main] || 1) - 1] : '') + '</span></span><span class="cusub">' + tag + '</span></div>';
 }
@@ -230,11 +238,11 @@ function cuLastHtml(tab) {
   if (!L || (tab && L.tab !== tab)) return '';
   n = L.items.length;
   h = '<div class="cusec">' + cuEsc(L.label) + ' · 開 ' + L.batches + ' 批 ' + n + ' 張</div>';
-  h += '<div class="cusub">入卡包 ' + L.added + (L.dissolved ? ' · 自動熔爐 ' + L.dissolved : '') + (L.tokenN ? ' · 化為信物 ' + L.tokenN : '') + (L.shardN ? ' · 信物滿轉碎片 ' + L.shardN : '') +
+  h += '<div class="cusub">' + (L.overN ? '進包 ' + L.added + ' 張、溢出 ' + L.overN + ' 張' : '入卡包 ' + L.added) + (L.dissolved ? ' · 自動熔爐 ' + L.dissolved : '') + (L.tokenN ? ' · 化為信物 ' + L.tokenN : '') + (L.shardN ? ' · 信物滿轉碎片 ' + L.shardN : '') +
     (L.shards ? ' · 碎片 +' + L.shards : '') + '</div>';
   show = n <= 7 ? L.items : L.items.filter(function (it) { return it.c.gr >= 3 || it.c.fig; }).slice(0, 24);
   show.forEach(function (it) { h += cuItemRow(it); });
-  if (show.length < n) h += '<div class="cusub">(其餘 ' + (n - show.length) + ' 張為青藍以下,已入卡包或自動熔爐)</div>';
+  if (show.length < n) h += '<div class="cusub">(其餘 ' + (n - show.length) + ' 張為青藍以下,已入卡包 / 溢出區或自動熔爐)</div>';
   return h;
 }
 
@@ -289,13 +297,15 @@ function cuFill(s, o) { return String(s).replace(/\{(\w+)\}/g, function (m, k) {
 // 回傳 { title, tags:[字], lines:[[標題, 內文]] };查無回 null。kind:trait(一般詞條 id)/ xtrait(名人專屬 '名人id|序')/ job('職業id:階')/ skill(技能 id)/ legend
 function cardsUiInfo(kind, key) {
   var o = { title: '', tags: [], lines: [] }, t, j, p, s, f, i, n, names;
+  if (kind === 'bnskill') return (typeof bnSkillInfo === 'function') ? bnSkillInfo(key) : null;
   if (kind === 'trait') {
     t = CARD_TRAIT_BY_ID[key];
     if (!t) return null;
     o.title = t.n;
     o.tags.push((CU_CLS[t.cls] || '') + '類', t.city ? '城建' : '戰事');
     if (t.neg) o.tags.push('負面');
-    o.lines.push(['效果', t.d]);
+    o.lines.push(['效果', cuTraitDesc(t) || t.d]);
+    o.lines.push(['來源', (typeof bnTraitHasBattle === 'function' && bnTraitHasBattle(t.id)) ? '人物天生特質,上陣時依討伐戰鬥規則計入' + (t.city ? ';另有城市面效果' : '') : (t.city ? '人物天生特質,於城市經營時生效' : '人物天生特質')]);
     j = null;
     if (t.conv) {
       p = t.conv.split(':'); j = CARD_JOB_BY_ID[p[0]]; n = +p[1];
@@ -313,7 +323,7 @@ function cardsUiInfo(kind, key) {
     t = f.tr[n];
     o.title = t[0];
     o.tags.push(t[1] ? '名人專屬' : '名人詞條', '城建');
-    o.lines.push(['效果', t[2] || '(史實設定,數值待定)']);
+    o.lines.push(['效果', ((typeof bnXTraitText === 'function') ? bnXTraitText(t[2]) : t[2]) || '(史實設定,數值待定)']);
     o.lines.push(['史實依據', f.bio || '—']);
     o.lines.push(['適用職司', '依詞條所述職務(派駐時)']);
     o.lines.push(['目前生效', CU_LIVE_CITY]);
@@ -348,12 +358,11 @@ function cardsUiInfo(kind, key) {
     o.title = '卡面圖例';
     o.lines.push(['品階', CARD_GRADE.map(function (g) { var c = ''; for (i = 0; i < g.corner; i++) c += '◆'; return g.ch + c; }).join(' < ') + '。邊框色、品字、角飾 ◆ 數三者同步;品階越高,職業上限越高(' + CARD_GRADE.map(function (g) { return g.ch + ' ' + CU_ROMAN[g.jobMax]; }).join('、') + ')']);
     o.lines.push(['才 N', '五維加總的資質概覽,決定縣試品第與名冊排序;不直接換算產出']);
-    o.lines.push(['五維 ' + CARD_STATS.join(''), '用於戰事與部分職務判定;' + CU_LIVE_WAR]);
+    o.lines.push(['五維 ' + CARD_STATS.join(''), '用於討伐戰鬥的兵力、攻防與部分職務判定']);
     o.lines.push(['職業 ●○', '職業專精階級(最高四階),四點亮幾點即第幾階;點職業可看加成百分比(' + CARD_JOB_TIERPCT.slice(1).map(function (v) { return '+' + v + ' %'; }).join('、') + ')']);
     o.lines.push(['專屬', '名人專屬詞條,只有該名人才有']);
-    o.lines.push(['技能', '戰場技能,張數依品階;' + CU_LIVE_WAR]);
-    o.lines.push(['武略', '戰、統、謀類詞條,折疊顯示;' + CU_LIVE_WAR]);
-    o.lines.push(['🔒', '名冊鎖定,鎖定中無法請辭']);
+    o.lines.push(['戰法', '討伐戰鬥用的戰法(指揮 / 主動 / 追擊 / 被動 / 大招),點戰法列可展開白話說明;路人依品階有 1~3 個,名人固定']);
+        o.lines.push(['🔒', '名冊鎖定,鎖定中無法請辭']);
     o.lines.push(['★', '強化星數(0~' + CARD_FURNACE.starMax + '),用卡片熔爐的碎片在名冊詳情升星;每星攻 / 防 / HP +' + Math.round(CARD_FURNACE.starBonus.atk * 100) + ' %,' + CARD_FURNACE.starBonus.skillStar + ' 星起技能強化、' + CARD_FURNACE.starBonus.markStar + ' 星專屬標記;與 🔒 無關']);
     o.lines.push(['點擊', '詞條、技能、職業、才字都可以點開看說明']);
     return o;
@@ -363,7 +372,7 @@ function cardsUiInfo(kind, key) {
 function cardsUiInfoHtml(kind, key) {
   var o = cardsUiInfo(kind, key), h;
   if (!o) return '';
-  h = '<div class="cuinfo" data-a="infox"><h4>' + cuEsc(o.title) + '</h4><div>' + o.tags.map(function (t) { return '<span class="cuit">' + cuEsc(t) + '</span>'; }).join('') + '</div>' +
+  h = '<div class="cuinfo" data-a="infox"><h4>' + cuEsc(o.title) + '</h4><div>' + o.tags.map(function (t, i) { return '<span class="cuit' + (o.tagCls && o.tagCls[i] ? ' ' + o.tagCls[i] : '') + '">' + cuEsc(t) + '</span>'; }).join('') + '</div>' +
     o.lines.map(function (l) { return '<div class="cuil"><b>' + cuEsc(l[0]) + '</b> ' + cuEsc(l[1]) + '</div>'; }).join('') +
     '<button class="cub" data-a="infox">關閉</button></div>';
   return h;
@@ -389,6 +398,7 @@ function cuTick() {
   if (!cu.open || !cu.el || !cu.el.querySelectorAll) return;
   cs = cardsGet();
   if (!cs) return;
+  if (typeof cuOverTick === 'function' && cuOverTick(cs)) { cardsUiRender(); return; }   // 溢出區:倒數文字每秒更新,到期 / 納入時整頁重畫
   nodes = cu.el.querySelectorAll('[data-cd]');
   for (i = 0; i < nodes.length; i++) {
     v = nodes[i].getAttribute('data-cd');
@@ -409,7 +419,7 @@ function cuClick(ev) {
   if (a === 'info') { cu.info = { k: b.getAttribute('data-k'), key: b.getAttribute('data-key') }; cardsUiRender(); return; }
   if (a === 'infox') { cu.info = null; cardsUiRender(); return; }
   cu.info = null;
-  if (a === 'tab') { cu.tab = b.getAttribute('data-t'); cu.detail = null; cu.confirm = null; cu.chain = false; cu.bid = null; cu.bpend = null; }
+  if (a === 'tab') { cu.tab = b.getAttribute('data-t'); cu.omsg = ''; cu.detail = null; cu.confirm = null; cu.chain = false; cu.bid = null; cu.bpend = null; }
   else if (a === 'open') { cuDoOpen(cs, v); }
   else if (typeof cuBagClick === 'function' && cuBagClick(a, b, cs)) { /* 卡包分頁動作(cardsui_bag.js) */ }
   else if (typeof cuNamedClick === 'function' && cuNamedClick(a, b, cs)) { /* 總覽 / 指名分頁動作(cardsui_named.js) */ }
@@ -439,7 +449,7 @@ function cardsUiOpen(tab) {
   if (tab === 'G') tab = 'N';
   if (tab && CU_TAB_NAME[tab]) cu.tab = tab;
   if (cardsClaimGift(cs, cuNow()) > 0) cuSave();
-  cu.open = true; cu.detail = null; cu.confirm = null; cu.msg = ''; cu.info = null; cu.chain = false; cu.bid = null; cu.bpend = null;
+  cu.open = true; cu.omsg = ''; cu.detail = null; cu.confirm = null; cu.msg = ''; cu.info = null; cu.chain = false; cu.bid = null; cu.bpend = null;
   if (typeof panelOpen === 'function') { try { panelOpen('cards'); } catch (e) { /* 略過 */ } }
   cardsUiRender();
   el.hidden = false;

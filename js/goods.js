@@ -386,7 +386,7 @@ function goodsWorkshopList() {
       nm = goodsName(Object.keys(GOODS_SOURCES[e.sid].out)[0]);
       text = !e.ok ? '缺礦脈:' + GOODS_SOURCES[e.sid].near.r + ' 格內放「鐵礦堆」' : (st ? GOODS_STATE_TEXT[st.state] : '等待結算');
     } else {
-      nm = RECIPES[e.rid].name;
+      nm = goodsRecipeName(e.rid);
       text = st ? GOODS_STATE_TEXT[st.state] : '等待結算';
       if (st && st.state === 'blocked' && st.miss) text = '缺料:' + goodsName(st.miss);
       else if (st && st.state === 'short' && st.miss) text = '缺料:' + goodsName(st.miss) + '(部分運轉)';
@@ -418,7 +418,7 @@ function goodsProdRows() {
     else if (e.kind === 'rec' && !e.conn) causes.push('road');
     row = {
       key: e.key, kind: e.kind, type: e.type, name: d.name || e.type, icon: d.icon || '', x: e.x, y: e.y, w: f[0], h: f[1],
-      out: oid, outName: goodsName(oid), outIcon: GOODS[oid].icon || '', recipe: e.kind === 'rec' ? r.name : goodsName(oid),
+      out: oid, outName: goodsName(oid), outIcon: goodsIcon(oid), recipe: e.kind === 'rec' ? goodsRecipeName(e.rid) : goodsName(oid),
       state: st ? st.state : 'wait', miss: miss, missName: miss ? goodsName(miss) : '', conn: e.conn, causes: causes, cause: causes[0] || (st ? 'ok' : 'wait'),
       perHour: st && st.state !== 'blocked' && st.state !== 'full' && st.state !== 'noore' ? Math.round(nom * st.eff * 100) / 100 : 0,
       nominal: nom, capped: capped
@@ -442,7 +442,7 @@ function goodsProdReason(row) {
     var cc = goodsCity();
     return '「' + row.outName + '」已滿倉(' + cityGoodsHave(row.out) + ' / ' + goodsCapOf(row.out) + ')' + (cc && cc.autoSell ? ',多出的自動賣掉(×' + GOODS_SELL_MUL + ')' : ',停工中。開自動賣或用掉它');
   }
-  if (c === 'ore') { var sid = Object.keys(GOODS_SOURCES).filter(function (k) { return GOODS_SOURCES[k].bld === row.type; })[0], nr = sid && GOODS_SOURCES[sid].near; return '缺礦脈:' + (nr ? nr.r + ' 格內要有「鐵礦堆」' : '附近要有礦脈'); }
+  if (c === 'ore') { var sid = goodsSourceIds().filter(function (k) { return GOODS_SOURCES[k].bld === row.type; })[0], nr = sid && GOODS_SOURCES[sid].near; return '缺礦脈:' + (nr ? nr.r + ' 格內要有「鐵礦堆」' : '附近要有礦脈'); }
   if (c === 'wait') return '等待結算';
   return '運轉中';
 }
@@ -474,11 +474,11 @@ function goodsToggleSell() { var c = goodsCity(); if (!c) return false; c.autoSe
 function goodsVisibleList() {
   var c = goodsCity(), out = [];
   if (!c) return out;
-  Object.keys(GOODS).forEach(function (id) {
+  goodsIds().forEach(function (id) {
     var g = GOODS[id];
     if (g.res) return;
     var have = cityGoodsHave(id);
-    if (have > 0 || (!g.legacy && !g.later)) out.push({ id: id, name: g.name, icon: g.icon, tier: g.tier, have: have, cap: goodsCapOf(id) });
+    if (have > 0 || (!g.legacy && !g.later)) out.push({ id: id, name: goodsName(id), icon: goodsIcon(id), tier: g.tier, have: have, cap: goodsCapOf(id) });
   });
   out.sort(function (a, b) { return (a.tier - b.tier) || (a.id < b.id ? -1 : 1); });
   return out;
@@ -495,32 +495,34 @@ function goodsBldName(t) { return (typeof OBJECTS !== 'undefined' && OBJECTS[t] 
 // 某貨品的所有產法:[{ kind:'src'|'rec'|'res', bld, bldName, rid?, inputs:{id:量}, rate? }];純資料
 function goodsMakers(id) {
   var out = [];
-  Object.keys(GOODS_SOURCES).forEach(function (sid) {
+  goodsSourceIds().forEach(function (sid) {
     var s = GOODS_SOURCES[sid];
     if (s.out[id]) out.push({ kind: 'src', bld: s.bld, bldName: goodsBldName(s.bld), inputs: {}, rate: s.out[id] });
   });
   Object.keys(GOODS_RES_SOURCES).forEach(function (b) { if (GOODS_RES_SOURCES[b] === id) out.push({ kind: 'res', bld: b, bldName: goodsBldName(b), inputs: {} }); });
-  Object.keys(RECIPES).forEach(function (rid) {
+  var fxRes = goodsPackNow() && typeof FX_RES_SOURCES !== 'undefined' ? FX_RES_SOURCES[goodsPackNow()] : null;   // 魔幻本族的木 / 石生產建築(只供鏈條頁顯示)
+  if (fxRes) Object.keys(fxRes).forEach(function (b) { if (fxRes[b] === id) out.push({ kind: 'res', bld: b, bldName: goodsBldName(b), inputs: {} }); });
+  goodsRecipeIds().forEach(function (rid) {
     var r = RECIPES[rid];
-    if (r.out[id]) r.bld.forEach(function (b) { out.push({ kind: 'rec', rid: rid, bld: b, bldName: goodsBldName(b), inputs: r.in, rate: r.rate, outN: r.out[id] }); });
+    if (r.out[id]) goodsRecipeBld(rid).forEach(function (b) { out.push({ kind: 'rec', rid: rid, bld: b, bldName: goodsBldName(b), inputs: r.in, rate: r.rate, outN: r.out[id] }); });
   });
   return out;
 }
 // 下游:用到此貨品的配方,以及其他用途標籤(科技成本 / 農具 / 居民消費)
 function goodsUsers(id) {
   var out = { recipes: [], tags: [] }, g = GOODS[id];
-  Object.keys(RECIPES).forEach(function (rid) {
+  goodsRecipeIds().forEach(function (rid) {
     var r = RECIPES[rid];
-    if (r.in[id]) out.recipes.push({ rid: rid, name: r.name, out: Object.keys(r.out)[0], n: r.in[id], bld: r.bld.map(goodsBldName).join('/') });
+    if (r.in[id]) out.recipes.push({ rid: rid, name: goodsRecipeName(rid), out: Object.keys(r.out)[0], n: r.in[id], bld: goodsRecipeBld(rid).map(goodsBldName).join('/') });
   });
-  if (g && !g.res && g.tier >= 1 && !g.legacy) out.tags.push('科技研發成本(T' + g.tier + ' 任選)');
+  if (g && !g.res && g.tier >= 1 && !g.legacy && !g.pack) out.tags.push('科技研發成本(T' + g.tier + ' 任選)');
   if (g && GOODS_FARM_TOOL.id === id) out.tags.push('田糧產 ×' + GOODS_FARM_TOOL.bonus);
   if (g && g.cons) out.tags.push('居民消費:' + g.cons);
   return out;
 }
 // 上游樹:{ id, name, icon, tier, makers:[{ bldName, built, kind, rate, kids:[{ n, node }] }] };depth 限制展開層數
 function goodsChainUp(id, depth, built) {
-  var g = GOODS[id] || {}, node = { id: id, name: g.name || id, icon: g.icon || '', tier: g.tier || 0, makers: [] };
+  var g = GOODS[id] || {}, node = { id: id, name: goodsName(id), icon: goodsIcon(id), tier: g.tier || 0, makers: [] };
   built = built || goodsBuiltTypes();
   if (depth <= 0) return node;
   goodsMakers(id).forEach(function (m) {
@@ -560,8 +562,8 @@ function goodsProdHtml() {
 }
 function goodsChainHtml() {
   var h = '<div class="gsub">選一個貨品,看它的上游原料與下游用途;紅字 = 該生產建築還沒蓋。</div><div class="gchips">';
-  Object.keys(GOODS).filter(function (id) { var g = GOODS[id]; return !g.res && !g.legacy && !g.later && g.tier >= 1; }).sort(function (a, b) { return (GOODS[a].tier - GOODS[b].tier) || (a < b ? -1 : 1); }).forEach(function (id) {
-    h += '<button class="gmini' + (id === goodsChainSel ? ' on' : '') + '" data-gp="chain" data-id="' + id + '">' + GOODS[id].icon + goodsEsc(GOODS[id].name) + '</button>';
+  goodsIds().filter(function (id) { var g = GOODS[id]; return !g.res && !g.legacy && !g.later && g.tier >= 1; }).sort(function (a, b) { return (GOODS[a].tier - GOODS[b].tier) || (a < b ? -1 : 1); }).forEach(function (id) {
+    h += '<button class="gmini' + (id === goodsChainSel ? ' on' : '') + '" data-gp="chain" data-id="' + id + '">' + goodsIcon(id) + goodsEsc(goodsName(id)) + '</button>';
   });
   h += '</div><div class="gtier">上游(怎麼做)</div>' + goodsChainNodeHtml(goodsChainUp(goodsChainSel, 6), 0, 0);
   var u = goodsUsers(goodsChainSel);

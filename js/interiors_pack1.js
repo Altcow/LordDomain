@@ -259,7 +259,7 @@ function ipTechBrief() {
   try {
     s = (typeof techState === 'function') ? techState() : null;
     if (s && s.cur && s.cur.length) {
-      s.cur.slice(0, 2).forEach(function (c) { var n = (typeof techNode === 'function') ? techNode(c.id) : null; lines.push('研發中:' + (n ? n.name : c.id) + (typeof techFmtTime === 'function' ? ' 剩 ' + techFmtTime(c.left) : '')); });
+      s.cur.slice(0, 2).forEach(function (c) { var n = (typeof techNode === 'function') ? techNode(c.id) : null; lines.push('研發中:' + (n ? ((typeof techLabelOf === 'function') ? techLabelOf(n) : n.name) : c.id) + (typeof techFmtTime === 'function' ? ' 剩 ' + techFmtTime(c.left) : '')); });
       return lines.join(';');
     }
     if (typeof techSummary === 'function') return techSummary();

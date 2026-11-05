@@ -7,7 +7,7 @@ var BNMAP = { ch: 1, sel: '', bc: null, env: null };
 var BNMAP_SCENE = { plain: '平原', hill: '山地', water: '水域', rain: '雨天' };
 function bnMapEnv() { return BNMAP.env || bnStgEnv(BNUI.env); }
 function bnMapData() { return bnu.data || bnUiLoad(); }
-function bnMapGoodsName(id) { return (typeof GOODS !== 'undefined' && GOODS[id] && GOODS[id].name) || id; }
+function bnMapGoodsName(id) { if (typeof goodsName === 'function' && typeof GOODS !== 'undefined' && GOODS[id]) return goodsName(id) || id; return (typeof GOODS !== 'undefined' && GOODS[id] && GOODS[id].name) || id; }
 function bnMapSkillName(id) { return (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[id] && BN_SKILLS[id].name) || id; }
 // 我方戰力:目前布陣有人用布陣,否則名冊最強 5 人
 function bnMapMyPower() {
@@ -57,16 +57,16 @@ function bnMapRatioTxt(mine, rec) {
 }
 
 function bnMapRender() {
-  var el = bnu.mapEl, d, env, ord, cap, got, wk, mine, h = '', ch, st, rows = '', k, ui, cn, sel, f, rw, bt, doneB, can, ratio, stats, lock, cl, locked = {}, first;
+  var el = bnu.mapEl, d, env, ord, mine, h = '', ch, st, rows = '', k, ui, cn, sel, f, rw, bt, doneB, can, ratio, stats, lock, cl, locked = {}, first;
   if (!el || typeof BN_STAGES === 'undefined') return;
   d = bnMapData(); env = bnMapEnv();
-  ord = bnStgOrders(d, env); cap = bnStgGoldCap(env); got = bnStgGoldGot(d, env); wk = bnStgWeek(d, env); mine = bnMapMyPower(); stats = bnMapStageStats(d);
+  ord = bnStgOrders(d, env); mine = bnMapMyPower(); stats = bnMapStageStats(d);
   if (!BNMAP.sel || !bnStgById(BNMAP.sel)) {   // 預設選第一個尚未通關且已解鎖的關,否則最後通關關
     BNMAP.sel = '1-1';
     for (k = 0; k < BN_STAGES.length; k++) { if (!bnStgUnlock(d.clear, BN_STAGES[k].id, env).ok) break; BNMAP.sel = BN_STAGES[k].id; if (!(d.clear[BN_STAGES[k].id] | 0)) break; }
     BNMAP.ch = bnStgById(BNMAP.sel).ch;
   }
-  h += '<div class="bnm-head"><span>軍令 <b>' + ord.left + '/' + ord.max + '</b></span><span>今日金幣 <b>' + got + '/' + cap + '</b></span><span>本週碎片 <b>' + wk.shards + '/' + BN_STG.shardWeek + '</b></span><span>兵書 <b>' + wk.books + '/' + BN_STG.bookWeek + '</b></span><span>我方戰力 <b>' + mine + '</b></span><span>進度 <b>' + stats.cleared + '/' + stats.total + '</b> · ★' + stats.stars + '/' + stats.total * 3 + '</span></div>';
+  h += '<div class="bnm-head"><span>軍令 <b>' + ord.left + '/' + ord.max + '</b></span><span>我方戰力 <b>' + mine + '</b></span><span>進度 <b>' + stats.cleared + '/' + stats.total + '</b> · ★' + stats.stars + '/' + stats.total * 3 + '</span></div>';
   h += '<div class="bnm-chs">';
   BN_CHAPTERS.forEach(function (c) {
     var u = bnStgUnlock(d.clear, c.n + '-1', env);
@@ -86,9 +86,9 @@ function bnMapRender() {
     h += '<div class="bnm-det"><h3>' + sel.id + ' ' + bnUiEsc(sel.name) + (sel.boss ? ' <i>頭目</i>' : '') + '</h3><p>' + bnUiEsc(sel.desc) + '</p><p class="sm">場景:' + (BNMAP_SCENE[sel.scene] || '平原') + (f.bonds.length ? ' · 敵方陣勢:' + f.bonds.map(bnUiEsc).join('、') : '') + '</p>';
     h += '<div class="bnm-foes">' + f.list.map(function (x) { return '<span><small>' + bnUiEsc(x.title) + '</small>' + bnUiEsc(x.name) + ' <u>' + bnUiEsc(x.troop) + '</u></span>'; }).join('') + '</div>';
     h += '<p>建議戰力 <b>' + f.rec + '</b> · 我方 <b>' + mine + '</b> <em class="' + ratio[1] + '">' + ratio[0] + '</em></p>';
-    h += '<p class="sm">' + (first ? '首通獎勵:' + bnMapRewardLine({ gold: rw.first.gold, goods: rw.first.goods, shards: rw.first.shards, book: rw.first.book, token: rw.first.token }) + '(首通不耗軍令)' : '重複獎勵:金幣 ' + rw.repeat.gold + '、碎片 ' + rw.repeat.shards + '、' + bnMapGoodsName(rw.repeat.goods[0]) + ' 機率 ' + Math.round(rw.repeat.goodsP * 100) + '%、兵書「' + bnMapSkillName(rw.repeat.book) + '」機率 ' + Math.round(rw.repeat.bookP * 100) + '%(勝利耗 1 軍令)') + '</p>';
+    h += '<p class="sm">' + (first ? '首通:' + bnMapRewardLine({ gold: rw.first.gold, goods: rw.first.goods, shards: rw.first.shards, book: rw.first.book, token: rw.first.token }) + '(首通不耗軍令)' : '首通已領') + '</p>';
+    h += '<p class="sm">今日重複獎勵:還剩 <b>' + bnStgRepLeft(d, sel.id, env) + '/' + BN_STG.repPerDay + '</b> 場(金幣 ' + rw.repeat.gold + '、碎片 ' + rw.repeat.shards + '、' + bnMapGoodsName(rw.repeat.goods[0]) + ' 機率 ' + Math.round(rw.repeat.goodsP * 100) + '%、兵書「' + bnMapSkillName(rw.repeat.book) + '」機率 ' + Math.round(rw.repeat.bookP * 100) + '%;勝利耗 1 軍令)</p>';
     if (!(((d.got || {})[sel.id] | 0) & 2)) h += '<p class="sm">三星首次:金幣 ' + rw.star3.gold + '、碎片 ' + rw.star3.shards + '(三星:勝利 + 無人陣亡 + 5 回合內全殲)</p>';
-    h += '<p class="sm">金幣、碎片、兵書受每日 / 每週上限;不給酒令與名人。</p>';
     h += '<button class="bnf-go" data-a="fight"' + (can.ok ? '' : ' disabled') + '>' + (can.ok ? '前往布陣' : bnUiEsc(can.why)) + '</button></div>';
   }
   h += '</div></div>';
@@ -139,7 +139,7 @@ function bnMapRewardHtml(rep) {
   if (rep.books) a.push('兵書「' + bnMapSkillName(rep.bookId) + '」×' + rep.books);
   if (rep.token) a.push('指名券 ×' + rep.token);
   h += '<p class="rw">' + (rep.first && rep.id !== 'B' ? '首通 · ' : '') + (rep.star3 ? '三星首次 · ' : '') + (a.length ? '獲得:' + a.join('、') : '本次沒有獎勵') + '</p>';
-  if (rep.cut && (rep.cut.gold || rep.cut.shards || rep.cut.books)) h += '<p class="sm">已達上限未發:' + [rep.cut.gold ? '金幣 ' + rep.cut.gold : '', rep.cut.shards ? '碎片 ' + rep.cut.shards : '', rep.cut.books ? '兵書 ' + rep.cut.books : ''].filter(Boolean).join('、') + '</p>';
+  if (rep.first === false && rep.id !== 'B' && rep.repLeft !== undefined) h += '<p class="sm">' + (rep.repGot ? '' : '今日重複獎勵已領完,本場僅練習。') + '今日重複獎勵剩餘 ' + rep.repLeft + ' 場</p>';
   if (rep.order) h += '<p class="sm">消耗軍令 1</p>';
   return h;
 }

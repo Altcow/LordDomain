@@ -2,12 +2,11 @@
 // 設計原則:戰鬥沒有小兵,每個單位都是一位武將;敵方每關 = 3~5 位『敵將』(各有名字、稱號、外觀鍵 foe:*)。兵種(盾步騎弓謀)只代表武將的戰鬥類型。
 // 依賴(載入順序):carddata.js、cards.js(可缺)、bn_data.js、bn_skills_data.js、bn_units.js。純邏輯、無 DOM;外部全域(world cardsGet 等)一律 typeof 守衛,測試以 env 注入。
 // 所有數字 PLACEHOLDER(v 陣列由 tools/bn_stage_check.js 解出,見 tools/bn_stage_report.md)。ES2017;不用 ?. ??。
-// 全域:BN_STG BN_STG_ARCH BN_CHAPTERS BN_STAGES BN_STG_BY_ID bnStgById bnStgFoes bnStgSolveV bnStgBountyDef bnStgEnv bnStgDayNo bnStgWeekNo bnStgNorm bnStgPack bnStgOrders bnStgGoldCap bnStgUnlock bnStgCanStart bnStgRewards bnStgSettle bnStgBountySettle bnStgChapterStars
+// 全域:BN_STG BN_STG_ARCH BN_CHAPTERS BN_STAGES BN_STG_BY_ID bnStgById bnStgFoes bnStgSolveV bnStgBountyDef bnStgEnv bnStgDayNo bnStgWeekNo bnStgNorm bnStgPack bnStgOrders bnStgRepLeft bnStgUnlock bnStgCanStart bnStgRewards bnStgSettle bnStgBountySettle bnStgChapterStars
 
 var BN_STG = {
   perDay: 5, store: 5,                       // 軍令:每日 +5、最多存 store(=perDay 即每日重置;PLAN 預設存 10 可改此值)
-  goldFloor: 300, goldHalf: 0.5, goldCapMax: 30000,   // 每日討伐金幣上限 = clamp(每小時金幣產出 × 0.5, 保底, 上限)
-  shardWeek: 20, bookWeek: 2,                // 戰鬥碎片 / 兵書 週上限
+  repPerDay: 3,                              // 每關每遊戲日前 N 場勝利才有重複獎勵;取消所有數字上限(金幣日上限、碎片 / 兵書週上限),獎勵不截斷
   gold1: 600, repeatDiv: 5, star3Gold: 200, star3Shards: 2,   // 首通 600 × 章、重複 = 首通 / 5、三星額外
   shards1: 5, shardsRep: 1, bookRepP: 0.05, matRepP: 0.5,
   bounty: { gold: 200, shards: 1, goods: 1, lo: 0.95, hi: 1.05, k: 1.15 },   // 敵方戰力 × k = 建議戰力口徑(流寇敵將編制較整齊、無名人,實測 k=1.15 使最強隊勝率約 45~55%)
@@ -205,28 +204,30 @@ function bnStgWeekNo(now) {
 
 // ───────── 存檔欄位(lorddomain.bn.v1 擴充;有值才寫、壞值夾住)─────────
 function bnStgInt(v, lo, hi) { v = +v; if (!isFinite(v)) return lo; v = Math.floor(v); return v < lo ? lo : (v > hi ? hi : v); }
-function bnStgNew() { return { got: {}, day: null, bounty: null, wk: null, gold: null, books: {} }; }
+function bnStgNew() { return { got: {}, day: null, bounty: null, rep: null, books: {} }; }
 function bnStgNorm(o, d) {
   var k, v;
-  d.got = {}; d.day = null; d.bounty = null; d.wk = null; d.gold = null; d.books = {};
+  d.got = {}; d.day = null; d.bounty = null; d.rep = null; d.books = {};
   if (!o || typeof o !== 'object') return d;
   if (o.got && typeof o.got === 'object') for (k in o.got) if (BN_STG_BY_ID[k]) { v = bnStgInt(o.got[k], 0, 3); if (v) d.got[k] = v; }
   if (o.day && typeof o.day === 'object') { d.day = { d: bnStgInt(o.day.d, 0, 1e7), left: bnStgInt(o.day.left, 0, 99) }; if (!d.day.d) d.day = null; }
   if (o.bounty && typeof o.bounty === 'object') { v = bnStgInt(o.bounty.d, 0, 1e7); if (v && o.bounty.done) d.bounty = { d: v, done: 1 }; }
-  if (o.wk && typeof o.wk === 'object') { d.wk = { w: bnStgInt(o.wk.w, 0, 1e7), shards: bnStgInt(o.wk.shards, 0, 9999), books: bnStgInt(o.wk.books, 0, 99) }; if (!d.wk.w) d.wk = null; }
-  if (o.gold && typeof o.gold === 'object') { d.gold = { d: bnStgInt(o.gold.d, 0, 1e7), got: bnStgInt(o.gold.got, 0, 1e7) }; if (!d.gold.d) d.gold = null; }
+  // 舊存檔的 wk / gold(週 / 日上限計數)已不作用,讀取時直接丟棄
+  if (o.rep && typeof o.rep === 'object') {   // rep = {d: 遊戲日號, n: {關卡id: 當日已領重複獎勵次數}}
+    v = bnStgInt(o.rep.d, 0, 1e7);
+    if (v && o.rep.n && typeof o.rep.n === 'object') { d.rep = { d: v, n: {} }; for (k in o.rep.n) if (BN_STG_BY_ID[k]) { v = bnStgInt(o.rep.n[k], 0, BN_STG.repPerDay); if (v) d.rep.n[k] = v; } if (!Object.keys(d.rep.n).length) d.rep = null; }
+  }
   if (o.books && typeof o.books === 'object') for (k in o.books) if (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[k]) { v = bnStgInt(o.books[k], 0, 999); if (v) d.books[k] = v; }
   return d;
 }
-function bnStgHas(d) { return Object.keys(d.got || {}).length || d.day || d.bounty || d.wk || d.gold || Object.keys(d.books || {}).length; }
+function bnStgHas(d) { return Object.keys(d.got || {}).length || d.day || d.bounty || d.rep || Object.keys(d.books || {}).length; }
 // 要併入存檔 JSON 的欄位(只含有值者)
 function bnStgPack(d) {
   var o = {};
   if (d.got && Object.keys(d.got).length) o.got = d.got;
   if (d.day) o.day = d.day;
   if (d.bounty) o.bounty = d.bounty;
-  if (d.wk) o.wk = d.wk;
-  if (d.gold) o.gold = d.gold;
+  if (d.rep) o.rep = d.rep;
   if (d.books && Object.keys(d.books).length) o.books = d.books;
   return o;
 }
@@ -243,18 +244,15 @@ function bnStgSpendOrder(d, env) {
   var cur = bnStgOrders(d, env), today = bnStgDayNo(env.now());
   d.day = { d: Math.max(today, d.day ? d.day.d : 0), left: Math.max(0, cur.left - 1) };
 }
-function bnStgGoldCap(env) {
-  var inc = +env.income() || 0;
-  return Math.max(BN_STG.goldFloor, Math.min(BN_STG.goldCapMax, Math.round(inc * BN_STG.goldHalf)));
+// 該關今日重複獎勵剩餘場數(以遊戲日重置)
+function bnStgRepLeft(d, id, env) {
+  var today = bnStgDayNo(env.now()), n = (d.rep && d.rep.d >= today && d.rep.n) ? (d.rep.n[id] | 0) : 0;
+  return Math.max(0, BN_STG.repPerDay - n);
 }
-function bnStgGoldGot(d, env) {
-  var today = bnStgDayNo(env.now());
-  return d.gold && d.gold.d >= today ? d.gold.got : 0;
-}
-function bnStgWeek(d, env) {
-  var w = bnStgWeekNo(env.now());
-  if (d.wk && d.wk.w >= w) return { shards: d.wk.shards, books: d.wk.books };
-  return { shards: 0, books: 0 };
+function bnStgRepUse(d, id, env) {
+  var today = bnStgDayNo(env.now()), n = (d.rep && d.rep.d >= today && d.rep.n) ? d.rep.n : {};
+  n[id] = Math.min(BN_STG.repPerDay, (n[id] | 0) + 1);
+  d.rep = { d: Math.max(today, d.rep ? d.rep.d : 0), n: n };
 }
 
 // 解鎖:章 n 需官階第 n 階;章內依序;新章需前章頭目已過。clear = d.clear。回 {ok, why}
@@ -294,26 +292,20 @@ function bnStgRewards(id) {
   };
 }
 function bnStgFrac(seed, tag, id) { return bnHash('bnrw', seed | 0, tag, id) / 4294967296; }
-// 發獎共用:gold/shards/books 受上限;goods/token 不受。回報告;實際寫入走 env
+// 發獎共用:全部照給,不截斷(無任何數字上限);實際寫入走 env
 function bnStgGrant(d, env, want, rep) {
-  var cap = bnStgGoldCap(env), got = bnStgGoldGot(d, env), wk = bnStgWeek(d, env), today = bnStgDayNo(env.now()), w = bnStgWeekNo(env.now()), g, s, b;
-  rep.cap = { gold: cap, goldGot: got, shardLeft: BN_STG.shardWeek - wk.shards, bookLeft: BN_STG.bookWeek - wk.books };
-  g = Math.max(0, Math.min(want.gold || 0, cap - got));
-  s = Math.max(0, Math.min(want.shards || 0, BN_STG.shardWeek - wk.shards));
-  b = Math.max(0, Math.min(want.books || 0, BN_STG.bookWeek - wk.books));
-  rep.cut = { gold: (want.gold || 0) - g, shards: (want.shards || 0) - s, books: (want.books || 0) - b };
-  if (g > 0) { env.coin(g); d.gold = { d: Math.max(today, d.gold ? d.gold.d : 0), got: (d.gold && d.gold.d >= today ? d.gold.got : 0) + g }; }
+  var g = Math.max(0, want.gold || 0), s = Math.max(0, want.shards || 0), b = Math.max(0, want.books || 0);
+  if (g > 0) env.coin(g);
   if (s > 0) env.shards(s);
   if (b > 0 && want.bookId) { d.books[want.bookId] = (d.books[want.bookId] | 0) + b; rep.bookId = want.bookId; }
-  if (s > 0 || b > 0) d.wk = { w: Math.max(w, d.wk ? d.wk.w : 0), shards: wk.shards + s, books: wk.books + b };
   (want.goods || []).forEach(function (x) { if (x[1] > 0) { env.goods(x[0], x[1]); rep.goods.push({ id: x[0], n: x[1] }); } });
   if (want.token > 0) { env.tokens(want.token); rep.token = want.token; }
   rep.gold = g; rep.shards = s; rep.books = b;
   return rep;
 }
-// 討伐結算。res = {winner, stars, seed}。d 為 bn 存檔資料(clear、got、day、gold、wk、books 會被改)。回報告 {win, first, star3, order, gold, shards, books, goods, token, cut, cap}
+// 討伐結算。res = {winner, stars, seed}。d 為 bn 存檔資料(clear、got、day、rep、books 會被改)。回報告 {win, first, star3, order, gold, shards, books, goods, token, repLeft(僅重複場)}
 function bnStgSettle(d, id, res, env) {
-  var st = bnStgById(id), rep = { win: false, id: id, first: false, star3: false, order: 0, gold: 0, shards: 0, books: 0, goods: [], token: 0, cut: { gold: 0, shards: 0, books: 0 }, cap: null }, rw, got, first, stars, want, f;
+  var st = bnStgById(id), rep = { win: false, id: id, first: false, star3: false, order: 0, gold: 0, shards: 0, books: 0, goods: [], token: 0 }, rw, got, first, stars, want, f;
   env = bnStgEnv(env);
   if (!st || !res || res.winner !== 'A') return rep;
   d.clear = d.clear || {}; d.got = d.got || {}; d.books = d.books || {};
@@ -325,9 +317,13 @@ function bnStgSettle(d, id, res, env) {
     got |= 1;
   } else {
     bnStgSpendOrder(d, env); rep.order = 1;
-    want.gold += rw.repeat.gold; want.shards += rw.repeat.shards;
-    if (bnStgFrac(res.seed, 'm', id) < rw.repeat.goodsP) want.goods.push([rw.repeat.goods[0], rw.repeat.goods[1]]);
-    if (bnStgFrac(res.seed, 'b', id) < rw.repeat.bookP) want.books += 1;
+    if (bnStgRepLeft(d, id, env) > 0) {   // 每遊戲日前 N 場勝利才有重複獎勵,之後僅當練習(仍耗軍令)
+      bnStgRepUse(d, id, env); rep.repGot = true;
+      want.gold += rw.repeat.gold; want.shards += rw.repeat.shards;
+      if (bnStgFrac(res.seed, 'm', id) < rw.repeat.goodsP) want.goods.push([rw.repeat.goods[0], rw.repeat.goods[1]]);
+      if (bnStgFrac(res.seed, 'b', id) < rw.repeat.bookP) want.books += 1;
+    }
+    rep.repLeft = bnStgRepLeft(d, id, env);
   }
   if (stars >= 3 && !(got & 2)) { want.gold += rw.star3.gold; want.shards += rw.star3.shards; got |= 2; rep.star3 = true; }
   bnStgGrant(d, env, want, rep);
@@ -337,7 +333,7 @@ function bnStgSettle(d, id, res, env) {
 }
 function bnStgBountyDone(d, env) { return !!(d.bounty && d.bounty.done && d.bounty.d >= bnStgDayNo(env.now())); }
 function bnStgBountySettle(d, res, env) {
-  var rep = { win: false, id: 'B', first: false, gold: 0, shards: 0, books: 0, goods: [], token: 0, cut: { gold: 0, shards: 0, books: 0 }, cap: null }, today, want, mats;
+  var rep = { win: false, id: 'B', first: false, gold: 0, shards: 0, books: 0, goods: [], token: 0 }, today, want, mats;
   env = bnStgEnv(env);
   if (!res || res.winner !== 'A') return rep;
   rep.win = true;

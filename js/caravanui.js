@@ -14,7 +14,7 @@ function cvTime(ms) {
 function cvItemsText(items) {
   var parts = [];
   Object.keys(items).sort(function (a, b) { return goodsTier(b) - goodsTier(a); }).forEach(function (id) {
-    parts.push((GOODS[id] ? GOODS[id].icon : '') + goodsName(id) + '×' + items[id]);
+    parts.push((GOODS[id] ? goodsIcon(id) : '') + goodsName(id) + '×' + items[id]);
   });
   return parts.length ? parts.join(' ') : '(空手而回)';
 }
@@ -34,15 +34,15 @@ function caravanPanelHtml() {
   var s = caravanGet(), now = Date.now(), h = '', busy = caravanBusyEscorts(), c, q, trip, pre = caravanPrereq();
   cvFixSel();
   c = caravanCart(cvUi.cart);
-  h += '<button class="close" data-cv="close" title="關閉">✕</button><b>🛻 走鏢</b>';
+  h += '<button class="close" data-cv="close" title="關閉">✕</button><b>🛻 ' + cvEsc(caravanOfficeName()) + '</b>';
   if (!pre.ok) h += '<div class="cvsub" data-cv-pre="1" style="color:#c0392b"><b>暫時不能出車</b>:' + cvEsc(pre.reason) + '。(已在路上的車隊照常結算。)</div>';
   h += '<div class="cvsub">今日車次 ' + (CARAVAN_DAILY_MAX - caravanLeft(now)) + ' / ' + CARAVAN_DAILY_MAX + ' · 金幣 ' + cvCoin() + '。高階貨品(T1~T4)由走鏢帶回,品階機率只看馬車品階。</div>';
 
   h += '<div class="cvh">馬車</div>';
   CARAVAN_CARTS.forEach(function (k) {
     var own = !!s.carts[k.id], tr = caravanTrip(k.id), odds = caravanOdds(k.id);
-    h += '<div class="cvrow' + (own && k.id === cvUi.cart ? ' sel' : '') + '"><span class="cvsw" style="background:' + k.color + '"></span><b>' + k.name + '</b> ' + cvEsc(k.title) +
-      '<small>T1~T4 ' + odds.map(cvPct).join(' / ') + ' · 抽 ' + k.draws + ' · 鏢師 ' + k.slots + '</small>';
+    h += '<div class="cvrow' + (own && k.id === cvUi.cart ? ' sel' : '') + '"><span class="cvsw" style="background:' + k.color + '"></span><b>' + k.name + '</b> ' + cvEsc(caravanCartTitle(k)) +
+      '<small>T1~T4 ' + odds.map(cvPct).join(' / ') + ' · 抽 ' + k.draws + ' · ' + caravanEscortTitle() + ' ' + k.slots + '</small>';
     if (tr) h += '<span class="cvr" data-cvt="' + tr.t1 + '">路上 ' + cvTime(tr.t1 - now) + '</span>';
     else if (own) h += '<button class="cvmini" data-cv="cart" data-k="' + k.id + '">' + (k.id === cvUi.cart ? '已選' : '選用') + '</button>';
     else h += '<button class="cvmini" data-cv="buy" data-k="' + k.id + '"' + (cvCoin() < k.cost ? ' disabled' : '') + '>購買 ' + k.cost + '</button>';
@@ -55,10 +55,10 @@ function caravanPanelHtml() {
   else {
     h += '<div class="cvrow">';
     CARAVAN_ROUTES.forEach(function (r) {
-      h += '<button class="cvmini' + (r.id === cvUi.route ? ' on' : '') + '" data-cv="route" data-k="' + r.id + '">' + cvEsc(r.name) + '</button>';
+      h += '<button class="cvmini' + (r.id === cvUi.route ? ' on' : '') + '" data-cv="route" data-k="' + r.id + '">' + cvEsc(caravanRouteName(r)) + '</button>';
     });
     h += '</div>';
-    h += '<div class="cvsub">鏢師(最多 ' + c.slots + ' 位):</div><div class="cvrow">';
+    h += '<div class="cvsub">' + caravanEscortTitle() + '(最多 ' + c.slots + ' 位):</div><div class="cvrow">';
     var any = false;
     s.roster.forEach(function (id) {
       if (busy[id]) return;
@@ -73,7 +73,7 @@ function caravanPanelHtml() {
     h += '<button class="cvgo" data-cv="go"' + (cvCoin() < q.fee || caravanLeft(now) <= 0 || !pre.ok ? ' disabled' : '') + '>出發</button>';
   }
 
-  h += '<div class="cvh">鏢師名冊 ' + s.roster.length + ' / ' + CARAVAN_ROSTER_MAX + '</div>';
+  h += '<div class="cvh">' + caravanEscortTitle() + '名冊 ' + s.roster.length + ' / ' + CARAVAN_ROSTER_MAX + '</div>';
   if (!s.roster.length) h += '<div class="cvsub">還沒有鏢師,從下面的今日招募請人。</div>';
   s.roster.forEach(function (id) {
     h += '<div class="cvrow"><img src="' + caravanEscortImg(id) + '" alt="" loading="lazy"><b>' + cvEsc(caravanEscortName(id)) + '</b> 戰力 ' + caravanEscortPower(id) + '(' + caravanEscortGrade(caravanEscortPower(id)) + ')' +
@@ -93,7 +93,7 @@ function caravanPanelHtml() {
   h += '<div class="cvh">最近戰果</div>';
   if (!s.log.length) h += '<div class="cvsub">還沒有走過鏢。</div>';
   s.log.slice().reverse().forEach(function (e) {
-    h += '<div class="cvsub"><b>' + cvEsc(caravanCart(e.cart).name) + '車 · ' + cvEsc(caravanRoute(e.route).name) + ' · ' + CARAVAN_OUTCOMES[e.outcome].name + '</b><br>' + cvEsc(cvItemsText(e.items)) + '</div>';
+    h += '<div class="cvsub"><b>' + cvEsc(caravanCart(e.cart).name) + '車 · ' + cvEsc(caravanRouteName(caravanRoute(e.route))) + ' · ' + CARAVAN_OUTCOMES[e.outcome].name + '</b><br>' + cvEsc(cvItemsText(e.items)) + '</div>';
   });
   return h;
 }

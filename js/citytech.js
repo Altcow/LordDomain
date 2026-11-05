@@ -21,6 +21,7 @@ function techNode(id) {
   }
   return techNode._m[id] || null;
 }
+function techLabelOf(n) { return (typeof fxTechLabel === 'function') ? fxTechLabel(n) : (n ? n.name : ''); }   // 節點顯示名(魔幻世界讀覆寫,其餘原名)
 function techIsStyle(n) { return !!n && n.id.indexOf('st_') === 0; }
 function techIsMega(n) { return !!n && (n.kind === 'mega' || n.id.indexOf('mg_') === 0); }   // 里程碑(大工程)不走研發序列
 
@@ -124,7 +125,7 @@ function techGoodsIds(tier) {
   // 該階貨品尚未定義時(目前貨品只到 T2,科技卻有 T3/T4 需求),退用現有最高階貨品,避免中後期科技永遠付不起
   var t = tier;
   while (t >= 0) {
-    var ids = Object.keys(GOODS).filter(function (g) { return GOODS[g].tier === t && !GOODS[g].res; }).sort();
+    var ids = Object.keys(GOODS).filter(function (g) { return GOODS[g].tier === t && !GOODS[g].res && !GOODS[g].pack; }).sort();   // 魔幻特色貨品(pack)不可抵付科技成本(PLAN_FANTASY_B Q7)
     if (ids.length) return ids;
     t--;
   }
@@ -314,7 +315,9 @@ function techUnlocked(unlockId) {
 // 回傳 true/false;資料檔未載入或物件不在對照表 → null(呼叫端沿用舊判定)
 // 物件對應節點:NL_OBJ_TECH 優先,其次 nl_objects.js 新物件的 tech 欄;無則 undefined
 function nlObjTech(objId) {
-  var src = (typeof NL_OBJ_TECH !== 'undefined') ? NL_OBJ_TECH[objId] : undefined;
+  var fx = (typeof fxObjTech === 'function') ? fxObjTech(objId) : undefined, src;   // 魔幻世界:本族風格件走 FX 覆寫(js/fxpack.js);歷史世界恆 undefined
+  if (fx !== undefined) return fx;
+  src = (typeof NL_OBJ_TECH !== 'undefined') ? NL_OBJ_TECH[objId] : undefined;
   if (src === undefined && typeof NL_NEW_OBJECTS !== 'undefined' && NL_NEW_OBJECTS[objId]) src = NL_NEW_OBJECTS[objId].tech;
   return src;
 }
@@ -327,12 +330,17 @@ function nlFeatureOpen(id) {
   if (g.type === 'node') return techDone(g.need);
   if (g.type === 'bld') {
     o = (typeof world !== 'undefined' && world && world.objects) || [];
-    for (i = 0; i < o.length; i++) if (o[i] && o[i].type === g.need) n++;
+    for (i = 0; i < o.length; i++) if (o[i] && (o[i].type === g.need || (typeof fxAsList === 'function' && fxAsList(o[i].type).indexOf(g.need) >= 0))) n++;   // 魔幻件以 funcLike 視同漢式功能件
     return n >= (g.min || 1);
   }
   return null;
 }
 function nlUnlocked(objId) {
+  if (typeof fxPack === 'function' && fxPack()) {   // 魔幻世界:被取代的漢式物件隱藏;本族風格件走科技閘(住宅第一件仍起手)
+    if (fxHiddenObj(objId)) return false;
+    var ft = fxObjTech(objId);
+    if (ft !== undefined && typeof objPackOk === 'function' && objPackOk(objId)) return ft === 'start' ? true : techDone(ft);
+  }
   if (typeof objPackOk === 'function' && typeof OBJECTS !== 'undefined' && OBJECTS[objId] && OBJECTS[objId].pack) return objPackOk(objId);   // 風格件:風格相符即起手開放,不符不可建
   if (typeof NL_OBJ_TECH === 'undefined' || typeof CITY_TECHS === 'undefined') return null;
   if (typeof NL_START_OBJS !== 'undefined' && NL_START_OBJS.indexOf(objId) >= 0) return true;
@@ -382,7 +390,7 @@ function techSummary() {
 function techListText() {
   var s = techState(); if (!s) return '';
   var lines = [techSummary()];
-  s.cur.forEach(function (c) { var n = techNode(c.id); lines.push('研發中 ' + (n ? n.name : c.id) + ' ' + techFmtTime(c.left)); });
-  s.queue.forEach(function (id, i) { var n = techNode(id); lines.push((i + 1) + '. ' + (n ? n.name : id) + (techCanStart(id) ? '' : ' (等待)')); });
+  s.cur.forEach(function (c) { var n = techNode(c.id); lines.push('研發中 ' + (n ? techLabelOf(n) : c.id) + ' ' + techFmtTime(c.left)); });
+  s.queue.forEach(function (id, i) { var n = techNode(id); lines.push((i + 1) + '. ' + (n ? techLabelOf(n) : id) + (techCanStart(id) ? '' : ' (等待)')); });
   return lines.join('\n');
 }

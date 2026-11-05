@@ -1,8 +1,8 @@
-const VERSION = 'v44';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v45';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
-const RUNTIME_PATHS = ['/assets/buildings/', '/assets/portraits/', '/assets/ui/', '/assets/terrain/', '/assets/fullbody/', '/assets/bnfx/', '/assets/furnace/'];
+const RUNTIME_PATHS = ['/assets/buildings/', '/assets/portraits/', '/assets/ui/', '/assets/terrain/', '/assets/fullbody/', '/assets/bnfx/', '/assets/furnace/', '/assets/traffic/'];
 const PRECACHE = [
   './',
   './index.html',
@@ -14,11 +14,14 @@ const PRECACHE = [
   './js/unitinfo.js',
   './js/wallskin.js',
   './js/theme_skin.js',
+  './js/fx_tech_data.js',
+  './js/fxpack.js',
   './js/progdata.js',
   './js/cityonly.js',
   './js/cityscore_data.js',
   './js/cityscore.js',
   './js/goodsdata.js',
+  './js/fx_goods_data.js',
   './js/goods.js',
   './js/techtree_data.js',
   './js/nolevel_data.js',
@@ -70,6 +73,9 @@ const PRECACHE = [
   './js/crowdparts.js',
   './js/crowdparts_fantasy.js',
   './js/citytraffic.js',
+  './js/gatherdata.js',
+  './js/citygather.js',
+  './js/traffic_sprites.js',
   './js/talentpatrol.js',
   './js/chainvis.js',
   './js/cityfx_data.js',
@@ -94,6 +100,7 @@ const PRECACHE = [
   './js/nl_style_objects.js',
   './js/art_card.js',
   './js/art_furnace.js',
+  './js/art_gather.js',
   './js/panelmgr.js',
   './js/caravan_goods.js',
   './js/caravan.js',
@@ -138,11 +145,16 @@ const PRECACHE = [
   './js/interior.js',
   './js/tavern_data.js',
   './js/tavern_scene.js',
+  './js/tavern_i1.js',
   './js/interiors_pack1_data.js',
   './js/interiors_pack1.js',
+  './js/interiors_pack2_data.js',
+  './js/interiors_pack2.js',
   './js/bn_data.js',
   './js/bn_skills_data.js',
   './js/bn_units.js',
+  './js/bn_flavor.js',
+  './js/bn_text.js',
   './js/bn_stages.js',
   './js/bn_engine.js',
   './js/bn_effects.js',

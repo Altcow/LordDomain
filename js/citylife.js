@@ -304,6 +304,7 @@ function lifeRebuild() {
   if (!LIFE.buck) LIFE.buck = [];
   for (k = LIFE.buck.length; k < boardW() + boardH(); k++) LIFE.buck.push([]);   // 換板(56 ↔ 經營大板)時補足對角線桶
   if (typeof lifeTrafficBuild === 'function') lifeTrafficBuild(ok);
+  if (typeof gatherBuild === 'function') gatherBuild(ok);   // 聚集點建置(citygather.js)
   // 站在被拆掉道路上(或下一步要踏上去)的人直接淡出
   LIFE.npcs.forEach(n => {
     if (n.st === 'fade' || n.st === 'enter' || n.st === 'exit') return;
@@ -650,6 +651,7 @@ function lifeRetire(k) {
       const n = L[i];
       if (n.dead || (n.st !== 'walk' && n.st !== 'act' && n.st !== 'chat')) continue;
       if (n.hold > 0 || n.port || n.ext || lifeRetiring(n)) continue;
+      if (n.gat > 0 && pass === 0) continue;   // 聚集成員最後才挑(citygather.js)
       if (pass === 0) {
         if (n.onS) continue;
         lifeFadeOut(n);
@@ -847,6 +849,7 @@ function lifeReset() {
   LIFE.healthy = 0; LIFE.adaptT = 0; LIFE.fps = 0;
   lifeSetLevel(0);   // 重擺時降載等級歸零(舊版不歸零,回來時目標可能仍是下限)
   if (typeof lifeTrafficReset === 'function') lifeTrafficReset();
+  if (typeof gatherReset === 'function') gatherReset();
   lifeCardHide();
 }
 
@@ -892,6 +895,7 @@ function lifePrefill() {
   let vis = null, placed = 0, tries = 0;
   Math.random = rng;
   try {
+    if (typeof gatherPrefill === 'function') placed += gatherPrefill();   // 進行中的聚集(下棋 / 休息)先擺好,算居民額度
     if (viewport.w > 0) {   // 40% 的路上人偏向目前畫面內的道路格(第一幀看得到;同視角仍是確定性的)
       vis = [];
       for (let i = 0; i < R.list.length; i++) {
@@ -1272,7 +1276,8 @@ function lifeAdapt(dt, t0) {
 function lifeStats() {
   return {
     n: LIFE.npcs.length, target: LIFE.target, floor: LIFE.floor, live: LIFE.live, ms: Math.round(LIFE.perf.ms * 100) / 100,
-    fps: Math.round(LIFE.fps), expFps: LIFE.expFps, level: LIFE.level, ext: LIFE.npcs.filter(n => n.ext).length
+    fps: Math.round(LIFE.fps), expFps: LIFE.expFps, level: LIFE.level, ext: LIFE.npcs.filter(n => n.ext).length,
+    gather: typeof gatherStats === 'function' ? gatherStats() : null
   };
 }
 
@@ -1330,6 +1335,7 @@ function lifeFrame(time) {
   lifeSpawnTick(dt);
   lifeNightTick(dt);
   lifePortTick(dt);
+  if (typeof gatherTick === 'function') gatherTick(dt);   // 聚集行為(citygather.js)
   if (typeof lifeTrafficTick === 'function') lifeTrafficTick(dt);
   if (typeof npcHeroTick === 'function') npcHeroTick(dt);   // 名冊人物 hero(npcinteract.js)
   if (typeof npcVisitTick === 'function') npcVisitTick(dt);   // 在野名人路過(npcvisit.js)
@@ -1394,6 +1400,7 @@ function lifeFrame(time) {
       if (n.id > n.pair.id || !(n.onS || n.pair.onS)) continue;
     } else if (!n.onS) continue;
     let d = Math.floor(n.x) + Math.floor(n.y);
+    if (n.dOver > d) d = n.dOver;   // 坐在物件上的聚集成員:畫在物件之後
     if (d < 0) d = 0; else if (d >= D) d = D - 1;
     buck[d].push(n);
   }
@@ -1420,11 +1427,13 @@ function lifeBubOk() {
 
 // 畫一個居民。ART 只有兩張原畫(正 0 / 背 1),右向以水平翻轉取代(2、3 由 0、1 翻轉而來),快取數量減半
 function lifeDrawOne(ctx, n, res, tod, season, useArt, alpha) {
+  if (n.tv && typeof trafficSpriteDraw === 'function' && trafficSpriteDraw(ctx, n, res, tod, alpha)) return;   // 街景車馬外部圖(traffic_sprites.js);缺圖回 false → 沿用下方程式繪製
   if (useArt && n.spec) {
     const pp = n.pp, f = lifeFaceF(n.fx, n.fy), flip = f === 2 || f === 3;
     pp.spec = n.spec; pp.x = n.px; pp.y = n.py; pp.f = (f === 1 || f === 2) ? 1 : 0;
     pp.fr = n.st === 'walk' ? Math.floor(LIFE.clock * n.frr * LIFE.frrMul + n.ph) % 2 : (n.fid ? Math.floor(LIFE.clock * 0.8 + n.ph * 2) % 2 : 0);
     pp.alpha = alpha;
+    if (n.gat > 0 && typeof gatherPose === 'function') gatherPose(n, pp);   // 聚集成員:坐 / 前伸 / 點頭 / 前傾(citygather.js)
     // 每幀最多新烘焙 LIFE_BAKE_MAX 個外觀:超過且尚未快取的人這一幀先畫占位小人(開場預布點不卡頓)
     if (LIFE.bakes >= LIFE_BAKE_MAX && !lifeSprCached(n.spec, pp.f, pp.fr, res, tod, season)) {
       useArt = false;
@@ -1448,6 +1457,7 @@ function lifeDrawOne(ctx, n, res, tod, season, useArt, alpha) {
 // 依對角線分桶繪製(每個對角線一次呼叫,總成本 O(n));縮放分三級:正常 / <0.5 簡化 / <0.35 色點
 function lifeDrawDiag(ctx, d, time) {
   if (typeof caravanVisDraw === 'function') caravanVisDraw(ctx, d);   // 走鏢車隊(caravan_vis.js),依同一組對角線桶
+  if (typeof gatherDraw === 'function') gatherDraw(ctx, d);   // 聚集小道具 / 提示 / 拉遠人影團(citygather.js)
   if (!LIFE.active || !LIFE.buck) return;
   const list = LIFE.buck[d];
   if (!list || !list.length) return;
@@ -1469,6 +1479,8 @@ function lifeDrawDiag(ctx, d, time) {
     const alpha = n.alpha * mult;
     if (alpha <= 0) continue;
     if (n.vis && npcVisitHidden()) continue;   // 在野名人:縮放 < 0.5 / 拍照 / 錄影不畫(照常走)
+    if (n.tv && typeof trafficHidden === 'function' && trafficHidden()) continue;   // 街景車馬:縮放 < 0.5 / 拍照 / 錄影不畫(照常走)
+    if (dots && n.gat > 0) continue;   // 聚集成員拉遠時由 gatherDraw 畫成一團人影,不佔色點額度
     if (dots) {
       if (LIFE.dots >= LIFE_DOT_MAX) break;
       if (skip && skip[k]) continue;
@@ -1516,6 +1528,8 @@ function lifeDrawDiag(ctx, d, time) {
       } else if (n.type === 'vendor' && n.st === 'walk' && ((LIFE.clock + n.ph * 3) % 7) < 1.6) {
         // 挑擔商販沿路叫賣
         if (lifeBubOk()) ART.bubble(ctx, n.px, n.py, 'talk', LIFE.clock, res, n.spec.scale || 1);
+      } else if (n.gat > 0) {
+        if (n.gbub && lifeBubOk()) ART.bubble(ctx, n.px, n.py - (n.gz || 0), n.gbub, LIFE.clock, res, n.spec.scale || 1);   // 聚集成員的動態泡泡
       } else if (n.bub && (n.st === 'walk' || n.st === 'act') && ((n.act === 'hawk' && n.st === 'act') || ((LIFE.clock + n.ph * 3) % n.bubP) < 1.6)) {
         // 街景角色(走販 / 叫賣者 / 圍觀者)的頭上泡泡
         if (lifeBubOk()) ART.bubble(ctx, n.px, n.py, n.bub, LIFE.clock, res, n.spec.scale || 1);
@@ -1542,13 +1556,13 @@ function lifeTap(sx, sy) {
     const dx = sx - h[0], dy = sy - h[1], dd = dx * dx + dy * dy;
     if (dd < bd) { bd = dd; best = n; }
   }
-  if (!best) return false;
+  if (!best) return typeof gatherTap === 'function' && gatherTap(sx, sy);   // 沒點到人:再看聚集提示圖示(citygather.js)
   lifeCardShow(best);
   return true;
 }
 
 function lifeGreetNext(n) {
-  const G = (typeof LIFE_LINES !== 'undefined' && LIFE_LINES[n.type]) || LIFE_GREET;
+  const G = (n.gat > 0 && typeof gatherLines === 'function' && gatherLines(n)) || (typeof LIFE_LINES !== 'undefined' && LIFE_LINES[n.type]) || LIFE_GREET;
   let k = Math.floor(Math.random() * G.length);
   if (G.length > 1) while (k === n.gi) k = Math.floor(Math.random() * G.length);
   n.gi = k;
@@ -1588,6 +1602,7 @@ function lifeCardMake() {
 }
 
 function lifeCardShow(n) {
+  if (typeof gatherCardHide === 'function') gatherCardHide();
   if (n.role === 'visitor' && typeof npcVisitCardShow === 'function' && npcVisitCardShow(n)) return;   // 在野名人:專屬小卡(npcvisit.js)
   if (typeof npcVisitCardHide === 'function') npcVisitCardHide();
   if (n.role === 'hero' && typeof npcHeroCardShow === 'function' && npcHeroCardShow(n)) return;   // 名冊人物:專屬小卡(npcui.js)
@@ -1596,7 +1611,7 @@ function lifeCardShow(n) {
   if (!c) return;
   LIFE.cardFor = n;
   c.nameEl.textContent = n.name;
-  c.typeEl.textContent = (typeof LIFE_LOOK_TITLE !== 'undefined' && LIFE_LOOK_TITLE[n.look]) || LIFE_TYPES[n.type].name;
+  c.typeEl.textContent = ((typeof LIFE_LOOK_TITLE !== 'undefined' && LIFE_LOOK_TITLE[n.look]) || LIFE_TYPES[n.type].name) + (n.gat > 0 && typeof gatherActText === 'function' ? ' · ' + gatherActText(n) : '');
   c.greet.textContent = '「' + lifeGreetNext(n) + '」';
   c.box.style.display = 'block';
 }

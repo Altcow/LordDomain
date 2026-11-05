@@ -47,10 +47,10 @@ function lordhallOverview() {
     Object.keys(c.inv).forEach(function (id) {
       var cap = 0;
       try { cap = goodsCapOf(id); } catch (e) { cap = 0; }
-      if (cap > 0 && c.inv[id] >= cap * 0.95) o.warns.push({ id: id, name: (typeof GOODS !== 'undefined' && GOODS[id] && GOODS[id].name) || id, kind: 'full' });
+      if (cap > 0 && c.inv[id] >= cap * 0.95) o.warns.push({ id: id, name: (typeof GOODS !== 'undefined' && GOODS[id] && (typeof goodsName === 'function' ? goodsName(id) : GOODS[id].name)) || id, kind: 'full' });
     });
   }
-  if (c && c.debt) Object.keys(c.debt).forEach(function (id) { if (c.debt[id] > 0.5) o.warns.push({ id: id, name: (typeof GOODS !== 'undefined' && GOODS[id] && GOODS[id].name) || id, kind: 'debt' }); });
+  if (c && c.debt) Object.keys(c.debt).forEach(function (id) { if (c.debt[id] > 0.5) o.warns.push({ id: id, name: (typeof GOODS !== 'undefined' && GOODS[id] && (typeof goodsName === 'function' ? goodsName(id) : GOODS[id].name)) || id, kind: 'debt' }); });
   return o;
 }
 

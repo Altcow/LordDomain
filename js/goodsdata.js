@@ -97,8 +97,29 @@ const RECIPES = {
 };
 
 // ───────── 5. 查詢輔助(純函式,無外部相依)─────────
+// 魔幻覆寫(PLAN_FANTASY_B B-2;資料在 fx_goods_data.js,由 tools/gen_fx_goods.js 產生):fxPack() 為 null(歷史世界 / 未載入 fxpack.js)時完全不讀覆寫表
+function goodsPackNow() { try { return (typeof fxPack === 'function' && fxPack()) || null; } catch (e) { return null; } }
+function goodsFxName(id) {   // [名稱, 圖示] 或 null;族名優先於 common
+  var p = goodsPackNow(), t = p && typeof FX_GOODS_NAME !== 'undefined' ? FX_GOODS_NAME : null;
+  return t ? ((t[p] && t[p][id]) || (t.common && t.common[id]) || null) : null;
+}
+// 貨品 / 配方 / 原料點在目前世界是否可見:帶 pack 的特色項目只在該族魔幻世界出現
+function goodsAvail(id) { var g = GOODS[id]; return !!g && (!g.pack || g.pack === goodsPackNow()); }
+function goodsIds() { return Object.keys(GOODS).filter(goodsAvail); }
+function goodsRecipeIds() { var p = goodsPackNow(); return Object.keys(RECIPES).filter(function (rid) { return !RECIPES[rid].pack || RECIPES[rid].pack === p; }); }
+function goodsSourceIds() { var p = goodsPackNow(); return Object.keys(GOODS_SOURCES).filter(function (sid) { return !GOODS_SOURCES[sid].pack || GOODS_SOURCES[sid].pack === p; }); }
+// 配方可執行的建築(魔幻世界多追加本族建築)
+function goodsRecipeBld(rid) {
+  var r = RECIPES[rid], p = goodsPackNow(), add = p && typeof FX_RECIPE_BLD !== 'undefined' && FX_RECIPE_BLD[p] ? FX_RECIPE_BLD[p][rid] : null;
+  return add && add.length ? r.bld.concat(add.filter(function (b) { return r.bld.indexOf(b) < 0; })) : r.bld;
+}
+function goodsRecipeName(rid) {
+  var r = RECIPES[rid], p = goodsPackNow(), t = p && typeof FX_RECIPE_NAME !== 'undefined' ? FX_RECIPE_NAME : null;
+  return r ? ((t && ((t[p] && t[p][rid]) || (t.common && t.common[rid]))) || r.name) : rid;
+}
 function goodsTier(id) { return GOODS[id] ? GOODS[id].tier : 0; }
-function goodsName(id) { return GOODS[id] ? GOODS[id].name : id; }
+function goodsName(id) { var o = goodsFxName(id); return o ? o[0] : (GOODS[id] ? GOODS[id].name : id); }
+function goodsIcon(id) { var o = goodsFxName(id); return o ? o[1] : (GOODS[id] ? (GOODS[id].icon || '') : ''); }
 function goodsPrice(id) {
   var g = GOODS[id];
   if (!g) return 0;
@@ -112,16 +133,16 @@ function goodsCapBase(id) {
 }
 // 某建築 type 可以跑的配方 id 陣列(依 RECIPES 宣告順序)
 function goodsRecipesFor(bld) {
-  return Object.keys(RECIPES).filter(function (rid) { return RECIPES[rid].bld.indexOf(bld) >= 0; });
+  return goodsRecipeIds().filter(function (rid) { return goodsRecipeBld(rid).indexOf(bld) >= 0; });
 }
 // 某建築 type 對應的原料點定義 id 陣列
 function goodsSourcesFor(bld) {
-  return Object.keys(GOODS_SOURCES).filter(function (sid) { return GOODS_SOURCES[sid].bld === bld; });
+  return goodsSourceIds().filter(function (sid) { return GOODS_SOURCES[sid].bld === bld; });
 }
 // 本模組涉及的所有生產建築 type(原料點 + 工坊 + 伐木 / 採石);prog_check / lint 用
 function goodsBuildingTypes() {
   var out = {};
-  Object.keys(GOODS_SOURCES).forEach(function (s) { out[GOODS_SOURCES[s].bld] = true; });
-  Object.keys(RECIPES).forEach(function (r) { RECIPES[r].bld.forEach(function (b) { out[b] = true; }); });
+  goodsSourceIds().forEach(function (s) { out[GOODS_SOURCES[s].bld] = true; });
+  goodsRecipeIds().forEach(function (r) { goodsRecipeBld(r).forEach(function (b) { out[b] = true; }); });
   return Object.keys(out);
 }

@@ -23,11 +23,11 @@ const THEME_SKINS = {
     types: ['hut_mud', 'hut_plank', 'house_tile', 'tent', 'flagpole', 'cave_dwelling'],
     pal: { roof: '#7a7a72', wall: '#8f8f84', trim: '#2a2623', cloth1: '#cfc8b8', cloth2: '#2a2623', leather: '#4a3a2a', flag1: '#cfc8b8', flag2: '#2a2623', accent: '#9a4a32', pattern: 'felt_diamond' } },
   // 魔幻三族(PLAN_FANTASY;realm: 'fantasy' = 魔幻世界,與歷史風格互相隔離,見 themeRealm / themeSet)。types 只留旗桿(PLAN_FANTASY Q5)
-  elf: { name: '精靈', icon: '🌳', desc: '活樹 · 白石 · 葉冠與藤橋(魔幻外觀 · 試玩)', looks: 1, realm: 'fantasy', types: ['flagpole'],
+  elf: { name: '精靈', icon: '🌳', desc: '活樹 · 白石 · 葉冠與藤橋', looks: 1, realm: 'fantasy', types: ['flagpole'],
     pal: { roof: '#5f9a4a', wall: '#ece6d6', trim: '#c9c7bc', cloth1: '#a8cf7a', cloth2: '#6f8fb8', leather: '#5a4030', flag1: '#5f9a4a', flag2: '#ece6d6', accent: '#e4ef9a', pattern: 'leaf_arc' } },
-  dwarf: { name: '矮人', icon: '⚒️', desc: '方石 · 鋼鐵與銅 · 熔爐火光(魔幻外觀 · 試玩)', looks: 1, realm: 'fantasy', types: ['flagpole'],
+  dwarf: { name: '矮人', icon: '⚒️', desc: '方石 · 鋼鐵與銅 · 熔爐火光', looks: 1, realm: 'fantasy', types: ['flagpole'],
     pal: { roof: '#3e4248', wall: '#7d766c', trim: '#b86a3a', cloth1: '#8a2e24', cloth2: '#6f7880', leather: '#4e4a46', flag1: '#8a2e24', flag2: '#6f7880', accent: '#f08a2a', pattern: 'forge_chevron' } },
-  kingdom: { name: '人類王國', icon: '🏰', desc: '石砌城堡 · 木骨白牆 · 紅藍旗(魔幻外觀 · 試玩)', looks: 1, realm: 'fantasy', types: ['flagpole'],
+  kingdom: { name: '人類王國', icon: '🏰', desc: '石砌城堡 · 木骨白牆 · 紅藍旗', looks: 1, realm: 'fantasy', types: ['flagpole'],
     pal: { roof: '#5a6878', wall: '#b5a894', trim: '#5a3e28', cloth1: '#f2ede2', cloth2: '#2f5a9a', leather: '#8e8270', flag1: '#b23a32', flag2: '#2f5a9a', accent: '#e3b95c', pattern: 'crown_quarter' } }
 };
 const THEME_ORDER = ['han', 'bei', 'xiyu', 'nanman', 'qiang', 'elf', 'dwarf', 'kingdom'];

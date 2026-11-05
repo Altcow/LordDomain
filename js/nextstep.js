@@ -66,6 +66,7 @@ function nsSnapshot() {
   for (i = 0; i < objs.length; i++) {
     o = objs[i]; if (!o || !o.type) continue;
     s.cnt[o.type] = (s.cnt[o.type] || 0) + 1;
+    if (typeof fxAsList === 'function') fxAsList(o.type).forEach(function (a) { s.cnt[a] = (s.cnt[a] || 0) + 1; });   // 魔幻件視同漢式功能件
     if (hs[o.type]) s.houses++;
   }
   s.lab = (s.cnt.research || 0) > 0;
@@ -117,7 +118,7 @@ function nsPrereq(techId, api, s) {
   if (!api.eraOpen(cur.era)) return { blocked: true };
   if (!s.lab) return { lab: true };
   if (api.queued(cur.id)) return { queued: true };
-  return { tech: cur.id, name: cur.name };
+  return { tech: cur.id, name: (typeof techLabelOf === 'function' ? techLabelOf(cur) : cur.name) };
 }
 function nsStepDone(step, s, mem) {
   var d = step.done, i, n;
@@ -156,7 +157,7 @@ function nsResolveChain(s, mem, api) {
   return null;
 }
 function nsObjName(st) {
-  var id = st.obj;
+  var id = (typeof fxGoType === 'function') ? fxGoType(st.obj) : st.obj;
   if (typeof OBJECTS !== 'undefined' && OBJECTS[id] && OBJECTS[id].name) return OBJECTS[id].name;
   if (typeof NL_UNLOCK_NAMES !== 'undefined' && NL_UNLOCK_NAMES[id]) return NL_UNLOCK_NAMES[id];
   return id;

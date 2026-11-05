@@ -146,7 +146,8 @@ function csTick() {
 function cityGoTo(cond) {
   var lv = csLv(), id = null, i, nm;
   for (i = 0; i < (cond.go || []).length; i++) {
-    if (typeof OBJECTS !== 'undefined' && OBJECTS[cond.go[i]] && (typeof isUnlocked !== 'function' || isUnlocked('estate', cond.go[i]))) { id = cond.go[i]; break; }
+    var gid = (typeof fxGoType === 'function') ? fxGoType(cond.go[i]) : cond.go[i];   // 魔幻世界:隱藏的漢式物件換成魔幻件
+    if (typeof OBJECTS !== 'undefined' && OBJECTS[gid] && (typeof isUnlocked !== 'function' || isUnlocked('estate', gid))) { id = gid; break; }
   }
   if (typeof progUiClose === 'function') progUiClose();
   if (!id) { if (typeof showToast === 'function') showToast('提示:' + cond.text); return false; }
@@ -175,7 +176,7 @@ function cityRenderReq(R, p, c) {
   else if (ok) {   // 預設列:名稱 + 庫存 / 需求(接入貨品需求表 goodsUpgradeReq 後才有內容)
     R.appendChild(puiEl('div', 'pg-sec', '工程貨品'));
     Object.keys(c.goods).forEach(function (id) {
-      var have = typeof cityGoodsHave === 'function' ? cityGoodsHave(id) : 0, nm = (typeof GOODS !== 'undefined' && GOODS[id] && GOODS[id].name) || id;
+      var have = typeof cityGoodsHave === 'function' ? cityGoodsHave(id) : 0, nm = (typeof GOODS !== 'undefined' && GOODS[id] && (typeof goodsName === 'function' ? goodsName(id) : GOODS[id].name)) || id;
       R.appendChild(puiReq(have >= c.goods[id], nm, have, c.goods[id]));
     });
   }

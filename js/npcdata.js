@@ -1,5 +1,5 @@
 // js/npcdata.js — 人物互動資料(PLAN_INTERIORS §4:派駐職司表、台詞、親近、請託、城內外觀對照)。純資料,不寫 DOM、不讀時間。
-// 數字多為 PLACEHOLDER;職司表 = PLAN_CARDS §7.1(MVP 先開 田曹/工曹/市令/學官/醫署/賊曹/太守,另開 冶坊/織坊 兩個已有產出的職司;掌櫃屬酒館室內,不在此)。
+// 數字多為 PLACEHOLDER;職司表 = PLAN_CARDS §7.1(MVP 先開 田曹/工曹/市令/學官/醫署/賊曹/太守,另開 冶坊/織坊 兩個已有產出的職司;酒館 I1 加開 掌櫃 keep:收入與客座事件獎勵,由 tavern_i1.js 讀取)。
 // 全域名稱:NPC_CFG NPC_POSTS NPC_TYPE_POST NPC_STAGE NPC_TRAIT_PCT NPC_TALK_JOB NPC_TALK_TRAIT NPC_TALK_GENERIC NPC_TALK_PRIV NPC_GIFT NPC_ERRANDS NPC_LOOK_JOB
 // ES2017(不使用可選串接與空值合併運算子)。
 
@@ -26,7 +26,8 @@ var NPC_POSTS = [
   { id: 'study',  name: '學官', types: ['research', 'xue_she', 'xue_gong', 'jingshe', 'shop_book'], main: ['wenshu', 'jiaohua'], aux: ['tianwen'], attr: 2, seat: { base: 1, div: 1, max: 6 }, per: 3, live: true, eff: '科研速度' },
   { id: 'med',    name: '醫署', types: ['hospital', 'shop_herb', 'tai_yi_shu', 'yu_tang'], main: ['yishu'], aux: ['paochu'], attr: 2, seat: { base: 1, div: 1, max: 3 }, per: 1, live: false, eff: '疫病風險 −' },
   { id: 'police', name: '賊曹', types: ['xian_ya', 'notice_board', 'li_men', 'wanglou', 'zhalou'], main: ['lvfa'], aux: ['bingshi'], attr: 0, seat: { base: 1, div: 2, max: 3 }, per: 1, live: false, eff: '治安' },
-  { id: 'gov',    name: '太守', types: ['palace'], main: ['lizhi'], aux: ['jisuan'], attr: 3, seat: { base: 1, div: 99, max: 1 }, per: 1, live: false, eff: '城市升級資源 −' }
+  { id: 'gov',    name: '太守', types: ['palace'], main: ['lizhi'], aux: ['jisuan'], attr: 3, seat: { base: 1, div: 99, max: 1 }, per: 1, live: false, eff: '城市升級資源 −' },
+  { id: 'keep',   name: '掌櫃', types: ['tavern'], main: ['ciling'], aux: ['niangzao'], attr: 4, seat: { base: 1, div: 99, max: 1 }, per: 1, live: true, eff: '酒館收入與事件獎勵' }
 ];
 var NPC_TYPE_POST = {};
 NPC_POSTS.forEach(function (p) { p.types.forEach(function (t) { if (!NPC_TYPE_POST[t]) NPC_TYPE_POST[t] = p.id; }); });

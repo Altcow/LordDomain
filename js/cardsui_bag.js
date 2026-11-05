@@ -4,7 +4,7 @@
 // 掛在 cardsui.js(cuBagHtml / cuBagClick / cuStarHtml 由其 typeof 守衛呼叫)。引擎在 cards.js(cardsBag* / cardsFurnace* / cardsStar* / cardsExchange)。不發聲、不推播。ES2017;不用 ?. ??。
 // 全域名稱:cuBagHtml cuBagClick cuBagCss cuStarHtml CU_BAG_PAGE CU_BAG_MSG
 var CU_BAG_PAGE = 40;   // 列表一頁筆數(「顯示更多」每次再加一頁)
-var CU_BAG_MSG = { tok: '酒令不足', full: '名冊已滿,先請辭一人或等官階晉升', none: '此卡已不在卡包', fig: '名人需在詳情頁手動熔鍊(二次確認)' };
+var CU_BAG_MSG = { over: '溢出區的卡需先納入卡包(清出空位後自動納入;也可直接熔鍊)', tok: '酒令不足', full: '名冊已滿,先請辭一人或等官階晉升', none: '此卡已不在卡包', fig: '名人需在詳情頁手動熔鍊(二次確認)' };
 var CU_BAG_AUTO = [[-1, '關'], [0, '白'], [1, '青以下'], [2, '藍以下']];
 var CU_BAG_LE = [[0, '白'], [1, '青'], [2, '藍'], [3, '紫']];   // 一鍵熔爐「品階 ≤ X」可選
 
@@ -13,13 +13,14 @@ function cuBagCss() {
   var st = document.createElement('style');
   st.id = 'cuBagStyle';
   st.textContent = '#cardsPanel button.cub.on{background:#f0b45a;color:#222}#cardsPanel .cuchips{display:flex;flex-wrap:wrap;gap:0}#cardsPanel .cubr{align-items:center;border-bottom:1px solid rgba(255,255,255,.08)}#cardsPanel .cubr .cubn{flex:1 1 auto;min-width:0;cursor:pointer;min-height:44px;display:flex;align-items:center}' +
-    '#cardsPanel .cubr button.cub{margin:0;padding:4px 8px;min-width:44px}#cardsPanel .cubsec{margin:8px 0 2px;font-size:12px;opacity:.7}';
+    '#cardsPanel .cubr button.cub{margin:0;padding:4px 8px;min-width:44px}#cardsPanel .cubsec{margin:8px 0 2px;font-size:12px;opacity:.7}' +
+    '#cardsPanel .cuovb{display:inline-block;padding:2px 10px;border-radius:12px;background:#c0392b;color:#fff;font-weight:bold;white-space:nowrap}#cardsPanel .cuovb.urg{background:#ffb020;color:#2a1a00;outline:2px solid #fff}#cardsPanel .cuovt{color:#ff7a6a;white-space:nowrap;padding:0 6px}#cardsPanel .cuovt.urg{color:#ffc040;font-weight:bold}#cardsPanel .cuovbox{margin:6px 0;padding:6px 8px;border:1px solid #c0392b;border-radius:8px;background:rgba(192,57,43,.12)}#cardsPanel .cuovbox.urg{border-color:#ffb020;background:rgba(255,176,32,.14)}#cardsPanel .cuovn{padding:4px 6px;border-radius:6px;background:rgba(255,176,32,.18)}';
   document.head.appendChild(st);
 }
 function cuBagGrLabel(gr) { var G = CARD_GRADE[gr], c = '', i; for (i = 0; i < G.corner; i++) c += '◆'; return G.ch + c; }
 function cuBagSelIds(cs) {   // 勾選中且仍在卡包的 bid(順便清掉已不存在的)
   var out = [];
-  Object.keys(cu.bsel).forEach(function (id) { var f = cardsBagFind(cs, id); if (f && !f.c.fig) out.push(id); else delete cu.bsel[id]; });
+  Object.keys(cu.bsel).forEach(function (id) { var f = cardsAnyFind(cs, id); if (f && !f.c.fig) out.push(id); else delete cu.bsel[id]; });
   return out;
 }
 function cuBagSum(cs, ids) {
@@ -28,6 +29,45 @@ function cuBagSum(cs, ids) {
 }
 function cuBagChips(items, cur, act, key) {
   return '<div class="cuchips">' + items.map(function (e) { return '<button class="cub' + (cur === e[0] ? ' on' : '') + '" data-a="' + act + '" data-v="' + e[0] + '">' + cuEsc(e[1]) + '</button>'; }).join('') + '</div>';
+}
+// ---- 溢出區(cs.bagOver):剩餘時間 hh:mm、頂部區塊、列表;到期結算與每秒更新由 cuOverTick(cardsui.js cuTick 掛點)----
+function cuOverFmt(ms) {
+  var m = Math.max(0, Math.ceil(ms / 60000)), h = Math.floor(m / 60);
+  m = m % 60;
+  return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+}
+function cuOverRowHtml(cs, c) {
+  var j = CARD_JOB_BY_ID[c.main], left = cardsOverLeft(cs, c, cuNow());
+  return '<div class="cur cubr" style="border-left:5px solid var(--gr' + c.gr + ');padding-left:4px"><button class="cub" data-a="bsel" data-id="' + c.bid + '" aria-label="勾選">' + (cu.bsel[c.bid] ? '☑' : '☐') + '</button>' +
+    '<span class="cubn" data-a="bdet" data-id="' + c.bid + '"><span><b>' + cuBagGrLabel(c.gr) + '</b> ' + cuEsc(c.name) + '<span class="cusub"> ' + (j ? j.t[(c.ja[c.main] || 1) - 1] : '') + ' · 才 ' + c.tai + '</span></span></span>' +
+    '<span class="cuovt' + (left < CARD_BAG.overWarnMs ? ' urg' : '') + '" data-ovl="' + c.bid + '">' + cuOverFmt(left) + '</span></div>';
+}
+function cuOverHtml(cs) {
+  var m = cardsOverMin(cs, cuNow()), list, sum, t, h, shown, i;
+  if (!m.n) return '';
+  list = cardsOverList(cs);
+  sum = cuBagSum(cs, list.map(function (c) { return c.bid; }));
+  t = cuOverFmt(m.ms);
+  h = '<div class="cuovbox' + (m.urgent ? ' urg' : '') + '"><div class="cur"><span><b>溢出區 ' + m.n + ' 張</b>,最短剩 <span data-ovmin="1">' + t + '</span> <span class="cusub">(上限 ' + cardsBagCap() + ')</span></span>' +
+    '<span class="cuovb' + (m.urgent ? ' urg' : '') + '" data-ovbadge="1">⏳ <span data-ovmin="1">' + t + '</span></span></div>';
+  h += '<div class="cusub">卡包滿時多出的卡暫放這裡;卡包有空位(熔鍊、任用、官階提升)會依剩餘時間短者先自動納入,24 小時內沒納入就熔成碎片。名人不受影響。' + (m.urgent ? ' <b class="cuwarn">快到期了!</b>' : '') + '</div>';
+  h += '<button class="cub warn" data-a="ovall">熔鍊整個溢出區(' + sum.n + ' 張,可得 ' + sum.raw + ' 碎)</button>';
+  shown = list.slice(0, 30);
+  for (i = 0; i < shown.length; i++) h += cuOverRowHtml(cs, shown[i]);
+  if (list.length > shown.length) h += '<div class="cusub">另有 ' + (list.length - shown.length) + ' 張(剩餘時間較長)。</div>';
+  return h + '</div>';
+}
+// cuTick 掛點:先結算,到期 / 納入 / 張數變化回 true(整頁重畫);否則只更新倒數文字
+function cuOverTick(cs) {
+  var r = cardsOverSettle(cs, cuNow()), m = cardsOverMin(cs, cuNow()), nodes, i, shown = 0, c;
+  if (r.expired || r.filled) { cuSave(); return true; }
+  if (!cu.el || !cu.el.querySelectorAll) return false;
+  nodes = cu.el.querySelectorAll('[data-ovmin]');
+  for (i = 0; i < nodes.length; i++) { nodes[i].textContent = m.ms === null ? '' : cuOverFmt(m.ms); shown++; }
+  if (shown && m.urgent !== !!cu.el.querySelector('.cuovbox.urg')) return true;   // 進入 < 2 小時:換提示色
+  nodes = cu.el.querySelectorAll('[data-ovl]');
+  for (i = 0; i < nodes.length; i++) { c = cardsAnyFind(cs, nodes[i].getAttribute('data-ovl')); if (c && c.over) nodes[i].textContent = cuOverFmt(cardsOverLeft(cs, c.c, cuNow())); }
+  return false;
 }
 function cuBagRowHtml(c) {
   var j = CARD_JOB_BY_ID[c.main], cost = cardsCost(c);
@@ -40,7 +80,8 @@ function cuBagRowHtml(c) {
 function cuBagDetailHtml(cs, f) {
   var c = f.c, cost = cardsCost(c), h = '<button class="cub" data-a="bback">‹ 返回卡包</button>', val = cardsFurnaceValue(c);
   h += cardsUiHtmlCard(c, { full: true, extra: '<div class="cusub cuink">出身:' + (c.org.k === 'pin' ? '縣試 ' + CARD_PIN[c.org.v] : CARD_VENUES[c.pool || 'T'].orgName) + (c.tok ? ' · 信物 ' + c.tok : '') + ' · 任用成本 🎴' + cost + '</div>' });
-  h += '<button class="cub" data-a="benl" data-id="' + c.bid + '">任用(🎴' + cost + ')</button>';
+  if (f.over) h += '<div class="cuwarn">溢出區 · 剩 <span data-ovl="' + c.bid + '">' + cuOverFmt(cardsOverLeft(cs, c, cuNow())) + '</span>。卡包有空位會自動納入;也可直接熔鍊清出空間。需納入後才能任用。</div>';
+  else h += '<button class="cub" data-a="benl" data-id="' + c.bid + '">任用(🎴' + cost + ')</button>';
   if (!c.fig) h += '<button class="cub warn" data-a="bdis" data-id="' + c.bid + '">熔鍊(+' + val + ' 碎)</button>';
   else h += '<button class="cub warn" data-a="bdis" data-id="' + c.bid + '">熔鍊名人(+' + val + ' 碎,需確認)</button><div class="cusub">名人不在一鍵與自動熔爐範圍;重複抽到會化為信物,信物滿了轉碎片。</div>';
   if (cu.bpend) h += cuBagPendHtml();
@@ -53,10 +94,15 @@ function cuBagPendHtml() {
 function cuBagHtml(cs) {
   var cap = cardsBagCap(), n = cs.bag.length, h = '', auto = cardsBagAutoLv(cs), list, shown, sel, leIds, leSum, f, rows = [[-1, '全'], [0, '白'], [1, '青'], [2, '藍'], [3, '紫'], [4, '金']], i, X = CARD_FURNACE.exchange, left;
   cuBagCss();
-  if (cu.bid) { f = cardsBagFind(cs, cu.bid); if (f) return cuBagDetailHtml(cs, f); cu.bid = null; }
+  var note = cardsOverNoteTake(cs);
+  if (note) cu.omsg = note.n + ' 張溢出卡到期,已熔成 ' + note.shards + ' 碎片';
+  if (cu.bid) { f = cardsAnyFind(cs, cu.bid); if (f) return cuBagDetailHtml(cs, f); cu.bid = null; }
   h += '<div class="cur"><span>卡包 <b>' + n + '/' + cap + '</b></span><span class="cusub">碎片 ' + cs.shards + ' · 指名券 ' + (cs.nameTokens | 0) + '</span></div>';
   h += '<div class="cusub">開批的卡直接放進卡包;酒令只在「任用」(卡包 → 名冊,名額 ' + cs.roster.length + '/' + cardsCap() + ')時花。<b>卡片熔爐</b>:放入不要的卡 → 預覽可得碎片 → 熔鍊。碎片可到名冊詳情強化武將(升星)、在下方兌換指名券,也用於學院進修。</div>';
-  if (n + CARD_BAG.batchNeed > cap) h += '<div class="cuwarn">卡包空位不足 ' + CARD_BAG.batchNeed + ' 張,新批暫存不開;請先熔鍊或任用。</div>';
+  if (cu.omsg) h += '<div class="cuovn">' + cuEsc(cu.omsg) + '</div>';
+  h += cuOverHtml(cs);
+  if (!cardsBagCanOpen(cs)) h += '<div class="cuwarn">卡包與溢出區空位合計不足 ' + CARD_BAG.batchNeed + ' 張,新批暫存不開;請先熔鍊或任用。</div>';
+  else if (cardsBagRoom(cs) < CARD_BAG.batchNeed) h += '<div class="cusub">卡包空位不足 ' + CARD_BAG.batchNeed + ' 張:多出的卡會進溢出區(24 小時內沒空位納入就熔成碎片)。</div>';
   if (typeof furnaceUiOpen === 'function') h += '<button class="cub" data-a="tofurnace">🔥 前往卡片熔爐</button>';   // 熔爐面板(furnaceui.js)
   left = cardsExchangeLeft(cs, cuNow());
   h += '<div class="cubsec">碎片兌換(' + X.shards + ' 碎 = 1 張指名券;本週還可換 ' + left + '/' + X.weekMax + ' 張)</div>';
@@ -98,7 +144,7 @@ function cuBagAsk(cs, ids, figOk) {
   cuBagDo(cs, ids, false);
 }
 function cuBagDo(cs, ids, figOk) {
-  var r = cardsBagDissolve(cs, ids, { figOk: !!figOk });
+  var r = cardsBagDissolve(cs, ids, { figOk: !!figOk, now: cuNow() });
   cu.bpend = null; cu.bid = null;
   if (!r.ok) { cu.msg = CU_BAG_MSG[r.reason] || '無法熔鍊'; return; }
   ids.forEach(function (id) { delete cu.bsel[id]; });
@@ -121,6 +167,7 @@ function cuBagClick(a, b, cs) {
   if (a === 'tofurnace') { if (typeof furnaceUiOpen === 'function') furnaceUiOpen(); return true; }
   if (a === 'bauto') { cardsBagSetAuto(cs, +v); cuSave(); return true; }
   if (a === 'ble') { cu.ble = Math.max(0, Math.min(3, +v | 0)); cu.bpend = null; return true; }
+  if (a === 'ovall') { cuBagAsk(cs, cardsOverList(cs).filter(function (c) { return !c.fig; }).map(function (c) { return c.bid; }), false); return true; }
   if (a === 'bledo') { cuBagAsk(cs, cardsBagPick(cs, cu.ble), false); return true; }
   if (a === 'bf') { cu.bf = +v; cu.bn = 1; return true; }
   if (a === 'br') { cu.br = v || ''; cu.bn = 1; return true; }
@@ -148,7 +195,7 @@ function cuBagClick(a, b, cs) {
     return true;
   }
   if (a === 'benl') {
-    r = cardsBagEnlist(cs, id);
+    r = cardsBagEnlist(cs, id, { now: cuNow() });
     if (r.ok) { cardsSyncTalents(); cu.bid = null; delete cu.bsel[id]; cu.msg = '任用「' + r.entry.name + '」,已進名冊'; cuSave(); }
     else { cu.msg = CU_BAG_MSG[r.reason] || '無法任用'; if (typeof showToast === 'function') showToast(cu.msg); }
     return true;

@@ -97,7 +97,10 @@ var BN_DATA = {
   // 疲兵之外的平手判定(§3.7)
   drawLead: 0.15,
   // 站位陣型(§2.7):前排 ≥3 鋒矢 / 前2中≥1 圓陣 / 後排≥2 雁行
-  formation: { fengshi: 0.08, yuanzhen: 0.08, yanxing: 0.08 }
+  formation: { fengshi: 0.08, yuanzhen: 0.08, yanxing: 0.08 },
+  // 路人戰法欄(§4.8;PLACEHOLDER):自帶 1(職業預設)+ 學習欄。learnByGr = 各品階(白青藍紫金)的基本學習欄;learnBonus = 通才 / 升階 2 次再加;learnCap = 學習欄上限(總戰法數上限 1 + learnCap = 3)。
+  // autoLearn:名冊卡沒有指定學習戰法時,依卡面雜湊從通用戰法池自動補滿(確定性),使白 1 / 青 2 / 藍 2 / 紫 3 / 金 3 皆有合理戰法欄
+  slots: { learnByGr: [0, 1, 1, 2, 2], learnBonus: 1, learnCap: 2, autoLearn: true }
 };
 
 // 詞條 → 戰鬥修正(§2.7;只列戰鬥面;未列者無戰鬥效果)。欄位語意見 bn_engine.js 的 u.mods

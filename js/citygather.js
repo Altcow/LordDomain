@@ -1,0 +1,874 @@
+// citygather.js — 城市聚集行為 P2(PLAN_CITYLIFE_GATHER.md §4):下棋 + 路邊休息。聚集成員就是 LIFE.npcs 裡的居民(算居民額度,不增加總人數)。
+// 下棋:場景觸發物件 yi_zuo / stone_table / tbl_chess / tbl_stone;2 人對弈(坐姿)+ 圍觀 0~6 人半圓站位;白天傍晚;一局 90~240 秒,局間冷卻 30~90 秒;
+//   排程 = 純函式 hash(世界, 道路簽章, 日, 15 分鐘時段, 棋桌),所以同一時段重開 / 朋友參觀看到同一場棋局(含已下了幾手);沒有棋桌物件時退用路邊空地的臨時麻布棋盤。
+// 路邊休息:長凳 / 石凳 / 矮凳 / 胡床 / 樹蔭 / 槐蔭石台 / 井邊 / 涼棚茶座 / 港口貨堆;有人坐著聊天、打盹、乘涼;沒有座椅物件時退用路沿空地坐地。
+// 只維護「畫面附近」的聚集(畫面外的組直接解散,成員改回一般居民行程);組池固定 8 組、成員 / 站位預先配置;等級上限見 GATHER_CAP。
+// 掛點(citylife.js,皆 typeof 守護):lifeRebuild → gatherBuild;lifeReset → gatherReset;lifePrefill → gatherPrefill;lifeFrame → gatherTick;lifeDrawDiag → gatherDraw;
+//   lifeDrawOne → gatherPose;lifeTap → gatherTap;lifeCardShow / lifeGreetNext → gatherCardHide / gatherLines / gatherActText;lifeRetire 第 1 輪略過聚集成員。
+// 零數據影響:不讀寫 world 數據、不寫存檔、不給獎勵;不發聲。ES2017;不用 ?. ??。全域名稱:GATHER gatherBuild gatherReset gatherPrefill gatherTick gatherDraw gatherPose gatherTap gatherLines gatherActText gatherCardHide gatherStats gatherForce gatherNow
+
+const GATHER_POOL = 8, GATHER_SLOTS = 24, GATHER_PROP_MAX = 48;
+const GATHER_SLOT_MS = 900000;   // 15 分鐘時段
+const GATHER_LOOKS = {
+  player: ['scholar', 'elder', 'man', 'man2'],
+  watch:  ['man', 'man2', 'woman', 'woman2', 'elder', 'scholar', 'kid', 'kid2'],
+  sit:    ['man', 'man2', 'woman', 'woman2', 'elder'],
+  porter: ['coolie_free']
+};
+const GATHER_TYPE_OF = { man: 'civ', man2: 'civ', woman: 'civ', woman2: 'civ', elder: 'elder', scholar: 'scholar', kid: 'kid', kid2: 'kid', coolie_free: 'coolie' };
+const GATHER_WALKER_OK = {   // 可被招募的一般居民類型(沒有扛鋤 / 挑擔的手持物,坐下不突兀)
+  player: { civ: 1, elder: 1, scholar: 1 }, watch: { civ: 1, elder: 1, scholar: 1, kid: 1 }, sit: { civ: 1, elder: 1, scholar: 1 }, stand: { civ: 1, elder: 1, scholar: 1, farmer: 1 }
+};
+
+const GATHER = {
+  inited: false, spots: [], pool: [], clock: 0, tickT: 0, built: false, members: 0, groupsOn: 0, fakeNow: 0,
+  tier: 'mid', cap: GATHER_CAP.mid, perMax: 16, watchMax: 4, pbuck: [], poseSpecs: {}, poseN: 0, base: 0, sig: -1,
+  stats: { groups: 0, members: 0, props: 0, tickMs: 0, drawMs: 0, specsWithPose: 0 }, propN: 0, drawAcc: 0, tickAcc: 0,
+  cardEl: null, cardCv: null, force: '', pending: '', prefilling: false, tmpGame: null, lastD: 1e9, propLast: 0, snap: false
+};
+
+function gatherNow() { return GATHER.fakeNow || Date.now(); }
+function gthStr(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; }
+function gthRnd(seed, k) { return lifeHash(seed, k) / 4294967296; }
+function gthLerp(a, b, t) { return a + (b - a) * t; }
+
+function gthNewGroup(id) {
+  return { id: id, on: false, kind: '', sp: null, game: null, seed: 0, iv: 6, gt0: 0, clk0: 0, closing: false, forced: false, n: 0, wantW: 0, nextRec: 0, openAt: 0,
+    mem: new Array(GATHER_SLOTS).fill(null), until: new Float32Array(GATHER_SLOTS), mst: new Uint8Array(GATHER_SLOTS), mrole: new Uint8Array(GATHER_SLOTS), pd: -1, lastPiece: 0 };
+}
+(function () { for (let i = 0; i < GATHER_POOL; i++) GATHER.pool.push(gthNewGroup(i + 1)); })();
+
+function gthInit() {
+  GATHER.inited = true;
+  try {
+    const m = (typeof location !== 'undefined' && location && location.search) ? /(^|[?&])gather=([a-z]+)/.exec(location.search) : null;
+    if (m) GATHER.pending = m[2];
+  } catch (e) { GATHER.pending = ''; }
+}
+
+// ───────── 等級上限 ─────────
+function gthTier() {
+  if (typeof isPowerSave === 'function' && isPowerSave()) return 'save';
+  if (typeof lifeLowEnd === 'function' && lifeLowEnd()) return 'low';
+  if (LIFE.density === 'low') return 'few';
+  if (LIFE.density === 'high' || LIFE.density === 'crowd') return 'high';
+  return 'mid';
+}
+function gthCapUpdate() {
+  GATHER.tier = gthTier();
+  const c = GATHER_CAP[GATHER.tier];
+  GATHER.cap = c;
+  GATHER.perMax = LIFE.level >= 4 ? Math.max(4, Math.floor(c.per * 0.7)) : c.per;   // 降載 L4 起單組 ×0.7(核心 2 人保留)
+  GATHER.watchMax = Math.min(c.watch, Math.max(0, GATHER.perMax - 2));
+}
+function gthMemberCap() {
+  const base = (GATHER.prefilling || LIFE.live <= 0) ? LIFE.target : LIFE.live;
+  return Math.min(GATHER.cap.members, Math.floor(Math.max(base, 6) * GATHER_MEMBER_RATIO + 0.5));
+}
+// 閘門:拍照 / 錄影 / 全景不畫提示圖示(人與棋局照畫)
+function gthUiOk() {
+  if (LIFE.placing) return false;
+  if (typeof uiIsPhoto === 'function' && uiIsPhoto()) return false;
+  if (typeof REC !== 'undefined' && REC && (REC.state === 'recording' || REC.state === 'countdown' || REC.state === 'plan')) return false;
+  if (typeof pano !== 'undefined' && pano && pano.open) return false;
+  return true;
+}
+function gthZoom() { return (typeof pano !== 'undefined' && pano && pano.open) ? Math.max(view.zoom, 0.5) : view.zoom; }
+function gthVis(sp, m) {
+  if (!(viewport.w > 0)) return true;
+  const s = worldToScreen(sp.px, sp.py);
+  return s[0] > -m && s[0] < viewport.w + m && s[1] > -m && s[1] < viewport.h + m;
+}
+function gthDist2(sp) {   // 到畫面中心的距離平方(開組排序用)
+  if (!(viewport.w > 0)) return 0;
+  const s = worldToScreen(sp.px, sp.py), dx = s[0] - viewport.w / 2, dy = s[1] - viewport.h / 2;
+  return dx * dx + dy * dy;
+}
+
+// ───────── 聚集點建置(只在道路圖重建時跑) ─────────
+function gthRoadNear(cx, cy, fw, fh, hb, ok) {
+  const R = LIFE.road, x0 = Math.floor(cx - fw / 2), y0 = Math.floor(cy - fh / 2);
+  let best = -1, bd = 1e9;
+  for (let y = y0 - 2; y <= y0 + fh + 1; y++) {
+    for (let x = x0 - 2; x <= x0 + fw + 1; x++) {
+      if (x < 0 || y < 0 || x >= boardW() || y >= boardH()) continue;
+      const i = idx(x, y);
+      if (!ok[i] || world.height[i] !== hb || !R.nb) continue;
+      const d = Math.abs(x + 0.5 - cx) + Math.abs(y + 0.5 - cy);
+      if (d < bd) { bd = d; best = i; }
+    }
+  }
+  return best;
+}
+function gthStandOk(x, y, hb) {
+  return typeof lifeStandOk === 'function' ? lifeStandOk(Math.floor(x), Math.floor(y), hb) : false;
+}
+function gthObjAt(cx, cy) {
+  if (cx < 0 || cy < 0 || cx >= boardW() || cy >= boardH()) return null;
+  const n = world.occ[idx(cx, cy)];
+  return n ? world.objects[n - 1] : null;
+}
+function gthSlot(x, y, fx, fy, o) {
+  const s = { x: x, y: y, fx: fx, fy: fy, sit: false, onObj: false, gz: 0, dO: 0 };
+  if (o) for (const k in o) s[k] = o[k];
+  return s;
+}
+// 圍觀 / 站立站位:繞焦點的兩圈(r1、r2),略過座位方向;回傳依「兩側優先」排序的站位
+function gthRing(cx, cy, r1, hb, seatAxes, maxN, excl) {
+  const out = [];
+  for (let ring = 0; ring < 2; ring++) {
+    const r = r1 + ring * 0.5, n = ring === 0 ? 10 : 14;
+    for (let i = 0; i < n; i++) {
+      const a = (i + ring * 0.5) * Math.PI * 2 / n, dx = Math.cos(a), dy = Math.sin(a) * 0.9;
+      const x = cx + dx * r, y = cy + dy * r;
+      let bad = false, sc = 0;
+      for (let k = 0; k < seatAxes.length; k++) { const dd = Math.abs(dx * seatAxes[k][0] + (dy / 0.9) * seatAxes[k][1]); if (dd > 0.82) bad = true; sc = Math.max(sc, dd); }
+      if (bad || !gthStandOk(x, y, hb)) continue;
+      if (excl) { const o = gthObjAt(Math.floor(x), Math.floor(y)); if (o && excl.indexOf(o) >= 0) continue; }
+      out.push({ x: x, y: y, key: ring * 10 + sc });
+    }
+  }
+  out.sort(function (a, b) { return a.key - b.key; });
+  return out.slice(0, maxN);
+}
+
+function gthMakeChess(o, oi, info, fp, ok, claimed) {
+  const hb = world.height[idx(o.x, o.y)], fw = fp[0], fh = fp[1], cx = o.x + fw / 2, cy = o.y + fh / 2;
+  const road = gthRoadNear(cx, cy, fw, fh, hb, ok);
+  if (road < 0) return null;
+  const sp = { k: 'chess', type: o.type, key: gthStr(o.type + '@' + o.x + ',' + o.y), oi: oi, cx: cx, cy: cy, fw: fw, fh: fh, hb: hb, road: road,
+    diag: (o.x + fw - 1) + (o.y + fh - 1), px: isoX(cx, cy), py: isoY(cx, cy, hb), bz: info.bz || 14, slots: [], w: info.w || 1, tmp: false, lamp: false, trait: 'chess' };
+  let axes;
+  if (info.seatObj) {   // yi_zuo:兩個石墩在長軸兩端
+    const ax = fw >= fh ? [1, 0] : [0, 1];
+    sp.slots.push(gthSlot(cx - ax[0] * 0.62, cy - ax[1] * 0.62, ax[0], ax[1], { sit: true, onObj: true, gz: 6, dO: sp.diag }));
+    sp.slots.push(gthSlot(cx + ax[0] * 0.62, cy + ax[1] * 0.62, -ax[0], -ax[1], { sit: true, onObj: true, gz: 6, dO: sp.diag }));
+    axes = [ax];
+  } else {   // 桌類:找相對的一對鄰格(石凳優先,其次可站的空格坐地)
+    const pairs = [[[-1, 0], [1, 0]], [[0, -1], [0, 1]]];
+    let best = null, bs = -1;
+    for (let p = 0; p < 2; p++) {
+      const pr = pairs[(p + (sp.key & 1)) % 2], sd = [];
+      let score = 0, okp = true;
+      for (let s = 0; s < 2; s++) {
+        const nx = o.x + pr[s][0], ny = o.y + pr[s][1], ob = gthObjAt(nx, ny);
+        if (ob) {
+          const oinf = gatherObjInfo(ob.type), ofp = footprint(ob.type, ob.rot);
+          if (oinf && oinf.k === 'rest' && oinf.seats === 1 && ofp[0] === 1 && ofp[1] === 1 && claimed[world.occ[idx(nx, ny)] - 1] === undefined) {
+            sd.push({ x: nx + 0.5, y: ny + 0.5, ob: world.occ[idx(nx, ny)] - 1, gz: oinf.gz || 7 }); score += 2;
+          } else okp = false;
+        } else if (gthStandOk(nx, ny, hb)) {
+          sd.push({ x: cx + pr[s][0] * 0.62, y: cy + pr[s][1] * 0.62, ob: -1, gz: 0 }); score += 1;
+        } else okp = false;
+      }
+      if (okp && score > bs) { bs = score; best = { pr: pr, sd: sd }; }
+    }
+    if (!best) return null;
+    for (let s = 0; s < 2; s++) {
+      const d = best.sd[s], pr = best.pr[s];
+      sp.slots.push(gthSlot(d.x, d.y, -pr[0], -pr[1], { sit: true, onObj: d.ob >= 0, gz: d.gz, dO: d.ob >= 0 ? (Math.floor(d.x) + Math.floor(d.y)) : 0 }));
+      if (d.ob >= 0) claimed[d.ob] = true;
+    }
+    axes = [best.pr[1]];
+  }
+  const r1 = Math.max(fw, fh) / 2 + 0.55, ring = gthRing(cx, cy, r1, hb, axes, 12, null);
+  for (let i = 0; i < ring.length; i++) sp.slots.push(gthSlot(ring[i].x, ring[i].y, cx - ring[i].x, cy - ring[i].y, null));
+  return sp;
+}
+
+function gthMakeRest(o, oi, info, fp, ok) {
+  const hb = world.height[idx(o.x, o.y)], fw = fp[0], fh = fp[1], cx = o.x + fw / 2, cy = o.y + fh / 2;
+  const road = gthRoadNear(cx, cy, fw, fh, hb, ok);
+  if (road < 0) return null;
+  const trait = info.shade ? 'shade' : info.well ? 'well' : info.cargo ? 'cargo' : info.tea ? 'tea' : 'rest';
+  const sp = { k: 'rest', type: o.type, key: gthStr(o.type + '@' + o.x + ',' + o.y), oi: oi, cx: cx, cy: cy, fw: fw, fh: fh, hb: hb, road: road,
+    diag: (o.x + fw - 1) + (o.y + fh - 1), px: isoX(cx, cy), py: isoY(cx, cy, hb), bz: info.big ? 10 : 6, slots: [], w: info.w || 1, tmp: false, lamp: false, trait: trait, night: !!(info.well || info.tea) };
+  const sitters = info.seats | 0;
+  if (sitters > 0) {
+    const ax = fw >= fh ? [1, 0] : [0, 1];
+    let pf = [-ax[1], ax[0]];
+    if (pf[0] + pf[1] < 0) pf = [-pf[0], -pf[1]];   // 面向開口(朝鏡頭側)
+    for (let i = 0; i < sitters; i++) {
+      let x, y;
+      if (info.big) {   // 2×2 大件:座位落在物件內側的四個角附近
+        const q = [[0.62, 0.12], [0.12, 0.62], [-0.62, 0.1], [0.1, -0.62]][i % 4];
+        x = cx + q[0]; y = cy + q[1];
+      } else {
+        const off = (i - (sitters - 1) / 2) * 0.7;
+        x = cx + ax[0] * off; y = cy + ax[1] * off;
+      }
+      sp.slots.push(gthSlot(x, y, pf[0] + (info.big ? 0.3 : 0), pf[1] + (info.big ? 0.3 : 0), { sit: true, onObj: true, gz: info.gz || 6, dO: sp.diag }));
+    }
+  } else if (info.shade || info.well || info.tea) {   // 站著:樹蔭四周 / 井邊 / 茶座旁
+    const r1 = Math.max(fw, fh) / 2 + (info.shade ? 0.5 : 0.6), ring = gthRing(cx, cy, r1, hb, [], info.well ? 3 : info.tea ? 2 : 3, null);
+    const pick = [];
+    for (let i = 0; i < ring.length && pick.length < (info.well ? 3 : info.tea ? 2 : 3); i++) {
+      let far = true;
+      for (let k = 0; k < pick.length; k++) if (Math.abs(pick[k].x - ring[i].x) + Math.abs(pick[k].y - ring[i].y) < 0.9) far = false;
+      if (far) pick.push(ring[i]);
+    }
+    for (let i = 0; i < pick.length; i++) sp.slots.push(gthSlot(pick[i].x, pick[i].y, cx - pick[i].x, cy - pick[i].y, null));
+  }
+  return sp.slots.length ? sp : null;
+}
+
+// 沒有該種聚集點時的退路:道路旁的空草地格(每種最多 2 個,依雜湊排序確定性挑選)
+function gthMakeTemp(kind, R, taken) {
+  const out = [], cands = [];
+  for (let i = 0; i < R.list.length; i++) {
+    const c = R.list[i], x = c % boardW(), y = Math.floor(c / boardW()), hb = world.height[c];
+    for (let d = 0; d < 4; d++) {
+      const nx = x + DIRS[d][0], ny = y + DIRS[d][1];
+      if (nx < 0 || ny < 0 || nx >= boardW() || ny >= boardH()) continue;
+      const j = idx(nx, ny);
+      if (R.ok[j] || world.occ[j] || !gthStandOk(nx, ny, hb)) continue;
+      cands.push({ c: c, nx: nx, ny: ny, hb: hb, h: lifeHash(GATHER.base, c * 4 + d) });
+      break;
+    }
+  }
+  cands.sort(function (a, b) { return a.h - b.h; });
+  for (let i = 0; i < cands.length && out.length < 2; i++) {
+    const q = cands[i], cx = q.nx + 0.5, cy = q.ny + 0.5, hb = q.hb;
+    let near = false;
+    for (let k = 0; k < out.length; k++) if (Math.abs(out[k].cx - cx) + Math.abs(out[k].cy - cy) < 4) near = true;
+    for (let k = 0; k < taken.length; k++) if (Math.abs(taken[k].cx - cx) + Math.abs(taken[k].cy - cy) < 3) near = true;
+    if (near) continue;
+    const sp = { k: kind, type: 'tmp_' + kind, key: gthStr('tmp' + kind + q.c), oi: -1, cx: cx, cy: cy, fw: 1, fh: 1, hb: hb, road: q.c, diag: q.nx + q.ny,
+      px: isoX(cx, cy), py: isoY(cx, cy, hb), bz: 0, slots: [], w: 1, tmp: true, lamp: false, trait: kind === 'chess' ? 'chess' : 'rest', night: false };
+    if (kind === 'chess') {
+      sp.slots.push(gthSlot(cx - 0.42, cy, 1, 0, { sit: true, gz: 0 }));
+      sp.slots.push(gthSlot(cx + 0.42, cy, -1, 0, { sit: true, gz: 0 }));
+      const ring = gthRing(cx, cy, 0.95, hb, [[1, 0]], 8, null);
+      for (let r = 0; r < ring.length; r++) sp.slots.push(gthSlot(ring[r].x, ring[r].y, cx - ring[r].x, cy - ring[r].y, null));
+    } else {
+      sp.slots.push(gthSlot(cx - 0.22, cy + 0.05, 0.4, 1, { sit: true, gz: 0 }));
+      sp.slots.push(gthSlot(cx + 0.22, cy + 0.05, -0.4, 1, { sit: true, gz: 0 }));
+    }
+    out.push(sp);
+  }
+  return out;
+}
+
+function gatherBuild(ok) {
+  if (!GATHER.inited) gthInit();
+  gatherReleaseAll();
+  const R = LIFE.road;
+  GATHER.spots.length = 0;
+  GATHER.built = false;
+  if (!R || !ok) return;
+  GATHER.sig = R.sig;
+  let w = 1;
+  try { w = (typeof worldsActive === 'function') ? (worldsActive() | 0) : 1; } catch (e) { w = 1; }
+  GATHER.base = lifeHash(lifeHash(0x6a7bc1d3, w), R.sig);
+  const D = boardW() + boardH();
+  for (let k = GATHER.pbuck.length; k < D; k++) GATHER.pbuck.push([]);
+  for (let k = 0; k < GATHER.pbuck.length; k++) GATHER.pbuck[k].length = 0;
+  const objs = world.objects, claimed = {}, lamps = [], chess = [], rest = [];
+  let i, o, info, fp, sp;
+  for (i = 0; i < objs.length; i++) {
+    o = objs[i];
+    if (o.type === 'lamp_stand' || o.type === 'stone_lamp' || o.type === 'lantern') lamps.push(o);
+    info = gatherObjInfo(o.type);
+    if (!info || info.k !== 'chess') continue;
+    fp = footprint(o.type, o.rot);
+    sp = gthMakeChess(o, i, info, fp, ok, claimed);
+    if (sp) chess.push(sp);
+  }
+  for (i = 0; i < objs.length; i++) {
+    o = objs[i];
+    info = gatherObjInfo(o.type);
+    if (!info || info.k !== 'rest' || claimed[i]) continue;
+    if (info.cargo && !R.port.length) continue;
+    fp = footprint(o.type, o.rot);
+    sp = gthMakeRest(o, i, info, fp, ok);
+    if (sp) rest.push(sp);
+  }
+  if (!chess.length) { const t = gthMakeTemp('chess', R, []); for (i = 0; i < t.length; i++) chess.push(t[i]); }
+  if (!rest.length) { const t = gthMakeTemp('rest', R, chess); for (i = 0; i < t.length; i++) rest.push(t[i]); }
+  for (i = 0; i < chess.length; i++) {
+    for (let k = 0; k < lamps.length; k++) if (Math.abs(lamps[k].x - chess[i].cx) + Math.abs(lamps[k].y - chess[i].cy) <= 4) chess[i].lamp = true;
+  }
+  // 相鄰去重(同種中心距 < 2.5 格者留一個),再依「非樹優先、雜湊」抽樣到上限
+  const keep = function (list, max) {
+    list.sort(function (a, b) { const ta = a.trait === 'shade' && a.fw === 1 ? 1 : 0, tb = b.trait === 'shade' && b.fw === 1 ? 1 : 0; return ta !== tb ? ta - tb : (lifeHash(GATHER.base, a.key) - lifeHash(GATHER.base, b.key)); });
+    const out = [];
+    for (let a = 0; a < list.length && out.length < max; a++) {
+      let dup = false;
+      for (let b = 0; b < out.length; b++) if (Math.abs(out[b].cx - list[a].cx) + Math.abs(out[b].cy - list[a].cy) < 2.5) dup = true;
+      if (!dup) out.push(list[a]);
+    }
+    return out;
+  };
+  const cs = keep(chess, GATHER_SPOT_MAX), rs = keep(rest, GATHER_SPOT_MAX * 2);
+  for (i = 0; i < cs.length; i++) GATHER.spots.push(cs[i]);
+  for (i = 0; i < rs.length; i++) GATHER.spots.push(rs[i]);
+  GATHER.built = true;
+  // R.fBase(人口下限基礎)加入聚集點數 ×1(PLAN §3.2);只增不減,下限仍受時段與密度夾制
+  R.fBase += Math.min(GATHER.spots.length, 12);
+}
+
+// ───────── 排程(純函式:同種子同結果) ─────────
+function gthTodMul(kind, sp) {
+  const tod = LIFE.tod, season = (typeof lifeSeason === 'function') ? lifeSeason() : 'spring';
+  let m = (GATHER_TOD[kind][tod] || 0) * (GATHER_SEASON[kind][season] || 1);
+  if (kind === 'chess' && tod === 'night' && sp.lamp) m = 0.2;
+  if (kind === 'rest') {
+    if (tod === 'night' && !sp.night) m = 0;
+    if (sp.trait === 'shade' && season === 'summer') m *= 1.5;
+    if ((sp.trait === 'well' || sp.trait === 'tea') && season === 'winter') m = (GATHER_TOD.rest[tod] || 0);
+  }
+  return m * (sp.w || 1);
+}
+// 此刻有沒有一局棋;有 → 填 out 並回傳 out(start 毫秒、dur 秒、seed、idx、iv 每手秒數)
+function gthChessGame(sp, now, out) {
+  const slot = Math.floor(now / GATHER_SLOT_MS), tin = (now - slot * GATHER_SLOT_MS) / 1000;
+  const mul = gthTodMul('chess', sp);
+  if (mul <= 0) return null;
+  const key = lifeHash(lifeHash(GATHER.base, sp.key), slot);
+  if (gthRnd(key, 1) >= Math.min(1, mul * 0.7)) return null;
+  let t = gthRnd(key, 2) * 300;
+  for (let i = 0; i < 12; i++) {
+    const dur = 90 + gthRnd(key, 10 + i) * 150;
+    if (t + dur > 900 || tin < t) return null;
+    if (tin < t + dur) {
+      out.start = slot * GATHER_SLOT_MS + t * 1000; out.dur = dur; out.seed = lifeHash(key, i + 1); out.idx = i; out.iv = 4 + gthRnd(out.seed, 3) * 4;
+      return out;
+    }
+    t += dur + 30 + gthRnd(key, 40 + i) * 60;
+  }
+  return null;
+}
+
+// ───────── 組與成員 ─────────
+function gthPropAdd(g) {
+  const d = Math.max(0, Math.min(GATHER.pbuck.length - 1, g.sp.diag));
+  g.pd = d; GATHER.pbuck[d].push(g);
+}
+function gthPropDel(g) {
+  if (g.pd < 0) return;
+  const L = GATHER.pbuck[g.pd], k = L ? L.indexOf(g) : -1;
+  if (k >= 0) L.splice(k, 1);
+  g.pd = -1;
+}
+function gthPoseOk(spec) {
+  if (!spec) return false;
+  if (GATHER.poseSpecs[spec.id]) return true;
+  if (GATHER.poseN >= GATHER.cap.pose) return false;
+  GATHER.poseSpecs[spec.id] = true; GATHER.poseN++;
+  return true;
+}
+function gthOpen(sp, game, forced) {
+  let g = null;
+  for (let i = 0; i < GATHER_POOL; i++) if (!GATHER.pool[i].on) { g = GATHER.pool[i]; break; }
+  if (!g) return null;
+  g.on = true; g.kind = sp.k; g.sp = sp; g.closing = false; g.forced = !!forced; g.n = 0; g.openAt = GATHER.clock; g.nextRec = 0;
+  g.mem.fill(null); g.mst.fill(0); g.mrole.fill(0); g.until.fill(0);
+  g.game = null;
+  if (sp.k === 'chess') {
+    g.game = { start: game.start, dur: game.dur, seed: game.seed, idx: game.idx, iv: game.iv };
+    g.seed = game.seed; g.iv = game.iv;
+    g.wantW = Math.min(GATHER.watchMax, Math.floor(gthRnd(game.seed, 5) * (GATHER.watchMax + 1)), sp.slots.length - 2);
+  } else { g.seed = lifeHash(GATHER.base, sp.key); g.wantW = 0; }
+  GATHER.groupsOn++;
+  gthPropAdd(g);
+  return g;
+}
+function gthDeact(g) {
+  for (let i = 0; i < GATHER_SLOTS; i++) if (g.mem[i]) gthRelease(g, i);
+  gthPropDel(g);
+  g.on = false; g.sp = null; g.game = null; g.n = 0; g.closing = false;
+  GATHER.groupsOn--;
+}
+function gthRelease(g, i) {
+  const n = g.mem[i];
+  if (!n) return;
+  g.mem[i] = null; g.mst[i] = 0; g.mrole[i] = 0; g.n--; GATHER.members--;
+  n.gat = 0; n.gp = false; n.gbub = ''; n.dOver = 0; n.gz = 0; n.gmode = '';
+  if (n.pp) { n.pp.lean = 0; n.pp.nod = 0; }
+  if (n.dead || n.st === 'fade') return;
+  if (GATHER.snap && n.cur >= 0) {   // 改路重建時:站位多半不在道路格上(lifeRebuild 會把站在非道路格的人淡出)→ 先回到所屬道路格中心
+    n.x = (n.cur % boardW()) + 0.5; n.y = Math.floor(n.cur / boardW()) + 0.5; n.px = isoX(n.x, n.y); n.py = isoY(n.x, n.y, lifeHAt(n.x, n.y));
+  }
+  if (n.st === 'act' && n.act === 'gather') n.dur = n.t;   // 這一站立刻結束 → lifeNextStop 依 lazy 重新排行程(走開)
+  else if (n.plan && n.plan[0] && n.plan[0].act === 'gather') n.plan[0].dur = 0;
+  n.fid = false;
+}
+function gatherReleaseAll() {
+  GATHER.snap = true;
+  try { for (let i = 0; i < GATHER_POOL; i++) { const g = GATHER.pool[i]; if (g.on) gthDeact(g); } } finally { GATHER.snap = false; }
+  GATHER.members = 0; GATHER.groupsOn = 0;
+}
+function gatherReset() {   // lifeReset:居民陣列已清空,只重置組狀態
+  for (let i = 0; i < GATHER_POOL; i++) {
+    const g = GATHER.pool[i];
+    gthPropDel(g);
+    g.on = false; g.sp = null; g.game = null; g.n = 0; g.closing = false; g.mem.fill(null); g.mst.fill(0); g.mrole.fill(0);
+  }
+  GATHER.members = 0; GATHER.groupsOn = 0;
+}
+
+function gthAttach(g, i, n, role, state, T) {
+  g.mem[i] = n; g.mst[i] = state; g.mrole[i] = role; g.n++; GATHER.members++;
+  n.gat = g.id; n.gs = i; n.gr = role; n.gp = false; n.gbub = ''; n.dOver = 0; n.gz = 0; n.gmode = ''; n.gT0 = GATHER.clock;
+  n.lazy = T || LIFE_TYPES[n.type] || LIFE_TYPES.civ;
+}
+function gthSeatIn(g, i, n) {   // 到位(走到道路格後 / 直接生成):設站位、面向、保持時間
+  const sl = g.sp.slots[i], role = g.mrole[i];
+  n.gp = true; n.gx = sl.x; n.gy = sl.y; n.gz = sl.gz || 0; n.dOver = sl.onObj ? sl.dO : 0; n.fx = sl.fx; n.fy = sl.fy;
+  n.fid = !sl.sit;
+  n.st = 'act'; n.act = 'gather'; n.dur = 9e5; n.t = 0;
+  g.mst[i] = 2;
+  if (g.kind === 'chess') {
+    g.until[i] = role === 1 ? 1e9 : GATHER.clock + 20 + Math.random() * 40;
+  } else {
+    const nap = (n.look === 'elder' || n.type === 'coolie') && Math.random() < 0.45 && sl.sit;
+    n.gmode = nap ? 'nap' : (g.sp.trait === 'rest' || g.sp.trait === 'cargo') ? 'sit' : g.sp.trait;
+    g.until[i] = GATHER.clock + (nap ? 40 + Math.random() * 80 : 20 + Math.random() * 70);
+  }
+}
+
+// 招募候選:附近正在走路的一般居民(walkIn:畫面內走過去;否則只挑畫面外的,瞬移 + 淡入)
+function gthPickWalker(sp, roleKey, radius, walkIn) {
+  const L = LIFE.npcs, okT = GATHER_WALKER_OK[roleKey];
+  let best = null, bd = 1e9;
+  for (let k = 0; k < L.length; k++) {
+    const n = L[k];
+    if (n.st !== 'walk' || n.gat > 0 || n.ext || n.port || n.vis || n.role || n.keep || n.hold > 0 || n.det || n.pair || n.dead || n.life < 1 || lifeRetiring(n)) continue;
+    if (!okT[n.type]) continue;
+    if (walkIn ? false : n.onS) continue;
+    const d = Math.abs(n.x - sp.cx) + Math.abs(n.y - sp.cy);
+    if (d > radius || d >= bd) continue;
+    if (n.cur < 0 || (roleKey === 'player' && n.look.indexOf('kid') === 0)) continue;
+    if (!n.spec || !gthPoseOk(n.spec)) continue;
+    bd = d; best = n;
+  }
+  return best;
+}
+
+// 在 g 的第 i 個站位招募一人;instant = 預布點(直接放在站位、不淡入)。回傳是否成功
+function gthRecruit(g, i, role, instant) {
+  const sp = g.sp, sl = sp.slots[i];
+  const roleKey = role === 1 ? 'player' : (sl.sit ? 'sit' : (g.kind === 'chess' ? 'watch' : 'stand'));
+  const porter = sp.trait === 'cargo';
+  if (GATHER.members >= gthMemberCap() || g.n >= GATHER.perMax) return false;
+  let n = null;
+  if (!porter) {
+    if (!instant) {
+      n = gthPickWalker(sp, roleKey, 7, true);
+      if (n) {
+        const D = lifeField(sp.road);
+        if (!D) return false;   // 距離場本幀預算用完,下次再試
+        if (D[n.cur] < 0) n = null;
+      }
+      if (n) {   // 走過去
+        gthAttach(g, i, n, role, 1);
+        n.plan = [{ cell: sp.road, act: 'gather', dur: 9e5 }]; n.pi = 0; n.goal = sp.road; n.loop = false;
+        return true;
+      }
+    }
+    n = gthPickWalker(sp, roleKey, 18, false);
+  }
+  if (n) {   // 畫面外的居民:瞬移到站位(站位在畫面內時 0.5 秒淡入)
+    gthAttach(g, i, n, role, 2);
+    n.plan = [{ cell: sp.road, act: 'gather', dur: 9e5 }]; n.pi = 0; n.goal = sp.road; n.loop = false;
+    n.cur = sp.road; n.nx = -1; n.x = sl.x; n.y = sl.y; n.px = isoX(n.x, n.y); n.py = isoY(n.x, n.y, lifeHAt(n.x, n.y));
+    if (!instant && gthVis(sp, 40)) { n.life = 0; n.alpha = 0; }
+    gthSeatIn(g, i, n);
+    return true;
+  }
+  // 沒有現成的人:生成一名新居民(算居民額度,須有空額)
+  if (!instant && LIFE.live >= LIFE.target + 2) return false;
+  const pool = GATHER_LOOKS[porter ? 'porter' : (role === 1 ? 'player' : (sl.sit ? 'sit' : 'watch'))];
+  let look = '', spec = null;
+  for (let t = 0; t < 5 && !spec; t++) {
+    look = pool[Math.floor(Math.random() * pool.length)];
+    const s = lifeSpecFor(look);
+    if (s && gthPoseOk(s)) spec = s;
+  }
+  if (!spec) return false;
+  const key = GATHER_TYPE_OF[look] || 'civ', T = LIFE_TYPES[key];
+  if (!T) return false;
+  const plan = [{ cell: sp.road, act: 'gather', dur: 9e5 }];
+  if (!lifeEmit(T, key, 1, sp.road, plan, null, true, { lane: 0.12 })) return false;
+  n = LIFE.npcs[LIFE.npcs.length - 1];
+  n.look = look; n.spec = spec; n.type = key;
+  gthAttach(g, i, n, role, 2, T);
+  n.x = sl.x; n.y = sl.y; n.px = isoX(n.x, n.y); n.py = isoY(n.x, n.y, lifeHAt(n.x, n.y));
+  if (instant) { n.life = 1; n.alpha = 1; } else { n.life = 0; n.alpha = 0; }
+  gthSeatIn(g, i, n);
+  return true;
+}
+
+// 每幀:成員到位、緩步入座、到時離開(只迭代使用中的組 × 站位)
+function gthUpdateMembers(dt) {
+  for (let gi = 0; gi < GATHER_POOL; gi++) {
+    const g = GATHER.pool[gi];
+    if (!g.on) continue;
+    for (let i = 0; i < GATHER_SLOTS; i++) {
+      const n = g.mem[i];
+      if (!n) continue;
+      if (n.dead || n.st === 'fade' || n.gat !== g.id || lifeRetiring(n)) {
+        if (n.gat === g.id) { n.gat = 0; n.gp = false; n.gbub = ''; n.dOver = 0; n.gz = 0; if (n.pp) { n.pp.lean = 0; n.pp.nod = 0; } }
+        g.mem[i] = null; g.mst[i] = 0; g.mrole[i] = 0; g.n--; GATHER.members--;
+        continue;
+      }
+      if (g.mst[i] === 1) {
+        if (n.st === 'act' && n.act === 'gather') gthSeatIn(g, i, n);
+        else if (GATHER.clock - n.gT0 > 50 || n.st !== 'walk') gthRelease(g, i);
+        continue;
+      }
+      if (n.gp) {   // 緩步入座 / 站定(1.6 格/秒)
+        const dx = n.gx - n.x, dy = n.gy - n.y, d = Math.sqrt(dx * dx + dy * dy);
+        if (d > 0.001) { const s = Math.min(d, 1.6 * dt); n.x += dx / d * s; n.y += dy / d * s; }
+        if (n.st !== 'act') gthRelease(g, i);
+        else if (GATHER.clock >= g.until[i]) gthRelease(g, i);
+      }
+    }
+  }
+}
+
+// ───────── 排程與開關組(2 Hz;省電 1 Hz) ─────────
+function gthKindMul(sp) { return gthTodMul(sp.k, sp); }
+function gthManage(prefill) {
+  gthCapUpdate();
+  const now = gatherNow(), tmp = GATHER.tmpGame || (GATHER.tmpGame = { start: 0, dur: 0, seed: 0, idx: 0, iv: 6 });
+  let gi, g, i;
+  // 1) 既有組:局終 / 離開畫面 → 解散;維持成員
+  for (gi = 0; gi < GATHER_POOL; gi++) {
+    g = GATHER.pool[gi];
+    if (!g.on) continue;
+    const sp = g.sp;
+    if (!g.closing) {
+      let end = false;
+      if (g.kind === 'chess') {
+        const gm = g.forced ? ((now - g.game.start) / 1000 < g.game.dur ? g.game : null) : gthChessGame(sp, now, tmp);
+        if (!gm || gm.seed !== g.game.seed) end = true;
+        else { g.gt0 = (now - g.game.start) / 1000; g.clk0 = GATHER.clock; }
+      } else if (!g.forced && gthKindMul(sp) <= 0) end = true;
+      if (!gthVis(sp, 260) && !prefill) { gthCloseStart(g, true); continue; }
+      if (end) { gthCloseStart(g, false); continue; }
+      gthMaintain(g, false);
+    } else {
+      if (g.n === 0 || GATHER.clock - g.openAt > 600) gthDeact(g);
+    }
+  }
+  // 2) 開新組:正在進行的棋局優先,其次畫面附近的休息點(依到畫面中心距離)
+  if (LIFE.placing && !prefill) return;
+  const cand = [];
+  for (i = 0; i < GATHER.spots.length; i++) {
+    const sp = GATHER.spots[i];
+    if (gthHasGroup(sp) || (!prefill && !gthVis(sp, 40))) continue;
+    if (sp.k === 'chess') { const gm = gthChessGame(sp, now, tmp); if (gm) cand.push({ sp: sp, d: gthDist2(sp) - 1e9, game: { start: gm.start, dur: gm.dur, seed: gm.seed, idx: gm.idx, iv: gm.iv } }); }
+    else if (gthKindMul(sp) > 0) cand.push({ sp: sp, d: gthDist2(sp) + (sp.trait === 'shade' && sp.fw === 1 ? 160000 : 0), game: null });   // 普通樹排在座椅 / 井 / 茶座之後
+  }
+  cand.sort(function (a, b) { return a.d - b.d; });
+  for (i = 0; i < cand.length; i++) {
+    if (GATHER.groupsOn >= GATHER.cap.groups) {   // 滿了:棋局可擠掉最遠的休息組
+      if (cand[i].sp.k !== 'chess') break;
+      let far = null, fd = -1;
+      for (gi = 0; gi < GATHER_POOL; gi++) { g = GATHER.pool[gi]; if (g.on && g.kind === 'rest' && !g.forced) { const dd = gthDist2(g.sp); if (dd > fd) { fd = dd; far = g; } } }
+      if (!far) break;
+      gthCloseStart(far, true);
+    }
+    if (GATHER.members >= gthMemberCap()) break;
+    g = gthOpen(cand[i].sp, cand[i].game, false);
+    if (!g) break;
+    if (g.kind === 'chess') { g.gt0 = (now - g.game.start) / 1000; g.clk0 = GATHER.clock; }
+    gthMaintain(g, prefill);
+  }
+  // 3) 強制開組(?gather= / gatherForce)
+  if (GATHER.force) { const f = GATHER.force; GATHER.force = ''; gthForceOpen(f); }
+}
+function gthHasGroup(sp) {
+  for (let i = 0; i < GATHER_POOL; i++) if (GATHER.pool[i].on && GATHER.pool[i].sp === sp) return true;
+  return false;
+}
+function gthCloseStart(g, cull) {
+  g.closing = true; g.openAt = GATHER.clock;
+  for (let i = 0; i < GATHER_SLOTS; i++) {
+    if (!g.mem[i]) continue;
+    if (cull || g.mst[i] === 1) gthRelease(g, i);
+    else g.until[i] = GATHER.clock + Math.random() * 6;   // 錯開 0~6 秒走開
+  }
+  if (cull || g.n === 0) gthDeact(g);
+}
+// 維持成員:棋局 = 兩名棋手 + 目標圍觀數;休息 = 空位依機率補人
+function gthMaintain(g, instant) {
+  const sp = g.sp, ns = sp.slots.length;
+  let i;
+  if (g.kind === 'chess') {
+    for (i = 0; i < 2 && i < ns; i++) if (!g.mem[i]) { if (!gthRecruit(g, i, 1, instant)) break; if (!instant) break; }
+    let w = 0;
+    for (i = 2; i < ns; i++) if (g.mem[i]) w++;
+    const tail = g.game ? g.game.dur - ((gatherNow() - g.game.start) / 1000) : 0;
+    if (tail < 6) return;   // 終局前不再補人
+    if (instant) {
+      for (i = 2; i < ns && w < g.wantW; i++) if (!g.mem[i] && gthRecruit(g, i, 2, true)) w++;
+    } else if (w < g.wantW && GATHER.clock >= g.nextRec) {
+      g.nextRec = GATHER.clock + 2 + Math.random() * 4;
+      for (i = 2; i < ns; i++) if (!g.mem[i] && gthRecruit(g, i, 2, false)) break;
+    } else if (w > g.wantW) {   // 降載後多出的圍觀者離開
+      for (i = ns - 1; i >= 2; i--) if (g.mem[i] && g.mst[i] === 2) { gthRelease(g, i); break; }
+    }
+  } else {
+    const mul = gthKindMul(sp);
+    for (i = 0; i < ns; i++) {
+      if (g.mem[i]) continue;
+      const p = instant ? Math.min(0.85, 0.6 * mul + 0.1) : Math.min(0.5, 0.05 * mul);
+      if (Math.random() < p) { if (gthRecruit(g, i, 3, instant) && !instant) break; }
+    }
+  }
+}
+function gthForceOpen(kind, type) {
+  const now = gatherNow();
+  let best = null, bd = 1e18;
+  for (let i = 0; i < GATHER.spots.length; i++) {
+    const sp = GATHER.spots[i];
+    if (sp.k !== kind || (type && sp.type !== type) || gthHasGroup(sp)) continue;
+    const d = gthDist2(sp);
+    if (d < bd) { bd = d; best = sp; }
+  }
+  if (!best) return null;
+  if (GATHER.groupsOn >= GATHER.cap.groups) {   // 擠掉一組
+    for (let gi = 0; gi < GATHER_POOL; gi++) if (GATHER.pool[gi].on) { gthCloseStart(GATHER.pool[gi], true); break; }
+  }
+  const game = kind === 'chess' ? { start: now, dur: 240, seed: lifeHash(GATHER.base, 777), idx: 0, iv: 5 } : null;
+  const g = gthOpen(best, game, true);
+  if (g) { if (g.kind === 'chess') { g.gt0 = 0; g.clk0 = GATHER.clock; } gthMaintain(g, false); }
+  return g;
+}
+// 開發 / 測試:在最近的聚集點立即開一組(chess / rest,可再指定物件 type);回傳組
+function gatherForce(kind, type) { if (!GATHER.inited) gthInit(); return gthForceOpen(kind, type); }
+
+function gatherPrefill() {
+  if (!GATHER.inited) gthInit();
+  if (!GATHER.built || !LIFE.active || !LIFE.road) return 0;
+  const before = GATHER.members;
+  GATHER.prefilling = true;
+  try { gthManage(true); } finally { GATHER.prefilling = false; }
+  GATHER.tickT = 0.5;   // 預布點之後的第一次一般排程延後 0.5 秒(一般排程用非種子亂數,不污染預布點的確定性)
+  for (let gi = 0; gi < GATHER_POOL; gi++) {   // 預布點的人第一幀就在位置上
+    const g = GATHER.pool[gi];
+    if (!g.on) continue;
+    for (let i = 0; i < GATHER_SLOTS; i++) { const n = g.mem[i]; if (n && n.gp) { n.x = n.gx; n.y = n.gy; n.px = isoX(n.x, n.y); n.py = isoY(n.x, n.y, lifeHAt(n.x, n.y)); } }
+  }
+  return GATHER.members - before;
+}
+
+// lifeFrame 掛點:每幀更新成員(≤ 48 人),每 0.5 秒排程
+function gatherTick(dt) {
+  if (!GATHER.inited) gthInit();
+  if (!GATHER.built) return;
+  const t0 = lifeNow();
+  GATHER.clock += dt;
+  if (GATHER.pending && GATHER.spots.length) { GATHER.force = GATHER.pending === 'list' ? '' : GATHER.pending; if (GATHER.pending === 'list' && typeof console !== 'undefined') console.log('[gather]', JSON.stringify(gatherStats())); GATHER.pending = ''; }
+  if (GATHER.groupsOn) gthUpdateMembers(dt);
+  GATHER.tickT -= dt;
+  if (GATHER.tickT <= 0) {
+    GATHER.tickT = (typeof isPowerSave === 'function' && isPowerSave()) ? 1 : 0.5;
+    gthManage(false);
+  }
+  GATHER.tickAcc += lifeNow() - t0;
+}
+
+// ───────── 動作與姿勢(每人每幀 O(1),不配置) ─────────
+function gthGroupOf(n) { return n.gat > 0 ? GATHER.pool[n.gat - 1] : null; }
+function gatherPose(n, pp) {
+  n.gbub = '';
+  const g = gthGroupOf(n);
+  if (!g || !g.on || g.mem[n.gs] !== n || !n.gp) return;
+  pp.y = n.py - n.gz;
+  pp.lean = 0; pp.nod = 0;
+  const clk = GATHER.clock, i = n.gs;
+  if (g.kind === 'chess') {
+    const gt = g.gt0 + (clk - g.clk0), iv = g.iv, k = Math.floor(gt / iv), ph = gt - k * iv, fin = gt - (g.game.dur - GATHER_KINDS.chess.finale);
+    const winner = gthRnd(g.game.seed, 99) < 0.5 ? 0 : 1;
+    if (n.gr === 1) {
+      pp.fr = 2;
+      const opp = g.mem[1 - i], dir = opp && opp.x < n.x ? -1 : 1;
+      if (fin > 0) {
+        if (i === winner) { pp.nod = Math.floor(fin * 2) % 2; if (fin > 1 && fin < 6) n.gbub = 'happy'; }
+        else { pp.lean = (Math.floor(fin * 3) % 2 ? 2.4 : -2.4); }
+      } else if ((k & 1) === i) {   // 輪到我:前傾 + 點頭落子
+        if (ph < 0.8) { pp.lean = 3 * dir; pp.nod = ph < 0.4 ? 1 : 0; }
+        else if (ph > 1.2 && ph < 2.6 && gthRnd(g.seed, k * 7 + i) < 0.3) n.gbub = 'idea';
+      } else if (ph > iv * 0.5 && ph < iv * 0.5 + 0.4) pp.nod = 1;
+    } else {
+      const r = gthRnd(g.seed, k * 13 + i);
+      if (fin > 0) { if (fin > 0.5 && fin < 5 && r < 0.35) n.gbub = 'happy'; }
+      else if (ph < 1.6) {
+        if (r < 0.3) n.gbub = r < 0.15 ? 'surprise' : 'question';
+        if (r > 0.9 && ph < 0.8) pp.fr = 4;   // 指點「下這裡!」
+      }
+    }
+    return;
+  }
+  // 路邊休息
+  const t = clk + n.ph * 3;
+  if (n.gmode === 'nap') { pp.fr = 2; pp.nod = Math.floor(t / 1.4) % 2; pp.lean = 2.4; n.gbub = ((t % 6) < 2.4) ? 'sleep' : ''; return; }
+  if (n.gmode === 'sit') {
+    pp.fr = 2;
+    const turn = Math.floor(t / 2.6) % Math.max(1, g.n);
+    if (g.n >= 2 && (i % g.n) === turn) { pp.lean = 1.6 * (Math.floor(t * 2) % 2 ? 1 : 0.5); n.gbub = 'talk'; }
+    else if (Math.floor(t / 5) % 3 === 0) pp.nod = Math.floor(t * 1.5) % 2;
+    return;
+  }
+  if (n.gmode === 'tea' || n.gmode === 'well' || n.gmode === 'shade') {
+    const turn = Math.floor(t / 2.8) % Math.max(1, g.n);
+    if (g.n >= 2 && (i % g.n) === turn) { pp.lean = 1.4; n.gbub = 'talk'; }
+    if (n.gmode === 'tea' && (t % 8) < 0.7) pp.fr = 4;   // 舉碗喝茶
+  }
+}
+
+// ───────── 繪製(小道具 + 提示圖示 + 拉遠人影團) ─────────
+function gthHintPos(g) {
+  const sp = g.sp;
+  return [sp.px, sp.py - (sp.bz || 10) - (sp.trait === 'shade' || sp.fw > 1 ? 52 : 34)];
+}
+function gatherDraw(ctx, d) {
+  if (d <= GATHER.lastD) { GATHER.propLast = GATHER.propN; GATHER.propN = 0; }   // 對角線由小到大畫:d 回頭 = 新的一幀(圖元上限以「每幀」計)
+  GATHER.lastD = d;
+  if (!GATHER.groupsOn || !LIFE.active) return;
+  const L = GATHER.pbuck[d];
+  if (!L || !L.length) return;
+  const t0 = lifeNow(), z = gthZoom();
+  for (let k = 0; k < L.length; k++) {
+    const g = L[k], sp = g.sp;
+    if (!g.on || !sp) continue;
+    if (z < 0.35) {   // 拉遠:每組一團人影(扁橢圓 + 頭點),不佔個人色點額度
+      if (g.n > 0 && GATHER.propN < GATHER_PROP_MAX) {
+        const m = Math.min(g.n, 6);
+        rqDisc(ctx, sp.px, sp.py - 3, 6 + m * 0.8, 3.2, 'rgba(40,30,20,0.35)');
+        let c = 0;
+        for (let i = 0; i < GATHER_SLOTS && c < 3; i++) { const n = g.mem[i]; if (n && n.gp) { rqDisc(ctx, sp.px - 4 + c * 4, sp.py - 5 - (c === 1 ? 1.6 : 0), 2.3, 2.3, n.col); c++; } }
+        GATHER.propN += 4;
+      }
+      continue;
+    }
+    if (z < 0.5) continue;
+    if (g.kind === 'chess' && g.game && !g.closing) gthDrawChess(ctx, g, z);
+    else if (g.kind === 'rest' && sp.type === 'liang_peng' && z >= 0.8 && g.n > 0 && GATHER.propN < GATHER_PROP_MAX) {   // 茶具
+      rqDisc(ctx, sp.px - 6, sp.py - 12, 1.7, 1, '#f4ead2'); rqDisc(ctx, sp.px + 5, sp.py - 11, 1.7, 1, '#f4ead2'); GATHER.propN += 2;
+    }
+    if (z >= 0.6 && g.n > 0 && gthUiOk() && GATHER.propN < GATHER_PROP_MAX) gthDrawHint(ctx, g);
+  }
+  GATHER.drawAcc += lifeNow() - t0;
+}
+function gthDrawChess(ctx, g, z) {
+  const sp = g.sp, gt = g.gt0 + (GATHER.clock - g.clk0), moves = Math.floor(gt / g.iv), cnt = Math.min(10, moves);
+  if (sp.tmp && GATHER.propN < GATHER_PROP_MAX - 8) {   // 臨時麻布棋盤:菱形 + 4×4 格線
+    const hb = sp.hb, a = [sp.cx - 0.26, sp.cy - 0.26], b = [sp.cx + 0.26, sp.cy - 0.26], c = [sp.cx + 0.26, sp.cy + 0.26], e = [sp.cx - 0.26, sp.cy + 0.26];
+    rqPoly4(ctx, isoX(a[0], a[1]), isoY(a[0], a[1], hb), isoX(b[0], b[1]), isoY(b[0], b[1], hb), isoX(c[0], c[1]), isoY(c[0], c[1], hb), isoX(e[0], e[1]), isoY(e[0], e[1], hb), '#d8c08a');
+    for (let q = 1; q < 4; q++) {
+      const u = -0.26 + q * 0.13;
+      rqLine(ctx, isoX(sp.cx + u, sp.cy - 0.26), isoY(sp.cx + u, sp.cy - 0.26, hb), isoX(sp.cx + u, sp.cy + 0.26), isoY(sp.cx + u, sp.cy + 0.26, hb), 0.6, '#7a5a30', 0.7);
+      rqLine(ctx, isoX(sp.cx - 0.26, sp.cy + u), isoY(sp.cx - 0.26, sp.cy + u, hb), isoX(sp.cx + 0.26, sp.cy + u), isoY(sp.cx + 0.26, sp.cy + u, hb), 0.6, '#7a5a30', 0.7);
+    }
+    GATHER.propN += 7;
+  }
+  if (z < 0.8) return;
+  for (let k = 0; k < cnt && GATHER.propN < GATHER_PROP_MAX; k++) {   // 棋子:最多 10 顆(超過換位置不增數)
+    const h = lifeHash(g.game.seed, k + (moves > 10 ? moves : 0) * 0);
+    const wx = sp.cx + ((h % 9) - 4) * 0.045, wy = sp.cy + (((h >>> 8) % 9) - 4) * 0.045;
+    rqDisc(ctx, isoX(wx, wy), isoY(wx, wy, sp.hb) - sp.bz, 1.5, 0.95, (k & 1) ? '#f4f0e4' : '#2a2622');
+    GATHER.propN++;
+  }
+}
+function gthDrawHint(ctx, g) {
+  const p = gthHintPos(g), x = p[0], y = p[1];
+  rqDisc(ctx, x, y, 8, 8, 'rgba(40,30,22,0.88)');
+  if (g.kind === 'chess') {
+    rqPoly4(ctx, x, y - 5, x + 6, y, x, y + 5, x - 6, y, '#d8b878');
+    rqDisc(ctx, x - 1.8, y - 0.6, 1.6, 1.2, '#2a2622'); rqDisc(ctx, x + 1.8, y + 0.6, 1.6, 1.2, '#f4f0e4');
+  } else {
+    rqDisc(ctx, x, y + 0.8, 4.4, 2.6, '#e6cf8e'); rqRect(ctx, x - 3.6, y - 2.8, 7.2, 3.4, '#e6cf8e'); rqDisc(ctx, x, y - 2.6, 3.6, 1.2, '#7a4a2a');
+  }
+  GATHER.propN += 4;
+}
+
+// ───────── 點擊:聚集提示 → 小卡 ─────────
+function gatherTap(sx, sy) {
+  if (!GATHER.groupsOn || LIFE.placing || !gthUiOk() || gthZoom() < 0.6) return false;
+  let best = null, bd = 22 * 22;
+  for (let gi = 0; gi < GATHER_POOL; gi++) {
+    const g = GATHER.pool[gi];
+    if (!g.on || g.n <= 0) continue;
+    const p = gthHintPos(g), s = worldToScreen(p[0], p[1]), dx = sx - s[0], dy = sy - s[1], dd = dx * dx + dy * dy;
+    if (dd < bd) { bd = dd; best = g; }
+  }
+  if (!best) return false;
+  gthCardShow(best);
+  return true;
+}
+function gthCardKey(g) { return g.kind === 'chess' ? 'chess' : (GATHER_CARD[g.sp.trait] ? g.sp.trait : 'rest'); }
+function gthCardShow(g) {
+  const c = LIFE.card || (typeof lifeCardMake === 'function' ? lifeCardMake() : null);
+  if (!c) return;
+  const info = GATHER_CARD[gthCardKey(g)];
+  let w = 0;
+  for (let i = 2; i < GATHER_SLOTS; i++) if (g.kind === 'chess' && g.mem[i]) w++;
+  LIFE.cardFor = null;
+  if (typeof npcVisitCardHide === 'function') npcVisitCardHide();
+  if (typeof npcHeroCardHide === 'function') npcHeroCardHide();
+  c.nameEl.textContent = info.title;
+  c.typeEl.textContent = g.kind === 'chess' ? '圍棋' : '街景';
+  const gt = g.kind === 'chess' ? g.gt0 + (GATHER.clock - g.clk0) : 0;
+  c.greet.textContent = info.desc.replace('{w}', String(w)).replace('{n}', String(g.n)) + (g.kind === 'chess' ? '(第 ' + Math.floor(gt / g.iv) + ' 手)' : '');
+  c.box.style.display = 'block';
+  if (g.kind === 'chess' && typeof document !== 'undefined' && document.createElement) {
+    if (!GATHER.cardCv) {
+      GATHER.cardCv = document.createElement('canvas');
+      GATHER.cardCv.width = 108; GATHER.cardCv.height = 108;
+      GATHER.cardCv.style.cssText = 'display:block;margin:6px auto 2px;border-radius:4px;';
+      c.box.appendChild(GATHER.cardCv);
+    }
+    GATHER.cardCv.style.display = 'block';
+    gthDrawCardBoard(GATHER.cardCv, g, Math.floor(gt / g.iv));
+  } else if (GATHER.cardCv) GATHER.cardCv.style.display = 'none';
+}
+function gthDrawCardBoard(cv, g, moves) {   // 9×9 小棋盤:依種子與手數確定性排子,只在開卡時畫一次
+  if (!cv.getContext) return;
+  const x = cv.getContext('2d');
+  if (!x) return;
+  x.fillStyle = '#d9b872'; x.fillRect(0, 0, 108, 108);
+  x.strokeStyle = '#6a4a22'; x.lineWidth = 1;
+  for (let i = 0; i < 9; i++) { x.beginPath(); x.moveTo(10 + i * 11, 10); x.lineTo(10 + i * 11, 98); x.moveTo(10, 10 + i * 11); x.lineTo(98, 10 + i * 11); x.stroke(); }
+  const cnt = Math.min(moves, 60);
+  for (let k = 0; k < cnt; k++) {
+    const h = lifeHash(g.game.seed, k);
+    x.fillStyle = (k & 1) ? '#f4f0e4' : '#2a2622';
+    x.beginPath(); x.arc(10 + (h % 9) * 11, 10 + ((h >>> 8) % 9) * 11, 4.6, 0, Math.PI * 2); x.fill();
+  }
+}
+function gatherCardHide() { if (GATHER.cardCv) GATHER.cardCv.style.display = 'none'; }
+
+// 小卡:聚集成員的台詞與「正在…」
+function gatherLines(n) {
+  const g = gthGroupOf(n);
+  if (!g || !g.on) return null;
+  if (g.kind === 'chess') return n.gr === 1 ? GATHER_LINES.chess.player : GATHER_LINES.chess.watch;
+  const R = GATHER_LINES.rest;
+  if (n.gmode === 'nap') return R.nap;
+  if (g.sp.trait === 'cargo') return R.porter;
+  return R[g.sp.trait] || R.sit;
+}
+function gatherActText(n) {
+  const g = gthGroupOf(n);
+  if (!g || !g.on) return '';
+  if (g.kind === 'chess') {
+    if (n.gr === 1) { const o = g.mem[1 - n.gs]; return '和' + (o ? o.name : '人') + '下棋(第 ' + Math.floor((g.gt0 + (GATHER.clock - g.clk0)) / g.iv) + ' 手)'; }
+    return '圍觀下棋';
+  }
+  if (n.gmode === 'nap') return '打盹';
+  const tr = g.sp.trait;
+  return tr === 'shade' ? '在樹蔭下乘涼' : tr === 'well' ? '在井邊閒聊' : tr === 'tea' ? '喝茶歇腳' : tr === 'cargo' ? '坐在貨堆上歇腳' : '坐著歇腳聊天';
+}
+
+// 開發用:?perf 的 console 輸出併入
+function gatherStats() {
+  const s = GATHER.stats;
+  s.groups = GATHER.groupsOn; s.members = GATHER.members; s.props = Math.max(GATHER.propLast, GATHER.propN); s.tickMs = Math.round(GATHER.tickAcc * 1000) / 1000; s.drawMs = Math.round(GATHER.drawAcc * 1000) / 1000;
+  s.specsWithPose = GATHER.poseN; s.tier = GATHER.tier; s.spots = GATHER.spots.length;
+  return s;
+}
+if (typeof module !== 'undefined' && module.exports) module.exports = { GATHER };

@@ -7,6 +7,7 @@
 //          cardsGenNamed cardsNamedDraw cardsNamedOpen cardsAddNameTokens cardsNamedGive cardsNamedRankCheck cardsNamedTick cardsNamedKeyOk
 //          cardsBagCap cardsBagRoom cardsBagAutoLv cardsBagSetAuto cardsBagStage cardsBagCommit cardsBagOpen cardsBagFlush cardsBagPut cardsBagFind cardsBagList cardsBagPick cardsBagEnlist
 //          cardsBagDissolve cardsBagDissolveValue cardsFurnaceValue cardsFurnaceSum cardsShardGain cardFigWeight
+//          cardsOverList cardsOverRoom cardsOverNow cardsOverLeft cardsOverMin cardsOverFill cardsOverSettle cardsOverNoteTake cardsBagCanOpen cardsAnyFind
 //          cardsWeekNo cardsStarLv cardsStarCost cardsStarUp cardsStarBonus cardsExchangeLeft cardsExchange
 //          cardsFind cardsSyncTalents cardsTalents cardsPatrolTalents cardsAccept cardsJobLine cardsAddTokens cardsOnTechDone cardsRankLv CARD_PIN
 
@@ -70,7 +71,7 @@ function cardsOnTechDone(id, big) {
   g[id] = 1;
   cardsAddTokens(cs, n);
   if (big) cardsNamedGive(cs, id, '完成里程碑');   // 指名券占位來源:里程碑 +1(與酒令同為每節點一次)
-  name = (node && node.name) || id;
+  name = (node && ((typeof techLabelOf === 'function') ? techLabelOf(node) : node.name)) || id;
   if (typeof showToast === 'function') showToast('研成〈' + name + '〉,得酒令 +' + n);
   return n;
 }
@@ -360,7 +361,7 @@ function cardsNamedDraw(cs, mode, key) {
   if (!cardsNamedOpen()) return { ok: false, reason: 'closed' };
   if (!cardsNamedKeyOk(mode, key)) return { ok: false, reason: 'bad' };
   if (cs.cur.G) return { ok: false, reason: 'busy' };
-  if (cs.bag.length + CARD_BAG.batchNeed > cardsBagCap()) return { ok: false, reason: 'bagfull' };
+  if (!cardsBagCanOpen(cs)) return { ok: false, reason: 'bagfull' };
   if ((cs.nameTokens | 0) < 1) return { ok: false, reason: 'ticket' };
   b = cardsGenNamed(cs, mode, key, cs.namedCount | 0);
   cs.nameTokens -= 1; cs.namedCount = (cs.namedCount | 0) + 1;
@@ -401,7 +402,7 @@ function cardsNamedTick(dt) {
   cardsNamedClock += dt || 0;
   if (cardsNamedClock < 5) return 0;
   cardsNamedClock = 0;
-  try { if (typeof academyTick === 'function') academyTick(5); if (typeof npcTick === 'function') npcTick(5); cs = cardsGet(); return cs ? cardsNamedRankCheck(cs) : 0; } catch (e) { return 0; }   // npcTick:人物互動(親近年資 / 請託)
+  try { if (typeof academyTick === 'function') academyTick(5); if (typeof npcTick === 'function') npcTick(5); cs = cardsGet(); if (cs) cardsOverSettle(cs, Date.now()); return cs ? cardsNamedRankCheck(cs) : 0; } catch (e) { return 0; }   // npcTick:人物互動(親近年資 / 請託)
 }
 
 // ───────── 名冊 / 任用 / 請辭 ─────────
@@ -486,7 +487,7 @@ function cardsBagDissolveValue(c) { return cardsFurnaceValue(c); }   // 舊名�
 function cardsFurnaceSum(cs, ids, figOk) {
   var o = { n: 0, shards: 0, top: 0, figs: 0, skippedFig: 0 }, seen = {};
   (ids || []).forEach(function (id) {
-    var f = cardsBagFind(cs, id);
+    var f = cardsAnyFind(cs, id);
     if (!f || seen[id]) return;
     seen[id] = 1;
     if (f.c.fig) { if (!figOk) { o.skippedFig++; return; } o.figs++; }
@@ -505,30 +506,81 @@ function cardsBagFind(cs, bid) {
   for (i = 0; i < cs.bag.length; i++) if (cs.bag[i].bid === bid) return { c: cs.bag[i], idx: i };
   return null;
 }
-// 放一張卡進卡包(複本,不檢查容量 / 重複名人);回卡包卡物件
-function cardsBagPut(cs, c, pool, key) {
+// 卡包 + 溢出區一起找:回 {c, idx, over}
+function cardsAnyFind(cs, bid) {
+  var f = cardsBagFind(cs, bid), i;
+  if (f) return { c: f.c, idx: f.idx, over: false };
+  for (i = 0; cs.bagOver && i < cs.bagOver.length; i++) if (cs.bagOver[i].bid === bid) return { c: cs.bagOver[i], idx: i, over: true };
+  return null;
+}
+// ───────── 溢出區(cs.bagOver,有值才寫):卡包滿了新卡不擋抽,進溢出區並以真實時間戳 exp = 進入時間 + CARD_BAG.overMs(24h)倒數,離線也算 ─────────
+// 規則:卡包有空位 → 依 exp 小者先自動納入(停止倒數);倒數歸零還在溢出區 → 熔成碎片(cardsFurnaceValue,記在 cs.overNote 供卡包頁提示);名人不入溢出區;溢出區上限 = 當前卡包上限。
+// 時鐘回撥:計時用 max(now, cs.clock.maxSeen),且每張 exp 夾在 現在 + overMs 以內,回撥不會延長倒數。
+function cardsOverNow(cs, now) { return Math.max((typeof now === 'number' && isFinite(now)) ? now : Date.now(), (cs.clock && cs.clock.maxSeen) || 0); }
+function cardsOverList(cs) { return (cs.bagOver || []).slice().sort(function (a, b) { return a.exp - b.exp; }); }
+function cardsOverRoom(cs) { return Math.max(0, cardsBagCap() - (cs.bagOver ? cs.bagOver.length : 0)); }
+function cardsBagCanOpen(cs) { return cardsBagRoom(cs) + cardsOverRoom(cs) >= CARD_BAG.batchNeed; }   // 開一批需卡包 + 溢出區空位合計 >= batchNeed
+function cardsOverLeft(cs, c, now) { var t = cardsOverNow(cs, now); return Math.max(0, Math.min(c.exp, t + CARD_BAG.overMs) - t); }
+// 溢出區摘要:{n, ms 最短剩餘毫秒(無則 null), urgent 是否 < overWarnMs}
+function cardsOverMin(cs, now) {
+  var n = cs.bagOver ? cs.bagOver.length : 0, ms = null;
+  (cs.bagOver || []).forEach(function (c) { var l = cardsOverLeft(cs, c, now); if (ms === null || l < ms) ms = l; });
+  return { n: n, ms: ms, urgent: ms !== null && ms < CARD_BAG.overWarnMs };
+}
+// 卡包有空位就把溢出區搬進來(exp 小者先);回搬了幾張
+function cardsOverFill(cs) {
+  var n = 0, c;
+  if (!cs.bagOver || !cs.bagOver.length) return 0;
+  cs.bagOver.sort(function (a, b) { return a.exp - b.exp; });
+  while (cs.bagOver.length && cs.bag.length < cardsBagCap()) { c = cs.bagOver.shift(); delete c.exp; cs.bag.push(c); n++; }
+  if (!cs.bagOver.length) delete cs.bagOver;
+  return n;
+}
+// 結算:夾住 exp -> 已到期者熔成碎片 -> 有空位就納入。無溢出卡時什麼都不碰。回 {expired, shards, filled}
+function cardsOverSettle(cs, now) {
+  var res = { expired: 0, shards: 0, filled: 0 }, t, dead = [], sum = 0, g;
+  if (!cs.bagOver || !cs.bagOver.length) return res;
+  t = cardsOverNow(cs, now);
+  if (cs.clock && t > cs.clock.maxSeen) cs.clock.maxSeen = t;
+  cs.bagOver.forEach(function (c) { if (!(c.exp <= t + CARD_BAG.overMs)) c.exp = t + CARD_BAG.overMs; if (c.exp <= t) dead.push(c); });
+  if (dead.length) {
+    cs.bagOver = cs.bagOver.filter(function (c) { return dead.indexOf(c) < 0; });
+    dead.forEach(function (c) { sum += cardsFurnaceValue(c); });
+    g = cardsShardGain(cs, sum);
+    res.expired = dead.length; res.shards = g.shards;
+    cs.overNote = { n: ((cs.overNote && cs.overNote.n) | 0) + dead.length, shards: ((cs.overNote && cs.overNote.shards) | 0) + g.shards };
+    if (!cs.bagOver.length) delete cs.bagOver;
+  }
+  res.filled = cardsOverFill(cs);
+  return res;
+}
+// 取走(並清除)到期熔鍊提示:{n, shards} 或 null
+function cardsOverNoteTake(cs) { var o = cs.overNote || null; delete cs.overNote; return o; }
+// 放一張卡進卡包(複本,不檢查容量 / 重複名人);回卡包卡物件。expAt 為數字時改放溢出區(cs.bagOver)並記到期時間戳 exp
+function cardsBagPut(cs, c, pool, key, expAt) {
   var o = JSON.parse(JSON.stringify(c));
   cs.bagSeq = (cs.bagSeq | 0) + 1;
   o.bid = 'b' + cs.bagSeq; o.pool = pool || 'T'; o.key = String(key || '');
   delete o.taken;
-  cs.bag.push(o);
+  if (typeof expAt === 'number') { o.exp = expAt; (cs.bagOver || (cs.bagOver = [])).push(o); }
+  else cs.bag.push(o);
   return o;
 }
-// 開批但先不入包(給抽卡特效用):reason none 無待開批次 busy 上一批尚未入包 bagfull 卡包空位不足 7 張(該批暫存在 acc,不開)
+// 開批但先不入包(給抽卡特效用):reason none 無待開批次 busy 上一批尚未入包 bagfull 卡包 + 溢出區空位合計不足 7 張(該批暫存在 acc,不開;卡包滿了但溢出區還有位子仍可開)
 function cardsBagStage(cs, venue) {
   var b;
   if (cs.cur[venue]) return { ok: false, reason: 'busy' };
   if (!cs.acc[venue] || !cs.acc[venue].length) return { ok: false, reason: 'none' };
-  if (cs.bag.length + CARD_BAG.batchNeed > cardsBagCap()) return { ok: false, reason: 'bagfull' };
+  if (!cardsBagCanOpen(cs)) return { ok: false, reason: 'bagfull' };
   b = cardsOpenBatch(cs, venue);
   return { ok: true, batch: b, cards: b.cands };
 }
-// 把待入包批次放進卡包。o {now, noAuto}。每張的去向 how:bag 入包 / auto 自動熔爐 / token 名人重複 → 信物 +1 / shard 名人重複且信物已滿 → 碎片 / skip 舊批次已處理
+// 把待入包批次放進卡包。o {now, noAuto}。每張的去向 how:bag 入包 / over 卡包已滿 -> 溢出區 / auto 自動熔爐 / token 名人重複 → 信物 +1 / shard 名人重複且信物已滿 → 碎片 / skip 舊批次已處理
 function cardsBagCommit(cs, venue, o) {
-  var b = cs.cur[venue], opt = o || {}, auto = opt.noAuto ? -1 : cardsBagAutoLv(cs), res, raw = 0, figShards = 0, g;
+  var b = cs.cur[venue], opt = o || {}, auto = opt.noAuto ? -1 : cardsBagAutoLv(cs), res, raw = 0, figShards = 0, g, expAt;
   if (!b) return { ok: false, reason: 'none' };
   cs.cur[venue] = null;
-  res = { ok: true, venue: venue, key: b.key, items: [], added: 0, dissolved: 0, tokenN: 0, shardN: 0, shards: 0, tokens: 0, lost: 0 };
+  res = { ok: true, venue: venue, key: b.key, items: [], added: 0, over: 0, dissolved: 0, tokenN: 0, shardN: 0, shards: 0, tokens: 0, lost: 0 };
   b.cands.forEach(function (c, i) {
     var owner, how, put, sh;
     if (b.taken && b.taken[i]) { res.items.push({ c: c, how: 'skip' }); return; }
@@ -540,6 +592,13 @@ function cardsBagCommit(cs, venue, o) {
       return;
     }
     if (!c.fig && auto >= 0 && c.gr <= auto) { sh = cardsFurnaceValue(c); raw += sh; res.dissolved++; res.items.push({ c: c, how: 'auto', shards: sh }); return; }
+    if (!c.fig && cardsBagRoom(cs) < 1 && cardsOverRoom(cs) > 0) {   // 卡包已滿:路人進溢出區(24 小時倒數);名人一律進卡包(可超過上限)
+      if (expAt === undefined) expAt = cardsOverNow(cs, opt.now) + CARD_BAG.overMs;
+      put = cardsBagPut(cs, c, venue, b.key, expAt);
+      res.over++;
+      res.items.push({ c: c, how: 'over', bid: put.bid, exp: expAt });
+      return;
+    }
     put = cardsBagPut(cs, c, venue, b.key);
     res.added++;
     res.items.push({ c: c, how: 'bag', bid: put.bid });
@@ -574,24 +633,26 @@ function cardsBagList(cs, f) {
   });
   return list;
 }
-// 一鍵熔爐的候選:路人且品階 ≤ maxGr(名人永不入選);回 bid 陣列
+// 一鍵熔爐的候選(卡包 + 溢出區):路人且品階 ≤ maxGr(名人永不入選);回 bid 陣列
 function cardsBagPick(cs, maxGr) {
-  return cs.bag.filter(function (c) { return !c.fig && c.gr <= maxGr; }).map(function (c) { return c.bid; });
+  return cs.bag.concat(cs.bagOver || []).filter(function (c) { return !c.fig && c.gr <= maxGr; }).map(function (c) { return c.bid; });   // 含溢出區的卡
 }
 // 熔鍊(單張 / 批量;函式名沿用 Dissolve):路人 → 碎片(無週上限)。名人預設不熔(reason fig),o.figOk = true(UI 二次確認後)才熔並給較高碎片。o {figOk}。回 {ok, n, shards, tokens, lost, skippedFig, reason?}
 function cardsBagDissolve(cs, ids, o) {
-  var opt = o || {}, drop = {}, n = 0, raw = 0, skippedFig = 0, g;
+  var opt = o || {}, drop = {}, n = 0, raw = 0, skippedFig = 0, g, nOver = 0;
   (ids || []).forEach(function (id) {
-    var f = cardsBagFind(cs, id);
+    var f = cardsAnyFind(cs, id);
     if (!f || drop[id]) return;
     if (f.c.fig && !opt.figOk) { skippedFig++; return; }
-    drop[id] = 1; n++; raw += cardsFurnaceValue(f.c);
+    drop[id] = 1; n++; raw += cardsFurnaceValue(f.c); if (f.over) nOver++;
   });
   if (!n) return { ok: false, reason: skippedFig ? 'fig' : 'none', n: 0, shards: 0, tokens: 0, lost: 0, skippedFig: skippedFig };
   cs.bag = cs.bag.filter(function (c) { return !drop[c.bid]; });
+  if (nOver) { cs.bagOver = cs.bagOver.filter(function (c) { return !drop[c.bid]; }); if (!cs.bagOver.length) delete cs.bagOver; }
   g = cardsShardGain(cs, raw);
   cs.lastRel = null;
-  return { ok: true, n: n, shards: g.shards, tokens: 0, lost: 0, skippedFig: skippedFig };
+  cardsOverSettle(cs, opt.now);   // 騰出空位:溢出區依剩餘時間短者先自動納入
+  return { ok: true, n: n, shards: g.shards, tokens: 0, lost: 0, skippedFig: skippedFig, over: nOver };
 }
 // 名冊項目:由卡包卡建立(id 依 cs.seq 遞增)
 function cardsMakeEntry(cs, c, pool, key, cost) {
@@ -606,14 +667,15 @@ function cardsMakeEntry(cs, c, pool, key, cost) {
   return e;
 }
 // 任用:卡包 → 名冊,花 cardsCost 酒令(開批免費,酒令只在這裡花)。回 {ok, reason?, entry?}。reason:none 卡包無此卡 tok 酒令不足 full 名冊已滿(須先請辭或提升官階)
-function cardsBagEnlist(cs, bid) {
+function cardsBagEnlist(cs, bid, o) {   // 只能任用卡包內的卡;溢出區的卡需先被納入(reason over)
   var f = cardsBagFind(cs, bid), c, cost, e;
-  if (!f) return { ok: false, reason: 'none' };
+  if (!f) return { ok: false, reason: (cs.bagOver && cs.bagOver.some(function (x) { return x.bid === bid; })) ? 'over' : 'none' };
   c = f.c; cost = cardsCost(c);
   if (cs.tok < cost) return { ok: false, reason: 'tok' };
   if (cs.roster.length >= cardsCap()) return { ok: false, reason: 'full' };
   e = cardsMakeEntry(cs, c, c.pool || 'T', c.key || '', cost);
   cs.tok -= cost; cs.bag.splice(f.idx, 1); cs.roster.push(e); cs.lastRel = null;
+  cardsOverSettle(cs, (o || {}).now);
   return { ok: true, entry: e };
 }
 // 待定席 → 名冊(需有名額)
@@ -821,8 +883,8 @@ function cardNormCard(c, isEntry, isBag) {
   else if (typeof cardsUiPortraitJob === 'function' && typeof cardsUiAvatarVar === 'function' && typeof portraitGenderOf === 'function' && (j = cardsUiPortraitJob(o))) { k = portraitGenderOf('generic/' + j + '_' + cardsUiAvatarVar(o)); if (k) o.sex = k; }
   return o;
 }
-function cardsNormSave(v) {
-  var n, k, V;
+function cardsNormSave(v, now) {
+  var n, k, V, seenB = {}, tNow = (typeof now === 'number' && isFinite(now)) ? now : Date.now();
   if (!v || typeof v !== 'object') return null;
   n = cardsStateNew(typeof v.seed === 'number' ? v.seed : undefined);
   n.seq = cardNum(v.seq, 0, 1e9, 0) | 0; n.tok = cardNum(v.tok, 0, 1e6, 0) | 0; n.nameTokens = cardNum(v.nameTokens, 0, 1e6, 0) | 0; n.namedCount = cardNum(v.namedCount, 0, 1e9, 0) | 0; n.shards = cardNum(v.shards, 0, 1e7, 0) | 0;
@@ -862,17 +924,30 @@ function cardsNormSave(v) {
   });
   // 卡包:正規化現有 cs.bag,再把殘留的 cur.*(舊候選批次)轉入(不自動熔爐;重複名人依信物規則)
   if (Array.isArray(v.bag)) {
-    var seenB = {};
     n.bag = v.bag.slice(0, 600).map(function (c) { return cardNormCard(c, false, true); }).filter(function (c) { if (!c || seenB[c.bid]) return false; seenB[c.bid] = 1; return true; });
   }
+  if (Array.isArray(v.bagOver)) {   // 溢出區:每項 = 卡包卡 + exp(到期時間戳;壞值 / 過遠夾回 現在 + overMs);名人不該在這裡,若有則改進卡包
+    var eff = Math.max(tNow, n.clock.maxSeen), ov = [];
+    v.bagOver.slice(0, 600).forEach(function (c) {
+      var o = cardNormCard(c, false, true);
+      if (!o || seenB[o.bid]) return;
+      seenB[o.bid] = 1;
+      if (o.fig) { n.bag.push(o); return; }
+      o.exp = cardNum(c.exp, 0, eff + CARD_BAG.overMs, eff + CARD_BAG.overMs);
+      ov.push(o);
+    });
+    if (ov.length) n.bagOver = ov;
+  }
+  if (v.overNote && typeof v.overNote === 'object' && (cardNum(v.overNote.n, 0, 1e6, 0) | 0) > 0) n.overNote = { n: cardNum(v.overNote.n, 0, 1e6, 0) | 0, shards: cardNum(v.overNote.shards, 0, 1e7, 0) | 0 };
   k = cardNum(v.bagSeq, 0, 1e9, 0) | 0;
-  n.bag.forEach(function (c) { var m2 = /^b(\d+)$/.exec(c.bid); if (m2 && +m2[1] > k) k = +m2[1]; });
+  n.bag.concat(n.bagOver || []).forEach(function (c) { var m2 = /^b(\d+)$/.exec(c.bid); if (m2 && +m2[1] > k) k = +m2[1]; });
   if (k > 0) n.bagSeq = k;
   if (typeof v.bagAuto === 'number' && isFinite(v.bagAuto)) cardsBagSetAuto(n, v.bagAuto);
   CARD_VENUE_ORDER.forEach(function (x) {
     if (!n.cur[x]) return;
-    cardsBagCommit(n, x, { noAuto: true });
+    cardsBagCommit(n, x, { noAuto: true, now: tNow });
   });
+  cardsOverSettle(n, tNow);   // 載入時先結算:到期者熔碎片、有空位就納入
   if (Array.isArray(v.errand)) n.errand = v.errand.slice(0, 4).filter(function (q) { return q && typeof q.id === 'string' && typeof q.eid === 'string' && (q.kind === 'goods' || q.kind === 'build' || q.kind === 'study'); }).map(function (q) {   // 人物請託(npcinteract.js)
     return { id: q.id.slice(0, 12), eid: q.eid.slice(0, 12), kind: q.kind, text: String(q.text || '').slice(0, 60), day: cardNum(q.day, 0, 1e9, 0) | 0, goods: q.goods ? String(q.goods).slice(0, 24) : undefined, n: cardNum(q.n, 0, 999, 0) | 0, type: q.type ? String(q.type).slice(0, 32) : undefined, base: cardNum(q.base, 0, 9999, 0) | 0 };
   });

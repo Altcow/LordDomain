@@ -113,7 +113,7 @@ function wwEnsure() {
   sel = wwNode('select', 'wwsel');
   sel.setAttribute('aria-label', '世界風格');
   ids = WORLD_PACKS.map(function (p) { return p.id; });
-  for (i = 0; i < ids.length; i++) { o = wwNode('option', '', WORLD_PACKS[i].name + (WORLD_PACKS[i].fantasy ? '(魔幻 · 試玩)' : '')); o.value = ids[i]; sel.appendChild(o); }
+  for (i = 0; i < ids.length; i++) { o = wwNode('option', '', WORLD_PACKS[i].name + (WORLD_PACKS[i].fantasy ? '(魔幻世界)' : '')); o.value = ids[i]; sel.appendChild(o); }
   sel.addEventListener('change', function () { wwSelect(sel.value); });
   wwRefs.sel = sel;
   b.appendChild(sel);
@@ -190,7 +190,7 @@ function wwSelect(id) {
   if (R.sel && R.sel.value !== p.id) R.sel.value = p.id;
   R.pname.textContent = p.name;
   R.psub.textContent = p.sub;
-  R.tag.textContent = p.fantasy ? '✦ ' + (p.tag || '魔幻外觀 · 試玩') + '(建立後不可與歷史風格互換)' : '';
+  R.tag.textContent = p.fantasy ? '✦ ' + (p.tag || '魔幻世界') + '(建立後不可與歷史風格互換)' : '';
   R.tag.hidden = !p.fantasy;
   wwFillTpl(p.id);
   R.intro.textContent = p.intro;

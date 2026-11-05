@@ -95,11 +95,13 @@ function cityscoreCompute(objs, board, lvOverride) {
       else if (t === TL || t === TV || t === 19) waterTiles++;   // 19 = T_OCEAN(景觀水面;海水不可飲用,飲水看 cityfx 水源物件,不看地形)
     }
   }
+  var cntAs = {};
   for (i = 0; i < objs.length; i++) {
     o = objs[i];
     inf = o && cityInfo(o.type);
     if (!inf) continue;
     cnt[o.type] = (cnt[o.type] || 0) + 1;
+    if (typeof fxAsList === 'function') fxAsList(o.type).forEach(function (a) { cntAs[a] = (cntAs[a] || 0) + 1; });   // 魔幻件視同漢式功能件(營造條件 types 計數;funcLike + condAlias);另存,不污染 cnt 的種類統計
     if (inf.swap && (o.rot | 0) % 2 === 1) { w = inf.h; h = inf.w; } else { w = inf.w; h = inf.h; }
     cx = o.x + (w >> 1);
     cy = o.y + (h >> 1);
@@ -193,7 +195,7 @@ function cityscoreCompute(objs, board, lvOverride) {
   if (cultKinds > 0) { val = cultKinds * 3; ax[3] += val; contrib[3].push({ id: '_cult', name: '文類多樣', n: cultKinds, v: val }); }
   if (shopKinds > 0) { val = shopKinds * 2; ax[4] += val; contrib[4].push({ id: '_shop', name: '店鋪多樣', n: shopKinds, v: val }); }
   if (trade) { ax[4] += 10; contrib[4].push({ id: '_trade', name: '對外商路', n: 1, v: 10 }); }
-  S = { axes: {}, pros: 0, pop: pop, houses: nh, tiers: tiers, cover: {}, cnt: cnt, kindsCls: kindsCls, kindsAll: kindsAll, cultKinds: cultKinds, shopKinds: shopKinds,
+  S = { axes: {}, pros: 0, pop: pop, houses: nh, tiers: tiers, cover: {}, cnt: cnt, cntAs: cntAs, kindsCls: kindsCls, kindsAll: kindsAll, cultKinds: cultKinds, shopKinds: shopKinds,
     waterTiles: waterTiles, waterCells: waterTiles + waterObjCells, roadFrac: nh > 0 ? roadNear / nh : 0, walls: (cnt.wall || 0) + (cnt.wall_courtyard || 0),
     trade: trade, pos: pos, labor: labor, jobs: jobs, contrib: {}, n: objs.length, lv: lv, t: 0 };
   for (a = 0; a < 6; a++) {
@@ -264,7 +266,7 @@ function cityCondEval(c, S, lv) {
   switch (c.k) {
     case 'dwell': have = S.houses; need = c.n; break;
     case 'tier': have = 0; for (i = c.t; i < 5; i++) have += S.tiers[i]; need = c.n; break;
-    case 'types': have = 0; c.ids.forEach(function (id) { have += S.cnt[id] || 0; if (typeof HOUSE_LIKE !== 'undefined') Object.keys(HOUSE_LIKE).forEach(function (sid) { if (HOUSE_LIKE[sid] === id) have += S.cnt[sid] || 0; }); }); need = c.n; break;
+    case 'types': have = 0; c.ids.forEach(function (id) { have += (S.cnt[id] || 0) + ((S.cntAs && S.cntAs[id]) || 0); if (typeof HOUSE_LIKE !== 'undefined') Object.keys(HOUSE_LIKE).forEach(function (sid) { if (HOUSE_LIKE[sid] === id) have += S.cnt[sid] || 0; }); }); need = c.n; break;
     case 'kinds': have = 0; c.cls.forEach(function (cl) { have += S.kindsCls[cl] || 0; }); need = c.n; break;
     case 'kindsAll': have = S.kindsAll; need = c.n; break;
     case 'cover': have = S.houses > 0 ? Math.floor(S.cover[c.svc] * 100 + 1e-6) : 0; need = Math.round(c.frac * 100); break;
@@ -322,7 +324,7 @@ function cityUpgradeGoodsCheck(lv) {
   chk = cityGoodsReq(req, { legacy: true });
   if (chk && chk.ok) return '';
   ids = chk ? Object.keys(chk.short || {}) : Object.keys(req);
-  names = ids.map(function (id) { return ((typeof GOODS !== 'undefined' && GOODS[id] && GOODS[id].name) || id) + '(缺 ' + ((chk && chk.short && chk.short[id]) || req[id]) + ')'; });
+  names = ids.map(function (id) { return ((typeof GOODS !== 'undefined' && GOODS[id] && (typeof goodsName === 'function' ? goodsName(id) : GOODS[id].name)) || id) + '(缺 ' + ((chk && chk.short && chk.short[id]) || req[id]) + ')'; });
   return '貨品不足:' + names.join('、');
 }
 function cityUpgradeGoodsSpend(lv) {

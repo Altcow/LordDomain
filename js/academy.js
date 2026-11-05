@@ -8,7 +8,7 @@
 function acadObjs() { return (typeof world !== 'undefined' && world && Array.isArray(world.objects)) ? world.objects : []; }
 function acadCount(type) {
   var objs = acadObjs(), n = 0, i;
-  for (i = 0; i < objs.length; i++) if (objs[i] && objs[i].type === type) n++;
+  for (i = 0; i < objs.length; i++) if (objs[i] && (objs[i].type === type || (typeof fxAsList === 'function' && fxAsList(objs[i].type).indexOf(type) >= 0))) n++;   // 魔幻件視同漢式學舍 / 書院 / 學宮
   return n;
 }
 function acadHas(id) { return (typeof techDone === 'function') ? !!techDone(id) : false; }
