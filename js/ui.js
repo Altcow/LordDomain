@@ -1,7 +1,7 @@
 // 經營模式建築分類(工具列上方的分類標籤)。item 為 OBJECTS 的 key;未列入者自動歸「其他」(buildCatIds)
 const BUILD_FAVS = ['house', 'market', 'wall', 'gate', 'tree', 'stone', 'well', 'lumber', 'quarry', 'field_sprout', 'shop_wine', 'stairs'];
 const BUILD_GROUPS = [
-  { id: 'live', name: '居住與生活', items: ['house', 'palace', 'well', 'well_sweep', 'privy', 'woodpile', 'barrel_water', 'barrel_empty', 'basket', 'food_table', 'couch', 'mat', 'screen', 'chest', 'bookshelf', 'lamp_stand', 'broom', 'winejar', 'winejar_big', 'winejar_stack', 'winejar_mix', 'deco_brazier', 'dog', 'cat'] },
+  { id: 'live', name: '居住與生活', items: ['research', 'house','palace', 'well', 'well_sweep', 'privy', 'woodpile', 'barrel_water', 'barrel_empty', 'basket', 'food_table', 'couch', 'mat', 'screen', 'chest', 'bookshelf', 'lamp_stand', 'broom', 'winejar', 'winejar_big', 'winejar_stack', 'winejar_mix', 'deco_brazier', 'dog', 'cat'] },
   { id: 'table', name: '桌几與座椅', items: ['tbl_wood', 'tbl_stone', 'tbl_low', 'tbl_long', 'tbl_big', 'tbl_round', 'tbl_tea', 'tbl_tea_long', 'tbl_meal', 'tbl_meal_long', 'tbl_low_meal', 'tbl_feast', 'tbl_banquet', 'tbl_book', 'tbl_study', 'tbl_wine', 'tbl_wine_long', 'tbl_chess', 'stone_table', 'table_wood', 'table_long', 'table_set', 'tea_set', 'low_table_cushion', 'stone_stool', 'stool_wood', 'cushion_round', 'stools_pair', 'bench_wood', 'hu_chuang', 'chair_bamboo', 'chair_wood', 'chair_taishi', 'screen_fold'] },
   { id: 'shop', name: '商鋪與市集', items: ['market', 'inn', 'post_station', 'shop_wine', 'shop_book', 'shop_cloth', 'shop_rice', 'shop_rouge', 'shop_gamble', 'shop_brothel', 'shop_herb', 'shop_tea', 'shop_pawn', 'stall_veg', 'stall_fruit', 'stall_cloth', 'stall_pottery', 'stall_rice', 'stall_book', 'stall_rouge', 'stall_meat', 'stall_wine', 'stall_tea', 'stall_toy', 'handcart', 'cart_hay', 'cart_goods', 'cart_empty', 'oxcart', 'deco_oxcart', 'wheelbarrow', 'carriage'] },
   { id: 'town', name: '民居與村落', items: ['hut_ruin', 'hut_mud', 'hut_plank', 'hut_collapsed', 'shack_lean', 'cave_dwelling', 'bamboo_house', 'house_tile', 'house_gentry', 'mansion_great', 'mansion_clan', 'manor_estate', 'yard_poor', 'wall_ruin', 'gate_wicker', 'fence_broken', 'well_old', 'rack_net', 'rack_cloth', 'shed_livestock', 'junk_pile', 'tree_dead'] },
@@ -197,6 +197,7 @@ function uiSetMode(m) {
 // 右側邊欄與頂列收進來的功能。top:true 的項目在正常模式留在頂列(原按鈕),精簡模式改由邊欄展開。
 // target 為既有按鈕 id,點擊時代為 click(原按鈕與其監聽不變);scope 限定經營(estate)或戰鬥布置(camp)
 let uiSideExpanded = false;
+const UI_SIDE_NORMAL_MAX = 7;   // 正常模式第一層上限(拍照不在第一層,收進展開列)
 const UI_SIDE_ITEMS = [
   { key: 'search', icon: '🔍', label: '搜尋', title: '搜尋建築與科技(未解鎖者可看缺什麼)', scope: 'estate', special: 'search' },
   { key: 'slots', icon: '🏘', label: '經營', title: '版面選擇(3 格):點一下打開,再點一次關閉', scope: 'all', special: 'slots' },
@@ -209,7 +210,7 @@ const UI_SIDE_ITEMS = [
   { key: 'tech', icon: '📜', label: '科技', title: '科技樹與研發序列', scope: 'estate', special: 'tech' },
   { key: 'goods', icon: '📦', label: '庫房', title: '庫房(貨品與工坊狀態)', scope: 'estate', target: 'btnGoods' },
   { key: 'caravan', icon: '🛻', label: '走鏢', title: '走鏢(鏢師、馬車與高階貨品)', scope: 'estate', target: 'btnCaravan', gate: 'caravan' },
-  { key: 'bn', icon: '⚔', label: '戰鬥', title: '戰鬥(5v5 回合制練習戰)', scope: 'estate', special: 'bn', gate: 'battleA' },
+  { key: 'bn', icon: '⚔', label: '戰鬥', title: '戰鬥(5v5 回合制練習戰)', scope: 'estate', special: 'bn', gate: 'battleA', showLocked: true },
   { key: 'save', icon: '💾', label: '存檔', title: '布置存檔', scope: 'estate', target: 'btnLayoutSave' },
   { key: 'season', icon: '🌤', label: '季節', title: '季節與時段', scope: 'estate', target: 'seasonBtn' },
   { key: 'help', icon: '❓', label: '說明', title: '戰鬥布置工具說明', scope: 'camp', target: 'btnToolHelp' },
@@ -279,6 +280,14 @@ function initSideUI() {
   setInterval(syncSideBar, 300);
 }
 
+// 戰鬥鈕未達條件時的說明(條件與文字沿用 bnui.js bnUiOpen;兩項都缺就都說)
+function uiBattleLockToast() {
+  let lv = 0, why = [];
+  try { lv = typeof cardsRankLv === 'function' ? cardsRankLv() | 0 : 0; } catch (e) { lv = 0; }
+  if (lv < BNUI.minRank) why.push('官階達「亭長」後開放戰鬥');
+  if (bnUiRosterList().length < BNUI.minRoster) why.push('名冊要有 ' + BNUI.minRoster + ' 人以上才能出戰');
+  if (typeof showToast === 'function') showToast(why.join(';') || '尚未開放戰鬥');
+}
 function uiSideAct(key) {
   const it = UI_SIDE_ITEMS.find(x => x.key === key);
   if (!it) return;
@@ -288,7 +297,7 @@ function uiSideAct(key) {
   else if (it.special === 'tech') { if (typeof techPanelToggle === 'function') techPanelToggle(); }
   else if (it.special === 'search') { if (typeof srToggle === 'function') srToggle(); }
   else if (it.special === 'photo') uiSetMode('photo');
-  else if (it.special === 'bn') { if (typeof bnUiOpen === 'function') bnUiOpen(); }
+  else if (it.special === 'bn') { if (!isUnlocked('feature', it.gate)) uiBattleLockToast(); else if (typeof bnUiOpen === 'function') bnUiOpen(); }
   else {
     const t = document.getElementById(it.target);
     if (t) t.click();
@@ -323,14 +332,17 @@ function syncSideBar() {
     }
     let hid = it.target ? (!orig || !!orig.hidden) : false;
     if (it.special === 'slots') hid = typeof slotPopAvail === 'function' ? !slotPopAvail() : true;
-    if (it.gate && !isUnlocked('feature', it.gate)) hid = true;
+    const locked = !!it.gate && !isUnlocked('feature', it.gate);
+    if (locked && !it.showLocked) hid = true;   // showLocked:未達條件仍顯示、灰掉,點擊時 toast 說明缺什麼
     b.hidden = hid;
+    b.style.opacity = locked ? '.45' : '';
+    b.setAttribute('aria-disabled', locked ? 'true' : 'false');
     const slotsOn = it.special === 'slots' && typeof slotPopIsOpen === 'function' && slotPopIsOpen();
     b.classList.toggle('on', it.special === 'edit' ? !!ui.editing : (it.special === 'slots' ? slotsOn : !!(orig && orig.classList.contains('on'))));
     b.querySelector('.ic').textContent = icon;
     b.querySelector('.lb').textContent = label;
   });
-  // 正常模式最多 6 顆:依序捨棄 季節 → 存檔(拍照保留,精簡展開列仍有)(精簡模式的展開列都還在);頂列項目與另一畫面的項目不算
+  // 正常模式第一層最多 UI_SIDE_NORMAL_MAX 顆:拍照一律收進展開列;超量再依序捨棄 季節 → 存檔(戰鬥鈕不捨棄,未達條件時灰掉);精簡模式的展開列都還在;頂列項目與另一畫面的項目不算
   if (!uiIsCompact()) {
     const camp = game.mode === 'battleDesign';
     const vis = key => {
@@ -338,8 +350,12 @@ function syncSideBar() {
       return b && !b.hidden ? b : null;
     };
     const count = () => UI_SIDE_ITEMS.filter(it => !it.top && (it.scope === 'all' || (it.scope === 'camp') === camp) && vis(it.key)).length;
-    const overflow = count() > 6;
-    if (!uiSideExpanded) ['season', 'save', 'bn', 'photo'].forEach(k => { if (count() > 6 && vis(k)) vis(k).hidden = true; });
+    const hasPhoto = !!vis('photo');
+    const overflow = hasPhoto || count() > UI_SIDE_NORMAL_MAX;
+    if (!uiSideExpanded) {
+      if (hasPhoto) vis('photo').hidden = true;
+      ['season', 'save'].forEach(k => { if (count() > UI_SIDE_NORMAL_MAX && vis(k)) vis(k).hidden = true; });
+    }
     const ex = document.getElementById('sideExpand');
     if (ex) { ex.hidden = !overflow; ex.textContent = uiSideExpanded ? '▴ 收合' : '▾ 全部'; ex.title = uiSideExpanded ? '收合側欄' : '展開全部功能'; side.classList.toggle('expanded', uiSideExpanded && overflow); }
   } else {
@@ -1577,7 +1593,7 @@ function applyOne(x, y) {
     const refund = refundOf(o.type);
     removeObjectAt(x, y, true);
     if (typeof auPlay === 'function') auPlay('remove');
-    if (o.type === LAB_TYPE && world.tech.cur) showToast('已拆除 科研院，退還 ' + refundText(refund) + '；研發暫停，重建後繼續');
+    if (o.type === LAB_TYPE && world.tech.cur) showToast('已拆除 研究院，退還 ' + refundText(refund) + '；研發暫停，重建後繼續');
     else showToast('已拆除 ' + OBJECTS[o.type].name + '，退還 ' + refundText(refund));
     return true;
   }
@@ -1800,7 +1816,7 @@ function onPointerEnd(e) {
   }
 }
 
-// 瀏覽模式輕點建築:科研院開科研面板;其他只做輕微高亮(不開任何選單)。居民點擊(lifeTap)優先
+// 瀏覽模式輕點建築:研究院開科研面板;其他只做輕微高亮(不開任何選單)。居民點擊(lifeTap)優先
 function tapObjectAt(sx, sy) {
   if (typeof chainVisTap === 'function' && chainVisTap(sx, sy)) return;   // 瓶頸圖示(chainvis.js)
   if (typeof lifeTap === 'function' && lifeTap(sx, sy)) return;
@@ -2010,7 +2026,7 @@ function onTplClick(e) {
   showToast('已套用 ' + t.name + (r.failed ? '（' + r.failed + ' 件無法放置）' : ''));
 }
 
-// 科研院面板（PLAN_TECH §5）：研發中卡片＋軍事／經濟頁籤，依階分組
+// 研究院面板（PLAN_TECH §5）：研發中卡片＋軍事／經濟頁籤，依階分組
 function toggleTechPanel(open) {
   if (game.mode === 'estate' && typeof techPanelOpen === 'function') {   // NL2:經營端改開新科技樹頁;兵種科技(tech.js)只在戰陣端
     if (open === undefined) open = !(typeof techPanelIsOpen === 'function' && techPanelIsOpen());
@@ -2053,11 +2069,11 @@ function techNodeHtml(id) {
 
 function updateTechPanel() {
   const c = world.tech.cur;
-  let html = '<b>📜 科研院</b><button class="close">✕</button>';
+  let html = '<b>📜 研究院</b><button class="close">✕</button>';
   if (c) {
     const T = TECHS[c.id];
     html += '<div class="tcur"><div><b>⏳ ' + T.icon + ' ' + T.name + '</b> ' + T.desc + '</div>';
-    if (!labBuilt()) html += '<div>科研院已拆除：研發暫停</div>';
+    if (!labBuilt()) html += '<div>研究院已拆除：研發暫停</div>';
     html += '<div class="tbar"><i id="techBarFill"></i></div><span id="techTimer"></span> <button data-tact="cancel">取消</button></div>';
   } else {
     html += '<div class="tier">尚未研發，選一項開始</div>';
@@ -2616,7 +2632,7 @@ function draftDemolish() {
   const refund = refundOf(o.type);
   const labBusy = o.type === LAB_TYPE && world.tech.cur;
   const msg = (costText(refund) ? '退還 ' + costText(refund) + '（依拆除規則，約為造價的一半）。' : '免費建造，不退款。') +
-    (labBusy ? '科研院研發將暫停，重建後繼續。' : '');
+    (labBusy ? '研究院研發將暫停，重建後繼續。' : '');
   const doIt = function () {
     if (draft && draft.orig === o) draftDiscard();
     if (world.objects.indexOf(o) < 0) return;
@@ -2838,7 +2854,7 @@ function commitPending() {
     saveWorld();
     if (typeof auPlay === 'function') auPlay('place');
     showToast('已建造 ' + r.n + ' 件，花費 ' + feeText(r.cost));
-    if (!hadLab && labBuilt()) showToast('科研院落成！切到 ✋ 瀏覽，點一下科研院即可研發');
+    if (!hadLab && labBuilt()) showToast('研究院落成！切到 ✋ 瀏覽，點一下研究院即可研發');
   } else if (r.why === 'res') {
     beep();
     showToast('資源不足：缺 ' + costText(missingOf(total)));

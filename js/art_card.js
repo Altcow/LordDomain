@@ -8,7 +8,7 @@
   var TILE = '#6f7f88', TILE_DK = '#4d5c64', RED = '#d23a2c', PLASTER = '#eadfc4';
 
   var CARD_BUILDINGS = {
-    tavern:       { name: '酒館',   icon: '🍶', w: 3, h: 2, group: 'shop', tech: 'ed_xiangyin', cost: { coin: 180 } },
+    tavern:       { name: '招賢館',   icon: '🍶', w: 3, h: 2, group: 'shop', tech: 'ed_xiangyin', cost: { coin: 180 } },
     kao_chang:    { name: '考場',   icon: '📜', w: 3, h: 3, group: 'rite', tech: 'ed_xuexiao',  cost: { coin: 260 } },
     dian_shi_tai: { name: '殿試台', icon: '🏯', w: 3, h: 2, group: 'rite', tech: 'e_dongguan',  cost: { coin: 420 } }
   };

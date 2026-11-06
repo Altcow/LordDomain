@@ -13,8 +13,7 @@ var LH_RANKS = [
 // 可派駐建築(占位,可替換):type → 職司與槽位數
 var LH_SLOTS = {
   research: { name: '研究院', grp: '文', slots: 3 },
-  market: { name: '市集', grp: '商', slots: 2 },
-  workshop: { name: '工坊', grp: '工', slots: 2 }
+  market: { name: '市集', grp: '商', slots: 2 }
 };
 var LH_MOOD_KEYS = [['mood', '民心'], ['food', '糧食'], ['water', '水源'], ['sani', '衛生']];
 var lh = { open: false, tab: 'ov', el: null, saved: null };
@@ -179,7 +178,7 @@ function lhHtmlPosts(ts, sites) {
   sites.forEach(function (s) { if (s.post) seen[s.post] = s.type; });
   Object.keys(seen).forEach(function (pid) {
     var info = npcStaffInfo(seen[pid]), free = sites.filter(function (s) { return s.post === pid && s.who.length < s.slots; }).length, cands;
-    h += '<div class="lhsec">' + lhEsc(info.name) + ' ' + info.used + '/' + info.seats + ' 席 · 人事 +' + Math.round(info.pct) + ' %(上限 ' + info.cap + ' %)' + (info.live ? '' : '・效果接入中') + '</div>';
+    h += '<div class="lhsec">' + lhEsc(info.name) + ' ' + info.used + '/' + info.seats + ' 席 · 人事 +' + Math.round(info.pct) + ' %(上限 ' + info.cap + ' %)' + (info.live ? '' : '・效果接入中') + (npcPostById(pid) ? '<div class="lhsub">對口建築:' + lhEsc(npcPostById(pid).types.slice(0, 6).map(function (t) { return (typeof OBJECTS !== 'undefined' && OBJECTS[t] && OBJECTS[t].name) || t; }).join('、')) + '</div>' : '') + '</div>';
     h += '<div class="lhr"><span>' + lhBar(info.pct / info.cap * 100) + '</span><span style="opacity:.7">' + lhEsc(info.eff) + '</span></div>';
     info.people.forEach(function (p) {
       h += '<div class="lhr"><span>' + lhEsc(p.name) + ' <small style="opacity:.7">' + lhEsc(lhPartText(p)) + '</small></span><span><b>+' + Math.round(p.pct) + '%</b> <button class="lhb" data-lh="un" data-t="' + lhEsc(p.id) + '">卸任</button></span></div>';

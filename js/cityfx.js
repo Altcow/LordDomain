@@ -316,6 +316,24 @@ function cityFxSetDecree(id, power) {
 }
 function cityFxGetDecree(id) { return cfx.dec[id] || 0; }
 
+// 被某類設施覆蓋的房屋戶數(CITY_FX[type].r 半徑,中心距 ≤ r 才算;同一戶只算一次)。教學 T6 / 修復提示用
+function cityFxHouseCover(type) {
+  var fx = (typeof CITY_FX !== 'undefined') ? CITY_FX[type] : null, objs, hs, i, j, f, h, seen = {}, n = 0;
+  if (!fx || typeof world === 'undefined' || !world || !world.objects) return 0;
+  objs = world.objects;
+  hs = (typeof CITYFX_HOUSES !== 'undefined') ? CITYFX_HOUSES : { house: 1 };
+  for (i = 0; i < objs.length; i++) {
+    f = objs[i];
+    if (!f || f.type !== type) continue;
+    for (j = 0; j < objs.length; j++) {
+      h = objs[j];
+      if (!h || !hs[h.type] || seen[j]) continue;
+      if (Math.sqrt((h.x - f.x) * (h.x - f.x) + (h.y - f.y) * (h.y - f.y)) <= fx.r) { seen[j] = true; n++; }
+    }
+  }
+  return n;
+}
+
 function cityFxCity(key) {
   var c;
   cfxEnsure(false);

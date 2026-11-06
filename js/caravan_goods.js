@@ -25,7 +25,7 @@ const CARAVAN_QTY = { 1: [3, 5], 2: [2, 3], 3: [1, 2], 4: [1, 1] };
 const CARAVAN_ROUTES = [
   { id: 'near', name: '近郊官道', fee: 100, secMul: 1,   risk: 0.10, yieldMul: 1,   power: 2,  hall: 1, town: '臨亭集', mx: 74,  my: 58,  cx: 112, cy: 98 },
   { id: 'hill', name: '山間小路', fee: 300, secMul: 1.5, risk: 0.25, yieldMul: 1.3, power: 6,  hall: 1, town: '山陽鎮', mx: 254, my: 46,  cx: 222, cy: 104 },
-  { id: 'far',  name: '遠方商道', fee: 800, secMul: 2.2, risk: 0.40, yieldMul: 1.7, power: 12, hall: 2, town: '雒陽',   mx: 262, my: 160, cx: 170, cy: 176 }
+  { id: 'far',  name: '遠方商道', fee: 800, secMul: 2.2, risk: 0.40, yieldMul: 1.7, power: 12, hall: 1, town: '雒陽',   mx: 262, my: 160, cx: 170, cy: 176 }
 ];
 // 地圖畫布(viewBox)與本城節點
 const CARAVAN_MAP = { w: 320, h: 210, hx: 150, hy: 110 };
@@ -104,13 +104,22 @@ function caravanMapPos(routeId, f) {
   u = 1 - f;
   return [u * u * M.hx + 2 * u * f * r.cx + f * f * r.mx, u * u * M.hy + 2 * u * f * r.cy + f * f * r.my];
 }
-// 一趟在地圖上的「去程」進度:前半段 0~1(本城 → 目的地);已抵達目的地(過半)回 -1 = 不畫
+// 一趟在地圖上的位置 f(0~1,沿路線:0 = 本城、1 = 目的地):前半段去程 f = 2p;後半段回程 f = 2(1−p)(沿同一路線走回本城)
+// 抵達本城(p ≥ 1)或零長度回 -1 = 不畫;時鐘早於出發停在本城
 function caravanMapGo(trip, now) {
-  var dur = trip.t1 - trip.t0, f;
+  var dur = trip.t1 - trip.t0, p;
   if (!(dur > 0)) return -1;
-  f = (now - trip.t0) / dur;
-  if (f >= 0.5) return -1;
-  return f <= 0 ? 0 : f * 2;
+  p = (now - trip.t0) / dur;
+  if (p >= 1) return -1;
+  if (p <= 0) return 0;
+  return p < 0.5 ? p * 2 : (1 - p) * 2;
+}
+// 是否在回程(後半段):地圖上以淡色鏡像小車表示「回程載貨」
+function caravanMapRet(trip, now) {
+  var dur = trip.t1 - trip.t0, p;
+  if (!(dur > 0)) return false;
+  p = (now - trip.t0) / dur;
+  return p >= 0.5 && p < 1;
 }
 // 某馬車的 T1~T4 機率(正規化,和 = 1;回傳長度 4 的陣列)
 function caravanOdds(cartId) {

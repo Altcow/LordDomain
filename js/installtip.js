@@ -180,6 +180,7 @@
     if (tries < MAX_TRIES) setTimeout(tryShow, RETRY_MS);
   }
 
+  if (typeof window.addEventListener !== 'function') return;   // 沒有事件介面的環境(測試假 window)不啟動
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
     deferred = e;

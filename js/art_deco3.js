@@ -563,7 +563,7 @@
     deco_target: item('箭靶', '🎯', 1, 1, 30, { drag: true }),
     deco_jumaa: item('拒馬', '🚧', 1, 1, 20, { drag: true }),
     deco_campfire: item('營火', '🔥', 1, 1, 20, { drag: true }),
-    deco_watchtower: item('望樓(木製)', '🗼', 2, 2, 300),
+    deco_watchtower: item('望樓', '🗼', 2, 2, 300),
     deco_oxcart: item('牛車', '🐂', 1, 3, 120),
     deco_lumberyard: item('伐木場(林場)', '🪓', 2, 2, 90),
     deco_stable: item('馬廄營', '🐴', 3, 2, 200)

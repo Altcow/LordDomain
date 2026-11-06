@@ -1,7 +1,7 @@
-// js/caravanui.js — 走鏢面板:路線地圖(本城 → 各目的地,選節點出車;出隊中的車以小車圖示沿線走去程)、出車(馬車 + 鏢師 + 報價)、路上車隊、
+// js/caravanui.js — 走鏢面板:路線地圖(本城 → 各目的地,選節點出車;出隊中的車以小車圖示沿線走去程、回程)、出車(馬車 + 鏢師 + 報價)、路上車隊、
 //   馬車(同品階可多輛,受車棚上限)、鏢師名冊與今日招募、最近戰果。邏輯在 caravan.js,資料在 caravan_goods.js。
 // 入口:右側邊欄「走鏢」(ui.js UI_SIDE_ITEMS key 'caravan',點 #btnCaravan);功能閘 NL_FEATURE_GATE.caravan(郵驛科技;出車另需驛站 + 道路連城門,見 caravanPrereq)。面板以 panelmgr 登錄為 big 面板。
-// 地圖:SVG 程式繪製(扁平色塊 + 墨線);面板關著不更新;開著時每秒更新倒數與小車位置(省電模式每 5 秒移動一次小車)。抵達目的地(過半程)後地圖不再畫該車,時間照走到結算。
+// 地圖:SVG 程式繪製(扁平色塊 + 墨線);面板關著不更新;開著時每秒更新倒數與小車位置(省電模式每 5 秒移動一次小車)。去程到目的地後,回程沿同一路線走回本城(淡色鏡像小車),抵達本城才不再畫,時間照走到結算。
 // ES2017;不用 ?. ??。
 
 var caravanPanelOpen = false;
@@ -38,12 +38,16 @@ function cvFixSel() {
 }
 
 // 地圖上小車的位置:去程進度 f 沿路線;同一路線多趟時依序號往法線方向錯開
-function cvCarXY(routeId, f, k) {
+// 回程走另一側(ret = true),與去程的車不疊在同一條線上
+function cvCarXY(routeId, f, k, ret) {
   var p = caravanMapPos(routeId, f), q = caravanMapPos(routeId, Math.min(1, f + 0.02)), dx = q[0] - p[0], dy = q[1] - p[1], L = Math.sqrt(dx * dx + dy * dy) || 1, o = (k % 3) * 7 - 7;
+  if (ret) o = -o;
   return [Math.round((p[0] - dy / L * o) * 10) / 10, Math.round((p[1] + dx / L * o) * 10) / 10];
 }
 function cvTripKey(t) { return t.cart + '|' + (t.no || 1) + '|' + t.t0; }
 
+// 回程小車:鏡像(朝向本城)並淡化
+function cvRetAttr(ret) { return ret ? ' transform="scale(-1,1)" opacity=".55"' : ''; }
 function caravanMapSvg(s, now) {
   var M = CARAVAN_MAP, h = '', hallLv = caravanHall().lv, perRoute = {};
   h += '<svg class="cvsvg" viewBox="0 0 ' + M.w + ' ' + M.h + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="走鏢路線地圖">';
@@ -70,14 +74,14 @@ function caravanMapSvg(s, now) {
       '<text x="' + r.mx + '" y="' + ly + '" text-anchor="middle" font-size="12" fill="' + (open ? '#2c2116' : '#7d7462') + '" font-weight="bold">' + cvEsc(town) + '</text>' +
       '<text x="' + r.mx + '" y="' + (ly + 12) + '" text-anchor="middle" font-size="9.5" fill="#5a4a34">' + (open ? '險' + cvPct(r.risk) + ' · 件×' + r.yieldMul : '鏢局 Lv' + r.hall + ' 開放') + '</text></g>';
   });
-  // 出隊中的小車(去程才畫)
+  // 出隊中的小車(去程與回程都畫;回程為淡色鏡像小車,表示載貨返回;抵達本城後不畫)
   s.trips.forEach(function (t) {
-    var f = caravanMapGo(t, now), c = caravanCart(t.cart), k = perRoute[t.route] = (perRoute[t.route] || 0) + 1, xy = cvCarXY(t.route, f < 0 ? 1 : f, k - 1);
-    h += '<g class="cvcar" data-cvm="' + cvEsc(cvTripKey(t)) + '" data-r="' + t.route + '" data-k2="' + (k - 1) + '" data-t0="' + t.t0 + '" data-t1="' + t.t1 + '" transform="translate(' + xy[0] + ',' + xy[1] + ')"' + (f < 0 ? ' visibility="hidden"' : '') + '>' +
+    var tr = { t0: t.t0, t1: t.t1 }, f = caravanMapGo(tr, now), ret = caravanMapRet(tr, now), c = caravanCart(t.cart), k = perRoute[t.route] = (perRoute[t.route] || 0) + 1, xy = cvCarXY(t.route, f < 0 ? 1 : f, k - 1, ret);
+    h += '<g class="cvcar" data-cvm="' + cvEsc(cvTripKey(t)) + '" data-r="' + t.route + '" data-k2="' + (k - 1) + '" data-t0="' + t.t0 + '" data-t1="' + t.t1 + '" transform="translate(' + xy[0] + ',' + xy[1] + ')"' + (f < 0 ? ' visibility="hidden"' : '') + '><g' + cvRetAttr(ret) + '>' +
       '<rect x="-9" y="-9" width="18" height="10" rx="2" fill="' + (c ? c.color : '#d8d8d8') + '" stroke="#2c2116" stroke-width="1.5"/>' +
       '<circle cx="-5" cy="3" r="3" fill="#2c2116"/><circle cx="5" cy="3" r="3" fill="#2c2116"/>' +
       '<circle cx="13" cy="-4" r="3.2" fill="#7a4a2a" stroke="#2c2116" stroke-width="1"/>' +
-      (t.esc.length ? '<circle cx="-14" cy="-3" r="3" fill="#d9a77a" stroke="#2c2116" stroke-width="1"/>' : '') + '</g>';
+      (t.esc.length ? '<circle cx="-14" cy="-3" r="3" fill="#d9a77a" stroke="#2c2116" stroke-width="1"/>' : '') + '</g></g>';
   });
   return h + '</svg>';
 }
@@ -207,10 +211,12 @@ function caravanPanelTick(panel, now) {
   });
   if (typeof isPowerSave === 'function' && isPowerSave() && cvTickN % 5) return;
   Array.prototype.forEach.call(panel.querySelectorAll('[data-cvm]'), function (g) {
-    var f = caravanMapGo({ t0: Number(g.getAttribute('data-t0')), t1: Number(g.getAttribute('data-t1')) }, now), xy;
+    var tr = { t0: Number(g.getAttribute('data-t0')), t1: Number(g.getAttribute('data-t1')) }, f = caravanMapGo(tr, now), ret = caravanMapRet(tr, now), xy, body = g.querySelector('g');
     if (f < 0) { g.setAttribute('visibility', 'hidden'); return; }
-    xy = cvCarXY(g.getAttribute('data-r'), f, Number(g.getAttribute('data-k2')) || 0);
+    xy = cvCarXY(g.getAttribute('data-r'), f, Number(g.getAttribute('data-k2')) || 0, ret);
+    g.setAttribute('visibility', 'visible');
     g.setAttribute('transform', 'translate(' + xy[0] + ',' + xy[1] + ')');
+    if (body) { body.removeAttribute('transform'); body.removeAttribute('opacity'); if (ret) { body.setAttribute('transform', 'scale(-1,1)'); body.setAttribute('opacity', '.55'); } }
   });
 }
 function caravanPanelToggle(open) {

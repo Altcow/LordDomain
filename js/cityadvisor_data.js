@@ -187,23 +187,23 @@ var ADVICE = [
   { id: 'a_food_tech', tier: 'B', pri: 35, stat: 'food', cond: 'foodTech', cd: 6, text: '研〈屯田〉就能種粟田,收成多一截。', go: { kind: 'tech', id: 'e_tuntian' } },
   { id: 'a_food_surplus', tier: 'B', pri: 20, stat: 'food', cond: 'foodSurplus', cd: 6, text: '糧多到倉裡放不下,開個市集賣掉換錢吧。', go: { kind: 'build', type: 'market' } },
 
-  { id: 'a_water_crit', tier: 'R', pri: 90, stat: 'water', cond: 'waterCrit', cd: 0, text: '{area}一口井都沒有,百姓只能喝溝水,快鑿井!', go: { kind: 'build', type: 'well', near: 'worst' } },
+  { id: 'a_water_crit', tier: 'R', pri: 90, stat: 'water', cond: 'waterCrit', cd: 0, text: '{area}有民房離井太遠,喝不到水,在旁邊鑿口井。', go: { kind: 'build', type: 'well', near: 'worst' } },
   { id: 'a_water_warn', tier: 'Y', pri: 65, stat: 'water', cond: 'waterWarn', cd: 3, text: '井水不太夠用({pct}%),再鑿一口。', go: { kind: 'build', type: 'well', near: 'worst' } },
   { id: 'a_water_tech', tier: 'B', pri: 30, stat: 'water', cond: 'waterTech', cd: 6, text: '研〈桔槔〉,河邊就能汲水,比井更大。', go: { kind: 'tech', id: 'wa_jiegao' } },
 
   { id: 'a_sani_crit', tier: 'R', pri: 85, stat: 'sani', cond: 'saniCrit', cd: 0, text: '街上污水橫流,衛生只剩 {v},趕緊蓋茅廁!', go: { kind: 'build', type: 'privy', near: 'worst' } },
   { id: 'a_sani_warn', tier: 'Y', pri: 60, stat: 'sani', cond: 'saniWarn', cd: 3, text: '衛生 {v}(警示線 45~60),人多的地方補座茅廁吧。', go: { kind: 'build', type: 'privy', near: 'worst' } },
   { id: 'a_sani_density', tier: 'Y', pri: 50, stat: 'sani', cond: 'saniDensity', cd: 6, text: '住戶已有 {n} 戶卻沒半座茅廁,趁早蓋一座。', go: { kind: 'build', type: 'privy' } },
-  { id: 'a_plague_crit', tier: 'R', pri: 88, stat: 'plague', cond: 'plagueCrit', cd: 0, text: '髒亂成疾,疫病就在眼前!快蓋醫館!', go: { kind: 'build', type: 'hospital', near: 'worst' } },
+  { id: 'a_plague_crit', tier: 'R', pri: 88, stat: 'plague', cond: 'plagueCrit', cd: 0, text: '髒亂成疾,疫病就在眼前!先蓋座茅廁,顧住衛生。', go: { kind: 'build', type: 'privy', near: 'worst' } },
   { id: 'a_plague_warn', tier: 'Y', pri: 58, stat: 'plague', cond: 'plagueWarn', cd: 3, text: '衛生不佳易生疫病,種個藥圃或開間藥舖當保險。', go: { kind: 'build', type: 'herb_garden' } },
 
   { id: 'a_mood_crit', tier: 'R', pri: 80, stat: 'mood', cond: 'moodCrit', cd: 0, text: '百姓怨聲載道(民心 {v}),先看哪一項紅了,再蓋說書台安撫。', go: { kind: 'build', type: 'storyteller', near: 'worst' } },
-  { id: 'a_mood_warn', tier: 'Y', pri: 55, stat: 'mood', cond: 'moodWarn', cd: 3, text: '民心 {v} 有點低,添座茶館讓大夥鬆口氣。', go: { kind: 'build', type: 'shop_tea' } },
+  { id: 'a_mood_warn', tier: 'Y', pri: 55, stat: 'mood', cond: 'moodWarn', cd: 3, text: '民心 {v} 有點低,在里社拜一拜,讓大夥鬆口氣。', go: { kind: 'build', type: 'she_altar' } },
   { id: 'a_mood_fun', tier: 'B', pri: 25, stat: 'mood', cond: 'moodFun', cd: 6, text: '日子過得平淡,蓋座里社或說書台,添點樂子。', go: { kind: 'build', type: 'she_altar' } },
 
   { id: 'a_order_crit', tier: 'R', pri: 78, stat: 'order', cond: 'orderCrit', cd: 0, text: '街頭鬧事的多了(治安 {v}),立個告示牌、設座望樓!', go: { kind: 'build', type: 'notice_board', near: 'worst' } },
   { id: 'a_order_warn', tier: 'Y', pri: 52, stat: 'order', cond: 'orderWarn', cd: 3, text: '治安 {v} 有些吃緊,人多的坊立座告示牌。', go: { kind: 'build', type: 'notice_board', near: 'worst' } },
-  { id: 'a_order_pop', tier: 'B', pri: 28, stat: 'order', cond: 'orderPop', cd: 6, text: '人口已近 {n},早些蓋座望樓防患未然。', go: { kind: 'build', type: 'deco_watchtower' } },
+  { id: 'a_order_pop', tier: 'B', pri: 28, stat: 'order', cond: 'orderPop', cd: 6, text: '人口已近 {n},早些立座告示牌防患未然。', go: { kind: 'build', type: 'notice_board' } },
 
   { id: 'a_house_full', tier: 'R', pri: 82, stat: 'house', cond: 'houseFull', cd: 0, text: '流民無處落腳,住房全滿了,快加蓋民居!', go: { kind: 'build', type: 'house' } },
   { id: 'a_house_tight', tier: 'Y', pri: 63, stat: 'house', cond: 'houseTight', cd: 3, text: '房子快住滿了({pct}%),再添幾戶。', go: { kind: 'build', type: 'house' } },

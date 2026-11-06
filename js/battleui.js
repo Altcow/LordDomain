@@ -534,7 +534,7 @@ function initAttackUI() {
   tip.ring.hidden = true;
   document.body.appendChild(tip.ring);
 
-  // ui.js 的 tapObjectAt 會開科研院面板(大面板);進攻/沙盤/錄影中不可開啟任何經營面板
+  // ui.js 的 tapObjectAt 會開研究院面板(大面板);進攻/沙盤/錄影中不可開啟任何經營面板
   if (typeof tapObjectAt === 'function') {
     const tapObjectOrig = tapObjectAt;
     tapObjectAt = function (sx, sy) {

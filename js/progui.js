@@ -413,11 +413,11 @@ function puiTaskRender() {
   if (pui.taskBtn) pui.taskBtn.style.display = puiNsReplaces() ? 'none' : '';
   p = progGet();
   m = puiTaskModel();
-  wel = !p.ftue.welcomed && puiModeOk();
+  wel = !p.ftue.welcomed && puiModeOk() && !(typeof tutHas === 'function' && tutHas());   // 新世界由新手教學接手,不再跳歡迎泡泡
   if (pui.welTxt) pui.welTxt.textContent = puiCity() ? '歡迎,城主!先點下方的建築,多蓋幾座民房,再蓋伐木場;蓋出新種類、擴大城市就能升級,點頂列 Lv 看條件。' : '歡迎,城主!先點下方的建築,蓋一座民房;點頂列 Lv 看升級條件。';
   pui.welShown = wel;
   pui.wel.hidden = !wel;
-  show = !wel && !p.ftue.off && m.kind !== 'none' && puiModeOk() && !puiNsReplaces();
+  show = !wel && !p.ftue.off && m.kind !== 'none' && puiModeOk() && !puiNsReplaces() && !(typeof tutActive === 'function' && tutActive());
   pui.taskShown = show;
   pui.ftue.hidden = !show;
   if (!show) return;

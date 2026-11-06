@@ -272,7 +272,7 @@ function drawLog(ctx, gx, gy, len, dep, baseH, r) {
 // 軍事建築固定色（不隨季節）；皆 6 位 hex，可用 shade()
 const MIL_COL = { red: '#b8322c', black: '#2e2b2b', herb: '#3f8a66', hay: '#d8b04a', white: '#f4efe4', horse: '#6e4a30' };
 
-// 科研院固定色（不隨季節）；皆 6 位 hex，可用 shade()
+// 研究院固定色（不隨季節）；皆 6 位 hex，可用 shade()
 const TECH_COL = { wood: '#5b3a29', roof: '#2f6b5e', bamboo: '#cdb46a', lacquer: '#7a2e26', bronze: '#b08d57' };
 
 // 旗：竿立於格點 (px,py)，旗面沿 +x 方向展開 fw 格、高 fh 像素

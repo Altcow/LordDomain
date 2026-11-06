@@ -132,7 +132,7 @@
     }
   });
 
-  // 廁所 privy 1x1:極小茅頂小屋,單門
+  // 茅廁 privy 1x1:極小茅頂小屋,單門
   A.def('privy', {
     w: 1, d: 1, hmax: 36,
     build: function (m, v) {
@@ -356,20 +356,20 @@
 
   // ---- 註冊到建築選單(OBJECTS 於 data.js 定義;side 'estate' 與其他建築一致) ----
   Object.assign(OBJECTS, {
-    shop_wine:    { name: '酒館', icon: '🍶', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 120 }, side: 'estate' },
-    shop_book:    { name: '書店', icon: '📚', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 120 }, side: 'estate' },
+    shop_wine:    { name: '酒肆', icon: '🍶', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 120 }, side: 'estate' },
+    shop_book:    { name: '書肆', icon: '📚', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 120 }, side: 'estate' },
     shop_cloth:   { name: '布莊', icon: '🧵', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 120 }, side: 'estate' },
     shop_rice:    { name: '米舖', icon: '🌾', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 110 }, side: 'estate' },
     shop_rouge:   { name: '胭脂店', icon: '💄', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 110 }, side: 'estate' },
     shop_gamble:  { name: '博戲坊', icon: '🎲', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 180 }, side: 'estate' },
     shop_brothel: { name: '倡樓', icon: '🏮', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 180 }, side: 'estate' },
-    shop_herb:    { name: '藥肆', icon: '🌿', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 110 }, side: 'estate' },
+    shop_herb:    { name: '藥舖', icon: '🌿', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 110 }, side: 'estate' },
     shop_smith:   { name: '鍛鐵鋪', icon: '⚒️', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 130 }, side: 'estate' },
     shop_tea:     { name: '茶館', icon: '🍵', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 110 }, side: 'estate' },
     shop_pawn:    { name: '當鋪', icon: '🏦', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 130 }, side: 'estate' },
     bank:         { name: '錢莊', icon: '💰', w: 2, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 150 }, side: 'estate' },
     inn:          { name: '客棧', icon: '🏨', w: 3, h: 2, on: [T_GRASS, T_ROAD], cost: { coin: 200 }, side: 'estate' },
-    privy:        { name: '廁所', icon: '🚻', w: 1, h: 1, on: [T_GRASS, T_ROAD], cost: { coin: 30 }, side: 'estate' },
+    privy:        { name: '茅廁', icon: '🚻', w: 1, h: 1, on: [T_GRASS, T_ROAD], cost: { coin: 30 }, side: 'estate' },
     stall_veg:    { name: '菜攤', icon: '🥬', w: 2, h: 1, on: [T_GRASS, T_ROAD], cost: { coin: 30 }, side: 'estate' },
     stall_fruit:  { name: '果攤', icon: '🍎', w: 2, h: 1, on: [T_GRASS, T_ROAD], cost: { coin: 30 }, side: 'estate' },
     stall_cloth:  { name: '布攤', icon: '🧶', w: 2, h: 1, on: [T_GRASS, T_ROAD], cost: { coin: 30 }, side: 'estate' },

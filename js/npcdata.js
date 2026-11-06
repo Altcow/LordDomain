@@ -19,13 +19,13 @@ var NPC_CFG = {
 // seat = { base, div, max }:席位 = min(max, base + floor(建築數 / div));per = 每棟建築可派駐人數;live = 目前是否已接上產出數值(false = 只計入顯示,效果待接)
 var NPC_POSTS = [
   { id: 'farm',   name: '田曹', types: ['field_sprout', 'field_millet', 'field_wheat', 'field_hemp', 'vegetable_plot', 'orchard', 'mulberry_grove'], main: ['nongshi'], aux: ['zhishui', 'jiqiao'], attr: 3, seat: { base: 1, div: 4, max: 4 }, per: 1, live: true, eff: '田類糧產' },
-  { id: 'craft',  name: '工曹', types: ['lumber', 'quarry', 'sawbench'], main: ['linmu', 'caishi'], aux: ['yingzao'], attr: 1, seat: { base: 1, div: 1, max: 4 }, per: 1, live: true, eff: '木、石、木板產出' },
+  { id: 'craft',  name: '工曹', types: ['lumber', 'quarry', 'sawbench'], main: ['linmu', 'caishi'], aux: ['yingzao'], attr: 1, seat: { base: 1, div: 1, max: 4 }, per: 1, live: true, eff: '管伐木場、採石場(木、石、木板產出)' },
   { id: 'iron',   name: '冶坊', types: ['smith_awning', 'smithy', 'shui_pai', 'mine_entrance'], main: ['yetie'], aux: ['jiqiao'], attr: 1, seat: { base: 0, div: 1, max: 3 }, per: 1, live: true, eff: '鐵錠、農具產出' },
   { id: 'loom',   name: '織坊', types: ['loom_shop', 'shop_cloth', 'jin_fang'], main: ['fangzhi'], aux: ['shangcai'], attr: 3, seat: { base: 0, div: 1, max: 2 }, per: 1, live: true, eff: '麻布、衣物產出' },
   { id: 'trade',  name: '市令', types: ['market', 'shi_lou'], main: ['shangcai'], aux: ['jisuan', 'ciling'], attr: 4, seat: { base: 1, div: 1, max: 4 }, per: 2, live: true, eff: '市集金幣產出' },
   { id: 'study',  name: '學官', types: ['research', 'xue_she', 'xue_gong', 'jingshe', 'shop_book'], main: ['wenshu', 'jiaohua'], aux: ['tianwen'], attr: 2, seat: { base: 1, div: 1, max: 6 }, per: 3, live: true, eff: '科研速度' },
-  { id: 'med',    name: '醫署', types: ['hospital', 'shop_herb', 'tai_yi_shu', 'yu_tang'], main: ['yishu'], aux: ['paochu'], attr: 2, seat: { base: 1, div: 1, max: 3 }, per: 1, live: false, eff: '疫病風險 −' },
-  { id: 'police', name: '賊曹', types: ['xian_ya', 'notice_board', 'li_men', 'wanglou', 'zhalou'], main: ['lvfa'], aux: ['bingshi'], attr: 0, seat: { base: 1, div: 2, max: 3 }, per: 1, live: false, eff: '治安' },
+  { id: 'med',    name: '醫署', types: ['herb_garden', 'shop_herb', 'tai_yi_shu', 'yu_tang'], main: ['yishu'], aux: ['paochu'], attr: 2, seat: { base: 1, div: 1, max: 3 }, per: 1, live: false, eff: '疫病風險 −' },
+  { id: 'police', name: '賊曹', types: ['xian_ya', 'notice_board', 'li_men', 'deco_watchtower', 'gate'], main: ['lvfa'], aux: ['bingshi'], attr: 0, seat: { base: 1, div: 2, max: 3 }, per: 1, live: false, eff: '治安' },
   { id: 'gov',    name: '太守', types: ['palace'], main: ['lizhi'], aux: ['jisuan'], attr: 3, seat: { base: 1, div: 99, max: 1 }, per: 1, live: false, eff: '城市升級資源 −' },
   { id: 'keep',   name: '掌櫃', types: ['tavern'], main: ['ciling'], aux: ['niangzao'], attr: 4, seat: { base: 1, div: 99, max: 1 }, per: 1, live: true, eff: '酒館收入與事件獎勵' }
 ];

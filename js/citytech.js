@@ -21,7 +21,7 @@ function techNode(id) {
   }
   return techNode._m[id] || null;
 }
-function techLabelOf(n) { return (typeof fxTechLabel === 'function') ? fxTechLabel(n) : (n ? n.name : ''); }   // 節點顯示名(魔幻世界讀覆寫,其餘原名)
+function techLabelOf(n) { var s = (typeof fxTechLabel === 'function') ? fxTechLabel(n) : (n ? n.name : ''); return (n && n.id === 'md_cesuo' && s === '圊溷') ? '圊溷(茅廁)' : s; }   // 節點顯示名(魔幻世界讀覆寫,其餘原名)
 function techIsStyle(n) { return !!n && n.id.indexOf('st_') === 0; }
 function techIsMega(n) { return !!n && (n.kind === 'mega' || n.id.indexOf('mg_') === 0); }   // 里程碑(大工程)不走研發序列
 
@@ -69,11 +69,13 @@ function techReqMet(n) {
 function techCostOf(id) {
   var n = techNode(id), c = n && n.cost;
   if (!c) return null;
+  if (typeof tutFreeTech === 'function' && tutFreeTech(id)) return { coin: 0, xue: 0, goods: null };   // 新手教學:茅廁首研免費(只一次)
   var g = c.goods ? { tier: c.goods.tier, n: (c.goods.n || 0) + (c.goods.rare || 0) } : null;
   return { coin: c.coin || 0, xue: c.xue || 0, goods: g };
 }
 function techDurationOf(id) {
   var n = techNode(id); if (!n) return 0;
+  if (typeof tutFreeTech === 'function' && tutFreeTech(id)) return TUT_MD_SECONDS;   // 新手教學:茅廁研發 30 秒(只一次)
   var base = (TECH_MIN['C' + n.era] || 2) * 60;
   return Math.max(1, Math.round(techIsStyle(n) ? base / 2 : base));
 }
@@ -157,6 +159,7 @@ function techCanStart(id) {
 }
 function techPay(id) {   // 呼叫前已確認 techAffordable
   var c = techCostOf(id), s = techState(), paid = { coin: c.coin, xue: c.xue, goods: {} };
+  if (typeof tutUseFree === 'function') tutUseFree(id);
   world.res.coin -= c.coin; s.xue = Math.max(0, s.xue - c.xue);
   if (c.goods) {
     var plan = techGoodsPlan(c.goods);

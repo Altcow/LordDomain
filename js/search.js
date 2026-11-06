@@ -8,7 +8,7 @@
 
 var SR_MAX = 50;
 var SR_DEBOUNCE_MS = 150;
-var SR_CHIPS = ['廁所', '市場', '城門', '研究院', '鐵'];
+var SR_CHIPS = ['茅廁', '市場', '城門', '研究院', '鐵'];
 var SR_TOP_NAME = { eco: '經濟建築', deco: '擺設品', mil: '軍事建築' };
 var SR_ST_TXT = { unlocked: '已解鎖', done: '已研完', cur: '研發中', queued: '排隊中', ready: '可研發', locked: '未解鎖', mega: '里程碑' };
 // 常用簡體 → 繁體(搜尋時兩邊都轉;遊戲名稱為繁體)
@@ -21,7 +21,7 @@ var SR_S2T = {
 };
 // 常見別稱 → 物件 id(只列確實存在於 OBJECTS 的 id;tools/test_search.js 會核對)
 var SR_ALIAS = {
-  privy: ['茅廁', '茅房', '厠所', '溷'],
+  privy: ['茅廁', '廁所', '茅房', '厠所', '溷'],
   market: ['市場', '集市', '市肆'],
   house: ['住宅', '房子', '民居', '住家'],
   palace: ['府邸', '官邸', '縣府'],
@@ -35,6 +35,7 @@ var SR_ALIAS = {
   bridge: ['橋'],
   stairs: ['樓梯', '台階', '臺階'],
   shop_wine: ['酒肆', '酒家', '酒樓'],
+  tavern: ['酒館', '招賢酒肆', '招賢'],
   inn: ['客棧', '旅店', '旅舍'],
   field_millet: ['田地', '農田'],
   well: ['水井', '井']

@@ -291,7 +291,7 @@
     woodpile:       { name: '柴堆', icon: '🪵', w: 1, h: 1, drag: true, cost: { coin: 20 } },
     haystack:       { name: '稻草堆', icon: '🌾', w: 1, h: 1, drag: true, cost: { coin: 20 } },
     grain_sacks:    { name: '糧袋堆', icon: '🌾', w: 1, h: 1, drag: true, cost: { coin: 30 } },
-    granary_round:  { name: '陶倉(圓囷)', icon: '🏺', w: 1, h: 1, cost: { coin: 80 } },
+    granary_round:  { name: '陶倉', icon: '🏺', w: 1, h: 1, cost: { coin: 80 } },
     barrel_water:   { name: '水桶(滿)', icon: '🪣', w: 1, h: 1, drag: true, cost: { coin: 20 } },
     barrel_empty:   { name: '水桶(空)', icon: '🪣', w: 1, h: 1, drag: true, cost: { coin: 20 } },
     well:           { name: '水井', icon: '🕳️', w: 1, h: 1, cost: { coin: 60 } },

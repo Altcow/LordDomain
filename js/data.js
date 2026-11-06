@@ -110,7 +110,7 @@ const OBJECTS = {
   // 斜坡:寬 2 格、沿坡 1 格(footprint 以 swap 處理:rot 偶數為 1×2,奇數為 2×1);上坡方向 DIRS[rot] 與 stairs 相同
   ramp: { name: '斜坡', icon: '📐', w: 1, h: 2, swap: true, on: [T_GRASS, T_ROAD], cost: { coin: 8, stone: 4 }, side: 'both', cb: { block: 'none', hp: null, cat: null } },
   bridge: { name: '橋梁', icon: '🌉', w: 1, h: 1, on: [T_LAKE, T_RIVER], cost: { wood: 8 } },
-  research: { name: '科研院', icon: '📜', w: 3, h: 3, max: 1, on: [T_GRASS], cost: { coin: 300, wood: 200, stone: 150 } },
+  research: { name: '研究院', icon: '📜', w: 3, h: 3, max: 1, on: [T_GRASS], cost: { coin: 300, wood: 200, stone: 150 } },
   // 軍事建築（PLAN 12.10）：mil = 工具列分組；unit = 所屬兵種（出征容量）；本身無產出
   archer:   { name: '弓箭營', icon: '🏹', w: 3, h: 3, max: 2, mil: true, on: [T_GRASS], cost: { coin: 160, wood: 120, stone: 30 }, unit: 'archer' },
   shield:   { name: '盾兵營', icon: '🛡️', w: 3, h: 3, max: 2, mil: true, on: [T_GRASS], cost: { coin: 150, wood: 80, stone: 60 }, unit: 'shield' },

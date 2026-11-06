@@ -13,7 +13,7 @@ var GUIDE_TICK_MS = 1000;
 // text:字串或函式。mode:'estate' 經營 | 'camp' 戰鬥布置 | 'any' 兩者皆可 | 'attack' 出征戰鬥中。feat:對應 isUnlocked('feature', feat),null = 一開始就有。
 var GUIDE_TOPICS = [
   { id: 'welcome', title: '歡迎,城主', feat: null, mode: 'any', steps: [
-    { target: '#progChip', text: '這是城市等級。點它可以看升級要什麼,升級後會開放新建築和新玩法。' },
+    { target: '#progChip', text: '這是城市的官階與科技晶片。點它可以看官階,以及科技研到哪一步。' },
     { target: '#resbar', text: '這排是你的資源。蓋建築要花資源,有些建築會自己生產。' }
   ] },
   { id: 'build', title: '蓋建築', feat: null, mode: 'estate', steps: [
@@ -425,6 +425,7 @@ function gdBusy() {
 }
 
 function gdReady() {
+  if (typeof tutActive === 'function' && tutActive()) return false;   // 新手教學期間暫停自動播放(教學在需要時自己叫出聚光孔)
   if (typeof prog === 'undefined' || !prog || typeof progLv !== 'function') return false;
   if (typeof progNeedsMigrate === 'function' && progNeedsMigrate()) return false;
   if (typeof game === 'undefined' || !game) return false;

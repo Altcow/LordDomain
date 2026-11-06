@@ -1,4 +1,4 @@
-// 科研院與科技（PLAN_TECH.md）：資料表＋研發邏輯＋效果查詢。依賴 map.js 的 world / canAfford / spend / gain / dealCache
+// 研究院與科技（PLAN_TECH.md）：資料表＋研發邏輯＋效果查詢。依賴 map.js 的 world / canAfford / spend / gain / dealCache
 const LAB_TYPE = 'research';
 const TECH_TREES = { mil: '軍事', eco: '經濟' };
 // 階：time 研發秒數；cost 一般節點成本（兵種解鎖節點以 TECHS[id].cost 覆寫）
@@ -96,7 +96,7 @@ function canResearch(id) {
   if (!T) return '未知科技';
   if (techHas(id)) return '已研發';
   if (world.tech.cur) return '正在研發「' + TECHS[world.tech.cur.id].name + '」';
-  if (!labBuilt()) return '需要科研院';
+  if (!labBuilt()) return '需要研究院';
   const miss = T.req.filter(r => !techHas(r));
   if (miss.length) return '需先研發 ' + miss.map(r => TECHS[r].name).join('、');
   if (!canAfford(techCost(id))) return '資源不足';
@@ -121,7 +121,7 @@ function cancelResearch() {
   return c.id;
 }
 
-// 推進研發；無科研院時暫停（進度保留）。完成回傳 id，否則 ''
+// 推進研發；無研究院時暫停（進度保留）。完成回傳 id，否則 ''
 function tickResearch(dt) {
   const c = world.tech.cur;
   if (!c || !(dt > 0) || !labBuilt()) return '';

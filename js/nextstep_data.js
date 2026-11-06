@@ -6,6 +6,8 @@
 // 全域名稱:NS_PREF_KEY NS_THROTTLE_MS NS_TIER_MARK NS_CHAIN NS_FIELD_TYPES
 var NS_PREF_KEY = 'lorddomain.nextstep';       // 全域偏好 'on' / 'off'(預設 on)
 var NS_THROTTLE_MS = 1500;                      // 計算節流,沿用顧問
+// 教學已涵蓋的步驟(畢業後由教學標為已完成,不再重複推薦)
+var NS_TUT_OVERLAP = ['n_house3', 'n_lab', 'n_tech', 'n_bars', 'n_privy', 'n_market', 'n_house6'];
 var NS_TIER_MARK = { R: '■', Y: '▲', B: '●', C: '' };
 var NS_FIELD_TYPES = ['field_sprout', 'field_millet', 'field_wheat', 'vegetable_plot'];
 
@@ -38,8 +40,8 @@ var NS_CHAIN = [
     go: { kind: 'build', type: 'house' }, obj: 'house', done: { k: 'houses', n: 6 } },
   { id: 'n_notice', icon: '📜', text: '何不立座告示牌,安定地方?', why: '人多了治安會鬆,告示牌能穩住秩序。',
     go: { kind: 'build', type: 'notice_board' }, obj: 'notice_board', done: { k: 'cnt', t: ['notice_board'], n: 1 } },
-  { id: 'n_tavern', icon: '🍶', text: '不妨蓋座酒館,招募第一位人物。', why: '酒館聚四方賢才,是人物入城的門。',
-    go: { kind: 'build', type: 'shop_wine' }, obj: 'shop_wine', done: { k: 'cnt', t: ['shop_wine'], n: 1 } },
+  { id: 'n_tavern', icon: '🍶', text: '不妨蓋座招賢館,招募第一位人物。', why: '招賢館聚四方賢才,是人物入城的門。',
+    go: { kind: 'build', type: 'tavern' }, obj: 'tavern', done: { k: 'cnt', t: ['tavern'], n: 1 } },
   { id: 'n_story', icon: '🎙️', text: '何不蓋座說書台,添些樂子?', why: '有得消遣,民心自然安穩。',
     go: { kind: 'build', type: 'storyteller' }, obj: 'storyteller', done: { k: 'cnt', t: ['storyteller'], n: 1 } },
   { id: 'n_book', icon: '📖', text: '不妨蓋間書肆,教化百姓。', why: '教化高了,治安與研發都跟著受益。',

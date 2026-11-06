@@ -34,7 +34,8 @@ function goodsNormCity(v) {
     if (v.adv && typeof advNormSave === 'function') c.adv = advNormSave(v.adv);   // 顧問已完成 / 已忽略 id(cityadvisor.js)
     if (v.ns && typeof nsNormSave === 'function') c.ns = nsNormSave(v.ns);   // 推薦下一步:已關閉 / 已看過 id(nextstep.js)
     if (v.cards && typeof cardsNormSave === 'function') { var cd = cardsNormSave(v.cards); if (cd) c.cards = cd; }   // 酒館 / 名冊(cards.js)
-    if (v.tavern && typeof tavernNormSave === 'function') { var tv = tavernNormSave(v.tavern); if (tv) c.tavern = tv; }   // 酒館室內資料 {lv, rooms, seed}(tavern_scene.js;I1 起才有包間內容)
+    if (v.tavern && typeof tavernNormSave === 'function') { var tv = tavernNormSave(v.tavern); if (tv) c.tavern = tv; }
+    if (v.tut && typeof tutNormSave === 'function') { var tu = tutNormSave(v.tut); if (tu) c.tut = tu; }   // 新手教學進度(tutorial.js);沒有 = 已畢業   // 酒館室內資料 {lv, rooms, seed}(tavern_scene.js;I1 起才有包間內容)
   }
   return c;
 }

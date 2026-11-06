@@ -1,4 +1,4 @@
-const VERSION = 'v48';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v49';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -87,6 +87,8 @@ const PRECACHE = [
   './js/cityadvisor.js',
   './js/nextstep_data.js',
   './js/nextstep.js',
+  './js/tutorial_data.js',
+  './js/tutorial.js',
   './js/panorama.js',
   './js/audiodata.js',
   './js/audio.js',

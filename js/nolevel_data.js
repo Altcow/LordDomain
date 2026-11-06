@@ -283,6 +283,7 @@ const NL_OBJ_TECH = {
   manor_estate: 'st_s1c',
   trebuchet: 'df_lianhuan',
   warship: 'df_lianhuan',
+  tavern: 'ed_xiangyin',
 };
 
 // 起手集合(34 件,PLAN_NOLEVEL §2.4)
@@ -333,7 +334,7 @@ const NL_UNLOCK_NAMES = {
   rcp_niue: '配方「牛軛」',
   lou_workshop: '耬車作坊',
   rcp_fenfei: '配方「糞肥」',
-  granary_round: '常平倉',
+  granary_round: '陶倉',
   edict_buhuang: '政令「捕蝗」',
   feat_yueling: '功能「月令曆」',
   greenhouse_cellar: '溫室菜窖',

@@ -50,7 +50,7 @@ var ADV_REVEAL = {
   house: function (s) { return (s.houses || 0) >= 6 || (s.minutes || 0) >= 15; },
   order: function (s) { return (s.pop || 0) >= 40 || (s.minutes || 0) >= 30; },
   road: function (s) { return (s.buildings || 0) >= 30; },
-  plague: function (s) { return !!s.saniEverWarn || (s.v && advNum(s.v.sani) !== null && advLevelOf('sani', s.v.sani) >= 1 && s.houses > 0); },
+  plague: function (s) { return !(typeof tutActive === 'function' && tutActive()) && (typeof nlUnlocked !== 'function' || nlUnlocked('herb_garden')) && (!!s.saniEverWarn || (s.v && advNum(s.v.sani) !== null && advLevelOf('sani', s.v.sani) >= 1 && s.houses > 0)); },   // 疫病長條:教學期間不揭露;藥圃(神農本草)可研之後才揭露
   era2: function (s) { return (s.era || 1) >= 2; }
 };
 function advRevealed(id, s, sticky) {

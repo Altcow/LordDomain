@@ -121,7 +121,8 @@ function nsUiRender(cand, n) {
   while (e.firstChild) e.removeChild(e.firstChild);
   if (nsUi.menu) {
     main = nsE('div', 'ns-menu');
-    if (n > 1) main.appendChild(nsBtn('下一則', 'ns-b', function () { nsNext(); nsUi.menu = false; nsUiRefresh(true); }));
+    if (typeof tutActive === 'function' && tutActive()) main.appendChild(nsBtn('跳過教學', 'ns-b', function () { nsUiTutSkip(); }, '跳過新手教學(補發學識 20)'));
+    else if (n > 1) main.appendChild(nsBtn('下一則', 'ns-b', function () { nsNext(); nsUi.menu = false; nsUiRefresh(true); }));
     main.appendChild(nsBtn('全部關閉', 'ns-b', function () { nsUiAllOff(); }, '全部關閉(不再提醒)'));
     main.appendChild(nsBtn('重新開啟', 'ns-b', function () { nsUndismissAll(); nsUi.menu = false; nsUiRefresh(true); }, '重新開啟已關閉的提示'));
     e.appendChild(main);
@@ -130,7 +131,7 @@ function nsUiRender(cand, n) {
     e.appendChild(acts);
     return;
   }
-  mark = NS_TIER_MARK[cand.tier] || '';
+  mark = cand.src === 'tut' ? (cand.progress || '') : (NS_TIER_MARK[cand.tier] || '');
   main = nsE('div', 'ns-main');
   main.appendChild(nsIcon(cand, mark));
   main.appendChild(nsE('span', 'ns-tx', (nsUi.why && cand.why) ? cand.why : cand.text));
@@ -139,14 +140,24 @@ function nsUiRender(cand, n) {
   e.appendChild(main);
   if (r.showWhy && cand.why && !nsUi.why) e.appendChild(nsE('div', 'ns-why', cand.why));
   acts = nsE('div', 'ns-acts');
-  acts.appendChild(nsBtn('前往', 'ns-b ns-go', function () { nsUiGo(cand); }));
-  acts.appendChild(nsBtn('✕', 'ns-b ns-sq', function () { nsUiDismiss(cand); }, '關閉這則,不再提示'));
+  if (cand.src === 'tut') {
+    acts.appendChild(nsBtn(cand.go.kind === 'tut' ? (cand.go.id === 'grad' ? '好' : '開始') : '前往', 'ns-b ns-go', function () { nsUiGo(cand); }));
+    if (cand.stepId === 'T0') acts.appendChild(nsBtn('跳過教學', 'ns-b', function () { nsUiTutSkip(); }, '跳過新手教學(補發學識 20)'));
+  } else {
+    acts.appendChild(nsBtn('前往', 'ns-b ns-go', function () { nsUiGo(cand); }));
+    acts.appendChild(nsBtn('✕', 'ns-b ns-sq', function () { nsUiDismiss(cand); }, '關閉這則,不再提示'));
+  }
   acts.appendChild(nsBtn('⋯', 'ns-b ns-sq', function () { nsUi.menu = true; nsUi.sig = ''; nsUiTick(); }, '更多'));
   e.appendChild(acts);
 }
 
 function nsUiGo(cand) { if (typeof nsGo === 'function') nsGo(cand); nsUi.why = false; nsUiRefresh(true); }
 function nsUiDismiss(cand) { nsUi.why = false; nsDismiss(cand.id); nsUiRefresh(true); }
+function nsUiTutSkip() {
+  if (typeof window !== 'undefined' && window && typeof window.confirm === 'function' && !window.confirm('跳過新手教學?會補發學識 20,之後的推薦回到一般模式。')) return;
+  if (typeof tutSkip === 'function') tutSkip();
+  nsUi.menu = false; nsUi.sig = ''; nsRt.last = -1e15; nsRt.cache = null; nsUiRefresh(true);
+}
 function nsUiAllOff() { nsSetEnabled(false); nsUi.menu = false; nsUi.sig = ''; nsUi.el.hidden = true; }
 function nsUiMenu(on) { nsUi.menu = !!on; nsUi.sig = ''; nsUiTick(); }
 

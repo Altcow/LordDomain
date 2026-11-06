@@ -157,7 +157,7 @@ var CITY_LV_REQ = {
     { k: 'types', ids: ['mansion_clan'], n: 1, text: '世家宅邸 1 座', go: ['mansion_clan'] }] },
   19: { id: 'lr19', title: '百肆', conds: [{ k: 'kinds', cls: ['stall', 'shop', 'ground', 'tavern', 'vice'], n: 12, text: '12 種店鋪攤位', go: ['shop_cloth', 'shop_herb', 'shop_rouge', 'shop_pawn', 'stall_cloth', 'stall_pottery', 'stall_book', 'stall_toy', 'shop_tea', 'shop_wine', 'shop_rice', 'stall_meat'] }] },
   20: { id: 'lr20', title: '興學宮', big: true, conds: [
-    { k: 'cluster', ids: ['shop_book', 'stele', 'she_altar', 'research'], d: 12, text: '書肆、石碑、里社、科研院在 12 格內', go: ['research', 'she_altar', 'stele', 'shop_book'] },
+    { k: 'cluster', ids: ['shop_book', 'stele', 'she_altar', 'research'], d: 12, text: '書肆、石碑、里社、研究院在 12 格內', go: ['research', 'she_altar', 'stele', 'shop_book'] },
     { k: 'axis', a: 'cul', f: 0.1, text: '文化軸達標', go: ['stele', 'censer', 'incense_burner', 'bookshelf', 'stall_book'] }] },
   21: { id: 'lr21', title: '守望相助', conds: [
     { k: 'cover', svc: 'safe', frac: 0.9, text: '9 成民居有守望', go: ['notice_board', 'gate', 'toll_gate'] },

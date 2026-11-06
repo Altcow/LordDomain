@@ -138,6 +138,7 @@ function nsResolveChain(s, mem, api) {
   for (i = 0; i < NS_CHAIN.length; i++) {
     st = NS_CHAIN[i];
     if (mem.dismissed[st.id] || nsStepDone(st, s, mem)) continue;
+    if (NS_TUT_OVERLAP.indexOf(st.id) >= 0 && typeof tutGraduated === 'function' && tutGraduated()) continue;   // 教學已做過的步驟(畢業後略過)
     if (st.obj && api) {
       techId = nsObjTechId(st.obj);
       if (techId) {
@@ -166,7 +167,9 @@ function nsObjName(st) {
 // ───────── 核心:候選清單(純函式)─────────
 // adv = advCompute 的結果(或 null);回傳 { cands:[{id,src,tier,icon,text,why,go,item}], top }
 function nsCompute(s, adv, mem, api) {
-  var reds = [], rest = [], chain, cands = [], items = (adv && adv.items) || [], i;
+  var reds = [], rest = [], chain, cands = [], items = (adv && adv.items) || [], i, tc;
+  tc = (typeof tutCompute === 'function') ? tutCompute(s, mem) : null;   // 新手教學期間:只回傳教學卡(一次一步、不輪播、不能 ✕)
+  if (tc) return { cands: [tc], top: tc };
   items.forEach(function (it) {
     var h, c;
     if (it.core || mem.dismissed['adv:' + it.id]) return;
@@ -220,6 +223,7 @@ function nsNext() { nsRt.rot++; }
 // ───────── 前往 ─────────
 function nsGo(cand) {
   if (!cand || !cand.go) return false;
+  if (cand.go.kind === 'tut') { if (typeof tutAct === 'function') tutAct(cand.go.id); nsRt.last = -1e15; return true; }
   if (cand.go.kind === 'bars') {
     if (typeof advUiOpenDock === 'function') advUiOpenDock('bars');
     nsMarkSeen('bars');

@@ -20,7 +20,7 @@ var CITYFX_PANEL_LV = 3;
 var CITYFX_LEVEL_AT = { sani: [60, 45, 30], water: [80, 60, 40], food: [100, 85, 70], order: [50, 40, 30], mood: [50, 40, 30] };
 var CITYFX_LEVEL_NAME = ['正常', '警示', '失衡', '危機'];
 // 各 key 基礎值(PLACEHOLDER)
-var CITYFX_BASE = { sani: 60, order: 50, mood: 50 };
+var CITYFX_BASE = { sani: 63, order: 50, mood: 50 };
 var CITYFX_DENSITY_SANI = 8;      // 衛生密度項 = 8 × 坊人口 / 100
 var CITYFX_DENSITY_ORDER = 80;    // 治安密度項 = 坊人口 / 80
 var CITYFX_EDU_ORDER = 0.2;       // 治安 + 教化 × 0.2;教化 = 20 + Σ教
@@ -83,7 +83,7 @@ var CITY_FX = {
   shop_book:      { n: '書肆',   fx: { wen: 5, jiao: 2 }, r: 10 },
   stall_book:     { n: '書簡攤', fx: { wen: 2, jiao: 1 }, r: 6 },
   stele:          { n: '石碑',   fx: { wen: 3, jiao: 1, wang: 0.2 }, r: 8 },
-  research:       { n: '精舍(書院)', fx: { jiao: 2, xue: 6 }, r: 10 },
+  research:       { n: '研究院', fx: { jiao: 2, xue: 6 }, r: 10 },
   bookshelf:      { n: '書架',   fx: { wen: 0.5, jiao: 0.5 }, r: 3 },
   // 宗教與娛樂
   she_altar:      { n: '里社',   fx: { xin: 2, locust: -0.3 }, r: 8 },
@@ -91,7 +91,7 @@ var CITY_FX = {
   censer:         { n: '博山爐', fx: { xin: 1 }, r: 4 },
   storyteller:    { n: '說書台', fx: { xin: 2, wen: 2 }, r: 8 },
   perform_ring:   { n: '藝人圈地', fx: { xin: 2 }, r: 8 },
-  shop_wine:      { n: '酒館',   fx: { xin: 2 }, r: 8 },
+  shop_wine:      { n: '酒肆',   fx: { xin: 2 }, r: 8 },
   shop_tea:       { n: '茶館',   fx: { xin: 2, wen: 1 }, r: 8 },
   paifang:        { n: '牌坊',   fx: { wang: 0.5, mei: 4, xu: 3 }, r: 10 }
 };

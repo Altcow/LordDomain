@@ -421,6 +421,7 @@ function advUiDictClose() { if (advUi.dict || (advUi.el.dict && !advUi.el.dict.h
 function advUiAutoHelp(c) {
   var m = advBind(), i, b;
   if (advUi.mode === 'off' || advUi.card || advUi.dict || advUi.dockOpen) return;
+  if (typeof tutActive === 'function' && tutActive()) return;   // 新手教學期間顧問不搶卡片(首次紅燈的說明浮卡留到教學結束後)
   for (i = 0; i < c.bars.length; i++) {
     b = c.bars[i];
     if (b.level === 2 && !m.seenHelp[b.id] && STAT_HELP[b.id]) {
