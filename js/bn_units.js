@@ -204,8 +204,8 @@ function bnSpecRaw(r) {
 
 // 隊伍:陣型(§2.7)、陣營 / 標籤 / 特殊羈絆(§2.6)。回傳 {units, bonds, formation}
 function bnBuildTeam(specs, o) {
-  var units = JSON.parse(JSON.stringify(specs)), bonds = [], fm = [], i, u, cnt = [0, 0, 0], n, facCnt = [0, 0, 0, 0], tagCnt = {}, atkB = 0, hpB = 0, tf;
-  for (i = 0; i < units.length; i++) { cnt[units[i].row]++; if (units[i].fac >= 0 && units[i].fac <= 3) facCnt[units[i].fac]++; }
+  var units = JSON.parse(JSON.stringify(specs)), bonds = [], fm = [], i, u, cnt = [0, 0, 0], n, facCnt = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], tagCnt = {}, atkB = 0, hpB = 0, tf;
+  for (i = 0; i < units.length; i++) { cnt[units[i].row]++; if ((units[i].fac >= 0 && units[i].fac <= 3) || (units[i].fac >= 5 && units[i].fac <= 13)) facCnt[units[i].fac]++; }   // 魏蜀吳黃巾 + 魔幻 9 陣營(5~13);中立不計
   function eachU(fn) { for (var k = 0; k < units.length; k++) fn(units[k]); }
   function mulStat(u, key, m) { u.stats[key] = bnRound(u.stats[key] * m); }
   // 陣營羈絆

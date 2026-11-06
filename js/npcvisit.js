@@ -62,7 +62,8 @@ function nvRecSave(r) {
 // ───────── 名單(確定性) ─────────
 function nvWeight(f) {
   var w = (typeof CARD_FIG_WEIGHT !== 'undefined') ? CARD_FIG_WEIGHT[f.id] : undefined;
-  return (typeof w === 'number' && w > 0) ? w : (f.gr === 4 ? 10 : 6);
+  w = (typeof w === 'number' && w > 0) ? w : (f.gr === 4 ? 10 : 6);
+  return (typeof fxFigRaceMul === 'function') ? w * fxFigRaceMul(f) : w;   // 魔幻世界:他族英雄(遊歷英雄)×0.3
 }
 // 當日名人順序:加權無放回(指數競賽 key = −ln(u) / w 由小到大),種子 = 世界 + 日
 function nvOrder(day) {
@@ -70,7 +71,7 @@ function nvOrder(day) {
   if (NPCV.order && NPCV.orderSig === sig) return NPCV.order;
   if (typeof CARD_FIGS === 'undefined') return [];
   rng = nvRng(nvHash('visit', nvWorld(), day, 'order'));
-  CARD_FIGS.forEach(function (f) {
+  ((typeof fxFigSrc === 'function' && fxFigSrc()) || CARD_FIGS).forEach(function (f) {   // 魔幻世界 = 42 位傳說英雄(js/fx_cards.js),歷史世界 = CARD_FIGS
     if (f.gr < 3) return;
     arr.push({ id: f.id, k: -Math.log(Math.max(1e-9, rng())) / nvWeight(f) });
   });
@@ -252,7 +253,7 @@ function nvCardRender() {
   if (!box || !e) return;
   g = CARD_GRADE[e.gr];
   aura = CARD_VISIT.aura[e.gr] || '#e6b84a';
-  src = 'assets/portraits/' + e.fig + '.webp';
+  src = (typeof fxFigImg === 'function' && fxFigImg(e.fig)) || 'assets/portraits/' + e.fig + '.webp';
   h = '<div style="display:flex;gap:8px;align-items:center">' +
     '<div style="width:44px;height:44px;border-radius:6px;border:2px solid ' + aura + ';background:rgba(128,128,128,.2);overflow:hidden;flex:none"><img alt="" src="' + nvEsc(src) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.remove()"></div>' +
     '<div style="flex:1;min-width:0"><b>' + nvEsc(e.name) + '</b> <span style="color:#c9b98f;font-size:12px">' + g.ch + ' · ' + nvEsc(e.zi || '') + '</span>' +

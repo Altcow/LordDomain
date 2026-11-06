@@ -117,8 +117,16 @@ function cardsNextIn(cs, venue, now) {
 function cardsVenueTheme(venue, no) {
   if (venue === 'T') { var row = CARD_ROWS[Math.floor(no / 4) % CARD_ROWS.length]; return { kind: 'wind', row: row, text: '酒客風向:' + row }; }
   if (venue === 'E') { var s = CARD_EXAM_SUBJECTS[no % CARD_EXAM_SUBJECTS.length]; return { kind: 'subject', subject: s, text: '科目:' + s.name }; }
-  var f = ((no % 5) + 5) % 5;
+  var fl = cardsFacGen(), f = fl[((no % fl.length) + fl.length) % fl.length];
   return { kind: 'faction', fac: f, text: '本日:' + CARD_FAC[f] };
+}
+// 世界的名人來源與陣營(js/fx_cards.js:魔幻世界 = 42 位傳說英雄與 9 個魔幻陣營;歷史世界 = CARD_FIGS 與 0~4,行為不變)
+function cardsFigSrc() { return (typeof fxFigSrc === 'function' && fxFigSrc()) || CARD_FIGS; }
+function cardsFacList() { return (typeof fxFacList === 'function' && fxFacList()) || [0, 1, 2, 3, 4]; }   // 指名可選陣營
+function cardsFacGen() { return (typeof fxFacGen === 'function' && fxFacGen()) || [0, 1, 2, 3, 4]; }     // 路人卡陣營 / 殿試本日陣營
+function cardsFigPool(gr, fac) {
+  var src = cardsFigSrc(), pool = src.filter(function (x) { return x.gr === gr && (fac === undefined || x.fac === fac); });
+  return pool.length ? pool : src.filter(function (x) { return x.gr === gr; });
 }
 
 // ───────── 候選人生成(§3A.2、§4.13.4) ─────────
@@ -257,25 +265,26 @@ function cardFromFig(f, venue, slot) {
 // 名人抽取權重(carddata.js CARD_FIG_WEIGHT;缺項金 10 / 紫 6)
 function cardFigWeight(f) {
   var w = (typeof CARD_FIG_WEIGHT !== 'undefined') ? CARD_FIG_WEIGHT[f.id] : undefined;
-  return (typeof w === 'number' && w > 0) ? w : (f.gr === 4 ? 10 : 6);
+  w = (typeof w === 'number' && w > 0) ? w : (f.gr === 4 ? 10 : 6);
+  return (typeof fxFigRaceMul === 'function') ? w * fxFigRaceMul(f) : w;   // 魔幻世界:他族英雄(遠客)×0.3
 }
 function cardGen(cs, venue, key, slot, gr, tag, opt) {
   var V = CARD_VENUES[venue], no = cardsKeyNo(key), r = cardRng(cardHash(cs.seed, venue, key, slot, tag || '')), G = CARD_GRADE[gr], card, pool, f, learn, jb, facW, i, tr;
   opt = opt || {};
   if (gr === 4) {
-    pool = CARD_FIGS.filter(function (x) { return x.gr === 4 && (opt.fac === undefined || x.fac === opt.fac); });
+    pool = cardsFigPool(4, opt.fac);
     return cardFromFig(cardWPick(r, pool, cardFigWeight), venue, slot);   // 金階名人依 CARD_FIG_WEIGHT 加權
   }
   if (gr === 3 && V.bFig > 0 && !opt.noFig) {
     var fm = (venue === 'E') ? Math.min(V.bFig * 2, V.bFig + 0.002 * Math.max(0, cs.fame.E - CARD_CFG.fameAfter)) : V.bFig;
     if (r() < fm) {
-      pool = CARD_FIGS.filter(function (x) { return x.gr === 3 && (opt.fac === undefined || x.fac === opt.fac); });
+      pool = cardsFigPool(3, opt.fac);
       if (pool.length) return cardFromFig(cardWPick(r, pool, cardFigWeight), venue, slot);   // 紫階名人依 CARD_FIG_WEIGHT 加權
     }
   }
   var sex = cardGenSex(cs, venue, key, slot, tag);
-  facW = venue === 'G' ? ((no % 5) + 5) % 5 : -1;
-  f = opt.fac !== undefined ? opt.fac : cardWPick(r, [0, 1, 2, 3, 4], function (x) { return x === facW ? 2 : 1; });
+  facW = venue === 'G' ? cardsVenueTheme('G', no).fac : -1;
+  f = opt.fac !== undefined ? opt.fac : cardWPick(r, cardsFacGen(), function (x) { return x === facW ? 2 : 1; });
   learn = cardPickLearn(r, G, !!opt.zhuan);
   jb = cardGenJobs(r, G, learn, venue, no, opt.row);
   tr = cardGenTraits(r, G, cardRint(r, G.trN[0], G.trN[1]));
@@ -329,9 +338,9 @@ function cardsOpenBatch(cs, venue) {
 function cardsDiscardBatch(cs, venue) { cs.cur[venue] = null; }
 
 // ───────── 指定池(取代殿試池;PLAN_INTERIORS I-1):不靠計時,消耗『指名券』(cs.nameTokens)。結果批次放 cs.cur.G(同殿試的存檔格式,pool 'G')─────────
-// mode 'fac' key = 陣營 0~4(CARD_FAC 序);mode 'row' key = 職業分類字(CARD_ROWS)。名人只在 fac 模式出現;row 模式的金檔降為紫。
+// mode 'fac' key = 陣營 0~4(CARD_FAC 序;魔幻世界 = cardsFacList() 的 5~13);mode 'row' key = 職業分類字(CARD_ROWS)。名人只在 fac 模式出現;row 模式的金檔降為紫。
 function cardsNamedKeyOk(mode, key) {
-  if (mode === 'fac') return typeof key === 'number' && key >= 0 && key < CARD_FAC.length && key === Math.floor(key);
+  if (mode === 'fac') return typeof key === 'number' && cardsFacList().indexOf(key) >= 0;
   if (mode === 'row') return CARD_ROWS.indexOf(key) >= 0;
   return false;
 }
@@ -847,7 +856,7 @@ function cardNum(v, lo, hi, d) { return (typeof v === 'number' && isFinite(v)) ?
 function cardNormCard(c, isEntry, isBag) {
   var o, k, j;
   if (!c || typeof c !== 'object' || !Array.isArray(c.st) || c.st.length !== 5) return null;
-  o = { name: String(c.name || '').slice(0, 12), zi: String(c.zi || '').slice(0, 6), fig: (c.fig && CARD_FIG_BY_ID[c.fig]) ? c.fig : null, fac: cardNum(c.fac, 0, 4, 4) | 0,
+  o = { name: String(c.name || '').slice(0, 12), zi: String(c.zi || '').slice(0, 6), fig: (c.fig && CARD_FIG_BY_ID[c.fig]) ? c.fig : null, fac: cardNum(c.fac, 0, CARD_FAC.length - 1, 4) | 0,
     gr: cardNum(c.gr, 0, 4, 0) | 0, st: c.st.map(function (v) { return cardNum(v, 0, 130, 10) | 0; }), tai: 0, ja: {}, main: null, learn: cardNum(c.learn, 0, 3, 0) | 0, tr: [], trn: null, skn: cardNum(c.skn, 0, 3, 0) | 0, org: { k: 'bu' } };
   if (!o.name) return null;
   o.tai = o.st.reduce(function (a, b) { return a + b; }, 0);

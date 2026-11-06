@@ -370,10 +370,10 @@ function bnXTraitText(desc) {
 
 // ---------- 卡 → 戰法清單 ----------
 // 回傳 [{id, role:'passive'|'skill'|'ult'|'native'|'learned'}],依顯示順序;無法取得時回 []
-function bnCardSkillIds(card) {
+function bnCardSkillIds(card, o) {   // o 可選 {troop}:布陣時依所選兵種(路人大招 / 自動學習隨兵種)
   var spec, out = [], i, fg, nat;
   if (!card || typeof bnUnitSpec !== 'function') return out;
-  try { spec = bnUnitSpec(card, {}); } catch (e) { return out; }
+  try { spec = bnUnitSpec(card, o && o.troop ? { troop: o.troop } : {}); } catch (e) { return out; }
   fg = card.fig && typeof BN_FIG_SKILLS !== 'undefined' ? BN_FIG_SKILLS[card.fig] : null;
   for (i = 0; i < spec.skills.length; i++) {
     out.push({ id: spec.skills[i], role: fg ? (i === 0 && fg.passive ? 'passive' : 'skill') : (i === 0 ? 'native' : 'learned') });
@@ -381,8 +381,8 @@ function bnCardSkillIds(card) {
   if (spec.ult) out.push({ id: spec.ult, role: 'ult' });
   return out.filter(function (x) { return !!(typeof BN_SKILLS !== 'undefined' && BN_SKILLS[x.id]); });
 }
-function bnCardSkillRows(card) {
-  return bnCardSkillIds(card).map(function (x) {
+function bnCardSkillRows(card, o) {
+  return bnCardSkillIds(card, o).map(function (x) {
     var p = bnSkillParts(x.id), d = BN_SKILLS[x.id];
     return { id: x.id, role: x.role, cat: d.cat, name: d.name, head: p.head, body: p.body, desc: p.desc, cd: d.cd || 0, rate: d.rate, fig: d.fig || '', flavor: (typeof BN_FLAVOR !== 'undefined' && BN_FLAVOR[x.id]) || '' };
   });

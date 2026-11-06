@@ -37,25 +37,25 @@ var WORLD_PACKS = [
     people: [{ id: 'mateng', name: '馬騰', src: 'assets/portraits/mateng.webp' }, { id: 'xumu_a', name: '牧人', src: 'assets/portraits/generic/xumu_a.webp' }, { id: 'nongshi_a', name: '農人', src: 'assets/portraits/generic/nongshi_a.webp' }],
     flag: { shape: 'rect', pat: 'felt_diamond', c: ['#cfc8b8', '#2a2623', '#9a4a32'] },
     feats: ['起手建築:石砌碉房、白氈黑邊帳、石砌碉樓、寨堡大宅', '特色:純外觀風格,數值不變;另有依山梯屋、石院、牲畜圍欄與白氈大帳院', '適合:喜歡山地、石砌與牧耕氣氛的玩法'], tpl: '' },
-  // 魔幻三族(PLAN_FANTASY;外觀 + 科技樹 / 解鎖已換魔幻(PLAN_FANTASY_B B-1);名人卡、事件待 B-3 / B-4,標『魔幻世界 · 英雄準備中』;與歷史風格互相隔離)
-  { id: 'elf', name: '精靈 · 世界樹森林', sub: '活樹 · 白石 · 葉冠與藤橋', fantasy: true, tag: '魔幻世界 · 英雄準備中',
-    intro: '古老巨樹撐起整片森林,精靈把家蓋在樹幹、樹根與枝冠之間,只拾倒木、不砍活樹。(魔幻世界 · 英雄準備中。)',
+  // 魔幻三族(PLAN_FANTASY;外觀 + 科技樹 / 解鎖(PLAN_FANTASY_B B-1)+ 42 位傳說英雄(B-3,people = 各族三位英雄頭像 assets/portraits/fx/);事件文案待 B-4;與歷史風格互相隔離)
+  { id: 'elf', name: '精靈 · 世界樹森林', sub: '活樹 · 白石 · 葉冠與藤橋', fantasy: true, tag: '魔幻世界',
+    intro: '古老巨樹撐起整片森林,精靈把家蓋在樹幹、樹根與枝冠之間,只拾倒木、不砍活樹。林主長青守著世界樹,守林人、月光祭司與星歌詩人都會來你的酒館坐坐。',
     buildings: ['s8_treehouse', 's8_canopy_hall', 's8_moon_manor', 's8_world_tree'], buildingsPending: false,
-    people: [{ id: 'linmu_a', name: '拾木人', src: 'assets/portraits/generic/linmu_a.webp' }, { id: 'yuewu_b', name: '歌者', src: 'assets/portraits/generic/yuewu_b.webp' }, { id: 'yishu_a', name: '藥師', src: 'assets/portraits/generic/yishu_a.webp' }],
+    people: [{ id: 'elf_changqing', name: '長青', src: 'assets/portraits/fx/elf_changqing.webp' }, { id: 'elf_qinglan', name: '青嵐', src: 'assets/portraits/fx/elf_qinglan.webp' }, { id: 'elf_yueyao', name: '月瑤', src: 'assets/portraits/fx/elf_yueyao.webp' }],
     flag: { shape: 'rect', pat: 'leaf_arc', c: ['#5f9a4a', '#ece6d6', '#e4ef9a'] },
-    feats: ['起手:樹屋、清泉石盆,研發到樹冠宅院、月光大宅與世界樹(地標限 1 座)', '特色:精靈專屬科技樹(萌芽紀 → 世界樹紀);英雄準備中;建立後不可與歷史風格互換', '適合:喜歡森林、樹屋與有機曲線佈局的玩法'], tpl: 'tpl_elfgrove' },
-  { id: 'dwarf', name: '矮人 · 鋼鐵礦城', sub: '方石 · 鋼鐵與銅 · 熔爐火光', fantasy: true, tag: '魔幻世界 · 英雄準備中',
-    intro: '山腹裡的工匠氏族沿著階梯礦坑往下挖,石牆守著山門,熔爐日夜不熄。(魔幻世界 · 英雄準備中。)',
+    feats: ['起手:樹屋、清泉石盆,研發到樹冠宅院、月光大宅與世界樹(地標限 1 座)', '特色:精靈科技樹(萌芽紀 → 世界樹紀)與 14 位傳說英雄;不可與歷史風格互換', '適合:森林、治療與謀略、有機曲線佈局'], tpl: 'tpl_elfgrove' },
+  { id: 'dwarf', name: '矮人 · 鋼鐵礦城', sub: '方石 · 鋼鐵與銅 · 熔爐火光', fantasy: true, tag: '魔幻世界',
+    intro: '山腹裡的工匠氏族沿著階梯礦坑往下挖,石牆守著山門,熔爐日夜不熄。山王磐山每天第一件事是去礦坑口數人,工匠、礦工與爐火祭司都在等你點名。',
     buildings: ['s9_rock_house', 's9_smelter', 's9_hall_manor', 's9_great_forge'], buildingsPending: false,
-    people: [{ id: 'yetie_a', name: '礦匠', src: 'assets/portraits/generic/yetie_a.webp' }, { id: 'bingshi_a', name: '山門守衛', src: 'assets/portraits/generic/bingshi_a.webp' }, { id: 'niangzao_a', name: '釀酒師', src: 'assets/portraits/generic/niangzao_a.webp' }],
+    people: [{ id: 'dw_panshan', name: '磐山', src: 'assets/portraits/fx/dw_panshan.webp' }, { id: 'dw_qianchui', name: '千錘', src: 'assets/portraits/fx/dw_qianchui.webp' }, { id: 'dw_maiya', name: '麥芽', src: 'assets/portraits/fx/dw_maiya.webp' }],
     flag: { shape: 'rect', pat: 'forge_chevron', c: ['#8a2e24', '#6f7880', '#c89a48'] },
-    feats: ['起手:嵌岩石屋,研發到冶煉爐、氏族石院、山廳大宅與大熔爐殿(地標限 1 座)', '特色:矮人專屬科技樹(星火紀 → 山心紀);英雄準備中;建立後不可與歷史風格互換', '適合:喜歡礦坑、石牆與工坊氣氛的玩法'], tpl: 'tpl_dwarfhold' },
-  { id: 'kingdom', name: '人類 · 王國城堡', sub: '石砌城堡 · 木骨白牆 · 紅藍旗', fantasy: true, tag: '魔幻世界 · 英雄準備中',
-    intro: '河谷高地上的石砌城堡守著一座城牆小鎮,騎士在營裡操練,市集街熱鬧,城外是風車與麥田。(魔幻世界 · 英雄準備中。)',
+    feats: ['起手:嵌岩石屋,研發到冶煉爐、氏族石院、山廳大宅與大熔爐殿(地標限 1 座)', '特色:矮人科技樹(星火紀 → 山心紀)與 14 位傳說英雄;不可與歷史風格互換', '適合:礦坑、工坊鏈與鐵壁防守'], tpl: 'tpl_dwarfhold' },
+  { id: 'kingdom', name: '人類 · 王國城堡', sub: '石砌城堡 · 木骨白牆 · 紅藍旗', fantasy: true, tag: '魔幻世界',
+    intro: '河谷高地上的石砌城堡守著一座城牆小鎮,年輕的國王昭明喜歡微服逛市集。騎士在營裡操練,白塔學士夜裡點燈,城外是風車、麥田與總是客滿的杏花酒館。',
     buildings: ['s10_cottage', 's10_market_row', 's10_manor', 's10_castle_keep'], buildingsPending: false,
-    people: [{ id: 'bingshi_b', name: '衛兵', src: 'assets/portraits/generic/bingshi_b.webp' }, { id: 'nongshi_b', name: '農夫', src: 'assets/portraits/generic/nongshi_b.webp' }, { id: 'shangcai_b', name: '商人', src: 'assets/portraits/generic/shangcai_b.webp' }],
+    people: [{ id: 'kd_zhaoming', name: '昭明', src: 'assets/portraits/fx/kd_zhaoming.webp' }, { id: 'kd_lingfeng', name: '凌鋒', src: 'assets/portraits/fx/kd_lingfeng.webp' }, { id: 'kd_xinghua', name: '杏花', src: 'assets/portraits/fx/kd_xinghua.webp' }],
     flag: { shape: 'rect', pat: 'crown_quarter', c: ['#b23a32', '#2f5a9a', '#e3b95c'] },
-    feats: ['起手:茅頂木骨屋,研發到市集街廊、騎士營、騎士莊園與王國城堡主堡(地標限 1 座)', '特色:王國專屬科技樹(拓荒紀 → 傳說紀);英雄準備中;建立後不可與歷史風格互換', '適合:喜歡城牆、城堡與田園小鎮佈局的玩法'], tpl: 'tpl_kingdom' }
+    feats: ['起手:茅頂木骨屋,研發到市集街廊、騎士營、騎士莊園與王國城堡主堡(地標限 1 座)', '特色:王國科技樹(拓荒紀 → 傳說紀)與 14 位傳說英雄;不可與歷史風格互換', '適合:城牆、市集與騎士團、平衡發展'], tpl: 'tpl_kingdom' }
 ];
 
 function worldPackIds() { return WORLD_PACKS.map(function (p) { return p.id; }); }

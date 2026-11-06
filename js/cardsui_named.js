@@ -48,7 +48,8 @@ function cuNamedHtml(cs) {
   h += '<div class="cusub">每次消耗 1 券,出一批 7 張直接進卡包;每 10 次至少 1 位紫以上。指名券來源:完成里程碑、官階晉升。</div>';
   h += cuBagLine(cs);
   h += '<div class="cuchips"><button class="cub' + (fac ? ' on' : '') + '" data-a="nmode" data-m="fac">陣營</button><button class="cub' + (fac ? '' : ' on') + '" data-a="nmode" data-m="row">職業分類</button></div>';
-  list = fac ? CARD_FAC.map(function (n, i) { return [i, n]; }) : CARD_ROWS.map(function (n) { return [n, n]; });
+  if (fac && cardsFacList().indexOf(cu.nkey) < 0) cu.nkey = cardsFacList()[0];   // 魔幻世界陣營為 5~13(本族在前)
+  list = fac ? cardsFacList().map(function (i) { return [i, CARD_FAC[i]]; }) : CARD_ROWS.map(function (n) { return [n, n]; });
   h += '<div class="cuchips">' + list.map(function (e) { return '<button class="cub' + (cu.nkey === e[0] ? ' on' : '') + '" data-a="nkey" data-k="' + e[0] + '">' + cuEsc(e[1]) + '</button>'; }).join('') + '</div>';
   h += '<div class="cusub">' + (fac ? '指定陣營:該陣營的人物,金 / 紫檔可能出現該陣營名人(重複者化為信物)。' : '指定職業分類:主職業取自該分類;不出名人。') + '</div>';
   canDraw = !b && tk >= 1 && !full;
@@ -81,7 +82,7 @@ function cuChainRun(first) {
 function cuNamedClick(a, b, cs) {
   var r, k;
   if (a === 'chainall') { cu.chain = true; cu.tab = 'O'; cuChainRun(true); return true; }
-  if (a === 'nmode') { cu.nmode = b.getAttribute('data-m') === 'row' ? 'row' : 'fac'; cu.nkey = cu.nmode === 'fac' ? 0 : CARD_ROWS[0]; return true; }
+  if (a === 'nmode') { cu.nmode = b.getAttribute('data-m') === 'row' ? 'row' : 'fac'; cu.nkey = cu.nmode === 'fac' ? cardsFacList()[0] : CARD_ROWS[0]; return true; }
   if (a === 'nkey') { k = b.getAttribute('data-k'); cu.nkey = cu.nmode === 'fac' ? +k : k; return true; }
   if (a === 'ndraw') {
     r = cardsNamedDraw(cs, cu.nmode, cu.nkey);

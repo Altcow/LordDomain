@@ -98,14 +98,40 @@ var BN_STG_DEF = [
     ['涼州董卓', '董卓以涼州猛將為班底,是郡國叛軍中最難纏的對手。', 'plain', 8, 5, 3, 2, 4]]
 ];
 
+// 魔幻世界(fxPack() 非 null)暫行對照(PLAN_FANTASY_B B-3 最小作法;正式的魔幻討伐章節在 B-4):三國名人敵將 → 魔幻英雄當試煉頭目(兵種相近),
+// 有名人出場的關卡,關名 / 說明在魔幻世界改成試煉文字(歷史世界讀原文字,行為不變)
+var BN_STG_FX_FIG = {
+  mayuanyi: ['kd_jinghu', '幻影試煉'], guanhai: ['dw_zaotian', '礦坑試煉'], zhangmancheng: ['elf_jiyu', '林道試煉'],
+  zhangniujiao: ['elf_luming', '劍舞試煉'], zhangliang: ['dw_kuangfu', '狂斧試煉'], zhangbao: ['dw_zhongyue', '山門試煉'], zhangjiao: ['elf_xingchen', '星歌試煉'],
+  yufuluo: ['dw_duanlei', '雷鳴試煉'], yudu: ['elf_liguo', '奇襲試煉'], zhangyan: ['kd_chenxing', '王旗試煉'], dongzhuo: ['kd_lingfeng', '騎士試煉']
+};
+function bnStgFxOn() { return typeof fxPack === 'function' && !!fxPack() && typeof BN_FIG_SKILLS !== 'undefined'; }
+// 魔幻世界的敵將條目:名人敵將換成對照的魔幻英雄;其餘原樣
+function bnStgFxEnt(ent) {
+  var m = ent && ent.fig && bnStgFxOn() ? BN_STG_FX_FIG[ent.fig] : null;
+  return (m && BN_FIG_SKILLS[m[0]]) ? { fig: m[0], title: m[1] } : ent;
+}
 var BN_STAGES = [], BN_STG_BY_ID = {};
 (function () {
   var c, j, ch, df, st, i, n = 0, bookList;
+  function fxText(st, ch) {   // 該關第一位(對照後的)魔幻頭目;無名人回 null
+    var k, e;
+    for (k = 0; k < st.foeIdx.length; k++) { e = ch.roster[st.foeIdx[k]]; if (e && e.fig && BN_STG_FX_FIG[e.fig]) return BN_STG_FX_FIG[e.fig]; }
+    return null;
+  }
+  function fxName(m) { var f = typeof CARD_FIG_BY_ID !== 'undefined' ? CARD_FIG_BY_ID[m[0]] : null; return f ? f.name : ''; }
   for (c = 0; c < BN_CHAPTERS.length; c++) {
     ch = BN_CHAPTERS[c];
     for (j = 0; j < 6; j++) {
       df = BN_STG_DEF[c][j];
       st = { id: ch.n + '-' + (j + 1), ch: ch.n, idx: j + 1, name: df[0], desc: df[1], scene: df[2], boss: j === 5, rank: ch.rank, order: n, foeIdx: df.slice(3), book: ch.books[j % ch.books.length], v: 0 };
+      (function (st, base, m) {
+        if (!m) return;
+        try {
+          Object.defineProperty(st, 'name', { enumerable: true, configurable: true, get: function () { var nm = bnStgFxOn() ? fxName(m) : ''; return nm ? nm + '的' + m[1] : base[0]; } });
+          Object.defineProperty(st, 'desc', { enumerable: true, configurable: true, get: function () { var nm = bnStgFxOn() ? fxName(m) : ''; return nm ? nm + '在此設下' + m[1] + ',帶著幾名敵將等你來挑戰。' : base[1]; } });
+        } catch (e) { /* 略過 */ }
+      })(st, df, fxText(st, ch));
       BN_STAGES.push(st); BN_STG_BY_ID[st.id] = st; n++;
     }
   }
@@ -150,6 +176,7 @@ function bnStgFoeSkills(sk, pos, kind, troop, arch, ch, more) {
   return out;
 }
 function bnStgMakeFoe(ent, v, ch, pos, st, sk) {
+  ent = bnStgFxEnt(ent);
   var fig = ent.fig ? BN_FIG_SKILLS[ent.fig] : null, arch = fig ? null : BN_STG_ARCH[ent[0]], troop = fig ? fig.troop : arch.troop, p = arch ? arch.prof : [1, 1, 1, 1, 1],
     gr = BN_STG.grOf[ch.n] | 0, boss = !!(st && st.boss && pos === 0), vk = ent.vk || (boss ? 1.05 : 1), card, spec, apt = {}, ov, more = !!(st && st.idx >= BN_STG.extraFrom);
   card = { id: 'foe', name: fig ? fig.name : ent[1], fig: fig ? ent.fig : '', fac: fig ? fig.fac : 4, gr: gr, st: p.map(function (x) { return Math.max(1, Math.round(v * vk * x)); }), tok: 0, up: 0, ja: {}, tr: [], main: '', learn: 0, sex: '' };

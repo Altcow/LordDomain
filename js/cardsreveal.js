@@ -34,7 +34,7 @@ function cardsRevealPlan(cards, power) {
 
 function rvAvatar(c) {
   var src = '', alt = '', pj, v;
-  if (c.fig) src = 'assets/portraits/' + rvEsc(c.fig) + '.webp';
+  if (c.fig) src = (typeof fxFigImg === 'function' && fxFigImg(c.fig)) || 'assets/portraits/' + rvEsc(c.fig) + '.webp';
   else if (typeof cardsUiPortraitJob === 'function' && typeof cardsUiAvatarVar === 'function' && (pj = cardsUiPortraitJob(c))) {
     v = cardsUiAvatarVar(c, pj);
     src = 'assets/portraits/generic/' + pj + '_' + v + '.webp';

@@ -40,5 +40,8 @@ var PORTRAIT_GENDER = {
   'nanhua': 'm', 'chengyuanzhi': 'm', 'dengmao': 'm', 'peiyuanshao': 'm', 'heyi': 'm', 'zhangkai': 'm',
   'diaochan': 'f', 'zuoci': 'm', 'panfeng': 'm', 'caoxing': 'm', 'huaxiong': 'm', 'yuanshu': 'm'
 };
-// 查表:key 為上述鍵;查無回 null
-function portraitGenderOf(key) { return (typeof PORTRAIT_GENDER !== 'undefined' && PORTRAIT_GENDER[key]) || null; }
+// 查表:key 為上述鍵;查無回 null。魔幻英雄(js/fx_cards.js 登錄進 CARD_FIG_BY_ID,帶 sex)不列在本表,改查其 sex 欄
+function portraitGenderOf(key) {
+  var f = (typeof CARD_FIG_BY_ID !== 'undefined' && key) ? CARD_FIG_BY_ID[key] : null;
+  return (typeof PORTRAIT_GENDER !== 'undefined' && PORTRAIT_GENDER[key]) || (f && (f.sex === 'm' || f.sex === 'f') ? f.sex : null) || null;
+}

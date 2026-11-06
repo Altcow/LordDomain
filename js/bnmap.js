@@ -91,6 +91,7 @@ function bnMapRender() {
     if (!(((d.got || {})[sel.id] | 0) & 2)) h += '<p class="sm">三星首次:金幣 ' + rw.star3.gold + '、碎片 ' + rw.star3.shards + '(三星:勝利 + 無人陣亡 + 5 回合內全殲)</p>';
     h += '<button class="bnf-go" data-a="fight"' + (can.ok ? '' : ' disabled') + '>' + (can.ok ? '前往布陣' : bnUiEsc(can.why)) + '</button></div>';
   }
+  if (typeof bnTeamStripHtml === 'function') h += bnTeamStripHtml({ mini: true, title: '目前隊伍' });   // 戰前準備:整隊武將戰法卡(js/bnteam.js)
   h += '</div></div>';
   bt = bnMapBounty(d); doneB = bnStgBountyDone(d, env);
   h += '<div class="bnm-foot"><div class="bnm-b"><b>每日流寇</b> <small>' + bnUiEsc(BN_CHAPTERS[bt.ch - 1].name) + ' · 建議戰力 ' + bt.rec + ' · 獎勵:金幣 ' + BN_STG.bounty.gold + '、碎片 ' + BN_STG.bounty.shards + '、' + bnMapGoodsName(BN_CHAPTERS[bt.ch - 1].mats[0]) + '(不耗軍令)</small><br>' + bt.list.map(function (x) { return bnUiEsc(x.name); }).join('、') +

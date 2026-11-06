@@ -120,12 +120,14 @@ function bnDrGlow(col) {
 
 // ───────── 外觀解析:回 {paths:[候選圖], bust:[索引→是否半身], tint, foe} ─────────
 function bnDrLook(u) {
-  var sp = u.spec || {}, look = sp.look || '', paths = [], bust = [], tint = 0, h = 0, i;
+  var sp = u.spec || {}, look = sp.look || '', paths = [], bust = [], tint = 0, h = 0, i, fb, pt;
   if (look && look.indexOf('foe:') === 0) {
     paths.push('assets/fullbody/bn_foe_' + look.slice(4) + '.webp'); bust.push(false);
   } else if (u.fig) {
-    paths.push('assets/fullbody/' + u.fig + '.webp'); bust.push(false);
-    paths.push('assets/portraits/' + u.fig + '.webp'); bust.push(true);
+    // 魔幻英雄(fxFigImg):全身 / 頭像在 assets/fullbody/fx/、assets/portraits/fx/;其餘沿用歷史路徑
+    fb = typeof fxFigImg === 'function' ? fxFigImg(u.fig, 'fullbody') : null; pt = typeof fxFigImg === 'function' ? fxFigImg(u.fig) : null;
+    paths.push(fb || 'assets/fullbody/' + u.fig + '.webp'); bust.push(false);
+    paths.push(pt || 'assets/portraits/' + u.fig + '.webp'); bust.push(true);
   } else {
     paths.push('assets/fullbody/bn_body_' + (BN_BODY_OF[u.troop] || 'inf') + '.webp'); bust.push(false);
     for (i = 0; i < (u.name || '').length; i++) h = (h * 31 + u.name.charCodeAt(i)) >>> 0;
@@ -232,7 +234,7 @@ var BNLAB = { dur: 1.1, min: 0.45, fade: 0.15, qMax: 3 };
 var BN_FAC_COL = ['#3a6ec8', '#2f9a5a', '#c8443a', '#d8b23a', '#8a8a8a'];
 var BN_FAC_NEUTRAL = '#8a8a8a';
 function bnPlLabel(P, v, text) {
-  var u = P.S && P.S.units[v.id], fac = u && u.fac >= 0 && u.fac <= 4 ? u.fac : -1, lb = P.lab[v.side], it;
+  var u = P.S && P.S.units[v.id], fac = u && u.fac >= 0 && BN_FAC_COL[u.fac] ? u.fac : -1, lb = P.lab[v.side], it;
   if (!text || !lb) return;
   it = { text: text, col: fac >= 0 ? BN_FAC_COL[fac] : BN_FAC_NEUTRAL, t: 0, out: -1 };
   if (!lb.cur) lb.cur = it;

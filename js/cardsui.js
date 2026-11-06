@@ -151,7 +151,7 @@ var CU_SIL = '<svg class="cusil" viewBox="0 0 40 40" aria-hidden="true"><circle 
 // 頭像 <img>(名人 portraits/<id>、路人 generic/<職業>_<變體>,舊命名次選;缺圖由 cuImgFail 回退剪影)。lazy = 列表縮圖延遲載入
 function cuPortraitImg(c, lazy) {
   var src = '', alt = '', pj;
-  if (c.fig) src = 'assets/portraits/' + cuEsc(c.fig) + '.webp';
+  if (c.fig) src = (typeof fxFigImg === 'function' && fxFigImg(c.fig)) || 'assets/portraits/' + cuEsc(c.fig) + '.webp';
   else if ((pj = cardsUiPortraitJob(c))) {
     src = 'assets/portraits/generic/' + pj + '_' + cardsUiAvatarVar(c, pj) + '.webp';
     if (c.gr <= 3) alt = 'assets/portraits/generic/' + pj + '_' + c.gr + '_' + cardsUiAvatarVar(c, pj) + '.webp';

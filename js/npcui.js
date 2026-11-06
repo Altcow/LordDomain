@@ -14,7 +14,7 @@ function npcJobTitle(e) {
 }
 function npcPortraitSrc(e) {
   var pj;
-  if (e.fig) return 'assets/portraits/' + e.fig + '.webp';
+  if (e.fig) return (typeof fxFigImg === 'function' && fxFigImg(e.fig)) || 'assets/portraits/' + e.fig + '.webp';
   if (typeof cardsUiPortraitJob === 'function' && typeof cardsUiAvatarVar === 'function' && (pj = cardsUiPortraitJob(e))) return 'assets/portraits/generic/' + pj + '_' + cardsUiAvatarVar(e) + '.webp';
   return '';
 }

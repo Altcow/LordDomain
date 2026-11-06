@@ -1,4 +1,4 @@
-const VERSION = 'v50';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v51';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -10,6 +10,7 @@ const PRECACHE = [
   './css/style.css',
   './css/cardsreveal.css',
   './css/search.css',
+  './css/bnshare.css',
   './js/data.js',
   './js/units.js',
   './js/unitinfo.js',
@@ -131,6 +132,8 @@ const PRECACHE = [
   './js/cardsreveal.js',
   './js/npcdata.js',
   './js/famous_lines.js',
+  './js/fx_cards_data.js',
+  './js/fx_cards.js',
   './js/npcinteract.js',
   './js/npcui.js',
   './js/academy.js',
@@ -167,6 +170,8 @@ const PRECACHE = [
   './js/bnui.js',
   './js/bnlog.js',
   './js/bnmap.js',
+  './js/bnshare.js',
+  './js/bnteam.js',
   './js/minimap.js',
   './js/main.js',
   './js/installtip.js',
