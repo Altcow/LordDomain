@@ -3,7 +3,7 @@
 // 存檔:只存 world.city.adv = { done:[id], ignore:[id], seenHelp:[stat] }(goods.js goodsNormCity 帶過 advNormSave);冷卻與揭露只在本次遊玩內。
 // 資料在 cityadvisor_data.js,介面在 cityadvisorui.js。ES2017;不用 ?. ??。
 // 全域名稱:advLevelOf advBarVal advRevealed advBars advCompute advSnapshot advTick advGet advAck advIgnore advDone advSeenHelp advMemNew advMemLoad advMemSave advNormSave
-//   advGoPlan advGo advCardRect advCentralRect advRectsOverlap advSetClock advReset ADV_COND ADV_REVEAL
+//   advGoPlan advGo advCardRect advCentralRect advRectsOverlap advSetClock advReset ADV_COND ADV_REVEAL advApplyLock advLockOf
 
 var ADV_CENTER = { x0: 0.25, x1: 0.75, y0: 0.2, y1: 0.8 };   // 與 panelmgr PANEL_CENTER 一致
 
@@ -113,8 +113,8 @@ var ADV_COND = {
   orderWarn: function (s, L, R) { return R.order && L.order === 1 ? { v: Math.round(s.v.order) } : false; },
   orderPop: function (s, L, R) { return (s.pop || 0) >= 60 && !s.hasWatch && L.order === 0 ? { n: Math.round(s.pop) } : false; },
 
-  houseFull: function (s, L, R) { return R.house && L.house === 2 ? {} : false; },
-  houseTight: function (s, L, R) { return R.house && L.house === 1 && s.occ >= 92 ? { pct: Math.round(s.occ) } : false; },
+  houseFull: function (s, L, R) { return R.house && L.house === 2 && !(L.sani >= 2) ? {} : false; },   // 衛生危急時先補衛生,不催蓋房(衛生死結修正)
+  houseTight: function (s, L, R) { return R.house && L.house === 1 && s.occ >= 92 && !(L.sani >= 1) ? { pct: Math.round(s.occ) } : false; },
   houseEmpty: function (s, L, R) { return R.house && L.house === 1 && s.occ < 60 && s.houses >= 6 ? { pct: Math.round(s.occ) } : false; },
 
   storeBlocked: function (s, L, R) { return R.store && s.store && s.store.blocked > 0 ? { n: s.store.blocked, miss: s.store.missName || '原料' } : false; },
@@ -142,6 +142,40 @@ function advFill(text, p, id, xun) {
   if (Array.isArray(t)) t = t[advHash(id + ':' + Math.floor((xun || 0) / 6)) % t.length];
   for (k in p) t = t.split('{' + k + '}').join(String(p[k]));
   return t;
+}
+
+// ───────── 建造型建議的科技閘(衛生死結修正)─────────
+// 要蓋的建築尚未開放時,把前往動作改成補救路徑並在文案後註明:先蓋研究院 / 先研發〈X〉 / 研發中 / 時代未到
+function advApplyLock(it, lk) {
+  var nm = '〈' + lk.name + '〉';
+  it.lock = lk;
+  if (lk.queued) { it.text += '(' + nm + '研發中,研成即可蓋)'; it.go = { kind: 'panel', id: 'tech' }; }
+  else if (lk.blocked) { it.text += '(需研發' + nm + ',時代未到)'; it.go = { kind: 'tech', id: lk.tech }; }
+  else if (lk.lab) { it.text += '(得先蓋研究院,研發' + nm + ')'; it.go = { kind: 'build', type: 'research' }; }
+  else { it.text += '(得先研發' + nm + ')'; it.go = { kind: 'tech', id: lk.tech }; }
+}
+// 物件 type 的開放狀態:已開放 / 無科技資料 → null;否則 { tech, name, lab?, queued?, blocked? }(tech = 沿前置往回找到的第一個可研節點)
+function advLockOf(type) {
+  var nid, n, cur, nx, i, guard = 0, ts, q;
+  if (typeof nlUnlocked !== 'function' || typeof techNode !== 'function' || typeof techDone !== 'function' || typeof techReqMet !== 'function' || typeof techEraOpen !== 'function') return null;
+  if (nlUnlocked(type) !== false) return null;
+  nid = (typeof nlObjTech === 'function') ? nlObjTech(type) : undefined;
+  n = (typeof nid === 'string' && nid !== 'start') ? techNode(nid) : null;
+  if (!n) return null;
+  cur = n;
+  while (guard++ < 30 && !techReqMet(cur)) {
+    nx = null;
+    for (i = 0; i < cur.req.length; i++) if (!techDone(cur.req[i])) { nx = techNode(cur.req[i]); break; }
+    if (!nx) break;
+    cur = nx;
+  }
+  ts = (typeof techState === 'function') ? techState() : null;
+  q = function (id) { return !!ts && ((ts.cur || []).some(function (c) { return c.id === id; }) || (ts.queue || []).indexOf(id) >= 0); };
+  var lk = { tech: cur.id, name: (typeof techLabelOf === 'function') ? techLabelOf(cur) : cur.name };
+  if (q(n.id) || q(cur.id)) lk.queued = true;
+  else if (!techEraOpen(cur.era)) lk.blocked = true;
+  else if (typeof techLabCount === 'function' && techLabCount() <= 0) lk.lab = true;
+  return lk;
 }
 
 // ───────── 記憶(存檔只含 id)─────────
@@ -202,7 +236,9 @@ function advCompute(s, mem, xun, sticky) {
     }
     p = ADV_COND[a.cond](s, L, R);
     if (!p) continue;
-    items.push({ id: a.id, tier: a.tier, pri: a.pri, stat: a.stat, go: a.go, core: !!a.core, text: advFill(a.text, p, a.id, xun), params: p });
+    c = { id: a.id, tier: a.tier, pri: a.pri, stat: a.stat, go: a.go, core: !!a.core, text: advFill(a.text, p, a.id, xun), params: p };
+    if (a.go && a.go.kind === 'build' && s.lock && s.lock[a.go.type]) advApplyLock(c, s.lock[a.go.type]);
+    items.push(c);
   }
   // 壓制矛盾:成對同時出現時移除 pri 較低者
   for (i = 0; i < ADV_CONFLICT.length; i++) {
@@ -335,6 +371,13 @@ function advSnapshot() {
   }
   s.worst = advWorstFang(advWorstKey(s));
   advSnapTech(s);
+  s.lock = {};
+  ADVICE.forEach(function (a) {
+    var t = a.go && a.go.kind === 'build' ? a.go.type : null, lk;
+    if (!t || t in s.lock) return;
+    try { lk = advLockOf((typeof fxGoType === 'function') ? fxGoType(t) : t); } catch (e5) { lk = null; }
+    if (lk) s.lock[t] = lk;
+  });
   if (typeof currentSeason === 'string') s.season = currentSeason;
   if (typeof nlEra === 'function') { try { s.era = nlEra() || 1; } catch (e4) { /* 略過 */ } }
   s.saniEverWarn = advRt.saniWarned || (s.houses > 0 && advLevelOf('sani', s.v.sani) >= 1);

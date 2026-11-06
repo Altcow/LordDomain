@@ -1,4 +1,4 @@
-const VERSION = 'v47';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v48';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -9,6 +9,7 @@ const PRECACHE = [
   './manifest.webmanifest',
   './css/style.css',
   './css/cardsreveal.css',
+  './css/search.css',
   './js/data.js',
   './js/units.js',
   './js/unitinfo.js',
@@ -108,6 +109,7 @@ const PRECACHE = [
   './js/caravan_vis.js',
   './js/buildpreview.js',
   './js/techui.js',
+  './js/search.js',
   './js/saveslots.js',
   './js/savesui.js',
   './js/worldpacks.js',
@@ -165,6 +167,7 @@ const PRECACHE = [
   './js/bnmap.js',
   './js/minimap.js',
   './js/main.js',
+  './js/installtip.js',
   './js/pwa.js',
   './icons/icon-180.png',
   './icons/icon-192.png',

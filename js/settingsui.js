@@ -395,6 +395,12 @@ function stUiSec() {
       stRender();
     }), '畫面角落的小全圖,方框是目前看到的範圍;點一下跳到那裡、拖曳方框移動畫面。拍照、錄影、進室內時自動隱藏。');
   }
+  if (typeof uiAutoBrowseSet === 'function') {
+    stAdd(nodes, '放完自動回到瀏覽', stSwitch(uiAutoBrowseOn(), function (v) {
+      uiAutoBrowseSet(v);
+      stRender();
+    }), '關(預設):放完一件仍停在放置模式,要按「✋ 瀏覽」才退出。開:每放完一件自動退出放置、回到瀏覽,可直接拖曳地圖、點建築。');
+  }
   return stSec('畫面', nodes.concat(stExtraNodesH('畫面')), 'view');
 }
 

@@ -1479,12 +1479,31 @@ function terrLevel() {
   return { id: li + '/' + fl, res: L.res, N: L.N, zrep: fl === 2 ? 1 : (fl === 1 ? 0.4 : 0.3), dres: Math.max(0.25, Math.min(1, L.res / 2)) };
 }
 
+// 草皮蓋住建築修正:物件 sprite 的底部(台階、地基、居民腳下)常超出佔地、落在前方 1~2 條對角線的地面格上;
+// 嚴格依對角線畫時,這些前方格在物件之後畫而把它蓋掉(c2d 與 GL 皆然)。平地格改為提早 TERR_LOOK 條對角線畫(GL 深度同步提前),
+// 只限「自身與後方 / 側後方鄰近格同高」的格;有高低差處維持原順序,懸崖照常遮擋。
+const TERR_LOOK = 2;
+function terrEarly(x, y) {
+  if (x + y < TERR_LOOK) return false;
+  const BW = boardW(), BH = boardH(), h = world.height[idx(x, y)];
+  for (let j = -1; j <= TERR_LOOK + 1; j++) {
+    const yy = y - j;
+    if (yy < 0 || yy >= BH) continue;
+    for (let i = -1; i <= TERR_LOOK + 1; i++) {
+      const xx = x - i;
+      if (i + j < 1 || xx < 0 || xx >= BW) continue;
+      if (world.height[idx(xx, yy)] !== h) return false;
+    }
+  }
+  return true;
+}
+
 function terrSig(X0, Y0, N, lvl, landOn, lm) {
   let h = Math.imul(2166136261 ^ (TERR_SEASON_ID[currentSeason] || 0), 16777619);
   for (let i = 0; i < lvl.id.length; i++) h = Math.imul(h ^ lvl.id.charCodeAt(i), 16777619);
   let tx = 0;
-  for (let y = Y0 - 1; y <= Y0 + N; y++)
-    for (let x = X0 - 1; x <= X0 + N; x++) {
+  for (let y = Y0 - 2 - TERR_LOOK; y <= Y0 + N; y++)   // 後方多看 TERR_LOOK + 1 圈:terrEarly 依賴的高度改變 → 重烘
+    for (let x = X0 - 2 - TERR_LOOK; x <= X0 + N; x++) {
       let v = 255;
       if (inBounds(x, y)) {
         const i = idx(x, y), tt = world.terrain[i];
@@ -1518,7 +1537,7 @@ function terrPlan(lvl, landOn, lm) {
         pre = true;
       }
       items.push({
-        k: N + ':' + ci + ',' + cj, sig: terrSig(X0, Y0, N, lvl, landOn, lm), d0: X0 + Y0, ord: ci + cj, ci: ci, X0: X0, Y0: Y0,
+        k: N + ':' + ci + ',' + cj, sig: terrSig(X0, Y0, N, lvl, landOn, lm), d0: X0 + Y0 - TERR_LOOK, ord: ci + cj, ci: ci, X0: X0, Y0: Y0,
         rx: rx, ry: ry, rw: rw, rh: rh, cw: cw, ch: ch, dw: Math.max(1, Math.ceil(rw * dres)), dh: Math.max(1, Math.ceil(rh * dres)), pre: pre, rec: null, key: ''
       });
     }
@@ -1565,7 +1584,7 @@ function terrBake(it, c, dc, lvl, landOn, lm) {
         if (x >= BW || y >= BH) continue;
         const i = idx(x, y), t = world.terrain[i], waste = landOn && lm.out[i] === 1;
         if (waste) drawWasteTile(c, x, y); else drawTile(c, x, y, 0);
-        terrDepthTile(dc, x, y, world.height[i], !waste && isWaterTerrain(t), d);
+        terrDepthTile(dc, x, y, world.height[i], !waste && isWaterTerrain(t), terrEarly(x, y) ? d : d + TERR_LOOK);   // 基準 d0 已減 TERR_LOOK:平地格深度提前、其餘不變
         if (!waste && (t === T_RIVER || t === T_LAKE || t >= T_OCEAN)) water.push(x, y);   // 活地形格也進清單(動畫疊層用)
       }
   } finally {
@@ -1687,12 +1706,25 @@ function draw(ctx, time) {
     for (let x = xa; x <= xb; x++) {
       const y = d - x;
       if (cellVisible(x, y)) {
-        if (!tg) {
+        if (!tg && !terrEarly(x, y)) {
           if (landOn && lm.out[idx(x, y)]) drawWasteTile(ctx, x, y);
           else drawTile(ctx, x, y, time);
         }
         if (hid) drawGhostCell(ctx, x, y);
         if (typeof tdZoneCell === 'function') tdZoneCell(ov, x, y);
+      }
+    }
+    if (!tg) {   // 平地格提早 TERR_LOOK 條對角線畫(見 terrEarly)
+      const D = d + TERR_LOOK;
+      if (D >= vs.dT0 && D <= vs.dT1 && D <= BW + BH - 2) {
+        const ea = Math.max(0, D - BH + 1, (D + vs.uMin + 1) >> 1), eb = Math.min(D, BW - 1, (D + vs.uMax) >> 1);
+        for (let x = ea; x <= eb; x++) {
+          const y = D - x;
+          if (cellVisible(x, y) && terrEarly(x, y)) {
+            if (landOn && lm.out[idx(x, y)]) drawWasteTile(ctx, x, y);
+            else drawTile(ctx, x, y, time);
+          }
+        }
       }
     }
     if (typeof drawOverlayDiag === 'function') drawOverlayDiag(ov, d, time);

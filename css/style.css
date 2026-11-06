@@ -547,6 +547,20 @@ body.atk-mode #toast { top: calc(162px + env(safe-area-inset-top)); bottom: auto
 #draftBar .btns button:disabled { opacity: .35; }
 #draftBar .btns .pok { background: #2e7d4f; border-color: #5fc98a; }
 #draftBar .btns .pno { background: #6b2b2b; border-color: #c96a5f; }
+/* 放置 ⇄ 瀏覽快速切換鈕(ui.js syncModeFloat):地圖左側中段,觸控 ≥ 44px */
+#modeFloat { position: fixed; z-index: 3; left: calc(6px + env(safe-area-inset-left)); top: 42%; min-width: 58px; min-height: 48px; padding: 6px 8px; border-radius: 24px; border: 1px solid #f0b45a; background: rgba(20, 26, 36, .9); color: #f0e6d2; font-size: 13px; font-weight: bold; line-height: 1.2; white-space: nowrap; box-shadow: 0 2px 10px rgba(0, 0, 0, .35); touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#modeFloat[hidden] { display: none !important; }
+#modeFloat[data-mf="browse"] { background: #2e7d4f; border-color: #5fc98a; color: #fff; }
+#modeFloat:active { filter: brightness(.9); }
+/* 加到主畫面提示卡(installtip.js):只在閒置時出現,底部疊在工具列上方,可關 */
+#installTip { position: fixed; left: 70px; right: 6px; bottom: calc(var(--stack) + 8px + env(safe-area-inset-bottom)); max-width: 420px; margin: 0 auto; z-index: 3; box-sizing: border-box; padding: 8px 10px; border-radius: 10px; background: rgba(20, 26, 36, .95); border: 1px solid #f0b45a; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); color: #e8edf2; font-size: 13px; line-height: 1.5; }
+#installTip .itp-head { display: flex; align-items: center; gap: 8px; }
+#installTip .itp-head b { flex: 1; min-width: 0; }
+#installTip .itp-body ol { margin: 4px 0 0; padding-left: 20px; }
+#installTip .itp-row { display: flex; gap: 8px; margin-top: 6px; }
+#installTip button { flex: 1 1 0; min-width: 44px; min-height: 44px; font-size: 14px; }
+#installTip .itp-x { flex: 0 0 44px; }
+#installTip .itp-ok { background: #2e7d4f; border-color: #5fc98a; }
 @media (orientation: landscape) {
   #draftBar { left: 66px; right: auto; max-width: none; width: min(136px, calc(25vw - 74px)); padding: 6px; }
   #draftBar .drow.top { flex-direction: column; align-items: flex-start; gap: 0; white-space: normal; }

@@ -166,7 +166,7 @@ function nsObjName(st) {
 // ───────── 核心:候選清單(純函式)─────────
 // adv = advCompute 的結果(或 null);回傳 { cands:[{id,src,tier,icon,text,why,go,item}], top }
 function nsCompute(s, adv, mem, api) {
-  var reds = [], rest = [], chain, cands = [], items = (adv && adv.items) || [];
+  var reds = [], rest = [], chain, cands = [], items = (adv && adv.items) || [], i;
   items.forEach(function (it) {
     var h, c;
     if (it.core || mem.dismissed['adv:' + it.id]) return;
@@ -176,6 +176,9 @@ function nsCompute(s, adv, mem, api) {
   });
   chain = nsResolveChain(s, mem, api);
   cands = reds.slice();
+  if (chain && chain.go && chain.go.kind === 'build' && chain.go.type === 'house') {   // 衛生亮燈時先補衛生,再推「多蓋民房」(衛生死結修正)
+    for (i = 0; i < rest.length; i++) if (rest[i].item && rest[i].item.stat === 'sani') { cands.push(rest.splice(i, 1)[0]); break; }
+  }
   if (chain) cands.push(chain);
   rest.forEach(function (c) { cands.push(c); });
   return { cands: cands, top: cands[0] || null };

@@ -174,6 +174,7 @@ function uiApplyMode() {
   b.classList.toggle('ui-compact', uiMode === 'compact');
   b.classList.toggle('photo-mode', uiMode === 'photo');
   syncSideBar();
+  syncModeFloat();
 }
 // 切換介面模式。進入拍照前記下原模式,還原鈕回到該模式
 function uiSetMode(m) {
@@ -197,6 +198,7 @@ function uiSetMode(m) {
 // target 為既有按鈕 id,點擊時代為 click(原按鈕與其監聽不變);scope 限定經營(estate)或戰鬥布置(camp)
 let uiSideExpanded = false;
 const UI_SIDE_ITEMS = [
+  { key: 'search', icon: '🔍', label: '搜尋', title: '搜尋建築與科技(未解鎖者可看缺什麼)', scope: 'estate', special: 'search' },
   { key: 'slots', icon: '🏘', label: '經營', title: '版面選擇(3 格):點一下打開,再點一次關閉', scope: 'all', special: 'slots' },
   { key: 'edit', icon: '🔨', label: '布置', title: '草稿布置(單一草稿,存到版面格)', scope: 'all', special: 'edit' },
   { key: 'hide', icon: '👁', label: '建築', title: '隱藏建築（整地用，H）', top: true, scope: 'all', target: 'btnHide' },
@@ -284,6 +286,7 @@ function uiSideAct(key) {
   else if (it.special === 'edit') editSideAct();
   else if (it.special === 'slots') { if (typeof slotPopToggle === 'function') slotPopToggle(); }
   else if (it.special === 'tech') { if (typeof techPanelToggle === 'function') techPanelToggle(); }
+  else if (it.special === 'search') { if (typeof srToggle === 'function') srToggle(); }
   else if (it.special === 'photo') uiSetMode('photo');
   else if (it.special === 'bn') { if (typeof bnUiOpen === 'function') bnUiOpen(); }
   else {
@@ -336,7 +339,7 @@ function syncSideBar() {
     };
     const count = () => UI_SIDE_ITEMS.filter(it => !it.top && (it.scope === 'all' || (it.scope === 'camp') === camp) && vis(it.key)).length;
     const overflow = count() > 6;
-    if (!uiSideExpanded) ['season', 'save', 'bn'].forEach(k => { if (count() > 6 && vis(k)) vis(k).hidden = true; });
+    if (!uiSideExpanded) ['season', 'save', 'bn', 'photo'].forEach(k => { if (count() > 6 && vis(k)) vis(k).hidden = true; });
     const ex = document.getElementById('sideExpand');
     if (ex) { ex.hidden = !overflow; ex.textContent = uiSideExpanded ? '▴ 收合' : '▾ 全部'; ex.title = uiSideExpanded ? '收合側欄' : '展開全部功能'; side.classList.toggle('expanded', uiSideExpanded && overflow); }
   } else {
@@ -570,6 +573,7 @@ function buildToolbar() {
   buildCatBar();
   buildTopMenu();
   buildVarBar();
+  syncModeFloat();
 }
 
 // ---- 頂層分類 / 小分類 / 變體 ----
@@ -1521,6 +1525,7 @@ function applyOne(x, y) {
       return false;
     }
     pendAdd(t, x, y, ui.rot, uiSkinPref(t));
+    uiNotePlaced(t);
     if (progFreeBuild() && !commitPending()) pendClear();
     updateResBar();
     return false;
@@ -2218,11 +2223,88 @@ function beep() {
   }
 }
 
+// ── 放置 ⇄ 瀏覽 快速切換(#modeFloat,index.html):放置中顯示「✋ 瀏覽」(退出放置,已放置的待購 / 建築保留);瀏覽中且記得上一個放置的物件時顯示「↩ 繼續放置」。
+// 位置固定在地圖左側中段,不擋底部列與待購列。按住超過 500ms、移動超過 10px、或同時有第二根手指時不觸發。
+// 偏好 lorddomain.ui.autoBrowse:'1' = 放完一件自動回到瀏覽(預設關)。組合(整組)不自動回到瀏覽,保留「撤銷上一組」。
+const UI_AUTO_BROWSE_KEY = 'lorddomain.ui.autoBrowse';
+let uiLastPlaced = null;      // 上一個放置的物件 / 組合 id(只存在記憶體,重新載入即清空)
+let mfPress = null;           // 目前這次按壓 {id, t, x, y, bad}
+let mfBound = false;
+const mfDownIds = new Set();
+function uiAutoBrowseOn() { return uiStorageGet(UI_AUTO_BROWSE_KEY) === '1'; }
+function uiAutoBrowseSet(on) { uiStorageSet(UI_AUTO_BROWSE_KEY, on ? '1' : '0'); }
+function uiNotePlaced(t) { if (t !== null && t !== undefined && (OBJECTS[t] || uiIsCombo(t))) uiLastPlaced = t; }
+// 放完一件(單件、非拖曳建造)後:偏好開啟且仍在放置中 → 退出放置
+function uiAfterPlace() { if (uiAutoBrowseOn() && ui.tool !== null) setTool(null); }
+function mfWanted() {
+  const b = document.body;
+  if (typeof game === 'undefined' || !game || game.mode !== 'estate' || !b) return '';
+  if (uiIsPhoto()) return '';
+  if (['sandbox', 'atk-mode', 'replay-mode', 'camp-mode', 'shooting', 'photo-mode'].some(c => b.classList.contains(c))) return '';
+  if (typeof panelKindOpen === 'function' && (panelKindOpen('big') || panelKindOpen('card'))) return '';
+  if (typeof settleOpen === 'function' && settleOpen()) return '';
+  if (typeof editLeaveDlgIsOpen === 'function' && editLeaveDlgIsOpen()) return '';
+  if (typeof stIsOpen !== 'undefined' && stIsOpen) return '';
+  if (ui.tool !== null) return isCampTool(ui.tool) ? '' : 'place';
+  return uiLastPlaced !== null ? 'browse' : '';
+}
+function mfAct() {
+  const want = mfWanted();
+  if (want === 'place') setTool(null);
+  else if (want === 'browse') setTool(uiLastPlaced);
+  syncModeFloat();
+}
+function syncModeFloat() {
+  const btn = document.getElementById('modeFloat');
+  if (!btn) return;
+  const want = mfWanted();
+  if (!want) {
+    btn.hidden = true;
+    mfPress = null;
+    return;
+  }
+  const text = want === 'place' ? '✋ 瀏覽' : '↩ 繼續放置';
+  const tip = want === 'place' ? '退出放置,回到瀏覽(可拖曳地圖、點建築);已放置的結果保留'
+    : '回到上一個放置的「' + (OBJECTS[uiLastPlaced] ? OBJECTS[uiLastPlaced].name : comboDef(uiLastPlaced).name) + '」';
+  if (btn.textContent !== text) btn.textContent = text;
+  btn.setAttribute('data-mf', want);
+  btn.setAttribute('title', tip);
+  btn.setAttribute('aria-label', tip);
+  btn.hidden = false;
+  if (!mfBound) mfBind(btn);
+}
+function mfBind(btn) {
+  mfBound = true;
+  document.addEventListener('pointerdown', e => {
+    mfDownIds.add(e.pointerId);
+    if (mfPress && e.pointerId !== mfPress.id) mfPress.bad = true;
+  }, true);
+  const release = e => { mfDownIds.delete(e.pointerId); };
+  document.addEventListener('pointerup', release, true);
+  document.addEventListener('pointercancel', release, true);
+  btn.addEventListener('pointerdown', e => {
+    if (mfPress) { mfPress.bad = true; return; }
+    if (mfDownIds.size > 1) return;
+    mfPress = { id: e.pointerId, t: Date.now(), x: e.clientX, y: e.clientY, bad: false };
+    try { btn.setPointerCapture(e.pointerId); } catch (err) { /* 略過 */ }
+  });
+  btn.addEventListener('pointermove', e => {
+    if (mfPress && e.pointerId === mfPress.id && Math.hypot(e.clientX - mfPress.x, e.clientY - mfPress.y) > 10) mfPress.bad = true;
+  });
+  btn.addEventListener('pointerup', e => {
+    const p = mfPress;
+    mfPress = null;
+    if (!p || p.bad || e.pointerId !== p.id || Date.now() - p.t > 500 || mfDownIds.size > 0) return;
+    mfAct();
+  });
+  btn.addEventListener('pointercancel', () => { mfPress = null; });
+}
 function updatePendBar() {
   const bar = document.getElementById('pendBar');
   const n = pend.list.length;
   updateDraftBar();
   skinBarSync();
+  syncModeFloat();
   document.body.classList.toggle('pending', n > 0);
   document.body.classList.toggle('psel', n > 0 && pend.sel >= 0);
   if (!n || draft || progFreeBuild()) {
@@ -2425,6 +2507,7 @@ function draftConfirm() {
       return;
     }
     draft = null;
+    uiNotePlaced(d.type);
     const nm = comboDef(d.type).name;
     showToast('已放下「' + nm + '」' + r.n + ' 件' + (r.skipped ? '(略過 ' + r.skipped + ' 件不合法)' : '') + '　可用「↶ 撤銷上一組」整組撤銷');
     updateResBar();
@@ -2458,11 +2541,13 @@ function draftConfirm() {
   } else {
     draft = null;
     pendAdd(d.type, d.x, d.y, d.rot, d.skin);
+    uiNotePlaced(d.type);
     if (progFreeBuild()) {
       if (!commitPending()) pendClear();
     } else {
-      showToast('已加入待購：' + OBJECTS[d.type].name + '（工具仍選取，可繼續放置）');
+      showToast('已加入待購：' + OBJECTS[d.type].name + (uiAutoBrowseOn() ? '（已回到瀏覽）' : '（工具仍選取，可繼續放置）'));
     }
+    uiAfterPlace();
   }
   updateResBar();
 }

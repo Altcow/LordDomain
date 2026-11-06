@@ -1,0 +1,42 @@
+/* css/search.css — 搜尋面板(js/search.js)。直式:浮在右側邊欄左側;橫式大面板模式:由 panelmgr 的 body.panel-big-landscape 接管為滿版。 */
+#searchPanel { position: fixed; top: calc(40px + env(safe-area-inset-top)); right: calc(var(--side-w) + 6px); width: min(380px, calc(100vw - var(--side-w) - 16px)); max-height: 76vh; display: flex; flex-direction: column; box-sizing: border-box; z-index: 4; padding: 10px; border-radius: 10px; background: rgba(20, 26, 36, .96); color: #f3ead7; border: 1px solid rgba(255, 255, 255, .18); box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+#searchPanel[hidden] { display: none; }
+#searchPanel .sr-head { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+#searchPanel .sr-head b { flex: 1 1 auto; font-size: 16px; }
+#searchPanel .sr-x { min-width: 44px; min-height: 44px; padding: 0; font-size: 16px; background: transparent; border: 0; color: #f3ead7; }
+#searchPanel #srInput { width: 100%; box-sizing: border-box; min-height: 44px; margin-top: 4px; padding: 6px 10px; font-size: 16px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .25); background: rgba(0, 0, 0, .35); color: #f3ead7; }
+#searchPanel .sr-world { margin-top: 4px; font-size: 12px; opacity: .75; }
+#searchPanel #srList { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; margin-top: 6px; }
+#searchPanel .sr-sum { font-size: 12px; opacity: .8; padding: 4px 2px; }
+#searchPanel .sr-sec { margin-top: 8px; padding-top: 4px; border-top: 1px solid rgba(255, 255, 255, .15); font-size: 12px; color: #f0b45a; }
+#searchPanel .sr-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 48px; margin-top: 4px; padding: 4px 6px; border-radius: 8px; cursor: pointer; }
+#searchPanel .sr-row:hover, #searchPanel .sr-row:focus { background: rgba(255, 255, 255, .06); outline: none; }
+#searchPanel .sr-ic { flex: 0 0 auto; width: 28px; text-align: center; font-size: 20px; }
+#searchPanel .sr-mn { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+#searchPanel .sr-mn b { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+#searchPanel .sr-mn small { font-size: 12px; opacity: .75; overflow-wrap: anywhere; }
+#searchPanel .sr-st { flex: 0 0 auto; padding: 2px 8px; border-radius: 10px; font-size: 12px; border: 1px solid rgba(255, 255, 255, .3); }
+#searchPanel .sr-st.s-unlocked, #searchPanel .sr-st.s-done { color: #9bd98a; border-color: #9bd98a; }
+#searchPanel .sr-st.s-ready { color: #f0b45a; border-color: #f0b45a; }
+#searchPanel .sr-st.s-cur { color: #7fb8f0; border-color: #7fb8f0; }
+#searchPanel .sr-st.s-queued { color: #c7bfff; border-color: #c7bfff; }
+#searchPanel .sr-st.s-locked { color: #bbb; }
+#searchPanel .sr-st.s-mega { color: #e6a0ff; border-color: #e6a0ff; }
+#searchPanel .sr-cost { flex: 1 1 100%; font-size: 12px; opacity: .8; overflow-wrap: anywhere; }
+#searchPanel .sr-det { margin: 0 0 6px; padding: 8px 10px; border-radius: 8px; background: rgba(255, 255, 255, .05); font-size: 13px; }
+#searchPanel .sr-l { margin-top: 4px; line-height: 1.5; overflow-wrap: anywhere; }
+#searchPanel .sr-ok { color: #9bd98a; }
+#searchPanel .sr-warn { color: #f0b45a; }
+#searchPanel .sr-chain { margin-top: 4px; font-size: 12px; opacity: .85; line-height: 1.5; overflow-wrap: anywhere; }
+#searchPanel .sr-hint { margin-top: 8px; font-size: 13px; line-height: 1.6; opacity: .9; }
+#searchPanel .sr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+#searchPanel button { min-height: 44px; min-width: 44px; padding: 4px 12px; font-size: 14px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .3); background: rgba(40, 48, 62, .9); color: #f3ead7; margin-top: 4px; }
+#searchPanel button:disabled { opacity: .4; }
+#searchPanel .sr-det button { margin-right: 6px; }
+#searchPanel .sr-row + .sr-det { margin-top: -2px; }
+
+body.panel-big-landscape #searchPanel:not([hidden]) { position: fixed !important; left: 0 !important; top: 0 !important; right: 0 !important; bottom: 0 !important; width: auto !important; max-width: none !important; max-height: none !important; border-radius: 0 !important; border: 0 !important; z-index: 41 !important; padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(12px, env(safe-area-inset-left)) !important; background: #141a24; }
+body.panel-big-landscape #searchPanel > * { max-width: 720px; width: 100%; box-sizing: border-box; margin-left: auto; margin-right: auto; }
+body.panel-big-landscape #searchPanel .sr-head { min-height: 44px; }
+body.panel-big-landscape #searchPanel .sr-row { min-height: 48px; }
+body.panel-big-landscape #searchPanel .sr-mn b { font-size: 15px; }
