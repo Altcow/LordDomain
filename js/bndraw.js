@@ -4,7 +4,8 @@
 // 繪製:只用 canvas 2D;全身圖直接 drawImage(原圖 ≤ 190×390,不另做縮圖快取),受擊閃白用預烘白剪影(lazy,≤ 20 張),特效用 assets/bnfx/ 黑底圖 + 'lighter' 加色混合;
 // 物件池(數字 28 / 特效 64)不在每幀配置。缺圖一律回退:名人全身 → 半身頭像 → 程式小人;兵種圖 → 程式小人(ART.chibiSprite 可用時放大)。
 // 不寫 DOM(DOM 由 bnui.js 透過 P.hooks 接手)、不發聲(音效經 sfxwPlay 且有 typeof 守衛、P.sfx=false 可關)。ES2017;不用 ?. ??。
-// 全域:BNPL_T BNDR bnDrImg bnDrLook bnDrLayout bnDrFrame bnDrResize bnPlNew bnPlTick bnPlSkip bnPlDispose bnPlPredict bnPlStats bnPlHitUlt bnPlSetSpeed
+// 戰鬥改版(2026-11-06):沒有士氣條;文化主題施放特效 fxc_*、狀態圖示 stc_*、輔助虛影 fxg_*、主角專屬 fxhero_*(assets/bnfx/,透明底,一般混合;缺圖退回原 fx_* 特效)。
+// 全域:BNPL_T BNDR bnDrImg bnDrLook bnDrLayout bnDrFrame bnDrResize bnPlNew bnPlTick bnPlSkip bnPlDispose bnPlPredict bnPlStats bnPlSetSpeed BN_FX_THEME BN_FX_GHOST BN_FX_HERO
 
 var BNPL_T = {
   round: 0.55, act: 0.1, cast: 0.28, lunge: 0.2, proj: 0.24, basicWait: 0.52, skillHit: 0.2, skillWait: 0.36, multi: 0.14, multiDelay: 0.06,
@@ -16,13 +17,37 @@ var BNDR = {
 };
 var BN_NUM_N = 28, BN_FX_N = 64;
 var BN_NUM_DMG = '#ff3b30', BN_NUM_HEAL = '#3ee05a', BN_NUM_MIN = 15;   // 浮字:扣血紅、補血綠,一律黑色描邊;最小字級(px)
-var BN_ST_ICON = { atk_up: 1, atk_down: 1, def_up: 1, def_down: 1, spd_up: 1, stun: 1, burn: 1, poison: 1, bleed: 1, shield: 1, silence: 1, taunt: 1, timid: 1, confuse: 1, heal_reduce: 'heal_block', ward: 1 };
+var BN_ST_ICON = { atk_up: 1, atk_down: 1, def_up: 1, def_down: 1, spd_up: 1, stun: 1, burn: 1, poison: 1, bleed: 1, shield: 1, silence: 1, taunt: 1, timid: 1, confuse: 1, heal_reduce: 'heal_block', ward: 1, rate_up: 'stc_rate_up', debuff_hit: 'stc_ink_blind', wx_mark: 'stc_wx_mark' };
 var BN_ST_NAME = {
   stun: '暈眩', fear: '威懾', confuse: '擾亂', timid: '怯戰', silence: '計窮', ult_lock: '封大', atk_down: '攻↓', def_down: '防↓', spd_down: '速↓', mark: '標記',
   burn: '燃燒', poison: '中毒', bleed: '流血', heal_reduce: '禁療', atk_up: '攻↑', def_up: '防↑', spd_up: '速↑', crit_up: '暴↑', taunt: '嘲諷', guard: '援護', evade: '規避',
-  ward: '抵禦', ccimm: '抗控', shield: '護盾', heal_hot: '回春'
+  ward: '抵禦', ccimm: '抗控', shield: '護盾', heal_hot: '回春', rate_up: '率↑', rate_down: '率↓', debuff_hit: '盲', wx_mark: '五行印', stealth: '隱匿', undying: '不倒'
 };
-var BN_ST_GOOD = { atk_up: 1, def_up: 1, spd_up: 1, crit_up: 1, taunt: 1, guard: 1, evade: 1, ward: 1, ccimm: 1, shield: 1, heal_hot: 1, amp_atk: 1 };
+var BN_ST_GOOD = { atk_up: 1, def_up: 1, spd_up: 1, crit_up: 1, taunt: 1, guard: 1, evade: 1, ward: 1, ccimm: 1, shield: 1, heal_hot: 1, amp_atk: 1, rate_up: 1, stealth: 1, undying: 1 };
+// 文化主題特效(new_heroes_draft §六):cast = 施放者身上、hit = 每個目標、area = 多目標時在目標群中央。缺圖時 alt = 原 fx_* 特效
+var BN_FX_THEME = {
+  herb: { cast: 'fxc_herb_mortar', hit: 'fxc_herb_leaves', area: 'fxc_herb_smoke', alt: 'heal_motes' },
+  ink: { cast: 'fxc_ink_brush', hit: 'fxc_ink_splash', area: 'fxc_ink_scroll', alt: 'spark' },
+  wuxing: { cast: 'fxc_wx_disc', hit: 'wx', alt: 'bolt_fork' },
+  yinyang: { cast: 'fxc_yy_taiji', hit: 'fxc_yy_flip', alt: 'morale_burst' },
+  bagua: { cast: 'fxc_bagua_disc', alt: 'impact_ring' },
+  talisman: { cast: 'fxc_talisman', hit: 'fxc_talisman_burn', alt: 'fire_s' },
+  charm: { cast: 'fxc_mirage', hit: 'fxc_mirage', alt: 'morale_burst' },
+  fireox: { cast: 'fxc_fireox_charge', hit: 'fxc_fireox_trail', alt: 'fire_l' },
+  drum: { cast: 'fxc_drum_wave', alt: 'impact_ring' },
+  banner: { cast: 'fxc_banner', alt: 'morale_burst' },
+  crossbow: { cast: 'fxc_crossbow_volley', hit: 'fxc_crossbow_volley', alt: 'spark' },
+  thunder: { cast: 'fxc_thunder_cloud', hit: 'fxc_thunder_strike', area: 'fxc_thunder_blast', alt: 'bolt_fork' }
+};
+var BN_FX_WX = { '金': 'fxc_wx_metal', '木': 'fxc_wx_wood', '水': 'fxc_wx_water', '火': 'fxc_wx_fire', '土': 'fxc_wx_earth' };
+// 輔助虛影:施放時在施放者身後半透明顯示(彈琴、跳舞、擊鼓 …)
+var BN_FX_GHOST = { s_xiaoqiao_3: 'fxg_qin', p_caiyong: 'fxg_qin', s_zhugeliang_2: 'fxg_qin', s_zhouyu_3: 'fxg_qin', s_diaochan_1: 'fxg_dance', s_zhenji_1: 'fxg_dance', s_yanyan_2: 'fxg_drum', s_dingfeng_1: 'fxg_drum',
+  s_caiyong_1: 'fxg_flute', s_daqiao_1: 'fxg_fan', s_zhugeliang_3: 'fxg_fan', u_caozhi: 'fxg_poem', s_caiyan_2: 'fxg_poem', s_kanze_1: 'fxg_poem', s_huatuo_1: 'fxg_herb', u_huatuo: 'fxg_herb', s_huatuo_vs1: 'fxg_herb', s_nanhua_2: 'fxg_herb', s_ganfuren_1: 'fxg_herb',
+  s_zhangjiao_vs1: 'fxg_talisman', s_yuji_1: 'fxg_talisman', s_nanhua_1: 'fxg_talisman', s_caiyan_1: 'fxg_hujia', s_heyi_1: 'fxg_horn', s_chengyuanzhi_1: 'fxg_horn', s_masu_2: 'fxg_banner', s_yuanshu_1: 'fxg_banner', s_panfeng_1: 'fxg_banner',
+  s_peiyuanshao_2: 'fxg_banner', s_sunshangxiang_1: 'fxg_banner', s_diaochan_3: 'fxg_moon', u_zhenji: 'fxg_moon' };
+// 主角專屬大招特效(12 位):大招發動時在敵陣中央播放
+var BN_FX_HERO = { u_caocao: 'fxhero_caocao', u_liubei: 'fxhero_liubei', u_sunquan: 'fxhero_sunquan', u_guanyu: 'fxhero_guanyu', u_zhugeliang: 'fxhero_zhugeliang', u_zhouyu: 'fxhero_zhouyu', u_lvbu: 'fxhero_lvbu',
+  u_zhangjiao: 'fxhero_zhangjiao', u_simayi: 'fxhero_simayi', u_diaochan: 'fxhero_diaochan', u_zuoci: 'fxhero_zuoci', u_nanhua: 'fxhero_nanhua' };
 var BN_TONE = { '金光': 'gold', '赤焰': 'flame', '白霜': 'frost', '青雷': 'thunder', '墨影': 'ink', '紫光': 'purple', '碧風': 'wind' };
 var BN_TONE_COL = { gold: '#ffd25a', flame: '#ff6a3a', frost: '#9fe0ff', thunder: '#7aa8ff', ink: '#b9a8d8', purple: '#c78bff', wind: '#6fe6b0', common: '#ffe9a8' };
 var BN_BODY_OF = { '盾': 'shield', '步': 'inf', '騎': 'cav', '弓': 'arc', '謀': 'str' };
@@ -150,7 +175,7 @@ function bnDrLayout(vw, vh, top, bot) {
 function bnPlNewVu(u, L) {
   var lk = bnDrLook(u), p = L ? L.pos[u.side][u.row][u.col] : { x: 0, y: 0 };
   return {
-    id: u.id, side: u.side, name: u.name, troop: u.troop, fig: u.fig, row: u.row, col: u.col, px: p.x, py: p.y, tx: p.x, ty: p.y, dx: 0, dy: 0, hp: u.hp, mx: u.maxHp, hpShow: u.hp, hpLag: u.hp, lagHold: 0, hitGlow: 0, morale: u.morale, moraleShow: u.morale,
+    id: u.id, side: u.side, name: u.name, troop: u.troop, fig: u.fig, row: u.row, col: u.col, px: p.x, py: p.y, tx: p.x, ty: p.y, dx: 0, dy: 0, hp: u.hp, mx: u.maxHp, hpShow: u.hp, hpLag: u.hp, lagHold: 0, hitGlow: 0,
     alive: u.alive !== false, fade: 1, rot: 0, flash: 0, cast: 0, kb: 0, scale: 1, lunge: null, dying: -1, st: {}, shield: 0, look: lk, phase: (u.id * 1.713) % 6.28, sx: 1, sy: 1, sh: L ? L.sh : 100, nn: 0, hitAt: 0, ultReady: false, tone: ''
   };
 }
@@ -229,7 +254,7 @@ function bnPlFx(P, name, x, y, o) {
   for (i = 0; i < P.fx.length; i++) if (!P.fx[i].on) { f = P.fx[i]; break; }
   if (!f) return null;
   f.on = true; f.name = name; f.x = x; f.y = y; f.x2 = o.x2 !== undefined ? o.x2 : x; f.y2 = o.y2 !== undefined ? o.y2 : y; f.t = -(o.delay || 0); f.dur = o.dur || 0.4; f.size = o.size || 60;
-  f.rot = o.rot || 0; f.col = o.col || '#ffe9a8'; f.mode = o.mode || 0;
+  f.rot = o.rot || 0; f.col = o.col || '#ffe9a8'; f.mode = o.mode || 0; f.file = o.file || ''; f.alt = o.alt || '';
   return f;
 }
 
@@ -259,7 +284,7 @@ function bnPlFxFor(sk, many) {
   if (tg.indexOf('water') >= 0) return { n: 'poison_mist', s: 1 };
   if (k.indexOf('heal') === 0) return { n: many ? 'heal_motes' : 'heal_pillar', s: 1 };
   if (k.indexOf('shield') === 0) return { n: 'shield_dome', s: 1 };
-  if (k.indexOf('buff') === 0 || k === 'inspire' || k === 'morale_up' || k === 'cleanse') return { n: 'morale_burst', s: 0.9 };
+  if (k.indexOf('buff') === 0 || k === 'rate_up' || k === 'cleanse' || k === 'invert') return { n: 'morale_burst', s: 0.9 };
   if (k === 'dot_poison') return { n: 'poison_mist', s: 1 };
   if (k === 'dot_burn') return { n: 'fire_s', s: 1 };
   if (k === 'stun' || k === 'silence' || k === 'fear' || k === 'taunt') return { n: 'impact_ring', s: 0.9 };
@@ -268,7 +293,7 @@ function bnPlFxFor(sk, many) {
   if (k === 'atk_multi') return { n: 'slash_d', s: 0.9 };
   if (k === 'atk_all') return { n: 'bolt_fork', s: 1.2 };
   if (k === 'atk_front') return { n: 'slash_h', s: 1.2 };
-  if (k.indexOf('debuff') === 0 || k === 'mark' || k === 'morale_down') return { n: 'spark', s: 1 };
+  if (k.indexOf('debuff') === 0 || k === 'mark' || k === 'rate_down' || k === 'buff_steal' || k === 'wx_mark') return { n: 'spark', s: 1 };
   return { n: 'slash_d', s: 1 };
 }
 function bnPlHitFx(P, vt, e, first) {
@@ -278,6 +303,27 @@ function bnPlHitFx(P, vt, e, first) {
     if (vt.troop === '盾' && !e.crit) f = { n: 'impact_ring', s: 0.7 };
   } else f = bnPlFxFor(sk, !first);
   bnPlFx(P, f.n, c.x, c.y, { size: s * 0.8 * f.s, dur: 0.38, rot: (vt.id * 0.7) % 3 - 1.2 });
+  if (sk && !e.basic && sk.theme && BN_FX_THEME[sk.theme]) bnPlThemeHit(P, vt, sk);
+}
+// 文化主題:命中特效(五行 = 施放者屬性;其餘依主題)
+function bnPlThemeHit(P, vt, sk) {
+  var T = BN_FX_THEME[sk.theme], c = bnPlCenter(vt), u = P.S.units[sk.u], file = T.hit;
+  if (!file) return;
+  if (file === 'wx') file = u && BN_FX_WX[u.el] ? BN_FX_WX[u.el] : 'fxc_wx_disc';
+  bnPlFx(P, file, c.x, c.y, { file: file, alt: T.alt, mode: 7, size: P.L.sh * 0.9, dur: 0.5 });
+}
+// 文化主題施放特效 + 輔助虛影 + 主角專屬(skill / ult 事件時呼叫)
+function bnPlThemeCast(P, v, e) {
+  var d = (typeof BN_SKILLS !== 'undefined') ? BN_SKILLS[e.id] : null, th = e.th || (d && d.theme) || '', T = BN_FX_THEME[th], c = bnPlCenter(v), L = P.L, g = BN_FX_GHOST[e.id];
+  if (g) bnPlFx(P, g, v.px + (v.side === 'A' ? -1 : 1) * L.colW * 0.25, v.py - L.sh * 0.55, { file: g, alt: 'morale_burst', mode: 6, size: L.sh * 1.25, dur: 0.9 });
+  if (T && T.cast) bnPlFx(P, T.cast, c.x, c.y - L.sh * 0.15, { file: T.cast, alt: T.alt, mode: 7, size: L.sh * 1.05, dur: 0.6 });
+}
+function bnPlHeroFx(P, v, id) {
+  var file = BN_FX_HERO[id], L = P.L, side, xs = 0, n = 0, k, w;
+  if (!file || !v) return;
+  side = v.side === 'A' ? 'B' : 'A';
+  for (k in P.vu) { w = P.vu[k]; if (w.side === side && w.alive) { xs += w.px; n++; } }
+  bnPlFx(P, file, n ? xs / n : L.vw / 2, L.top + (L.vh - L.top - L.bot) * 0.5, { file: file, alt: 'bolt_fork', mode: 7, size: Math.min(L.vw * 0.5, L.sh * 2.4), dur: 1.0, delay: 0.1 });
 }
 function bnPlProj(P, vs, vt, e, delay) {
   var a = bnPlCenter(vs), b = bnPlCenter(vt), L = P.L;
@@ -341,7 +387,7 @@ var BNST_POP = { dur: 0.6, gap: 0.12, size: 0.8, good: '#ffd75a', bad: '#c890ff'
 var BN_ST_POP = {
   atk_up: '攻擊提升', def_up: '防禦提升', spd_up: '速度提升', crit_up: '暴擊提升', atk_down: '攻擊', def_down: '防禦', spd_down: '速度',
   stun: '暈眩', fear: '威懾', confuse: '擾亂', timid: '怯戰', silence: '計窮', ult_lock: '封大招', mark: '標記', burn: '燃燒', poison: '中毒', bleed: '流血', heal_reduce: '禁療',
-  taunt: '嘲諷', guard: '援護', evade: '規避', ward: '抵禦', heal_hot: '回春', amp_atk: '增傷', shield: '護盾'
+  taunt: '嘲諷', guard: '援護', evade: '規避', ward: '抵禦', heal_hot: '回春', amp_atk: '增傷', shield: '護盾', rate_up: '發動率', rate_down: '發動率', debuff_hit: '命中', wx_mark: '五行印', stealth: '隱匿', undying: '不倒'
 };
 function bnPlStK(P) { var s = P.speed || 1; return s <= 1 ? 1 : 1 + (s - 1) * 0.6; }   // 3× → 2.2 倍模擬秒 ≈ 實際 0.44 秒
 function bnPlStPopTxt(id) { var nm = BN_ST_POP[id] || BN_ST_NAME[id] || ''; return nm ? (BN_ST_GOOD[id] ? '+' : '−') + nm : ''; }
@@ -381,6 +427,7 @@ function bnPlCutin(P, e) {
   dur = full ? BNPL_T.cutFull : BNPL_T.cutSmall;
   P.cut = { full: full, t: 0, dur: dur, side: v.side, name: v.name, fig: v.fig, skill: d ? d.name : '', tone: tone, uid: e.u, path: v.look.paths[0], big: !!v.fig };
   if (!full) { bnPlFx(P, 'morale_burst', v.px, v.py - P.L.sh * 0.5, { size: P.L.sh * 1.3, dur: 0.5, delay: 0 }); bnPlLabel(P, v, '大招·' + (d ? d.name : '')); }
+  bnPlHeroFx(P, v, e.id);
   bnPlSfx(P, 'flag');
   bnPlHook(P, 'cut', P.cut);
   return dur;
@@ -390,7 +437,7 @@ function bnPlEvent(P, e) {
   P.nev++;
   switch (e.t) {
     case 'init':
-      for (i = 0; i < e.units.length; i++) { v = P.vu[e.units[i].id]; if (v) { v.hp = e.units[i].hp; v.mx = e.units[i].mx; v.hpShow = v.hp; v.morale = e.units[i].morale; v.moraleShow = v.morale; } }
+      for (i = 0; i < e.units.length; i++) { v = P.vu[e.units[i].id]; if (v) { v.hp = e.units[i].hp; v.mx = e.units[i].mx; v.hpShow = v.hp; } }
       return 0;
     case 'round':
       P.round = e.n; P.chainN = 0;
@@ -405,7 +452,7 @@ function bnPlEvent(P, e) {
       return t.act;
     case 'skip':
       v = P.vu[e.u];
-      if (v) bnPlText(P, v, e.why === 'stun' ? '暈眩!' : (e.why === 'fear' ? '威懾!' : '中伏'), '#ff9a8a', 1, 2, 0.8);
+      if (v) bnPlText(P, v, e.why === 'stun' ? '暈眩!' : (e.why === 'fear' ? '威懾!' : (e.why === 'retreat' ? '退場' : '中伏')), '#ff9a8a', 1, 2, 0.8);
       return t.txt;
     case 'idle':
       v = P.vu[e.u];
@@ -419,17 +466,18 @@ function bnPlEvent(P, e) {
       return bnPlCutin(P, e);
     case 'skill': {
       v = P.vu[e.u];
-      P.sk = { id: e.id, kind: e.kind, cat: e.cat, tags: (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[e.id] && BN_SKILLS[e.id].tags) || [], name: e.name };
+      P.sk = { id: e.id, kind: e.kind, cat: e.cat, tags: (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[e.id] && BN_SKILLS[e.id].tags) || [], name: e.name, theme: e.th || (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[e.id] && BN_SKILLS[e.id].theme) || '', u: e.u };
       if (!v) return 0;
       v.cast = 1;
       if (e.cat !== 'ult') bnPlLabel(P, v, (e.rc ? '再放·' : (e.as !== undefined ? '補刀·' : '')) + (e.name || ''));   // 技能名 → 己方天空角落標籤
-      if (/^(heal|shield|buff|inspire|morale|cleanse|revive|guard|evade|reorder|taunt)/.test(e.kind || '')) { c = bnPlCenter(v); bnPlFx(P, 'morale_burst', c.x, c.y, { size: L.sh * 0.9, dur: 0.4 }); }
+      if (/^(heal|shield|buff|rate_up|cleanse|revive|guard|evade|reorder|taunt)/.test(e.kind || '')) { c = bnPlCenter(v); bnPlFx(P, 'morale_burst', c.x, c.y, { size: L.sh * 0.9, dur: 0.4 }); }
+      bnPlThemeCast(P, v, e);
       if (P.sk.tags.indexOf('charge') >= 0) { bnPlFx(P, 'dust', v.px, v.py - L.sh * 0.1, { size: L.sh * 0.7, dur: 0.5 }); }
       return e.cat === 'ult' ? 0.12 : t.cast;
     }
     case 'dmg': return bnPlDmg(P, e);
     case 'evade':
-      v = P.vu[e.tgt]; if (v) bnPlText(P, v, '閃避', '#cfe8ff', 0.9, 2, 0.7);
+      v = P.vu[e.tgt]; if (v) bnPlText(P, v, e.miss ? '落空' : '閃避', '#cfe8ff', 0.9, 2, 0.7);
       return t.status;
     case 'heal': {
       v = P.vu[e.tgt];
@@ -452,15 +500,11 @@ function bnPlEvent(P, e) {
     case 'status': return bnPlStatus(P, e);
     case 'unstatus':
       v = P.vu[e.tgt];
-      if (v) { delete v.st[e.id]; if (e.id === 'shield') v.shield = 0; }
+      if (v) { delete v.st[e.id]; if (e.id === 'shield') v.shield = 0; if (e.why === 'cleanse' && (e.id === 'poison' || e.id === 'heal_reduce')) { c = bnPlCenter(v); bnPlFx(P, 'stc_herb_detox', c.x, c.y - L.sh * 0.35, { file: 'stc_herb_detox', alt: 'heal_motes', mode: 7, size: L.sh * 0.45, dur: 0.6 }); } }
       return 0;
     case 'resist': case 'immune': case 'ccimm':
       v = P.vu[e.tgt]; if (v) bnPlText(P, v, e.t === 'resist' ? '抵禦' : '免疫', '#cfe8ff', 0.75, 2, 0.7);
       return 0.1;
-    case 'morale':
-      v = P.vu[e.u];
-      if (v) { v.morale = e.now; }
-      return 0;
     case 'kill': return bnPlKill(P, e);
     case 'move':
       v = P.vu[e.u];
@@ -468,6 +512,7 @@ function bnPlEvent(P, e) {
       return 0.3;
     case 'react':
       v = P.vu[e.tgt]; if (v) bnPlText(P, v, e.name || '連環', '#ffb36a', 0.9, 2, 0.8);
+      if (v && e.id === 'rx_invert') { c = bnPlCenter(v); bnPlFx(P, 'stc_yinyang_flip', c.x, c.y, { file: 'fxc_yy_flip', alt: 'morale_burst', mode: 7, size: L.sh * 0.9, dur: 0.55 }); }
       return 0.2;
     case 'bond':
       P.banner = { text: e.name || '羈絆', t: 0, dur: 0.8, big: false };
@@ -525,7 +570,6 @@ function bnPlAnim(P, dt) {
     else if (v.hpLag > v.hpShow) { v.hpLag += (v.hpShow - v.hpLag) * Math.min(1, dt * 2.2); if (v.hpLag - v.hpShow < 0.5) v.hpLag = v.hpShow; }
     if (v.hpLag < v.hpShow) v.hpLag = v.hpShow;
     if (v.hitGlow > 0) v.hitGlow = Math.max(0, v.hitGlow - dt / 0.35);
-    v.moraleShow += (v.morale - v.moraleShow) * Math.min(1, dt * 8);
     if (v.flash > 0) v.flash = Math.max(0, v.flash - dt / 0.2);
     if (v.kb > 0) v.kb = Math.max(0, v.kb - dt / 0.25);
     if (v.cast > 0) v.cast = Math.max(0, v.cast - dt / 0.32);
@@ -610,22 +654,12 @@ function bnPlSkip(P) {
   for (i = 0; i < P.fx.length; i++) P.fx[i].on = false;
   for (id in P.vu) {
     v = P.vu[id]; u = S.units[id];
-    v.hp = u.hp; v.hpShow = u.hp; v.hpLag = u.hp; v.lagHold = 0; v.hitGlow = 0; v.morale = u.morale; v.moraleShow = u.morale; v.alive = u.alive; v.lunge = null; v.flash = 0; v.kb = 0; v.cast = 0; v.st = {}; v.shield = 0;
+    v.hp = u.hp; v.hpShow = u.hp; v.hpLag = u.hp; v.lagHold = 0; v.hitGlow = 0; v.alive = u.alive; v.lunge = null; v.flash = 0; v.kb = 0; v.cast = 0; v.st = {}; v.shield = 0;
     v.dying = u.alive ? -1 : 2; v.fade = u.alive ? 1 : 0; v.rot = u.alive ? 0 : 1.22 * (v.side === 'A' ? -1 : 1);
     if (u.alive) { Object.keys(u.st || {}).forEach(function (k) { v.st[k] = 1; }); if (u.st && u.st.shield) v.shield = u.st.shield.val; }
   }
   P.endEv = S.events[S.events.length - 1];
   bnPlFinish(P);
-}
-// 手動大招:點我方士氣滿的單位 → 回該單位 id(否則 -1)
-function bnPlHitUlt(P, x, y) {
-  var id, v, h = P.L.sh, w = Math.max(44, P.L.colW);
-  for (id in P.vu) {
-    v = P.vu[id];
-    if (v.side !== 'A' || !v.alive) continue;
-    if (v.morale >= 100 && Math.abs(x - v.px) <= w / 2 && y <= v.py + 8 && y >= v.py - Math.max(44, h)) return v.id | 0;
-  }
-  return -1;
 }
 // 統計(給結算畫面):依完整事件日誌算傷害 / 治療 / 承傷 / 擊殺
 function bnPlStats(S) {
@@ -743,12 +777,10 @@ function bnDrBars(ctx, P, v, t, L) {
   ctx.fillStyle = hp > 0.5 ? '#5ed05e' : (hp > 0.25 ? '#e0b43a' : '#e0503a'); ctx.fillRect(x, y, w * hp, bh);
   if (v.hitGlow > 0) { ctx.globalAlpha = v.fade * v.hitGlow * 0.7; ctx.fillStyle = '#fff'; ctx.fillRect(x, y, w * lag, bh); ctx.globalAlpha = v.fade; ctx.strokeStyle = 'rgba(255,240,200,' + (0.9 * v.hitGlow) + ')'; ctx.lineWidth = 2; ctx.strokeRect(x - 2, y - 2, w + 4, bh + 4); }   // 受擊加亮
   if (v.shield > 0) { ctx.fillStyle = 'rgba(142,199,255,.95)'; ctx.fillRect(x, y, Math.min(w, w * v.shield / v.mx), 2); }
-  ctx.fillStyle = '#000'; ctx.fillRect(x - 2, y + bh + 1, w + 4, 4);
-  ctx.fillStyle = v.morale >= 100 ? '#fff2a0' : '#d9a441'; ctx.fillRect(x, y + bh + 2, w * Math.min(1, v.moraleShow / 100), 2);
   keys = Object.keys(v.st); iy = y - sz - 3;
   for (i = 0; i < keys.length && n < 3; i++) {
     k = keys[i]; ic = BN_ST_ICON[k];
-    ex = ic ? bnDrImg('assets/bnfx/st_' + (ic === 1 ? k : ic) + '.webp') : null;
+    ex = ic ? bnDrImg('assets/bnfx/' + (typeof ic === 'string' && ic.indexOf('stc_') === 0 ? ic : 'st_' + (ic === 1 ? k : ic)) + '.webp') : null;
     if (ex && ex.ok) ctx.drawImage(ex.img, x + n * (sz + 1), iy, sz, sz);
     else { ctx.fillStyle = BN_ST_GOOD[k] ? '#4a8a4a' : '#9a4a3a'; ctx.fillRect(x + n * (sz + 1), iy, sz, sz); ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.round(sz * 0.7) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText((BN_ST_NAME[k] || k).charAt(0), x + n * (sz + 1) + sz / 2, iy + sz / 2); }
     n++;
@@ -756,10 +788,6 @@ function bnDrBars(ctx, P, v, t, L) {
   if (keys.length > 3) { ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.round(sz * 0.7) + 'px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('+' + (keys.length - 3), x + 3 * (sz + 1), iy + sz / 2); }
   ctx.fillStyle = '#f0e6cf'; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 3; ctx.font = Math.round(L.fs * 0.82) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.strokeText(v.name, v.px + v.dx, v.py + v.dy + 2); ctx.fillText(v.name, v.px + v.dx, v.py + v.dy + 2);
-  if (v.morale >= 100 && v.alive) {
-    ctx.strokeStyle = 'rgba(255,226,120,' + (0.55 + 0.35 * Math.sin(t * 8)) + ')'; ctx.lineWidth = 2;
-    ctx.beginPath(); if (ctx.ellipse) ctx.ellipse(v.px, v.py - 2, L.sh * 0.3, L.sh * 0.08, 0, 0, 6.283); else ctx.arc(v.px, v.py - 2, L.sh * 0.25, 0, 6.283); ctx.stroke();
-  }
   ctx.globalAlpha = 1;
 }
 function bnDrFx(ctx, P, f, L) {
@@ -779,6 +807,18 @@ function bnDrFx(ctx, P, f, L) {
     if (g) { ctx.globalAlpha = 0.9; ctx.drawImage(g, x - f.size, y - f.size, f.size * 2, f.size * 2); }
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     return;
+  }
+  if (f.file) {   // 第二批特效(透明底,一般混合;6 = 虛影半透明)。缺圖 / 載入中 → 退回原 fx_* 特效
+    e = bnDrImg('assets/bnfx/' + f.file + '.webp');
+    if (e.ok) {
+      s = f.size * (f.mode === 6 ? 1 : 0.85 + 0.25 * k);
+      ctx.globalAlpha = Math.max(0, Math.min(1, a)) * (f.mode === 6 ? 0.55 : 1);
+      ctx.drawImage(e.img, f.x - s / 2, f.y - s / 2, s, s);
+      ctx.globalAlpha = 1;
+      return;
+    }
+    if (!f.alt) return;
+    f.name = f.alt;
   }
   e = bnDrImg('assets/bnfx/fx_' + f.name + '.webp');
   s = f.size * (0.7 + 0.5 * k);
@@ -832,8 +872,9 @@ function bnDrFrame(ctx, P, dpr, nowSec) {
   ctx.setTransform(dpr, 0, 0, dpr, sx * dpr, sy * dpr);
   for (id in P.vu) list.push(P.vu[id]);
   list.sort(function (a, c) { return (a.py + a.dy) - (c.py + c.dy); });
+  for (i = 0; i < P.fx.length; i++) if (P.fx[i].on && P.fx[i].mode === 6) bnDrFx(ctx, P, P.fx[i], L);   // 輔助虛影畫在人物後面
   for (i = 0; i < list.length; i++) bnDrUnit(ctx, P, list[i], nowSec, L);
-  for (i = 0; i < P.fx.length; i++) if (P.fx[i].on) bnDrFx(ctx, P, P.fx[i], L);
+  for (i = 0; i < P.fx.length; i++) if (P.fx[i].on && P.fx[i].mode !== 6) bnDrFx(ctx, P, P.fx[i], L);
   for (i = 0; i < list.length; i++) bnDrBars(ctx, P, list[i], nowSec, L);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
   for (i = 0; i < P.nums.length; i++) {

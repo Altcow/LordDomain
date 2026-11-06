@@ -118,7 +118,14 @@ const ETHNIC_BY_FIG = {
   yuji: ['han', 'daoist'], dongzhuo: ['han', 'liang', 1], lvbu: ['han', 'bei', 1], yuanshao: ['han', 'han'],
   huangfusong: ['han', 'han'], luzhi: ['han', 'scholar'], gongsunzan: ['han', 'bei'], zhujun: ['han', 'han'],
   zhengxuan: ['han', 'scholar'], mateng: ['han', 'liang', 1], xurong: ['han', 'han'], huatuo: ['han', 'han'],
-  caiyong: ['han', 'scholar'], youtu: ['shanyue', 'shanyue'], yufuluo: ['xiongnu', 'xiongnu']
+  caiyong: ['han', 'scholar'], youtu: ['shanyue', 'shanyue'], yufuluo: ['xiongnu', 'xiongnu'],
+  // 戰鬥改版新增 30 位(皆漢人;dress 依人物形象)
+  zhenji: ['han', 'han'], caiyan: ['han', 'scholar'], caozhi: ['han', 'scholar'], yangxiu: ['han', 'scholar'], pangde: ['han', 'liang'],
+  zhanghe: ['han', 'han'], ganfuren: ['han', 'han'], mifuren: ['han', 'han'], masu: ['han', 'scholar'], huangyueying: ['han', 'scholar'],
+  zhoucang: ['han', 'han'], yanyan: ['han', 'han'], sunshangxiang: ['han', 'han'], lingtong: ['han', 'han'], daqiao: ['han', 'han'],
+  xiaoqiao: ['han', 'han'], dingfeng: ['han', 'han'], kanze: ['han', 'scholar'], nanhua: ['han', 'daoist'], chengyuanzhi: ['han', 'han'],
+  dengmao: ['han', 'han'], peiyuanshao: ['han', 'han'], heyi: ['han', 'han'], zhangkai: ['han', 'han'], diaochan: ['han', 'han'],
+  zuoci: ['han', 'daoist'], panfeng: ['han', 'han'], caoxing: ['han', 'han'], huaxiong: ['han', 'liang'], yuanshu: ['han', 'han']
 
 };
 const ETHNIC_DRESS = ['han', 'liang', 'bei', 'south', 'daoist', 'scholar', 'nanman', 'shanyue', 'xiongnu'];

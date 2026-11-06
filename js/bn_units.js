@@ -1,7 +1,7 @@
 // js/bn_units.js — 名冊卡 → 戰鬥單位(PLAN_BATTLE_A §2:屬性換算、兵種適性、站位、羈絆、詞條)。純邏輯、無 DOM。
 // 依賴(載入順序):carddata.js(CARD_GRADE CARD_JOBS CARD_FIGS CARD_FIG_BY_ID)、bn_data.js、bn_skills_data.js。隨機名冊卡(模擬器用)另需 cards.js。
 // 產物 = 「單位規格 spec」(純 JSON),engine 的 rec.teamA/teamB 直接吃 spec。
-// spec = {name, fig, fac, gr, troop, row, col, apt:{兵種:'S'|'A'|'B'|'C'}, stats:{hp,atk,mag,def,sres,spd,heal,sh,crit,res,morale0,mgain}, mods:{...}, skills:[戰法 id], ult:id, tags:[...], jobs:[...], traits:[...]}
+// spec = {name, fig, fac, gr, troop, row, col, apt:{兵種:'S'|'A'|'B'|'C'}, stats:{hp,atk,mag,def,sres,spd,heal,sh,crit,res}, mods:{...}, skills:[戰法 id], ult:id, tags:[...], jobs:[...], traits:[...]}
 // 全域:bnEff bnCardStats bnAptOf bnDefaultTroop bnUnitSpec bnSpecRaw bnBuildTeam bnRandomCard bnRandomLearned bnRowOf bnPower
 
 function bnEff(v) {
@@ -75,14 +75,13 @@ function bnTraitFold(card, troop) {
     if (tm.spd) st.spd += tm.spd;
     if (tm.atkTroop && tm.atkTroop[troop]) st.atkTroop += tm.atkTroop[troop];
     if (tm.allMul) st.all *= tm.allMul;
-    ['takenPct', 'frontTaken', 'takenRanged', 'critTaken', 'healTaken', 'r1Dmg', 'firstHit', 'vsShield', 'atkMelee', 'early2', 'lateTaken', 'rowTakenFront', 'rowMoraleGain', 'shieldOut', 'r1Spd', 'reach', 'roundStartRowMorale'].forEach(function (key) { if (tm[key]) add(mods, key, tm[key]); });
+    ['takenPct', 'frontTaken', 'takenRanged', 'critTaken', 'healTaken', 'r1Dmg', 'firstHit', 'vsShield', 'atkMelee', 'early2', 'lateTaken', 'rowTakenFront', 'rowRate', 'rowAtk', 'shieldOut', 'r1Spd', 'reach'].forEach(function (key) { if (tm[key]) add(mods, key, tm[key]); });
     if (tm.takenFromTroop) { mods.takenFromTroop = mods.takenFromTroop || {}; Object.keys(tm.takenFromTroop).forEach(function (t) { mods.takenFromTroop[t] = (mods.takenFromTroop[t] || 1) * tm.takenFromTroop[t]; }); }
     if (tm.burnTaken) mods.burnTaken = (mods.burnTaken || 1) * tm.burnTaken;
     if (tm.burnOut) mods.burnOut = (mods.burnOut || 1) * tm.burnOut;
     if (tm.magMul) mods.magMul = (mods.magMul || 1) * tm.magMul;
-    if (tm.allyDownMorale) mods.allyDownMorale = (mods.allyDownMorale || 1) * tm.allyDownMorale;
     if (tm.lowHp) mods.lowHp = tm.lowHp.slice();
-    ['immuneAllyDown', 'undyingOnce', 'gamble', 'noFmt'].forEach(function (key) { if (tm[key]) mods[key] = 1; });
+    ['undyingOnce', 'gamble', 'noFmt'].forEach(function (key) { if (tm[key]) mods[key] = 1; });
     if (tm.immuneFirst) mods.immuneFirst = (mods.immuneFirst || []).concat(tm.immuneFirst);
     if (tm.opening) mods.opening = tm.opening;
     if (tm.fmt) { mods.fmtTrait = mods.fmtTrait || []; mods.fmtTrait.push(tm.fmt); }
@@ -151,14 +150,13 @@ function bnUnitSpec(card, o) {
       heal: bnRound(bnFormula(F.heal, T, W, Z, P) * g),
       sh: bnRound(bnFormula(F.sh, T, W, Z, P) * g),
       crit: crit,
-      res: bnClamp((P - BN_DATA.resFrom) * BN_DATA.resPer, 0, BN_DATA.resMax),
-      morale0: bnRound(BN_DATA.moraleStart[0] + BN_DATA.moraleStart[1] * M),
-      mgain: BN_DATA.moraleGainBase + M * BN_DATA.moraleGainPerM
+      res: bnClamp((P - BN_DATA.resFrom) * BN_DATA.resPer, 0, BN_DATA.resMax)
     },
     mods: tf.mods
   };
   if (fg) {
-    skills.push(fg.passive);
+    if (fg.passive) skills.push(fg.passive);
+    spec.el = fg.el || '';
     for (i = 0; i < fg.skills.length; i++) skills.push(fg.skills[i]);
     spec.ult = fg.ult;
   } else {
@@ -198,8 +196,8 @@ function bnApplyScene(spec, scene) {
 function bnSpecRaw(r) {
   var s = {
     name: r.name, fig: r.fig || '', fac: r.fac === undefined ? 4 : r.fac, gr: r.gr || 0, troop: r.troop, row: r.row, col: r.col || 0, apt: {}, traits: r.traits || [], jobs: [], main: '', learn: 0,
-    stats: { hp: r.hp, atk: r.atk, mag: r.mag, def: r.def, sres: r.sres, spd: r.spd, heal: r.heal !== undefined ? r.heal : 60, sh: r.sh !== undefined ? r.sh : 100, crit: r.crit !== undefined ? r.crit : 0.05, res: r.res !== undefined ? r.res : 0.04, morale0: r.morale0 !== undefined ? r.morale0 : 25, mgain: r.mgain !== undefined ? r.mgain : 1.0 },
-    mods: r.mods || {}, skills: r.skills || [], ult: r.ult || ''
+    stats: { hp: r.hp, atk: r.atk, mag: r.mag, def: r.def, sres: r.sres, spd: r.spd, heal: r.heal !== undefined ? r.heal : 60, sh: r.sh !== undefined ? r.sh : 100, crit: r.crit !== undefined ? r.crit : 0.05, res: r.res !== undefined ? r.res : 0.04 },
+    mods: r.mods || {}, skills: r.skills || [], ult: r.ult || '', el: r.el || ''
   };
   return s;
 }
@@ -229,7 +227,7 @@ function bnBuildTeam(specs, o) {
       if (e.shield) u.mods.shieldOut = (u.mods.shieldOut || 0) + e.shield;
       if (e.hp) hpB += e.hp;
       if (e.res) u.stats.res = Math.min(BN_DATA.resMax + 0.08, u.stats.res + e.res);
-      if (e.morale0) u.stats.morale0 += e.morale0;
+      if (e.rate) u.mods.rateBonus = (u.mods.rateBonus || 0) + e.rate;
       if (e.spd) u.stats.spd += e.spd;
     });
   });
@@ -241,7 +239,7 @@ function bnBuildTeam(specs, o) {
     if (present.length < b.need) return;
     sp++; bonds.push(b.name);
     present.forEach(function (u) {
-      if (b.moraleGain) u.bondMorale = (u.bondMorale || 0) + b.moraleGain;
+      if (b.rate) u.mods.rateBonus = (u.mods.rateBonus || 0) + b.rate;
       if (b.strat) u.mods.stratPct = (u.mods.stratPct || 0) + b.strat;
       if (b.cdMinus) u.mods.cdMinus = Math.max(u.mods.cdMinus || 0, b.cdMinus);
     });
@@ -258,8 +256,11 @@ function bnBuildTeam(specs, o) {
     if (atkB) { mulStat(u, 'atk', 1 + atkB); mulStat(u, 'mag', 1 + atkB); }
     if (hpB) mulStat(u, 'hp', 1 + hpB);
   });
-  // 詞條光環:寬厚(同排友軍士氣獲得 +)
-  eachU(function (a) { if (a.mods.rowMoraleGain) eachU(function (b) { if (b.row === a.row) b.bondMorale = (b.bondMorale || 0) + a.mods.rowMoraleGain; }); });
+  // 詞條光環:寬厚(同排友軍戰法發動率 +)、鼓舞(同排友軍攻擊 +)
+  eachU(function (a) {
+    if (a.mods.rowRate) eachU(function (b) { if (b.row === a.row) b.mods.rateBonus = (b.mods.rateBonus || 0) + a.mods.rowRate; });
+    if (a.mods.rowAtk) eachU(function (b) { if (b.row === a.row) { mulStat(b, 'atk', 1 + a.mods.rowAtk); mulStat(b, 'mag', 1 + a.mods.rowAtk); } });
+  });
   return { units: units, bonds: bonds, formation: fm };
 }
 function BN_BONDS_CAP() { return BN_BONDS.cap || BN_DATA.bondCap; }

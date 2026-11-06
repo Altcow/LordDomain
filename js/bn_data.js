@@ -1,9 +1,10 @@
 // js/bn_data.js — 戰鬥 A 模式(討伐戰)參數與係數(PLAN_BATTLE_A §2、§3.4、§4.1~§4.3、§4.11)。
+// 戰鬥改版(2026-11-06):拿掉士氣 / 氣力;所有戰法(含大招)每回合各自擲發動率;新增對象條件 vs、五行、發動率增減等。
 // 全部數字皆 PLACEHOLDER,集中在這一個檔;調參只改此檔(tools/bn_sim.js --tune 的建議對象)。不寫 DOM、不讀時間。ES2017,不用 ?. ??。
 // 全域:BN_DATA(係數)BN_TRAIT_MODS(詞條 → 戰鬥修正)BN_BONDS(陣營 / 職業標籤 / 特殊組合羈絆)。B1 範圍:僅純邏輯。
 var BN_DATA = {
   v: 1,
-  K: 1.73,                     // 傷害總係數(§3.4);B1 調參 1.6 → 1.73(配合治療增強,維持 5~7 回合)
+  K: 1.0,                      // 傷害總係數(§3.4);B1 調參 1.6 → 1.73;戰鬥改版(多戰法同時發動 + 放完戰法仍普攻 + cdCut)1.73 → 1.0,維持 5~7 回合
   maxRound: 8,                 // 回合上限
   critMul: 1.5,
   jitter: 0.10,                // 浮動 ±5 %:0.95 + 0.10 × r
@@ -19,7 +20,6 @@ var BN_DATA = {
   },
   critBase: 0.05, critPerPt: 0.0015, critFrom: 50,  // 暴擊率 5 % + (主屬 − 50) × 0.15 %
   resPer: 0.004, resFrom: 40, resMax: 0.25,        // 減益抵抗 RES
-  moraleStart: [15, 0.3], moraleGainBase: 0.8, moraleGainPerM: 1 / 250,
   // 兵種(§2.2)
   troops: {
     '盾': { hp: 1.30, atk: 0.80, def: 1.40, spd: -10, R: 1 },
@@ -35,13 +35,13 @@ var BN_DATA = {
   cavCharge: 1.2,              // 騎兵每場第一次普攻
   archerBackTaken: 0.9,        // 弓站後排受近戰普攻
   mageRateBonus: 0.05,         // 謀兵種主動戰法發動率 +5 pp
-  // 士氣(§4.1)
-  morale: { max: 100, act: 15, hit: 8, kill: 20, allyDown: -10, idle: 15, chainCapPerRound: 30 },
   // 目標選擇
   pickPrey: 100, pickLowHp: 50,
-  // 戰法發動率 / 冷卻預設(§4.2)
-  rate: { active: { S: 0.50, M: 0.40, L: 0.35, XL: 0.35 }, pursuit: { S: 0.40, M: 0.35, L: 0.30, XL: 0.30 }, prepBonus: 0.10, cap: 0.70, healBoost: 0.25 },   // healBoost:主動治療戰法的發動率加成(調參用)
+  // 戰法發動率 / 冷卻預設(§4.2)。每次行動:每個主動戰法與大招各自擲骰(可同時放好幾個),普攻後每個追擊戰法各自擲骰。
+  // ult = 大招(大招式戰法)預設發動率(json 有 rate 者以 json 為準);ultCap = 大招發動率上限;ultFrom = 第幾回合起可發動;ultCd = 大招發動後冷卻回合
+  rate: { active: { S: 0.50, M: 0.40, L: 0.35, XL: 0.35 }, pursuit: { S: 0.40, M: 0.35, L: 0.30, XL: 0.30 }, ult: 0.15, ultCap: 0.45, ultFrom: 2, ultCd: 3, prepBonus: 0.10, cap: 0.70, healBoost: 0.25 },   // healBoost:主動治療戰法的發動率加成(調參用)
   cd: { S: 1, M: 2, L: 3, XL: 3 },
+  cdCut: 1,                    // 戰鬥改版:主動 / 追擊戰法冷卻一律 −1(最少 1;大招不受影響)
   passiveMul: 0.5,             // 被動 / 持續指揮的數值 = 主動同 power × 0.5
   defaultRounds: 3,            // 指揮戰法預設持續
   buffRounds: 2, buffRoundsXL: 3,
@@ -57,12 +57,12 @@ var BN_DATA = {
     shield_single: [1.0, 1.5, 2.0, 2.5], shield_all: [0.4, 0.6, 0.8, 0.9],   // shield_all XL 1.1 → 0.9(金城湯池過強)
     cleanse: [1, 2, 99, 99], revive: [0.2, 0.3, 0.4, 0.5],
     buff_atk: [0.10, 0.15, 0.20, 0.30], buff_def: [0.10, 0.15, 0.20, 0.30], buff_spd: [8, 12, 16, 22], buff_crit: [0.08, 0.12, 0.16, 0.24], buff_all: [0.05, 0.08, 0.10, 0.15], buff_all_spd: [5, 8, 10, 15],
-    morale_up: [15, 25, 35, 50], inspire: [10, 15, 20, 30], inspire_atk: [0.06, 0.08, 0.10, 0.15],
-    debuff_atk: [0.10, 0.15, 0.20, 0.30], debuff_def: [0.10, 0.15, 0.20, 0.30], debuff_spd: [8, 12, 16, 22], morale_down: [15, 25, 35, 50], mark: [0.10, 0.15, 0.20, 0.30],
-    silence: [1, 1, 2, 2], taunt: [1, 2, 2, 3], taunt_def: [0, 0.10, 0.20, 0.30], fear: [15, 20, 25, 35], fear_skip: [0.20, 0.30, 0.40, 0.50], bind: [1, 1, 1, 2],
+    rate_up: [0.05, 0.10, 0.15, 0.20], rate_down: [0.05, 0.10, 0.15, 0.20],   // 戰法發動率 ± 百分點(取代士氣類)
+    debuff_atk: [0.10, 0.15, 0.20, 0.30], debuff_def: [0.10, 0.15, 0.20, 0.30], debuff_spd: [8, 12, 16, 22], debuff_hit: [0.15, 0.25, 0.35, 0.45], mark: [0.10, 0.15, 0.20, 0.30],
+    silence: [1, 1, 2, 2], taunt: [1, 2, 2, 3], taunt_def: [0, 0.10, 0.20, 0.30], fear_skip: [0.20, 0.30, 0.40, 0.50], bind: [1, 1, 1, 2],
     dot_burn: [0.15, 0.20, 0.25, 0.30], dot_poison: [0.03, 0.04, 0.05, 0.06], dot_bleed: [0.15, 0.20, 0.25, 0.30],
     counter: [0.4, 0.5, 0.6, 0.8], reorder_spd: [0, 5, 10, 15], guard: [0.3, 0.5, 0.7, 1.0], lifesteal_pct: [0.2, 0.3, 0.4, 0.5],
-    evade: [1, 1, 2, 2], confuse: [1, 1, 2, 2], timid: [1, 1, 1, 2], dispel: [1, 2, 99, 99], dispel_shield: [0, 0.5, 1, 1],
+    evade: [1, 1, 2, 2], confuse: [1, 1, 2, 2], timid: [1, 1, 1, 2], dispel: [1, 2, 99, 99], dispel_shield: [0, 0.5, 1, 1], buff_steal: [1, 1, 2, 3], invert: [1, 1, 2, 3],
     cd_reduce: [1, 1, 2, 2], summon_hp: [0.15, 0.25, 0.35, 0.5], summon_atk: [0.4, 0.55, 0.7, 0.9],
     stat_charge: [0.03, 0.04, 0.05, 0.06],      // stack_charge 每層加成
     execute_chain_stack: [0.05, 0.08, 0.10, 0.15], undying_dur: [1, 2, 2, 3], stealth_dur: [1, 1, 2, 2], immune_dur: [2, 2, 3, 3]
@@ -92,6 +92,13 @@ var BN_DATA = {
   followMul: { S: 0.6, M: 0.9, L: 1.2, XL: 1.6 },     // 羈絆 follow_up 的普攻倍率
   passiveGuardMul: 0.8,                                // 被動援護比例 = guard 表 × 此值(上限 0.5)
   rxBurnDot: 0.15,                                     // 連環延燒給的燃燒倍率
+  // 對象條件 vs(new_heroes_draft §一.1):bonus.mult 檔位 → 數值。dmg = 傷害 / 效果倍率加成;crit = 暴擊率加成(XL = 必定暴擊);chance = 控制 / 狀態機率(XL = 必中,無視規避、抵禦);
+  //   taken = 受到傷害加成(負號為減傷,減傷取一半);spd = 速度;bothCut = mode both 時防守端的減傷
+  vs: { dmg: { S: 0.2, M: 0.4, L: 0.7, XL: 1.0 }, crit: { S: 0.10, M: 0.20, L: 0.35, XL: 1 }, chance: { S: 0.5, M: 0.7, L: 0.9, XL: 1 }, taken: { S: 0.2, M: 0.4, L: 0.7, XL: 1.0 }, spd: { S: 8, M: 12, L: 16, XL: 22 }, bothCut: 0.2 },
+  // 五行(theme = wuxing 的戰法):剋 = 金剋木、木剋土、土剋水、水剋火、火剋金。剋對方屬性 +over;目標帶『被我剋』的五行印 → +mark 並消耗;命中後留下自己屬性的五行印
+  wx: { beats: { '金': '木', '木': '土', '土': '水', '水': '火', '火': '金' }, over: 0.3, mark: 0.7, markRounds: 2 },
+  // 名人標籤(vs.tag 用;warrior = 武 ≥ 90 由 CARD_FIGS 自動判定)
+  figTags: { lord: ['caocao', 'liubei', 'sunquan', 'zhangjiao', 'dongzhuo', 'yuanshao', 'yuanshu'], mystic: ['zhangjiao', 'zhangbao', 'yuji', 'zhanglu', 'zuoci', 'nanhua'], sun_clan: ['sunjian', 'sunce', 'sunquan', 'sunshangxiang'], taoyuan: ['liubei', 'guanyu', 'zhangfei'], liu_family: ['ganfuren', 'mifuren', 'sunshangxiang'] },
   // 羈絆累計上限(§2.6)
   bondCap: { atk: 0.20, hp: 0.10 },
   // 疲兵之外的平手判定(§3.7)
@@ -117,16 +124,16 @@ var BN_TRAIT_MODS = {
   wanren: { atk: 0.10 },
   kangqi: { takenFromTroop: { '騎': 0.8 } },
   busheshe: { atkTroop: { '弓': -0.08 }, atkMelee: 0.03 },
-  zhijun: { allyDownMorale: 0.85 },
+  zhijun: { takenPct: -0.03 },
   tixu: { lowHp: [0.3, 0.10] },
   fengshi: { fmt: 'fengshi' },
   yuanzhen: { fmt: 'yuanzhen' },
   yanxing: { fmt: 'yanxing' },
   bazhen: { fmtAll: 1.15 },
   chengbing: { hp: 0.08 },
-  guwu: { roundStartRowMorale: 5 },
+  guwu: { rowAtk: 0.04 },
   suwei: { rowTakenFront: -0.10 },
-  yanfa: { allyDownMorale: 0.75 },
+  yanfa: { takenPct: -0.04 },
   huogong: { burnOut: 1.5 },
   guantian: { r1Spd: 10 },
   ditinq: { immuneFirst: ['reorder', 'swap'] },
@@ -139,13 +146,13 @@ var BN_TRAIT_MODS = {
   duomou: { stZ: 8, spd: -8 },
   jinshen: { critTaken: -0.15, spd: -3 },
   lumang: { atk: 0.06, critTaken: 0.20 },
-  zhongyi: { immuneAllyDown: 1 },
+  zhongyi: { immuneFirst: ['fear', 'timid'] },
   fanfu: { atk: 0.08 },
   gaoao: { stT: 4 },
   baonue: { atk: 0.08 },
   weihuo: { burnTaken: 1.4 },
   qingdi: { early2: 0.10, lateTaken: 0.05 },
-  kuanhou: { rowMoraleGain: 0.10 },
+  kuanhou: { rowRate: 0.02 },
   dutu: { gamble: 1 },
   jiuxian: { atk: 0.12, noFmt: 1 },
   fujiang: { undyingOnce: 1, atk: -0.05 },
@@ -163,10 +170,10 @@ var BN_BONDS = {
   fac: { 3: { atk: 0.05 }, 4: { atk: 0.08 }, 5: { atk: 0.10, hp: 0.05 } },     // 魏蜀吳黃巾;中立不計
   tag: {                                                                       // 同標籤 2 人生效
     '將門': { defFront: 0.08 }, '士人': { strat: 0.08 }, '醫者': { heal: 0.15 }, '工匠': { shield: 0.12 }, '農家': { hp: 0.06 },
-    '官僚': { res: 0.08 }, '方士': { morale0: 15 }, '商賈': { gold: 0.10 }, '水軍': { spd: 5 }
+    '官僚': { res: 0.08 }, '方士': { rate: 0.05 }, '商賈': { gold: 0.10 }, '水軍': { spd: 5 }
   },
   special: [   // 名人組合(戰前算好,戰中只查表)
-    { id: 'sp_enruo', name: '桃園結義', members: ['liubei', 'guanyu', 'zhangfei'], need: 3, moraleGain: 0.20 },
+    { id: 'sp_enruo', name: '桃園結義', members: ['liubei', 'guanyu', 'zhangfei'], need: 3, rate: 0.05 },
     { id: 'sp_tiangong', name: '天公地公人公', members: ['zhangjiao', 'zhangbao', 'zhangliang'], need: 3, strat: 0.12 },
     { id: 'sp_yingchuan', name: '潁川之士', members: ['xunyu', 'xunyou', 'guojia', 'zhongyao'], need: 2, cdMinus: 1 },
     { id: 'sp_baima', name: '白馬義從', members: ['gongsunzan', 'zhaoyun'], need: 2, cavSpd: 8 }

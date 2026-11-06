@@ -3,15 +3,16 @@
 // 每場最多 BNLOG.maxLines 行,超過截斷並註明;整鍵超過 BNLOG.maxChars 時先丟最舊的「最近」紀錄。檢視時才把短碼還原成中文句子。
 // 存檔:世界內 'lorddomain.bnlog.v1'(SAVE_SLOT_KEYS,隨世界 / 回溯點切換)= {v:1, recent:[戰報], saved:[戰報]};有值才寫;壞檔 / 缺欄位 = 空,不報錯。
 // 面板掛在 bnui.js 的 #bnLayer 內(#bnLog);Esc / 返回鍵先關面板(bnUiBack 先問 bnLogBack)。不發聲。ES2017;不用 ?. ??。
+// 戰鬥改版(2026-11-06):沒有士氣(舊戰報的 M 士氣行仍可顯示);新增 r = 戰法發動判定(哪個戰法擲骰成功 / 未發動、發動率)。
 // 全域:BNLOG bnLogEncode bnLogBuild bnLogLoad bnLogRecord bnLogSave bnLogDel bnLogGet bnLogItems bnLogVerify bnLogOpen bnLogClose bnLogIsOpen bnLogBack bnLogDo bnLogRender
 
 var BNLOG = {
-  key: 'lorddomain.bnlog.v1', recentMax: 10, savedMax: 20, maxLines: 1500, maxChars: 900000, recsMax: 10,
+  key: 'lorddomain.bnlog.v1', recentMax: 10, savedMax: 20, maxLines: 2500, maxChars: 900000, recsMax: 10,
   recs: {}, recIds: [], el: null, tab: 'recent', view: null, msg: ''
 };
 // 短碼:事件類型 → 1 字母(init / cd 不存:陣容另有快照,冷卻不影響數字與順序)
 var BNLOG_CODE = { round: 'R', act: 'A', skill: 'K', ult: 'U', dmg: 'D', evade: 'E', heal: 'H', shield: 'S', revive: 'V', status: 'T', unstatus: 'X', resist: 'Q', immune: 'I', ccimm: 'C',
-  morale: 'M', kill: 'Z', move: 'O', react: 'Y', bond: 'B', trigger: 'G', prep: 'P', skip: 'W', idle: 'L', chain: 'N', chaincap: 'J', end: 'F' };
+  roll: 'r', kill: 'Z', move: 'O', react: 'Y', bond: 'B', trigger: 'G', prep: 'P', skip: 'W', idle: 'L', chain: 'N', chaincap: 'J', end: 'F' };
 var BNLOG_GR = ['白', '青', '藍', '紫', '金'];
 var BNLOG_WHY = {
   hit: '受擊', kill: '擊倒', skill: '戰法', allydown: '友軍倒下', act: '行動', idle: '待命', ult: '施放大招', aura: '光環', chain: '連鎖', bond: '羈絆', rx: '反應', down: '被削', steal: '被奪', killskill: '戰法擊倒', antidote: '解毒',
@@ -43,7 +44,7 @@ function bnLogEncOne(e, K) {
     case 'skill': f = [e.u, K(e.name || bnLogSkName(e.id)), K(e.cat || ''), n(e.rc), n(e.as)]; break;
     case 'ult': f = [e.u, K(bnLogSkName(e.id))]; break;
     case 'dmg': f = [n(e.src), e.tgt, e.v | 0, e.abs ? e.abs | 0 : '', (e.crit ? 1 : 0) | (e.basic ? 2 : 0) | (e.ctr ? 4 : 0), e.hp | 0, K(e.ty || ''), n(e.via), e.dot ? K(e.dot) : '', e.rx ? K(e.rx) : '']; break;
-    case 'evade': f = [n(e.src), e.tgt]; break;
+    case 'evade': f = [n(e.src), e.tgt, e.miss ? 1 : '']; break;
     case 'heal': f = [n(e.src), e.tgt, e.v | 0, n(e.nom), e.hp | 0, e.blk ? 1 : '']; break;
     case 'shield': f = [n(e.src), e.tgt, e.v | 0]; break;
     case 'revive': f = [e.tgt, e.hp | 0]; break;
@@ -51,7 +52,7 @@ function bnLogEncOne(e, K) {
     case 'unstatus': f = [e.tgt, K(e.id), K(e.why || '')]; break;
     case 'resist': f = [e.tgt, K(e.id), n(e.layers)]; break;
     case 'immune': case 'ccimm': f = [e.tgt, K(e.id)]; break;
-    case 'morale': f = [e.u, n(e.v), n(e.now), K(e.why || '')]; break;
+    case 'roll': f = [e.u, K(bnLogSkName(e.id)), e.p | 0, e.ok ? 1 : 0]; break;
     case 'kill': f = [n(e.src), e.tgt]; break;
     case 'move': f = [e.u, e.row, e.col]; break;
     case 'react': f = [K(e.name || e.id), n(e.tgt)]; break;
@@ -90,7 +91,7 @@ function bnLogBuild(S, rec, m) {
   if (L.length > BNLOG.maxLines) { cut = L.length - BNLOG.maxLines; L = L.slice(0, BNLOG.maxLines); }
   rep = {
     id: 'r' + Date.now().toString(36) + (rec.seed >>> 0).toString(36).slice(-4), ts: Date.now(), kind: m.kind || 'practice', sid: String(m.sid || ''), lb: String(m.label || ''), seed: rec.seed >>> 0,
-    au: rec.opts && rec.opts.autoUlt === false ? 0 : 1, mu: m.manual ? 1 : 0, w: res.w || 'draw', why: res.why || '', r: res.r | 0, st: res.st | 0,
+    au: 1, mu: m.manual ? 1 : 0, w: res.w || 'draw', why: res.why || '', r: res.r | 0, st: res.st | 0,
     A: bnLogUnits(rec.teamA, m.stars), B: bnLogUnits(rec.teamB, null), bA: (rec.meta && rec.meta.bonds || []).concat(rec.meta && rec.meta.formation || []).map(String),
     k: en.k, L: L, ne: en.n, cut: cut, h: en.h
   };
@@ -190,7 +191,7 @@ function bnLogItems(rep) {
         push('dmg', nm(f[0]) + ' → ' + nm(f[1]) + ' ' + (x & 2 ? '普攻' : (BNLOG_TY[D(f[6])] || '')) + (x & 4 ? '反擊' : '') + (f[8] ? '(' + bnLogStName(D(f[8])) + ')' : '') + '傷害 ' + f[2] +
           (f[3] ? '(護盾吸收 ' + f[3] + ')' : '') + (x & 1 ? ' 暴擊' : '') + (f[7] ? '(' + nm(f[7]) + ' 援護代受)' : '') + (f[9] ? '〔反應:' + D(f[9]) + '〕' : '') + ' · 剩兵力 ' + f[5]);
         break;
-      case 'E': push('ef', nm(f[1]) + ' 閃避了 ' + nm(f[0]) + ' 的攻擊'); break;
+      case 'E': push('ef', f[2] === '1' ? nm(f[0]) + ' 命中下降,攻擊落空' : nm(f[1]) + ' 閃避了 ' + nm(f[0]) + ' 的攻擊'); break;
       case 'H': push('heal', nm(f[0]) + ' 治療 ' + nm(f[1]) + ' +' + f[2] + (f[3] && +f[3] !== +f[2] ? '(原 ' + f[3] + (f[5] ? ',禁療減少' : '') + ')' : '') + ' · 剩兵力 ' + f[4]); break;
       case 'S': push('heal', nm(f[0]) + ' 給 ' + nm(f[1]) + ' 護盾 +' + f[2]); break;
       case 'V': push('heal', nm(f[0]) + ' 復活,兵力 ' + f[1]); break;
@@ -199,7 +200,8 @@ function bnLogItems(rep) {
       case 'Q': push('ef', nm(f[0]) + ' 抵禦了〔' + bnLogStName(D(f[1])) + '〕' + (f[2] ? '(剩 ' + f[2] + ' 層)' : '')); break;
       case 'I': push('ef', nm(f[0]) + ' 免疫〔' + bnLogStName(D(f[1])) + '〕'); break;
       case 'C': push('ef', nm(f[0]) + ' 抗控擋下〔' + bnLogStName(D(f[1])) + '〕'); break;
-      case 'M': push('mo', nm(f[0]) + ' 士氣 ' + (+f[1] > 0 ? '+' : '') + f[1] + ' → ' + f[2] + '(' + W(D(f[3])) + ')'); break;
+      case 'r': push(f[3] === '1' ? 'ro' : 'mo', nm(f[0]) + '「' + D(f[1]) + '」發動率 ' + f[2] + '% → ' + (f[3] === '1' ? '發動' : '未發動')); break;
+      case 'M': push('mo', nm(f[0]) + ' 士氣 ' + (+f[1] > 0 ? '+' : '') + f[1] + ' → ' + f[2] + '(' + W(D(f[3])) + ')'); break;   // 舊戰報(戰鬥改版前)
       case 'Z': push('kill', '✖ ' + nm(f[0]) + ' 擊倒 ' + nm(f[1])); break;
       case 'O': push('ef', nm(f[0]) + ' 移到' + ['前', '中', '後'][+f[1]] + '排第 ' + (+f[2] + 1) + ' 格'); break;
       case 'Y': push('ef', '反應「' + D(f[0]) + '」' + (f[1] && f[1] !== '-1' ? '→ ' + nm(f[1]) : '')); break;
@@ -230,7 +232,7 @@ function bnLogVerify(rep, rec) {
   var S, en, h;
   rec = rec || BNLOG.recs[rep.id];
   if (!rec) return { ok: false, why: '只有本次遊戲中打的場次能重打驗證(陣容資料不存檔)' };
-  if (rep.mu) return { ok: false, why: '這場中途手動放大招或切換自動大招,無法用種子重現' };
+  if (rep.mu) return { ok: false, why: '這場中途有手動操作,無法用種子重現' };
   if (typeof bnRun !== 'function') return { ok: false, why: '引擎未載入' };
   S = bnRun(JSON.parse(JSON.stringify(rec)));
   en = bnLogEncode(S.events);
@@ -251,7 +253,7 @@ var BNLOG_CSS = '#bnLog{position:absolute;left:0;top:0;right:0;bottom:0;z-index:
   '#bnLog .tm{width:100%;border-collapse:collapse;font-size:12px;margin:2px 0 6px}#bnLog .tm td,#bnLog .tm th{padding:2px 4px;border-bottom:1px solid rgba(255,255,255,.1);text-align:left;vertical-align:top;overflow-wrap:anywhere}#bnLog .tm th{opacity:.75;font-weight:normal}#bnLog .tm td:not(:last-child),#bnLog .tm th{white-space:nowrap}#bnLog details{margin:0 0 6px}#bnLog summary{min-height:44px;line-height:44px;font-size:14px;cursor:pointer}' +
   '#bnLog .stk{position:sticky;top:-8px;z-index:1;background:#1b150f;padding:4px 0 2px}#bnLog .ctl{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}#bnLog .rds{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin:0 0 6px}#bnLog .rds::-webkit-scrollbar{display:none}#bnLog .rds button{flex:0 0 auto}' +
   '#bnLog .ln{font-size:13px;line-height:1.45;padding:1px 6px;overflow-wrap:anywhere;border-left:3px solid transparent}#bnLog .ln.rd,#bnLog .ln.end{color:#ffd25a;font-weight:bold;margin-top:6px}#bnLog .ln.act{color:#9fc8ff;margin-top:4px}' +
-  '#bnLog .ln.dmg{color:#ffb0a0}#bnLog .ln.heal{color:#9be39b}#bnLog .ln.kill{color:#ff7a6a;font-weight:bold}#bnLog .ln.mo{opacity:.7;font-size:12px}#bnLog .ln.st{color:#e0c8ff}#bnLog .ln.cur{background:rgba(255,210,90,.14);border-left-color:#ffd25a}' +
+  '#bnLog .ln.dmg{color:#ffb0a0}#bnLog .ln.heal{color:#9be39b}#bnLog .ln.kill{color:#ff7a6a;font-weight:bold}#bnLog .ln.mo{opacity:.7;font-size:12px}#bnLog .ln.ro{color:#ffe6a0;font-size:12px}#bnLog .ln.st{color:#e0c8ff}#bnLog .ln.cur{background:rgba(255,210,90,.14);border-left-color:#ffd25a}' +
   '#bnLog .g0{color:#e6e6e6}#bnLog .g1{color:#8fd9a0}#bnLog .g2{color:#8ab8ff}#bnLog .g3{color:#d9a0ff}#bnLog .g4{color:#ffd25a}' +
   '@media (orientation:landscape) and (min-width:700px){#bnLog .cols{display:grid;grid-template-columns:minmax(260px,1fr) minmax(300px,1.4fr);column-gap:12px;align-items:start}}';
 function bnLogCss() {
@@ -342,7 +344,7 @@ function bnLogRender() {
   if (v) {
     rep = v.rep;
     h += '<div class="lh"><button data-l="back" aria-label="返回">↩</button><b>戰報 · ' + bnLogEsc(rep.lb) + '</b></div><div class="lb"><div class="cols"><div class="c1">';
-    h += '<div class="sum"><b>' + bnLogEsc(bnLogResTxt(rep)) + '</b> · ' + bnLogDate(rep.ts) + '<br>關卡 ' + bnLogEsc(rep.sid || '-') + ' · 種子 ' + rep.seed + ' · 自動大招 ' + (rep.au ? '開' : '關') + (rep.mu ? ' · 有手動操作' : '') +
+    h += '<div class="sum"><b>' + bnLogEsc(bnLogResTxt(rep)) + '</b> · ' + bnLogDate(rep.ts) + '<br>關卡 ' + bnLogEsc(rep.sid || '-') + ' · 種子 ' + rep.seed + (rep.mu ? ' · 有手動操作' : '') +
       (rep.bA.length ? '<br>羈絆 / 陣型:' + bnLogEsc(rep.bA.join('、')) : '') + '</div>';
     h += '<details' + (bnLogWide() ? ' open' : '') + '><summary>陣容快照(武將 / 品階 / 星 / 兵種 / 位置 / 兵力 / 戰力 / 戰法)</summary><div class="sm">我方陣容</div>' + bnLogUnitRows(rep.A, true) + '<div class="sm">敵方陣容</div>' + bnLogUnitRows(rep.B, false) + '</details>';
     saved = bnLogLoad().saved.some(function (x) { return x.id === rep.id; });

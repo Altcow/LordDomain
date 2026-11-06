@@ -255,7 +255,7 @@ var CARD_SKILLS = [
 var CARD_SKILL_BY_ID = {}, CARD_SKILL_BY_ROW = {};
 CARD_SKILLS.forEach(function (k) { CARD_SKILL_BY_ID[k.id] = k; CARD_SKILL_BY_ROW[k.row] = k; });
 
-// 名人 70 位(PLAN_CARDS §5.4,由表格轉出,不另編造):id、名、字、陣營(0 魏 1 蜀 2 吳 3 黃巾 4 中立)、籍貫、五維[統武智政魅]、才、
+// 名人 100 位(前 70 位 PLAN_CARDS §5.4,由表格轉出,不另編造;後 30 位為戰鬥改版新增,見 new_heroes_draft.md):id、名、字、陣營(0 魏 1 蜀 2 吳 3 黃巾 4 中立)、籍貫、五維[統武智政魅]、才、
 // tr = [詞條名, 專屬(1/0), 說明]、bio 史實依據(簡)、fb 陣營依據、gr 品階(4 = A 級名人 金、3 = B 級名人 紫)、birth 生卒。職業欄由引擎依五維自動推導(未於 §5.4 手填)。
 var CARD_FIGS = [
   {id:"caocao",name:"曹操",zi:"孟德",fac:0,home:"沛國譙",st:[96,72,92,94,90],tai:444,tr:[["唯才是舉",1,""],["屯田",0],["兵法",0,"陣法全 ×1.1"]],bio:"求賢令、許下屯田、注《孫子》",fb:"史",gr:4,birth:"155–220"},
@@ -327,7 +327,38 @@ var CARD_FIGS = [
   {id:"huatuo",name:"華佗",zi:"元化",fac:4,home:"沛國譙",st:[15,20,86,45,72],tai:238,tr:[["通醫",0],["五禽戲",1,"本軍負傷場次 −1,城內晨練場面"]],bio:"麻沸散;五禽之戲",fb:"史(醫者)",gr:3,birth:"?–208"},
   {id:"caiyong",name:"蔡邕",zi:"伯喈",fac:4,home:"陳留圉縣",st:[30,15,90,82,92],tai:309,tr:[["經學",0],["熹平石經",1,"學職 +10 %"]],bio:"175 年書石經;焦尾琴",fb:"史(士人)",gr:3,birth:"133–192"},
   {id:"youtu",name:"尤突",zi:"",fac:4,home:"丹陽",st:[60,72,47,35,62],tai:276,tr:[["山戰",0],["丹陽宗帥",1,"山地格守方受傷 −8 %"]],bio:"丹陽宗帥,受曹公印綬,為陸遜所破",fb:"史(山越,外族)",gr:3,birth:"?–?"},
-  {id:"yufuluo",name:"於夫羅",zi:"",fac:4,home:"南匈奴",st:[80,86,52,50,78],tai:346,tr:[["騎射",0],["南匈奴單于",1,"胡騎部隊移速 +8 %"]],bio:"南匈奴單于,寓居河東平陽",fb:"史(外族)",gr:3,birth:"?–195"}
+  {id:"yufuluo",name:"於夫羅",zi:"",fac:4,home:"南匈奴",st:[80,86,52,50,78],tai:346,tr:[["騎射",0],["南匈奴單于",1,"胡騎部隊移速 +8 %"]],bio:"南匈奴單于,寓居河東平陽",fb:"史(外族)",gr:3,birth:"?–195"},
+  // 戰鬥改版新增 30 位(tools/battle_skills/new_heroes_draft.md;頭像 / 全身圖在 assets/portraits、assets/fullbody,id 同):魏 6、蜀 6、吳 6、黃巾 6、中立 6
+  {id:"zhenji",name:"甄姬",zi:"",fac:0,home:"中山無極",st:[30,20,82,70,98],tai:300,tr:[["洛神",1,"(傳說)凌波微步"],["善樂",0],["謹慎",0]],bio:"先為袁熙妻,鄴城破後為曹丕夫人,明帝之母;傳說為〈洛神賦〉原型",fb:"史(曹丕夫人)",gr:4,birth:"183–221"},
+  {id:"caiyan",name:"蔡琰",zi:"文姬",fac:0,home:"陳留圉縣",st:[28,15,90,75,88],tai:296,tr:[["文姬歸漢",1],["善樂",0],["經學",0]],bio:"蔡邕之女,沒於南匈奴十二年,曹操以金璧贖回;默寫亡書四百餘篇",fb:"史(曹操贖回)",gr:4,birth:"?–?"},
+  {id:"caozhi",name:"曹植",zi:"子建",fac:0,home:"沛國譙",st:[40,35,95,60,90],tai:320,tr:[["才高八斗",1],["好酒",0],["狂生",0]],bio:"建安文學代表,銅雀臺援筆立成;任性飲酒,擅開司馬門",fb:"史",gr:4,birth:"192–232"},
+  {id:"yangxiu",name:"楊修",zi:"德祖",fac:0,home:"弘農華陰",st:[35,25,92,72,70],tai:294,tr:[["雞肋",1],["識破",0],["傲上",0]],bio:"曹操主簿,解「一合酥」「雞肋」;為曹操所殺",fb:"史",gr:3,birth:"175–219"},
+  {id:"pangde",name:"龐德",zi:"令明",fac:0,home:"南安狟道",st:[80,92,50,40,68],tai:330,tr:[["抬櫬決死",1],["騎射",0],["忠義",0]],bio:"常乘白馬,射中關羽額;樊城被擒不屈而死",fb:"史(先從馬超、張魯,215 歸曹)",gr:4,birth:"?–219"},
+  {id:"zhanghe",name:"張郃",zi:"儁乂",fac:0,home:"河間鄚縣",st:[88,85,72,55,68],tai:368,tr:[["識變善陣",1],["山戰",0],["謹慎",0]],bio:"官渡歸曹;街亭破馬謖;木門道中伏弩而死",fb:"史(先事韓馥、袁紹)",gr:4,birth:"?–231"},
+  {id:"ganfuren",name:"甘夫人",zi:"",fac:1,home:"沛",st:[25,10,70,78,92],tai:275,tr:[["玉人",1,"(傳說)"],["寬厚",0]],bio:"劉備之妾,劉禪生母;長坂為趙雲所護",fb:"史",gr:3,birth:"?–?"},
+  {id:"mifuren",name:"糜夫人",zi:"",fac:1,home:"東海朐縣",st:[25,15,68,70,85],tai:263,tr:[["託孤",1,"(演義)"],["忠義",0]],bio:"糜竺之妹,劉備夫人;長坂坡託阿斗於趙雲為演義情節",fb:"史(演義情節)",gr:3,birth:"?–?"},
+  {id:"masu",name:"馬謖",zi:"幼常",fac:1,home:"襄陽宜城",st:[60,40,88,72,70],tai:330,tr:[["攻心為上",1],["說客",0],["輕敵",0]],bio:"好論軍計;街亭違亮節度,為張郃所破",fb:"史",gr:3,birth:"190–228"},
+  {id:"huangyueying",name:"黃月英",zi:"",fac:1,home:"沔南",st:[45,40,92,80,62],tai:319,tr:[["機關巧思",1,"(傳說)"],["匠心",0],["好學",0]],bio:"黃承彥之女、諸葛亮之妻;「月英」之名與機關發明為民間傳說",fb:"史(諸葛亮妻;名為傳說)",gr:4,birth:"?–?"},
+  {id:"zhoucang",name:"周倉",zi:"",fac:1,home:"關西",st:[65,85,35,25,62],tai:272,tr:[["扛刀",1,"(演義)"],["忠義",0],["水戰",0]],bio:"演義人物:為關羽扛刀,水擒龐德;史書無此人",fb:"演義",gr:3,birth:"?–219"},
+  {id:"yanyan",name:"嚴顏",zi:"",fac:1,home:"巴郡臨江",st:[80,80,58,55,72],tai:345,tr:[["斷頭將軍",1],["堅守",0],["大器晚成",0]],bio:"劉璋巴郡太守,為張飛所擒,不屈,張飛壯而釋之",fb:"史(先事劉璋)",gr:3,birth:"?–?"},
+  {id:"sunshangxiang",name:"孫尚香",zi:"",fac:2,home:"吳郡富春",st:[68,82,62,45,85],tai:342,tr:[["諸兄之風",1],["騎射",0],["傲上",0]],bio:"孫權之妹,嫁劉備;「才捷剛猛,有諸兄之風」,侍婢百餘人皆執刀",fb:"史(史稱孫夫人;孫尚香為戲曲名)",gr:4,birth:"?–?"},
+  {id:"lingtong",name:"凌統",zi:"公績",fac:2,home:"吳郡餘杭",st:[80,88,58,50,78],tai:354,tr:[["父仇",1],["忠義",0],["暴躁",0]],bio:"凌操之子;逍遙津死戰護孫權;與甘寧有殺父之仇",fb:"史",gr:4,birth:"189–217"},
+  {id:"daqiao",name:"大喬",zi:"",fac:2,home:"廬江皖縣",st:[25,10,72,70,96],tai:273,tr:[["江東雙璧",1],["善樂",0]],bio:"橋公長女,孫策所納",fb:"史",gr:3,birth:"?–?"},
+  {id:"xiaoqiao",name:"小喬",zi:"",fac:2,home:"廬江皖縣",st:[25,10,78,68,96],tai:277,tr:[["顧曲知音",1],["善樂",0]],bio:"橋公次女,周瑜之妻",fb:"史",gr:3,birth:"?–?"},
+  {id:"dingfeng",name:"丁奉",zi:"承淵",fac:2,home:"廬江安豐",st:[80,84,62,50,66],tai:342,tr:[["雪中短兵",1],["先登",0],["大器晚成",0]],bio:"歷仕孫權至孫皓;東興之戰雪中脫甲短兵破魏軍",fb:"史",gr:3,birth:"?–271"},
+  {id:"kanze",name:"闞澤",zi:"德潤",fac:2,home:"會稽山陰",st:[40,25,85,82,72],tai:304,tr:[["傭書",1],["說客",0],["好學",0]],bio:"家貧傭書而博學;演義為黃蓋送詐降書",fb:"史",gr:3,birth:"?–243"},
+  {id:"nanhua",name:"南華老仙",zi:"",fac:3,home:"不詳",st:[40,20,98,60,95],tai:313,tr:[["太平要術",1,"(演義)"],["觀天",0],["通醫",0]],bio:"演義第一回授張角《太平要術》的老仙人",fb:"演義",gr:4,birth:"不詳"},
+  {id:"chengyuanzhi",name:"程遠志",zi:"",fac:3,home:"不詳",st:[70,80,40,30,65],tai:285,tr:[["五萬犯境",1,"(演義)"],["魯莽",0]],bio:"演義黃巾大將,率五萬人犯涿郡,為關羽所斬",fb:"演義",gr:3,birth:"?–184"},
+  {id:"dengmao",name:"鄧茂",zi:"",fac:3,home:"不詳",st:[62,76,38,28,55],tai:259,tr:[["搶功",1,"(演義)"],["健步",0]],bio:"演義程遠志副將,為張飛所刺",fb:"演義",gr:3,birth:"?–184"},
+  {id:"peiyuanshao",name:"裴元紹",zi:"",fac:3,home:"不詳",st:[60,74,40,30,55],tai:259,tr:[["臥牛山寨",1,"(演義)"],["貪財",0]],bio:"演義黃巾餘黨,臥牛山盜趙雲之馬被殺",fb:"演義",gr:3,birth:"?–?"},
+  {id:"heyi",name:"何儀",zi:"",fac:3,home:"汝南",st:[72,72,45,35,62],tai:286,tr:[["汝南聚眾",1],["堅守",0]],bio:"汝南、潁川黃巾渠帥,為曹操所破(演義為許褚所擒)",fb:"史+演義",gr:3,birth:"?–196"},
+  {id:"zhangkai",name:"張闓",zi:"",fac:3,home:"不詳",st:[55,76,55,30,40],tai:256,tr:[["劫財",1,"(裴注)"],["貪財",0],["反覆",0]],bio:"陶謙部將,殺曹嵩取其財(裴注引說);演義作黃巾餘黨",fb:"裴注+演義",gr:3,birth:"?–?"},
+  {id:"diaochan",name:"貂蟬",zi:"",fac:4,home:"不詳",st:[30,15,90,72,100],tai:307,tr:[["連環計",1,"(演義)"],["善樂",0],["說客",0]],bio:"演義人物;史載呂布與董卓侍婢私通",fb:"演義",gr:4,birth:"?–?"},
+  {id:"zuoci",name:"左慈",zi:"元放",fac:4,home:"廬江",st:[40,30,96,55,90],tai:311,tr:[["方術",1],["觀天",0],["識破",0]],bio:"《後漢書·方術傳》有傳;演義戲弄曹操",fb:"史(方士)",gr:4,birth:"?–?"},
+  {id:"panfeng",name:"潘鳳",zi:"",fac:4,home:"不詳",st:[60,75,30,30,70],tai:265,tr:[["無雙上將",1,"(演義)"],["輕敵",0]],bio:"演義韓馥部將,號無雙上將,為華雄所斬",fb:"演義",gr:3,birth:"?–191"},
+  {id:"caoxing",name:"曹性",zi:"",fac:4,home:"不詳",st:[62,82,48,30,52],tai:274,tr:[["暗箭",1],["神射",0]],bio:"呂布部將;演義射瞎夏侯惇左目",fb:"史(呂布部將)+演義",gr:3,birth:"?–?"},
+  {id:"huaxiong",name:"華雄",zi:"",fac:4,home:"關西",st:[78,90,40,30,60],tai:298,tr:[["連勝",1],["膂力",0],["輕敵",0]],bio:"董卓都督,陽人之戰為孫堅所斬(演義為關羽溫酒所斬)",fb:"史(董卓部)",gr:3,birth:"?–191"},
+  {id:"yuanshu",name:"袁術",zi:"公路",fac:4,home:"汝南汝陽",st:[72,60,68,62,85],tai:347,tr:[["僭號仲家",1],["名望",0],["傲上",0]],bio:"袁紹從弟;得傳國璽,僭號稱帝於壽春",fb:"史",gr:3,birth:"?–199"}
 ];
 // 名人職業覆寫表(之後逐位手填;cards.js 的 cardFigJobs 優先讀此表,查無才由五維推導):{ 名人id: { ja: { 職業id: 階(1~4) }, main: '主職業id' } }。目前為空。
 var CARD_FIG_JOB_OVERRIDE = {};
@@ -344,7 +375,10 @@ var CARD_FIG_WEIGHT = {
   dongzhuo: 10, yuanshao: 10, huangfusong: 10, luzhi: 10, gongsunzan: 10, zhujun: 10, zhengxuan: 10, mateng: 10,
   xuchu: 3, caoren: 3, xiahouyuan: 3, xuhuang: 3, huangzhong: 3, xushu: 3, taishici: 3, huanggai: 3, huatuo: 3, caiyong: 3,
   zhongyao: 6, mizhu: 6, maliang: 6, shamoke: 6, zhoutai: 6, chengpu: 6, shixie: 6,
-  boca: 6, zhangyan: 6, liupi: 6, yudu: 6, yuji: 6, xurong: 6, youtu: 6, yufuluo: 6
+  boca: 6, zhangyan: 6, liupi: 6, yudu: 6, yuji: 6, xurong: 6, youtu: 6, yufuluo: 6,
+  // 戰鬥改版新增 30 位(貂蟬、孫尚香、甄姬較有名 = 3)
+  zhenji: 3, caiyan: 10, caozhi: 10, pangde: 10, zhanghe: 10, huangyueying: 10, sunshangxiang: 3, lingtong: 10, nanhua: 10, diaochan: 3, zuoci: 10,
+  yangxiu: 6, ganfuren: 6, mifuren: 6, masu: 6, zhoucang: 6, yanyan: 6, daqiao: 6, xiaoqiao: 6, dingfeng: 6, kanze: 6, chengyuanzhi: 6, dengmao: 6, peiyuanshao: 6, heyi: 6, zhangkai: 6, panfeng: 6, caoxing: 6, huaxiong: 6, yuanshu: 6
 };
 // 在野名人路過(js/npcvisit.js;使用者決議,數值皆 PLACEHOLDER)。名人來源 CARD_FIGS(金 / 紫階),依上面 CARD_FIG_WEIGHT 加權(缺項 金 10 / 紫 6),已在名冊 / 卡包的不來。
 //   countW = 每日 0 / 1 / 2 位的權重;startMin~endMin = 一天中可抵達的時段(分鐘,本機時間,白天);windowMin = 預定抵達後多久內才演(過了不補演);

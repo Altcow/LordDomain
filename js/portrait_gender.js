@@ -1,5 +1,5 @@
 // js/portrait_gender.js — 頭像性別表:依頭像實際畫面(臉、髮型、服飾)逐張目視判定,'m' 男 / 'f' 女。
-// 鍵:'generic/<職業頭像id>_<a|b|c>'(78)、'biaoshi_NN'(30)、名人 id(70)。拿不準者仍給最可能值,見下方 UNSURE 註記。
+// 鍵:'generic/<職業頭像id>_<a|b|c>'(78)、'biaoshi_NN'(30)、名人 id(100)。拿不準者仍給最可能值,見下方 UNSURE 註記。
 // 不確定(依畫面最可能值標記):generic/bingshi_b(f) caishi_c(m) ciling_a(f) jiaohua_a(m) jisuan_a(f) lizhi_a(m) lvfa_c(m) niangzao_a(m) shangcai_c(m) yetie_c(m) yuewu_a(f) zaozhi_c(m) zhishui_c(m);biaoshi_21(m) biaoshi_23(f) biaoshi_25(m)。
 // 全域名稱:PORTRAIT_GENDER portraitGenderOf
 var PORTRAIT_GENDER = {
@@ -32,7 +32,13 @@ var PORTRAIT_GENDER = {
   'youtu': 'm', 'yuanshao': 'm', 'yudu': 'm', 'yufuluo': 'm', 'yuji': 'm', 'zhangbao': 'm',
   'zhangfei': 'm', 'zhangjiao': 'm', 'zhangliang': 'm', 'zhangliao': 'm', 'zhanglu': 'm', 'zhangmancheng': 'm',
   'zhangniujiao': 'm', 'zhangyan': 'm', 'zhangzhao': 'm', 'zhaoyun': 'm', 'zhengxuan': 'm', 'zhongyao': 'm',
-  'zhoutai': 'm', 'zhouyu': 'm', 'zhugeliang': 'm', 'zhujun': 'm'
+  'zhoutai': 'm', 'zhouyu': 'm', 'zhugeliang': 'm', 'zhujun': 'm',
+  // 戰鬥改版新增 30 位名人(依人物設定:9 位女性)
+  'zhenji': 'f', 'caiyan': 'f', 'caozhi': 'm', 'yangxiu': 'm', 'pangde': 'm', 'zhanghe': 'm',
+  'ganfuren': 'f', 'mifuren': 'f', 'masu': 'm', 'huangyueying': 'f', 'zhoucang': 'm', 'yanyan': 'm',
+  'sunshangxiang': 'f', 'lingtong': 'm', 'daqiao': 'f', 'xiaoqiao': 'f', 'dingfeng': 'm', 'kanze': 'm',
+  'nanhua': 'm', 'chengyuanzhi': 'm', 'dengmao': 'm', 'peiyuanshao': 'm', 'heyi': 'm', 'zhangkai': 'm',
+  'diaochan': 'f', 'zuoci': 'm', 'panfeng': 'm', 'caoxing': 'm', 'huaxiong': 'm', 'yuanshu': 'm'
 };
 // 查表:key 為上述鍵;查無回 null
 function portraitGenderOf(key) { return (typeof PORTRAIT_GENDER !== 'undefined' && PORTRAIT_GENDER[key]) || null; }
