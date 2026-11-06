@@ -155,6 +155,15 @@ function advApplyLock(it, lk) {
   else { it.text += '(得先研發' + nm + ')'; it.go = { kind: 'tech', id: lk.tech }; }
 }
 // 物件 type 的開放狀態:已開放 / 無科技資料 → null;否則 { tech, name, lab?, queued?, blocked? }(tech = 沿前置往回找到的第一個可研節點)
+// 名額檢查:上限為 0 或已達上限 → 回原因文字;沒有上限資料或仍有名額 → null
+function advCapBlock(type, s) {
+  var c = s && s.cap ? s.cap[type] : undefined, n;
+  if (c === undefined || c === null) return null;
+  n = (s.capN && s.capN[type]) || 0;
+  if (c <= 0) return '名額為 0,' + (typeof nsCapHint === 'function' ? nsCapHint(type) : '目前還不能蓋');
+  if (n >= c) return '名額已滿,上限 ' + c + ' 座';
+  return null;
+}
 function advLockOf(type) {
   var nid, n, cur, nx, i, guard = 0, ts, q;
   if (typeof nlUnlocked !== 'function' || typeof techNode !== 'function' || typeof techDone !== 'function' || typeof techReqMet !== 'function' || typeof techEraOpen !== 'function') return null;
@@ -237,7 +246,8 @@ function advCompute(s, mem, xun, sticky) {
     p = ADV_COND[a.cond](s, L, R);
     if (!p) continue;
     c = { id: a.id, tier: a.tier, pri: a.pri, stat: a.stat, go: a.go, core: !!a.core, text: advFill(a.text, p, a.id, xun), params: p };
-    if (a.go && a.go.kind === 'build' && s.lock && s.lock[a.go.type]) advApplyLock(c, s.lock[a.go.type]);
+    if (a.go && a.go.kind === 'build' && advCapBlock(a.go.type, s)) { c.text += '(' + advCapBlock(a.go.type, s) + ')'; c.go = { kind: 'bars' }; c.capBlock = true; }   // 名額不足:說明原因,改導向長條,不叫玩家去蓋
+    else if (a.go && a.go.kind === 'build' && s.lock && s.lock[a.go.type]) advApplyLock(c, s.lock[a.go.type]);
     items.push(c);
   }
   // 壓制矛盾:成對同時出現時移除 pri 較低者
@@ -378,6 +388,9 @@ function advSnapshot() {
     try { lk = advLockOf((typeof fxGoType === 'function') ? fxGoType(t) : t); } catch (e5) { lk = null; }
     if (lk) s.lock[t] = lk;
   });
+  s.cap = {}; s.capN = {};   // 建造建議的真實名額上限(nsCapOf,依等級)與目前數量;名額 0 或已滿的建議不當成可執行
+  ADVICE.forEach(function (a) { var t = a.go && a.go.kind === 'build' ? a.go.type : null; if (t && !(t in s.cap)) s.cap[t] = (typeof nsCapOf === 'function') ? nsCapOf(t) : null; });
+  if (typeof world !== 'undefined' && world && world.objects) world.objects.forEach(function (o) { if (o && o.type in s.cap) s.capN[o.type] = (s.capN[o.type] || 0) + 1; });
   if (typeof currentSeason === 'string') s.season = currentSeason;
   if (typeof nlEra === 'function') { try { s.era = nlEra() || 1; } catch (e4) { /* 略過 */ } }
   s.saniEverWarn = advRt.saniWarned || (s.houses > 0 && advLevelOf('sani', s.v.sani) >= 1);

@@ -2,8 +2,14 @@
 // 依賴(載入順序):carddata.js(CARD_GRADE CARD_JOBS CARD_FIGS CARD_FIG_BY_ID)、bn_data.js、bn_skills_data.js。隨機名冊卡(模擬器用)另需 cards.js。
 // 產物 = 「單位規格 spec」(純 JSON),engine 的 rec.teamA/teamB 直接吃 spec。
 // spec = {name, fig, fac, gr, troop, row, col, apt:{兵種:'S'|'A'|'B'|'C'}, stats:{hp,atk,mag,def,sres,spd,heal,sh,crit,res}, mods:{...}, skills:[戰法 id], ult:id, tags:[...], jobs:[...], traits:[...]}
-// 全域:bnEff bnCardStats bnAptOf bnDefaultTroop bnUnitSpec bnSpecRaw bnBuildTeam bnRandomCard bnRandomLearned bnRowOf bnPower
+// B4 / B6:名人專屬詞條(BN_FIG_TRAIT)併入 mods;名人強度校正(BN_FIG_TUNE);兵書 / 傳授學習欄(bnBookLearnOf → bnLearnMerge)與研兵(bnBookDrillOf)以 typeof 守衛讀 bn_book.js。
+// 全域:bnEff bnCardStats bnAptOf bnDefaultTroop bnUnitSpec bnSpecRaw bnBuildTeam bnRandomCard bnRandomLearned bnRowOf bnPower bnLearnMerge
 
+// B6 戰法平衡覆寫(bn_data.js BN_SKILL_TUNE):載入時套到 BN_SKILLS(只改記憶體,不改資料檔)
+(function () {
+  if (typeof BN_SKILL_TUNE === 'undefined' || typeof BN_SKILLS === 'undefined') return;
+  Object.keys(BN_SKILL_TUNE).forEach(function (id) { if (BN_SKILLS[id]) Object.assign(BN_SKILLS[id], BN_SKILL_TUNE[id]); });
+})();
 function bnEff(v) {
   var k = BN_DATA.effKnee, s = BN_DATA.effSlope;
   if (v <= k[0]) return v;
@@ -61,10 +67,13 @@ function bnPower(spec) {   // 戰力(§5.2,僅顯示)
 
 // 詞條 → mods / 靜態屬性修正
 function bnTraitFold(card, troop) {
-  var mods = {}, st = { stT: 0, stW: 0, stZ: 0, atk: 0, hp: 0, def: 0, spd: 0, atkTroop: 0, all: 1 }, ids = card.tr || [], i, tm, k, scene = '';
+  var mods = {}, st = { stT: 0, stW: 0, stZ: 0, atk: 0, hp: 0, def: 0, spd: 0, atkTroop: 0, all: 1 }, ids = card.tr || [], i, tm, k, scene = '', list;
   function add(o, key, v) { o[key] = (o[key] || 0) + v; }
-  for (i = 0; i < ids.length; i++) {
-    tm = BN_TRAIT_MODS[ids[i]];
+  function addMap(key, src) { mods[key] = mods[key] || {}; Object.keys(src).forEach(function (x) { mods[key][x] = (mods[key][x] || 0) + src[x]; }); }
+  list = ids.map(function (id) { return BN_TRAIT_MODS[id]; });
+  if (card.fig && typeof BN_FIG_TRAIT !== 'undefined' && BN_FIG_TRAIT[card.fig]) list.push(BN_FIG_TRAIT[card.fig].m);   // 名人專屬詞條(B4)
+  for (i = 0; i < list.length; i++) {
+    tm = list[i];
     if (!tm) continue;
     if (tm.troop && tm.troop !== troop) continue;
     if (tm.stT) st.stT += tm.stT;
@@ -75,7 +84,10 @@ function bnTraitFold(card, troop) {
     if (tm.spd) st.spd += tm.spd;
     if (tm.atkTroop && tm.atkTroop[troop]) st.atkTroop += tm.atkTroop[troop];
     if (tm.allMul) st.all *= tm.allMul;
-    ['takenPct', 'frontTaken', 'takenRanged', 'critTaken', 'healTaken', 'r1Dmg', 'firstHit', 'vsShield', 'atkMelee', 'early2', 'lateTaken', 'rowTakenFront', 'rowRate', 'rowAtk', 'shieldOut', 'r1Spd', 'reach'].forEach(function (key) { if (tm[key]) add(mods, key, tm[key]); });
+    ['takenPct', 'frontTaken', 'takenRanged', 'critTaken', 'healTaken', 'r1Dmg', 'firstHit', 'vsShield', 'atkMelee', 'early2', 'lateTaken', 'rowTakenFront', 'rowRate', 'rowAtk', 'shieldOut', 'r1Spd', 'reach', 'stratPct', 'takenStrat', 'healOut', 'teamAtk'].forEach(function (key) { if (tm[key]) add(mods, key, tm[key]); });
+    ['vsFac', 'vsFig', 'vsTroop', 'teamTroopSpd'].forEach(function (key) { if (tm[key]) addMap(key, tm[key]); });
+    if (tm.lowHpTaken) mods.lowHpTaken = tm.lowHpTaken.slice();
+    if (tm.teamTakenFac) mods.teamTakenFac = { fac: tm.teamTakenFac.fac, v: tm.teamTakenFac.v };
     if (tm.takenFromTroop) { mods.takenFromTroop = mods.takenFromTroop || {}; Object.keys(tm.takenFromTroop).forEach(function (t) { mods.takenFromTroop[t] = (mods.takenFromTroop[t] || 1) * tm.takenFromTroop[t]; }); }
     if (tm.burnTaken) mods.burnTaken = (mods.burnTaken || 1) * tm.burnTaken;
     if (tm.burnOut) mods.burnOut = (mods.burnOut || 1) * tm.burnOut;
@@ -105,6 +117,14 @@ function bnAutoLearn(card, troop, native, n) {
   for (i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0;
   while (out.length < n && pool.length) { k = h % pool.length; out.push(pool[k]); pool.splice(k, 1); h = (Math.imul(h, 1664525) + 1013904223) >>> 0; }
   return out;
+}
+// 學習欄合併(B4):L = 各欄指定戰法(null / 無效 = 該欄自動);自動欄依 bnAutoLearn 補(避開已指定者)。回傳最多 n 個 id
+function bnLearnMerge(card, troop, native, n, L) {
+  var out = [], fixed = [], i, auto, k = 0;
+  for (i = 0; i < n; i++) { var id = L[i]; fixed.push(id && BN_SKILLS[id] && native.indexOf(id) < 0 && fixed.indexOf(id) < 0 ? id : null); }
+  auto = bnAutoLearn(card, troop, native.concat(fixed.filter(function (x) { return x; })), n);
+  for (i = 0; i < n; i++) out.push(fixed[i] || auto[k++] || null);
+  return out.filter(function (x) { return x; });
 }
 function bnNativeSkills(card, troop) {
   var ids = Object.keys(card.ja || {}), main = card.main, out = [], pr, j;
@@ -163,11 +183,21 @@ function bnUnitSpec(card, o) {
     skills = bnNativeSkills(card, troop);
     learned = o.learned || card.bnLearn;
     sl = bnSlotCount(card);
+    if (!learned && typeof bnBookLearnOf === 'function') { var bl = bnBookLearnOf(card); if (bl) learned = bnLearnMerge(card, troop, skills, sl, bl); }   // 兵書 / 傳授學到的戰法(bn_book.js;名冊卡才有)
     if (!learned) learned = BN_DATA.slots.autoLearn ? bnAutoLearn(card, troop, skills, sl) : [];
     for (i = 0; i < learned.length && i < sl; i++) if (BN_SKILLS[learned[i]] && skills.indexOf(learned[i]) < 0) skills.push(learned[i]);
     spec.ult = bnUltFor(card, troop);
   }
   spec.skills = skills;
+  // 名人強度校正(B6,bn_data.js BN_FIG_TUNE):兵力 / 攻擊 / 謀略 / 治療 / 護盾量同乘一個係數,讓新舊名人勝率落在相近範圍
+  var tn = (card.fig && typeof BN_FIG_TUNE !== 'undefined') ? BN_FIG_TUNE[card.fig] : 0;
+  if (tn && tn !== 1) {
+    ['hp', 'atk', 'mag', 'heal', 'sh'].forEach(function (k) { spec.stats[k] = bnRound(spec.stats[k] * tn); });
+    spec.mods.rateBonus = (spec.mods.rateBonus || 0) + (tn - 1) * (BN_DATA.figTuneRate || 0);   // 同一係數也小幅影響戰法發動率(治療 / 控制型不吃數值縮放)
+  }
+  // 研兵(bn_book.js;只對名冊卡):該兵種兵力 / 攻擊 / 謀略 / 治療 +n%
+  var dr = (typeof bnBookDrillOf === 'function') ? bnBookDrillOf(card, troop) : 0;
+  if (dr > 0) { ['hp', 'atk', 'mag', 'heal'].forEach(function (k) { spec.stats[k] = bnRound(spec.stats[k] * (1 + dr)); }); spec.drill = dr; }
   // 升星加成(卡片熔爐 cardsStarBonus;缺函式 / 缺欄位 = 0)。注意 entry.star 是鎖定旗標,不是星等,不讀
   var sb = (typeof cardsStarBonus === 'function') ? cardsStarBonus(card) : null;
   if (sb && (sb.atk || sb.def || sb.hp)) {
@@ -260,6 +290,13 @@ function bnBuildTeam(specs, o) {
   eachU(function (a) {
     if (a.mods.rowRate) eachU(function (b) { if (b.row === a.row) b.mods.rateBonus = (b.mods.rateBonus || 0) + a.mods.rowRate; });
     if (a.mods.rowAtk) eachU(function (b) { if (b.row === a.row) { mulStat(b, 'atk', 1 + a.mods.rowAtk); mulStat(b, 'mag', 1 + a.mods.rowAtk); } });
+  });
+  // 名人專屬詞條光環(B4):全隊攻擊、我方某陣營受傷、我方某兵種速度
+  eachU(function (a) {
+    var tt = a.mods.teamTakenFac, ts = a.mods.teamTroopSpd;
+    if (a.mods.teamAtk) eachU(function (b) { mulStat(b, 'atk', 1 + a.mods.teamAtk); mulStat(b, 'mag', 1 + a.mods.teamAtk); });
+    if (tt) eachU(function (b) { if (b.fac === tt.fac) b.mods.takenPct = (b.mods.takenPct || 0) + tt.v; });
+    if (ts) eachU(function (b) { if (ts[b.troop]) b.stats.spd += ts[b.troop]; });
   });
   return { units: units, bonds: bonds, formation: fm };
 }

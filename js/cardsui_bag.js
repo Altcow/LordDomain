@@ -4,7 +4,7 @@
 // 掛在 cardsui.js(cuBagHtml / cuBagClick / cuStarHtml 由其 typeof 守衛呼叫)。引擎在 cards.js(cardsBag* / cardsFurnace* / cardsStar* / cardsExchange)。不發聲、不推播。ES2017;不用 ?. ??。
 // 全域名稱:cuBagHtml cuBagClick cuBagCss cuStarHtml CU_BAG_PAGE CU_BAG_MSG
 var CU_BAG_PAGE = 40;   // 列表一頁筆數(「顯示更多」每次再加一頁)
-var CU_BAG_MSG = { over: '溢出區的卡需先納入卡包(清出空位後自動納入;也可直接熔鍊)', tok: '酒令不足', full: '名冊已滿,先請辭一人或等官階晉升', none: '此卡已不在卡包', fig: '名人需在詳情頁手動熔鍊(二次確認)' };
+var CU_BAG_MSG = { over: '溢出區的卡需先納入卡包(清出空位後自動納入;也可直接熔鍊)', tok: '酒令不足', full: '名冊已滿,先遣散一人或等官階晉升', none: '此卡已不在卡包', fig: '名人需在詳情頁手動熔鍊(二次確認)' };
 var CU_BAG_AUTO = [[-1, '關'], [0, '白'], [1, '青以下'], [2, '藍以下']];
 var CU_BAG_LE = [[0, '白'], [1, '青'], [2, '藍'], [3, '紫']];   // 一鍵熔爐「品階 ≤ X」可選
 

@@ -3,19 +3,28 @@
 // 引擎是惰性推進的:佇列空了才呼叫 bnStep(S) 取下一個行動的事件;略過 = bnRunToEnd(S) 後直接跳到終局視覺(結果與播放必然相同,引擎確定性)。
 // 繪製:只用 canvas 2D;全身圖直接 drawImage(原圖 ≤ 190×390,不另做縮圖快取),受擊閃白用預烘白剪影(lazy,≤ 20 張),特效用 assets/bnfx/ 黑底圖 + 'lighter' 加色混合;
 // 物件池(數字 28 / 特效 64)不在每幀配置。缺圖一律回退:名人全身 → 半身頭像 → 程式小人;兵種圖 → 程式小人(ART.chibiSprite 可用時放大)。
-// 不寫 DOM(DOM 由 bnui.js 透過 P.hooks 接手)、不發聲(音效經 sfxwPlay 且有 typeof 守衛、P.sfx=false 可關)。ES2017;不用 ?. ??。
+// 不寫 DOM(DOM 由 bnui.js 透過 P.hooks 接手)、不直接發聲(音效經 js/bnsfx.js 的 bnSfxPlay,缺檔退回 sfxwPlay;皆有 typeof 守衛、P.sfx=false 可關)。ES2017;不用 ?. ??。
+// B5 動畫:前衝前傾 lean、受擊閃白(全身 / 半身 / 程式小人)與後退、閃避側閃 ev、倒下下沉淡出、治療 / 護盾 / 增減益粒子(物件池 BN_PT_N)、狀態圖示彈出、暴擊微震與放大浮字、待機呼吸晃動。
+// 視覺時間 = 模擬秒 ÷ bnPlStK(倍速時拉長,不閃一下就沒;前衝與命中同步仍用模擬秒);省電:待機靜止、無微震、粒子減量;低階機(平均繪製 > BNDR.lowMs)自動 BNDR.low 粒子減半。
 // 戰鬥改版(2026-11-06):沒有士氣條;文化主題施放特效 fxc_*、狀態圖示 stc_*、輔助虛影 fxg_*、主角專屬 fxhero_*(assets/bnfx/,透明底,一般混合;缺圖退回原 fx_* 特效)。
-// 全域:BNPL_T BNDR bnDrImg bnDrLook bnDrLayout bnDrFrame bnDrResize bnPlNew bnPlTick bnPlSkip bnPlDispose bnPlPredict bnPlStats bnPlSetSpeed BN_FX_THEME BN_FX_GHOST BN_FX_HERO
+// 全域:BNPL_T BNDR bnDrImg bnDrLook bnDrLayout bnDrFrame bnDrResize bnPlNew bnPlTick bnPlSkip bnPlDispose bnPlPredict bnPlStats bnPlSetSpeed BN_FX_THEME BN_FX_GHOST BN_FX_HERO BN_PT_KIND BN_ATK_SFX bnPlBurst bnDrIdle
 
 var BNPL_T = {
   round: 0.55, act: 0.1, cast: 0.28, lunge: 0.2, proj: 0.24, basicWait: 0.52, skillHit: 0.2, skillWait: 0.36, multi: 0.14, multiDelay: 0.06,
   dot: 0.26, heal: 0.26, healMore: 0.12, status: 0.08, txt: 0.3, end: 0.8, chain: 0.28, cutFull: 1.0, cutSmall: 0.45, killDelay: 0.05, dying: 0.45
 };
 var BNDR = {
-  imgs: {}, tint: {}, white: {}, glow: {}, bgKey: '', bg: null, dprMax: 2, whiteMax: 20, whiteN: 0,
+  imgs: {}, tint: {}, white: {}, glow: {}, bgKey: '', bg: null, dprMax: 2, whiteMax: 20, whiteN: 0, low: false, lowMs: 8,
   stats: { frames: 0, lastMs: 0, sumMs: 0, maxMs: 0, samples: [] }
 };
-var BN_NUM_N = 28, BN_FX_N = 64;
+var BN_NUM_N = 28, BN_FX_N = 64, BN_PT_N = 48;
+// 粒子爆發:n 顆、顏色、形狀(0 光點 1 十字 2 上箭 3 下箭)、初速 vy、重力 g、存活秒
+var BN_PT_KIND = {
+  heal: { n: 8, col: '#7af09a', sh: 1, vy: -55, g: -10, dur: 0.75 }, shield: { n: 8, col: '#8ec7ff', sh: 0, vy: -10, g: 0, dur: 0.6, ring: 1 },
+  buff: { n: 5, col: '#ffd75a', sh: 2, vy: -60, g: 0, dur: 0.6 }, debuff: { n: 5, col: '#c890ff', sh: 3, vy: 45, g: 0, dur: 0.6 }, crit: { n: 6, col: '#ffb040', sh: 0, vy: -70, g: 160, dur: 0.4, burst: 1 }
+};
+var BN_ATK_SFX = { '盾': 'atk_blade', '步': 'atk_spear', '騎': 'atk_cav', '弓': 'atk_bow', '謀': 'atk_strat' };
+var BN_SFX_ALT = { atk_blade: 'melee', atk_spear: 'blade', atk_cav: 'hoofH', atk_bow: 'arrow', atk_strat: 'bolt', block: 'shieldHit', kill: 'grunt', ult: 'flag', drum: 'drum' };   // 沒有 bnsfx.js 時退回 sfxwar 舊音色
 var BN_NUM_DMG = '#ff3b30', BN_NUM_HEAL = '#3ee05a', BN_NUM_MIN = 15;   // 浮字:扣血紅、補血綠,一律黑色描邊;最小字級(px)
 var BN_ST_ICON = { atk_up: 1, atk_down: 1, def_up: 1, def_down: 1, spd_up: 1, stun: 1, burn: 1, poison: 1, bleed: 1, shield: 1, silence: 1, taunt: 1, timid: 1, confuse: 1, heal_reduce: 'heal_block', ward: 1, rate_up: 'stc_rate_up', debuff_hit: 'stc_ink_blind', wx_mark: 'stc_wx_mark' };
 var BN_ST_NAME = {
@@ -178,7 +187,8 @@ function bnPlNewVu(u, L) {
   var lk = bnDrLook(u), p = L ? L.pos[u.side][u.row][u.col] : { x: 0, y: 0 };
   return {
     id: u.id, side: u.side, name: u.name, troop: u.troop, fig: u.fig, row: u.row, col: u.col, px: p.x, py: p.y, tx: p.x, ty: p.y, dx: 0, dy: 0, hp: u.hp, mx: u.maxHp, hpShow: u.hp, hpLag: u.hp, lagHold: 0, hitGlow: 0,
-    alive: u.alive !== false, fade: 1, rot: 0, flash: 0, cast: 0, kb: 0, scale: 1, lunge: null, dying: -1, st: {}, shield: 0, look: lk, phase: (u.id * 1.713) % 6.28, sx: 1, sy: 1, sh: L ? L.sh : 100, nn: 0, hitAt: 0, ultReady: false, tone: ''
+    alive: u.alive !== false, fade: 1, rot: 0, flash: 0, cast: 0, kb: 0, scale: 1, lunge: null, dying: -1, st: {}, shield: 0, look: lk, phase: (u.id * 1.713) % 6.28, sx: 1, sy: 1, sh: L ? L.sh : 100, nn: 0, hitAt: 0, ultReady: false, tone: '',
+    lean: 0, ev: 0, stp: {}, ibr: 1, itl: 0, isw: 0
   };
 }
 function bnPlNew(S, L, o) {
@@ -191,15 +201,42 @@ function bnPlNew(S, L, o) {
   };
   for (i = 0; i < BN_NUM_N; i++) P.nums.push({ on: false, x: 0, y: 0, vy: 0, t: 0, dur: 1, text: '', col: '#fff', size: 14, kind: 0 });
   for (i = 0; i < (P.ps ? BN_FX_N / 2 : BN_FX_N); i++) P.fx.push({ on: false, name: '', x: 0, y: 0, x2: 0, y2: 0, t: 0, dur: 0.4, size: 40, rot: 0, col: '#fff', mode: 0, delay: 0 });
+  P.pt = [];
+  for (i = 0; i < (P.ps ? BN_PT_N / 3 : BN_PT_N); i++) P.pt.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, g: 0, t: 0, dur: 0.5, col: '#fff', sh: 0, sz: 4 });
   for (i = 0; i < S.units.length; i++) { u = S.units[i]; P.vu[u.id] = bnPlNewVu(u, L); }
+  if (P.sfx && typeof bnSfxBattle === 'function') { try { bnSfxBattle(true); } catch (e) { /* 略過 */ } }
   return P;
 }
 function bnPlSetSpeed(P, s) { P.speed = s; }
-function bnPlDispose(P) { P.over = true; P.tm = []; P.hooks = {}; }
+function bnPlDispose(P) {
+  P.over = true; P.tm = []; P.hooks = {};
+  if (P.sfx && typeof bnSfxBattle === 'function') { try { bnSfxBattle(false); } catch (e) { /* 略過 */ } }
+}
 function bnPlHook(P, name, a, b) { var f = P.hooks && P.hooks[name]; if (f) { try { f(a, b); } catch (e) { /* 略過 */ } } }
 function bnPlSfx(P, kind) {
-  if (!P.sfx || typeof sfxwPlay !== 'function') return;
-  try { sfxwPlay(kind); } catch (e) { /* 略過 */ }
+  if (!P.sfx || P.skipped) return;
+  try {
+    if (typeof bnSfxPlay === 'function') bnSfxPlay(kind);
+    else if (typeof sfxwPlay === 'function' && BN_SFX_ALT[kind]) sfxwPlay(BN_SFX_ALT[kind]);
+  } catch (e) { /* 略過 */ }
+}
+// 粒子爆發(治療 / 護盾 / 增益 / 減益 / 暴擊);池滿就少發,不配置新物件。省電 0.4 倍、低階機 0.5 倍數量
+function bnPlBurst(P, v, kind) {
+  var K = BN_PT_KIND[kind], L = P.L, c, n, i, j = 0, p, a, r;
+  if (!K || !v || !P.pt) return 0;
+  c = bnPlCenter(v);
+  n = Math.max(2, Math.round(K.n * (P.ps ? 0.4 : 1) * (BNDR.low ? 0.5 : 1)));
+  for (i = 0; i < P.pt.length && j < n; i++) {
+    p = P.pt[i];
+    if (p.on) continue;
+    a = (j / n) * 6.283 + (v.id % 5) * 0.4; r = L.colW * 0.28;
+    p.on = true; p.t = -j * 0.03; p.dur = K.dur; p.col = K.col; p.sh = K.sh; p.g = K.g; p.sz = Math.max(K.sh > 1 ? 7 : 4, L.sh * (K.sh > 1 ? 0.1 : (K.sh ? 0.08 : 0.05)));
+    if (K.ring) { p.x = c.x + Math.cos(a) * r; p.y = c.y + Math.sin(a) * r * 0.9; p.vx = -Math.sin(a) * 40; p.vy = Math.cos(a) * 36 + K.vy; p.t = 0; }
+    else if (K.burst) { p.x = c.x; p.y = c.y; p.vx = Math.cos(a) * 110; p.vy = Math.sin(a) * 80 + K.vy; p.t = 0; }
+    else { p.x = c.x + Math.cos(a) * r; p.y = c.y + (K.vy > 0 ? -L.sh * 0.35 : L.sh * 0.25) + ((j * 7) % 5) * 2; p.vx = Math.cos(a) * 8; p.vy = K.vy * (0.8 + ((j * 3) % 4) * 0.1); }
+    j++;
+  }
+  return j;
 }
 function bnPlAt(P, delay, fn) {
   var t = P.clock + delay, i = P.tm.length;
@@ -219,7 +256,7 @@ function bnPlText(P, v, text, col, size, kind, dur, dxj) {
   var i, k, n = null, L = P.L;
   for (i = 0; i < P.nums.length; i++) if (!P.nums[i].on) { n = P.nums[i]; break; }
   if (!n) n = P.nums[0];
-  n.on = true; n.uid = v.id; n.st = 0; n.text = text; n.col = col; n.size = size || 1; n.kind = kind || 0; n.t = 0; n.dur = dur || 0.8; n.vy = kind === 2 ? -L.sh * 0.18 : -L.sh * 0.55;
+  n.on = true; n.uid = v.id; n.st = 0; n.text = text; n.col = col; n.size = size || 1; n.kind = kind || 0; n.t = 0; n.pk = bnPlStK(P); n.dur = (dur || 0.8) * n.pk; n.vy = kind === 2 ? -L.sh * 0.18 : -L.sh * 0.55;
   n.x = v.px + v.dx + (dxj !== undefined ? dxj : ((v.nn++ % 3) - 1) * L.colW * 0.22);
   n.y = v.py + v.dy - L.sh - 24 - (kind === 2 ? 16 : 0);   // 從兵力條上方浮起:不被人物 / 血條遮住,也不蓋血條
   if (kind !== 2) {   // 同一人短時間內多個數字(連擊 / 治療):後出的往上錯開一格,不疊在一起
@@ -257,6 +294,7 @@ function bnPlFx(P, name, x, y, o) {
   if (!f) return null;
   f.on = true; f.name = name; f.x = x; f.y = y; f.x2 = o.x2 !== undefined ? o.x2 : x; f.y2 = o.y2 !== undefined ? o.y2 : y; f.t = -(o.delay || 0); f.dur = o.dur || 0.4; f.size = o.size || 60;
   f.rot = o.rot || 0; f.col = o.col || '#ffe9a8'; f.mode = o.mode || 0; f.file = o.file || ''; f.alt = o.alt || '';
+  if (f.mode !== 1 && f.mode !== 2) f.dur *= bnPlStK(P);   // 飛行物(箭 / 球)須與命中同步,維持模擬秒
   return f;
 }
 
@@ -338,12 +376,12 @@ function bnPlHit(P, e, vt) {
   var abs = e.abs | 0, v = e.v | 0, L = P.L, ty = e.ty, col;
   if (v > 0) { vt.hpLag = Math.max(vt.hpLag, vt.hpShow, vt.hp); vt.lagHold = 0.4; vt.hitGlow = 1; }   // 殘影:舊血量淡紅段停 0.4 秒再縮;血條短暫加亮
   vt.hp = e.hp;
-  if (abs > 0) { vt.shield = Math.max(0, vt.shield - abs); if (v <= 0) bnPlText(P, vt, '盾 -' + abs, '#8ec7ff', 1, 0, 0.8); else bnPlText(P, vt, '-' + abs, '#8ec7ff', 0.8, 0, 0.7, -L.colW * 0.3); bnPlSfx(P, 'shieldHit'); }
+  if (abs > 0) { vt.shield = Math.max(0, vt.shield - abs); if (v <= 0) bnPlText(P, vt, '盾 -' + abs, '#8ec7ff', 1, 0, 0.8); else bnPlText(P, vt, '-' + abs, '#8ec7ff', 0.8, 0, 0.7, -L.colW * 0.3); bnPlSfx(P, 'block'); }
   if (v > 0) {
-    col = BN_NUM_DMG;   // 扣血一律紅字黑框(攻擊 / 謀略 / 持續傷害皆同);暴擊更大
-    if (e.crit) { bnPlText(P, vt, '-' + v + '!', BN_NUM_DMG, 1.4, 1, 0.95); P.shake = 0.12; }
+    col = BN_NUM_DMG;   // 扣血一律紅字黑框(攻擊 / 謀略 / 持續傷害皆同);暴擊更大(浮字放大彈出 + 畫面微震 + 火花)
+    if (e.crit) { bnPlText(P, vt, '-' + v + '!', BN_NUM_DMG, 1.4, 1, 0.95); P.shake = 0.16; bnPlBurst(P, vt, 'crit'); }
     else bnPlText(P, vt, '-' + v, col, 1, 0, 0.8);
-    if (ty !== 'dot') { vt.flash = 1; vt.kb = 1; }
+    if (ty !== 'dot') { vt.flash = 1; vt.kb = 1; bnPlSfx(P, e.crit ? 'crit' : 'hit'); }
   }
   if (e.ctr) bnPlText(P, vt, '反擊', '#ffb36a', 0.75, 2, 0.7);
   if (e.via !== undefined && P.vu[e.via]) bnPlText(P, P.vu[e.via], '援護', '#8ec7ff', 0.75, 2, 0.7);
@@ -361,11 +399,11 @@ function bnPlDmg(P, e) {
       if (bnPlIsMelee(vs, null)) { delay = BNPL_T.lunge; bnPlStartLunge(P, vs, vt, 0.52); }
       else { delay = BNPL_T.proj; bnPlProj(P, vs, vt, e, delay); }
       wait = BNPL_T.basicWait;
-      bnPlSfx(P, vs.troop === '弓' ? 'arrow' : (vs.troop === '騎' ? 'hoofH' : (vs.troop === '謀' ? 'bolt' : (vs.troop === '盾' ? 'melee' : 'blade'))));
+      bnPlSfx(P, BN_ATK_SFX[vs.troop] || 'atk_blade');   // 出手音依兵種:盾刀、步槍、騎、弓、謀略
     } else if (vs) {
       delay = BNPL_T.skillHit; wait = BNPL_T.skillWait;
       if (bnPlIsMelee(vs, sk)) bnPlStartLunge(P, vs, vt, 0.5); else if (sk && (sk.kind === 'atk_back' || sk.kind === 'atk_snipe' || vs.troop === '弓' || vs.troop === '謀')) bnPlProj(P, vs, vt, e, delay);
-      bnPlSfx(P, vs.troop === '謀' ? 'bolt' : (vs.troop === '弓' ? 'arrow' : 'melee'));
+      bnPlSfx(P, BN_ATK_SFX[vs.troop] || 'atk_blade');
     }
   }
   if (e.ctr && vs) { bnPlStartLunge(P, vs, vt, 0.4); }
@@ -379,7 +417,8 @@ function bnPlStatus(P, e) {
   if (!v) return 0;
   v.st[e.id] = 1;
   if (e.id === 'shield') return 0;
-  if (nm && e.id !== 'ccimm') bnPlStPop(P, v, e.id);
+  if (v.stp) v.stp[e.id] = 1;   // 狀態圖示彈出
+  if (nm && e.id !== 'ccimm') { bnPlStPop(P, v, e.id); bnPlBurst(P, v, good ? 'buff' : 'debuff'); bnPlSfx(P, good ? 'buff' : 'debuff'); }
   return BNPL_T.status;
 }
 // 狀態浮字:「+中毒」「−防禦」…;同一人連續被施加時排隊(間隔 BNST_POP.gap)、水平錯開,小字快速淡出。
@@ -404,7 +443,7 @@ function bnPlStPop(P, v, id) {
     var lane = 0, up, i, n, lh = Math.max(BN_NUM_MIN * 0.9, P.L.fs * 1.25) * BNST_POP.size + 3;
     if (P.skipped) return;
     for (i = 0; i < P.nums.length; i++) if (P.nums[i].on && P.nums[i].kind === 2 && P.nums[i].uid === v.id && P.nums[i].st) lane++;
-    n = bnPlText(P, v, txt, good ? BNST_POP.good : BNST_POP.bad, BNST_POP.size, 2, BNST_POP.dur * k, (slot - 1) * P.L.colW * 0.12);
+    n = bnPlText(P, v, txt, good ? BNST_POP.good : BNST_POP.bad, BNST_POP.size, 2, BNST_POP.dur, (slot - 1) * P.L.colW * 0.12);   // bnPlText 已依倍速拉長
     n.st = 1;
     up = Math.max(0, Math.floor((n.y - 12) / lh));   // 上方剩幾格(橫式第一列很靠頂):放不下就改排到左右兩側
     lane = Math.min(3, lane);
@@ -417,7 +456,7 @@ function bnPlKill(P, e) {
   var v = P.vu[e.tgt], d;
   if (!v) return 0;
   d = Math.max(0, v.hitAt - P.clock) + BNPL_T.killDelay;
-  bnPlAt(P, d, function () { v.dying = 0; v.alive = false; v.st = {}; v.shield = 0; if (!P.skipped) bnPlSfx(P, 'grunt'); });
+  bnPlAt(P, d, function () { v.dying = 0; v.alive = false; v.st = {}; v.stp = {}; v.shield = 0; if (!P.skipped) bnPlSfx(P, 'kill'); });
   return 0;
 }
 function bnPlCutin(P, e) {
@@ -426,11 +465,11 @@ function bnPlCutin(P, e) {
   full = !!v.fig && !P.ultSeen[e.u] && !P.ps && P.speed < 4;
   P.ultSeen[e.u] = true;
   v.tone = tone;
-  dur = full ? BNPL_T.cutFull : BNPL_T.cutSmall;
+  dur = (full ? BNPL_T.cutFull : BNPL_T.cutSmall) * bnPlStK(P);   // 倍速時 cut-in 不縮成一閃(3× 實際約 0.7 秒)
   P.cut = { full: full, t: 0, dur: dur, side: v.side, name: v.name, fig: v.fig, skill: d ? d.name : '', tone: tone, uid: e.u, path: v.look.paths[0], big: !!v.fig };
   if (!full) { bnPlFx(P, 'morale_burst', v.px, v.py - P.L.sh * 0.5, { size: P.L.sh * 1.3, dur: 0.5, delay: 0 }); bnPlLabel(P, v, '大招·' + (d ? d.name : '')); }
   bnPlHeroFx(P, v, e.id);
-  bnPlSfx(P, 'flag');
+  bnPlSfx(P, 'ult');
   bnPlHook(P, 'cut', P.cut);
   return dur;
 }
@@ -479,13 +518,13 @@ function bnPlEvent(P, e) {
     }
     case 'dmg': return bnPlDmg(P, e);
     case 'evade':
-      v = P.vu[e.tgt]; if (v) bnPlText(P, v, e.miss ? '落空' : '閃避', '#cfe8ff', 0.9, 2, 0.7);
+      v = P.vu[e.tgt]; if (v) { bnPlText(P, v, e.miss ? '落空' : '閃避', '#cfe8ff', 0.9, 2, 0.7); v.ev = 1; bnPlSfx(P, 'evade'); }
       return t.status;
     case 'heal': {
       v = P.vu[e.tgt];
       if (!v) return 0;
       v.hp = e.hp;
-      if (e.v > 0) { bnPlText(P, v, '+' + e.v, BN_NUM_HEAL, 1, 0, 0.85); c = bnPlCenter(v); bnPlFx(P, P.sk && P.sk.kind === 'heal_all' ? 'heal_motes' : 'heal_pillar', c.x, c.y, { size: L.sh * 0.9, dur: 0.5 }); }
+      if (e.v > 0) { bnPlText(P, v, '+' + e.v, BN_NUM_HEAL, 1, 0, 0.85); c = bnPlCenter(v); bnPlFx(P, P.sk && P.sk.kind === 'heal_all' ? 'heal_motes' : 'heal_pillar', c.x, c.y, { size: L.sh * 0.9, dur: 0.5 }); bnPlBurst(P, v, 'heal'); bnPlSfx(P, 'heal'); }
       return P.hitN++ === 0 ? t.heal : t.healMore;
     }
     case 'shield':
@@ -493,11 +532,12 @@ function bnPlEvent(P, e) {
       if (!v) return 0;
       v.shield = e.tot; v.st.shield = 1;
       bnPlText(P, v, '盾 +' + e.v, '#8ec7ff', 0.95, 0, 0.85);
-      c = bnPlCenter(v); bnPlFx(P, 'shield_dome', c.x, c.y, { size: L.sh * 1.0, dur: 0.5 });
+      c = bnPlCenter(v); bnPlFx(P, 'shield_dome', c.x, c.y, { size: L.sh * 1.0, dur: 0.5 }); bnPlBurst(P, v, 'shield'); bnPlSfx(P, 'shield');
+      if (v.stp) v.stp.shield = 1;
       return P.hitN++ === 0 ? t.heal : t.healMore;
     case 'revive':
       v = P.vu[e.tgt];
-      if (v) { v.alive = true; v.dying = -1; v.fade = 0; v.rot = 0; v.hp = e.hp; bnPlText(P, v, '復活', '#8ff0a0', 1.1, 2, 0.9); c = bnPlCenter(v); bnPlFx(P, 'heal_pillar', c.x, c.y, { size: L.sh * 1.1, dur: 0.6 }); }
+      if (v) { v.alive = true; v.dying = -1; v.fade = 0; v.rot = 0; v.hp = e.hp; bnPlText(P, v, '復活', '#8ff0a0', 1.1, 2, 0.9); c = bnPlCenter(v); bnPlFx(P, 'heal_pillar', c.x, c.y, { size: L.sh * 1.1, dur: 0.6 }); bnPlBurst(P, v, 'heal'); bnPlSfx(P, 'heal'); }
       return t.heal;
     case 'status': return bnPlStatus(P, e);
     case 'unstatus':
@@ -559,7 +599,7 @@ function bnPlPredict(S, n) {
 
 // ───────── 推進 ─────────
 function bnPlAnim(P, dt) {
-  var id, v, n, f, i, l, tm;
+  var id, v, n, f, i, l, tm, k, dv = dt / bnPlStK(P), pt = P.pt;   // dv = 視覺秒(倍速時較慢,短動畫不一閃即逝)
   for (id in P.vu) {
     v = P.vu[id];
     if (v.px !== v.tx || v.py !== v.ty) {
@@ -572,10 +612,12 @@ function bnPlAnim(P, dt) {
     else if (v.hpLag > v.hpShow) { v.hpLag += (v.hpShow - v.hpLag) * Math.min(1, dt * 2.2); if (v.hpLag - v.hpShow < 0.5) v.hpLag = v.hpShow; }
     if (v.hpLag < v.hpShow) v.hpLag = v.hpShow;
     if (v.hitGlow > 0) v.hitGlow = Math.max(0, v.hitGlow - dt / 0.35);
-    if (v.flash > 0) v.flash = Math.max(0, v.flash - dt / 0.2);
-    if (v.kb > 0) v.kb = Math.max(0, v.kb - dt / 0.25);
+    if (v.flash > 0) v.flash = Math.max(0, v.flash - dv / 0.2);
+    if (v.kb > 0) v.kb = Math.max(0, v.kb - dv / 0.25);
+    if (v.ev > 0) v.ev = Math.max(0, v.ev - dv / 0.3);
     if (v.cast > 0) v.cast = Math.max(0, v.cast - dt / 0.32);
-    v.dx = 0; v.dy = 0; v.scale = 1; v.sx = 1; v.sy = 1;
+    if (v.stp) for (k in v.stp) { v.stp[k] -= dv / 0.3; if (v.stp[k] <= 0) delete v.stp[k]; }
+    v.dx = 0; v.dy = 0; v.scale = 1; v.sx = 1; v.sy = 1; v.lean = 0;
     l = v.lunge;
     if (l) {
       l.t += dt;
@@ -585,15 +627,26 @@ function bnPlAnim(P, dt) {
         n = i < 0.4 ? i / 0.4 : (i < 0.55 ? 1 : 1 - (i - 0.55) / 0.45);
         n = n * n * (3 - 2 * n);
         v.dx = l.tx * 0.38 * n; v.dy = l.ty * 0.38 * n;
+        if (i < 0.12) { v.dx -= l.tx * 0.04 * (i / 0.12); }   // 出手前微微後拉(蓄勢)
         v.sx = 1 + 0.12 * n * (i < 0.4 ? 1 : -0.6); v.sy = 1 - 0.07 * n * (i < 0.4 ? 1 : -0.6);
+        v.lean = n;   // 前傾
       }
     }
     if (v.kb > 0) { v.dx += (v.side === 'A' ? -1 : 1) * v.kb * P.L.colW * 0.1; }
+    if (v.ev > 0) { v.dx += (v.side === 'A' ? -1 : 1) * Math.sin(v.ev * 3.1416) * P.L.colW * 0.18; v.dy -= Math.sin(v.ev * 3.1416) * P.L.sh * 0.04; }   // 閃避:側身後閃再回位
     if (v.dying >= 0) {
-      v.dying += dt;
+      v.dying += dv;
       i = Math.min(1, v.dying / BNPL_T.dying);
-      v.rot = i * 1.22 * (v.side === 'A' ? -1 : 1); v.fade = 1 - i;
+      v.rot = i * 1.22 * (v.side === 'A' ? -1 : 1); v.fade = 1 - i; v.dy += i * P.L.sh * 0.06;   // 倒下:側倒、下沉、淡出
     } else if (v.fade < 1) v.fade = Math.min(1, v.fade + dt * 3);
+  }
+  if (pt) for (i = 0; i < pt.length; i++) {
+    f = pt[i];
+    if (!f.on) continue;
+    f.t += dv;
+    if (f.t < 0) continue;
+    f.x += f.vx * dv; f.y += f.vy * dv; f.vy += f.g * dv;
+    if (f.t >= f.dur) f.on = false;
   }
   for (i = 0; i < P.nums.length; i++) {
     n = P.nums[i];
@@ -609,7 +662,7 @@ function bnPlAnim(P, dt) {
   }
   if (P.banner) { P.banner.t += dt; if (P.banner.t >= P.banner.dur) P.banner = null; }
   bnPlLabAnim(P, dt);
-  if (P.shake > 0) P.shake = Math.max(0, P.shake - dt);
+  if (P.shake > 0) P.shake = Math.max(0, P.shake - dv);
   if (P.cut) {
     P.cut.t += dt;
     if (P.cut.t >= P.cut.dur) { P.cut = null; bnPlHook(P, 'cut', null); } else bnPlHook(P, 'cut', P.cut);
@@ -654,9 +707,11 @@ function bnPlSkip(P) {
   P.ei = S.events.length; P.tm = []; P.cut = null; P.banner = null; P.lab = { A: { cur: null, q: [] }, B: { cur: null, q: [] } }; bnPlHook(P, 'cut', null);
   for (i = 0; i < P.nums.length; i++) P.nums[i].on = false;
   for (i = 0; i < P.fx.length; i++) P.fx[i].on = false;
+  for (i = 0; i < (P.pt || []).length; i++) P.pt[i].on = false;
+  P.shake = 0;
   for (id in P.vu) {
     v = P.vu[id]; u = S.units[id];
-    v.hp = u.hp; v.hpShow = u.hp; v.hpLag = u.hp; v.lagHold = 0; v.hitGlow = 0; v.alive = u.alive; v.lunge = null; v.flash = 0; v.kb = 0; v.cast = 0; v.st = {}; v.shield = 0;
+    v.hp = u.hp; v.hpShow = u.hp; v.hpLag = u.hp; v.lagHold = 0; v.hitGlow = 0; v.alive = u.alive; v.lunge = null; v.flash = 0; v.kb = 0; v.cast = 0; v.st = {}; v.shield = 0; v.lean = 0; v.ev = 0; v.stp = {};
     v.dying = u.alive ? -1 : 2; v.fade = u.alive ? 1 : 0; v.rot = u.alive ? 0 : 1.22 * (v.side === 'A' ? -1 : 1);
     if (u.alive) { Object.keys(u.st || {}).forEach(function (k) { v.st[k] = 1; }); if (u.st && u.st.shield) v.shield = u.st.shield.val; }
   }
@@ -732,11 +787,20 @@ function bnDrCrowd(ctx, v, h) {
   ctx.drawImage(spr.cv, spr.l * sc, spr.t * sc, spr.cv.width / spr.res * sc, spr.cv.height / spr.res * sc);
   return true;
 }
+// 待機呼吸:縮放 ±1.5 %、前後輕晃(傾角 + 水平位移);省電模式 / 倒下 = 靜止。寫入 v.ibr / v.itl / v.isw(不配置物件)
+function bnDrIdle(P, v, t) {
+  if (P.ps || v.dying >= 0 || !v.alive) { v.ibr = 1; v.itl = 0; v.isw = 0; return v; }
+  v.ibr = 1 + 0.015 * Math.sin(t * 2.1 + v.phase);
+  v.itl = Math.sin(t * 1.5 + v.phase) * 0.026;
+  v.isw = Math.sin(t * 1.1 + v.phase * 1.3) * (v.sh || 100) * 0.012;
+  return v;
+}
 function bnDrUnit(ctx, P, v, t, L, pw) {
-  var h = L.sh, lk = v.look, i, e, src = null, bust = false, w, dir = v.side === 'A' ? 1 : -1, br, tilt, flashSrc = null, pend = false, tinted;
+  var h = L.sh, lk = v.look, i, e, src = null, bust = false, w, dir = v.side === 'A' ? 1 : -1, br, tilt, flashSrc = null, pend = false, tinted, g;
   if (v.fade <= 0.01) return;
-  br = 1 + 0.015 * Math.sin(t * 2.1 + v.phase);
-  tilt = Math.sin(t * 1.5 + v.phase) * 0.026 - v.kb * 0.1 * dir + v.rot;
+  bnDrIdle(P, v, t);
+  br = v.ibr;
+  tilt = v.itl - v.kb * 0.1 * dir + v.lean * 0.14 * dir + v.rot;
   for (i = 0; i < lk.paths.length; i++) {
     e = bnDrImg(lk.paths[i]);
     if (e.ok) { src = e; bust = lk.bust[i]; break; }
@@ -744,7 +808,7 @@ function bnDrUnit(ctx, P, v, t, L, pw) {
   }
   ctx.save();
   ctx.globalAlpha = v.fade;
-  ctx.translate(v.px + v.dx, v.py + v.dy);
+  ctx.translate(v.px + v.dx + v.isw * dir, v.py + v.dy);
   // 地面陰影
   ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath();
   if (ctx.ellipse) ctx.ellipse(0, -2, h * 0.24, h * 0.055, 0, 0, 6.283); else ctx.arc(0, -2, h * 0.2, 0, 6.283);
@@ -752,8 +816,10 @@ function bnDrUnit(ctx, P, v, t, L, pw) {
   ctx.rotate(tilt);
   ctx.scale(dir * v.sx * (1 + (br - 1) * 0.5), v.sy * br * (1 + v.cast * 0.06));
   if (src) {
-    if (bust) { w = h * 0.7; ctx.drawImage(src.img, -w / 2, -h * 0.78, w, w * bnDrIh(src) / bnDrIw(src)); }
-    else {
+    if (bust) {
+      w = h * 0.7; ctx.drawImage(src.img, -w / 2, -h * 0.78, w, w * bnDrIh(src) / bnDrIw(src));
+      if (v.flash > 0) { flashSrc = bnDrWhite(src); if (flashSrc) { ctx.globalAlpha = v.fade * v.flash * 0.85; ctx.drawImage(flashSrc, -w / 2, -h * 0.78, w, w * bnDrIh(src) / bnDrIw(src)); ctx.globalAlpha = v.fade; } }
+    } else {
       w = h * bnDrIw(src) / bnDrIh(src);
       tinted = lk.tint ? bnDrTinted(src, lk.tint) : null;
       ctx.drawImage(tinted || src.img, -w / 2, -h, w, h);
@@ -761,6 +827,11 @@ function bnDrUnit(ctx, P, v, t, L, pw) {
     }
   } else if (!pend || true) {
     if (!bnDrCrowd(ctx, v, h)) bnDrFallbackBody(ctx, v, h);
+    if (v.flash > 0 && (g = bnDrGlow('#ffffff'))) {   // 程式小人沒有剪影:疊一層白光代替閃白
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = v.fade * v.flash * 0.7;
+      ctx.drawImage(g, -h * 0.4, -h * 0.95, h * 0.8, h * 0.95);
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = v.fade;
+    }
   }
   ctx.restore();
 }
@@ -770,7 +841,7 @@ function bnDrBarBox(v, L) {
   return { x: v.px + v.dx - w / 2, y: v.py + v.dy - L.sh - bh - 6, w: w, h: bh };
 }
 function bnDrBars(ctx, P, v, t, L) {
-  var bb = bnDrBarBox(v, L), w = bb.w, x = bb.x, y = bb.y, bh = bb.h, hp = Math.max(0, Math.min(1, v.hpShow / v.mx)), lag = Math.max(hp, Math.min(1, (v.hpLag || 0) / v.mx)), keys, n = 0, i, ic, k, sz = Math.max(11, L.fs * 0.95), ex, iy;
+  var bb = bnDrBarBox(v, L), w = bb.w, x = bb.x, y = bb.y, bh = bb.h, hp = Math.max(0, Math.min(1, v.hpShow / v.mx)), lag = Math.max(hp, Math.min(1, (v.hpLag || 0) / v.mx)), keys, n = 0, i, ic, k, sz = Math.max(11, L.fs * 0.95), ex, iy, pp;
   if (v.fade <= 0.05) return;
   ctx.globalAlpha = v.fade;
   ctx.fillStyle = '#000'; ctx.fillRect(x - 2, y - 2, w + 4, bh + 4);                         // 黑框
@@ -783,7 +854,8 @@ function bnDrBars(ctx, P, v, t, L) {
   for (i = 0; i < keys.length && n < 3; i++) {
     k = keys[i]; ic = BN_ST_ICON[k];
     ex = ic ? bnDrImg('assets/bnfx/' + (typeof ic === 'string' && ic.indexOf('stc_') === 0 ? ic : 'st_' + (ic === 1 ? k : ic)) + '.webp') : null;
-    if (ex && ex.ok) ctx.drawImage(ex.img, x + n * (sz + 1), iy, sz, sz);
+    pp = v.stp && v.stp[k] > 0 ? v.stp[k] * 0.6 * sz : 0;   // 剛施加:圖示放大後縮回
+    if (ex && ex.ok) ctx.drawImage(ex.img, x + n * (sz + 1) - pp / 2, iy - pp / 2, sz + pp, sz + pp);
     else { ctx.fillStyle = BN_ST_GOOD[k] ? '#4a8a4a' : '#9a4a3a'; ctx.fillRect(x + n * (sz + 1), iy, sz, sz); ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.round(sz * 0.7) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText((BN_ST_NAME[k] || k).charAt(0), x + n * (sz + 1) + sz / 2, iy + sz / 2); }
     n++;
   }
@@ -835,6 +907,30 @@ function bnDrFx(ctx, P, f, L) {
   }
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
 }
+// 粒子:光點 = 快取光暈圖加色;十字 / 箭頭 = 兩三個 fillRect / 一條路徑。總數受池大小限制(≤ 48)
+function bnDrPts(ctx, P) {
+  var pt = P.pt, i, p, a, s, g;
+  if (!pt) return;
+  for (i = 0; i < pt.length; i++) {
+    p = pt[i];
+    if (!p.on || p.t < 0) continue;
+    a = p.t < 0.1 ? p.t / 0.1 : Math.max(0, 1 - (p.t - 0.1) / Math.max(0.05, p.dur - 0.1));
+    s = p.sz;
+    ctx.globalAlpha = a;
+    if (p.sh === 0) {
+      g = bnDrGlow(p.col);
+      if (g) { ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(g, p.x - s * 1.6, p.y - s * 1.6, s * 3.2, s * 3.2); ctx.globalCompositeOperation = 'source-over'; }
+    } else if (p.sh === 1) {
+      ctx.fillStyle = p.col; ctx.fillRect(p.x - s / 2, p.y - s / 6, s, s / 3); ctx.fillRect(p.x - s / 6, p.y - s / 2, s / 3, s);
+    } else {
+      ctx.strokeStyle = p.col; ctx.lineWidth = Math.max(2, s / 3.5); ctx.lineJoin = 'round'; ctx.beginPath();
+      if (p.sh === 2) { ctx.moveTo(p.x - s / 2, p.y + s / 3); ctx.lineTo(p.x, p.y - s / 3); ctx.lineTo(p.x + s / 2, p.y + s / 3); }
+      else { ctx.moveTo(p.x - s / 2, p.y - s / 3); ctx.lineTo(p.x, p.y + s / 3); ctx.lineTo(p.x + s / 2, p.y - s / 3); }
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
 // 技能名標籤:斜角色塊,靠牆的一半填陣營旗色(半透明)、另一半透明;文字描黑邊。回各方標籤的矩形(測試用)
 function bnDrLabRect(P, L, sd, tw) {
   var h = L.labH || 26, w = tw + h * 1.4 + h * 0.45, x0 = sd === 'A' ? Math.max(0, (L.labX0 || 6) - 6) : L.vw - w;
@@ -870,20 +966,21 @@ function bnDrFrame(ctx, P, dpr, nowSec) {
   bg = bnDrBgFor(L, dpr, ps);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (bg) ctx.drawImage(bg, 0, 0); else { ctx.fillStyle = '#3a4228'; ctx.fillRect(0, 0, L.vw * dpr, L.vh * dpr); }
-  if (P.shake > 0 && !ps) { sx = Math.sin(nowSec * 90) * 2.5 * (P.shake / 0.12); sy = Math.cos(nowSec * 73) * 2; }
+  if (P.shake > 0 && !ps) { b = Math.min(1.3, P.shake / 0.12); sx = Math.sin(nowSec * 90) * 3 * b; sy = Math.cos(nowSec * 73) * 2.2 * b; }   // 暴擊微震(省電不震)
   ctx.setTransform(dpr, 0, 0, dpr, sx * dpr, sy * dpr);
   for (id in P.vu) list.push(P.vu[id]);
   list.sort(function (a, c) { return (a.py + a.dy) - (c.py + c.dy); });
   for (i = 0; i < P.fx.length; i++) if (P.fx[i].on && P.fx[i].mode === 6) bnDrFx(ctx, P, P.fx[i], L);   // 輔助虛影畫在人物後面
   for (i = 0; i < list.length; i++) bnDrUnit(ctx, P, list[i], nowSec, L);
   for (i = 0; i < P.fx.length; i++) if (P.fx[i].on && P.fx[i].mode !== 6) bnDrFx(ctx, P, P.fx[i], L);
+  bnDrPts(ctx, P);
   for (i = 0; i < list.length; i++) bnDrBars(ctx, P, list[i], nowSec, L);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
   for (i = 0; i < P.nums.length; i++) {
     n = P.nums[i];
     if (!n.on) continue;
     ctx.globalAlpha = Math.max(0, Math.min(1, (n.dur - n.t) / 0.25));
-    fz = Math.round(Math.max(BN_NUM_MIN * (n.size < 1 ? 0.9 : 1), L.fs * 1.25) * n.size);
+    fz = Math.round(Math.max(BN_NUM_MIN * (n.size < 1 ? 0.9 : 1), L.fs * 1.25) * n.size * (n.kind === 2 ? 1 : 1 + (n.kind === 1 ? 0.6 : 0.18) * Math.max(0, 1 - n.t / (0.16 * (n.pk || 1)))));   // 彈出:暴擊先放大 1.6 倍再縮回
     ctx.font = 'bold ' + fz + 'px sans-serif';
     ctx.lineWidth = Math.max(3, fz * 0.22); ctx.strokeStyle = '#000'; ctx.strokeText(n.text, n.x, n.y);   // 黑色描邊(所有浮字)
     ctx.fillStyle = n.col; ctx.fillText(n.text, n.x, n.y);
@@ -902,6 +999,9 @@ function bnDrFrame(ctx, P, dpr, nowSec) {
   }
   bnDrLabels(ctx, P, L);
   if (S0) { v = performance.now() - S0; BNDR.stats.lastMs = v; BNDR.stats.frames++; BNDR.stats.sumMs += v; if (v > BNDR.stats.maxMs) BNDR.stats.maxMs = v; if (BNDR.stats.samples.length < 600) BNDR.stats.samples.push(v); }
+  if (!BNDR.low && BNDR.stats.frames >= 90 && BNDR.stats.sumMs / BNDR.stats.frames > BNDR.lowMs) BNDR.low = true;   // 低階機自動降級(粒子減半)
 }
+// 低階裝置提示(記憶體 ≤ 2 GB 或 ≤ 2 核):一開始就降級
+try { if (typeof navigator !== 'undefined' && navigator && ((navigator.deviceMemory && navigator.deviceMemory <= 2) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2))) BNDR.low = true; } catch (e) { /* 略過 */ }
 
 if (typeof module !== 'undefined' && module.exports) module.exports = { BNPL_T: BNPL_T };

@@ -1,4 +1,4 @@
-// js/cards.js — 卡牌與酒館引擎 第一階段(PLAN_CARDS.md v3:§2.2~2.6 三場所/招募歲鐘/品階機率與保底/名額、§3A 品階與升階、§4.13 職業詞條、§7A 名額與請辭;第四批決議:開批的卡直接進卡包 cs.bag、酒令 = 任用成本、名人加權抽取)。
+// js/cards.js — 卡牌與酒館引擎 第一階段(PLAN_CARDS.md v3:§2.2~2.6 三場所/招募歲鐘/品階機率與保底/名額、§3A 品階與升階、§4.13 職業詞條、§7A 名額與遣散;第四批決議:開批的卡直接進卡包 cs.bag、酒令 = 任用成本、名人加權抽取)。
 // 純資料邏輯,不寫 DOM;時間一律由呼叫端傳入 now(毫秒),模擬層不讀 Date.now()。資料表在 js/carddata.js,介面在 js/cardsui.js。
 // 存檔:world.city.cards(goods.js goodsNormCity 帶過 cardsNormSave);名冊 roster 即派工用的 world.city.talents(同一批物件,不可列舉,不重複存檔)。
 // 第一階段刻意未做:名冊人物/小兵卡/人物圈、取捨詞條 §4.4A、戰場技能內容(只記數量 skn)、記名簿、快速模式、文鬥小遊戲(星數固定 1)、結義。
@@ -135,6 +135,8 @@ var CARD_NAME_GIV_F = ['婉', '貞', '蘭', '梅', '秀', '英', '蓮', '芳', '
 var CARD_NAME_GIV_M = CARD_NAME_GIV.filter(function (x) { return ['玉', '織', '純'].indexOf(x) < 0; });
 function cardGenSex(cs, venue, key, slot, tag) { return cardRng(cardHash(cs.seed, venue, key, slot, (tag || '') + '|sex'))() < 0.42 ? 'f' : 'm'; }
 function cardGenName(r, sex) {
+  var fxn = (typeof fxGenName === 'function') ? fxGenName(r, sex) : null;   // 魔幻世界:依族取名(js/fx_text.js);歷史世界回 null、不耗亂數
+  if (fxn) return fxn;
   var P = sex === 'f' ? CARD_NAME_GIV_F : CARD_NAME_GIV_M;
   var s = CARD_NAME_SUR[Math.floor(r() * CARD_NAME_SUR.length)], g = P[Math.floor(r() * P.length)];
   if (r() < 0.5) g += P[Math.floor(r() * P.length)];
@@ -414,7 +416,7 @@ function cardsNamedTick(dt) {
   try { if (typeof academyTick === 'function') academyTick(5); if (typeof npcTick === 'function') npcTick(5); cs = cardsGet(); if (cs) cardsOverSettle(cs, Date.now()); return cs ? cardsNamedRankCheck(cs) : 0; } catch (e) { return 0; }   // npcTick:人物互動(親近年資 / 請託)
 }
 
-// ───────── 名冊 / 任用 / 請辭 ─────────
+// ───────── 名冊 / 任用 / 遣散 ─────────
 function cardsCost(c) { return CARD_GRADE[c.gr].cost + ((c.gr === 3 && c.learn === 3) ? CARD_COST.zongBonus : 0); }
 // 官階等級 1~(LH_RANKS 序號 + 1);缺 lordhallui / cityscore 時回 0(名額退回 capBase)
 function cardsRankLv() {
@@ -675,7 +677,7 @@ function cardsMakeEntry(cs, c, pool, key, cost) {
   cardsRefreshEntry(e);
   return e;
 }
-// 任用:卡包 → 名冊,花 cardsCost 酒令(開批免費,酒令只在這裡花)。回 {ok, reason?, entry?}。reason:none 卡包無此卡 tok 酒令不足 full 名冊已滿(須先請辭或提升官階)
+// 任用:卡包 → 名冊,花 cardsCost 酒令(開批免費,酒令只在這裡花)。回 {ok, reason?, entry?}。reason:none 卡包無此卡 tok 酒令不足 full 名冊已滿(須先遣散或提升官階)
 function cardsBagEnlist(cs, bid, o) {   // 只能任用卡包內的卡;溢出區的卡需先被納入(reason over)
   var f = cardsBagFind(cs, bid), c, cost, e;
   if (!f) return { ok: false, reason: (cs.bagOver && cs.bagOver.some(function (x) { return x.bid === bid; })) ? 'over' : 'none' };
@@ -703,13 +705,13 @@ function cardsClaimGift(cs, now) {
   n = days * CARD_WINE.dailyGift; cs.tok += n; cs.gift.day = day;
   return n;
 }
-// 請辭:opts {unassign}。路人回收 20 %(碎片,無每週上限:碎片已不能換酒令,剝削迴圈不成立);名人轉流浪不給碎片。回 {ok, reason?, shards?, tokens?}
+// 遣散:opts {unassign}。路人回收 20 %(碎片,無每週上限:碎片已不能換酒令,剝削迴圈不成立);名人轉流浪不給碎片。回 {ok, reason?, shards?, tokens?}
 function cardsRelease(cs, id, opts) {
   var f = cardsFind(cs, id), e, o = opts || {}, shards, snapS;
   if (!f || f.list === 'wander') return { ok: false, reason: 'none' };
   e = f.e;
   if (e.star) return { ok: false, reason: 'locked' };
-  if (e.study) return { ok: false, reason: 'study' };   // 進修中(academy.js)不可請辭
+  if (e.study) return { ok: false, reason: 'study' };   // 進修中(academy.js)不可遣散
   if (e.at && !o.unassign) return { ok: false, reason: 'busy' };
   cs[f.list].splice(f.idx, 1);
   e.at = null;
@@ -776,7 +778,7 @@ function cardsUpgrade(e, ctx) {
 }
 
 // ───────── 卡片熔爐:強化武將(升星)與碎片兌換指名券(數值在 carddata.js CARD_FURNACE,PLACEHOLDER) ─────────
-// 星等欄位 = entry.starLv(0~5,有值才寫);注意 entry.star 是『鎖定防誤請辭』旗標(PLAN_BATTLE_A §2),兩者無關、不可混用。
+// 星等欄位 = entry.starLv(0~5,有值才寫);注意 entry.star 是『鎖定防誤遣散』旗標(PLAN_BATTLE_A §2),兩者無關、不可混用。
 function cardsWeekNo(now) { return Math.floor(((now || 0) - cardsTz(now || 0)) / (7 * 86400000)); }
 function cardsStarLv(e) { return Math.max(0, Math.min(CARD_FURNACE.starMax, (e && e.starLv) | 0)); }
 // 下一星花費:base = 表值(名人 × figMul)、off = 信物折抵(每個 tokOff,上限 tokOffMax)、cost = 實付(至少 1)。滿星回 {max: true}
@@ -874,8 +876,10 @@ function cardNormCard(c, isEntry, isBag) {
       o.study = { k: c.study.k, n: cardNum(c.study.n, 1, 9, 1) | 0, l: 0, p: Math.round(cardNum(c.study.p, 0, 1e5, 0)), cs: cardNum(c.study.cs, 0, 1e6, 0) | 0, cc: cardNum(c.study.cc, 0, 1e9, 0) | 0 };
       o.study.l = Math.min(o.study.n - 1, cardNum(c.study.l, 0, 9, 0) | 0);
       if (c.study.k !== 'up') o.study.j = c.study.j;
+      if (typeof c.study.t === 'string' && c.study.t) o.study.t = c.study.t.slice(0, 12);   // 教習 id(academy.js)
       o.at = null;
     }
+    if (c.tch && !o.study) o.tch = 1;   // 教習(academy.js,有值才寫;在學者不當教習)
     o.up = cardNum(c.up, 0, CARD_CFG.upMax, 0) | 0; o.cost = cardNum(c.cost, 0, 99, CARD_GRADE[o.gr].cost) | 0;
     if (cardNum(c.fav, 0, 5, 0) | 0) o.fav = cardNum(c.fav, 0, 5, 0) | 0; if (c.gift) o.gift = 1; if (typeof c.favDay === 'number' && isFinite(c.favDay)) o.favDay = c.favDay | 0; if (typeof c.since === 'number' && isFinite(c.since)) o.since = c.since | 0;   // 人物互動(npcinteract.js):親近 / 小禮旗標 / 最近加親近日 / 派駐起始日
     cardsRefreshEntry(o);
@@ -897,7 +901,7 @@ function cardsNormSave(v, now) {
   if (!v || typeof v !== 'object') return null;
   n = cardsStateNew(typeof v.seed === 'number' ? v.seed : undefined);
   n.seq = cardNum(v.seq, 0, 1e9, 0) | 0; n.tok = cardNum(v.tok, 0, 1e6, 0) | 0; n.nameTokens = cardNum(v.nameTokens, 0, 1e6, 0) | 0; n.namedCount = cardNum(v.namedCount, 0, 1e9, 0) | 0; n.shards = cardNum(v.shards, 0, 1e7, 0) | 0;
-  if (v.exWk && typeof v.exWk === 'object' && (cardNum(v.exWk.n, 0, 1e6, 0) | 0) > 0) n.exWk = { w: cardNum(v.exWk.w, -1, 1e9, -1) | 0, n: cardNum(v.exWk.n, 0, CARD_FURNACE.exchange.weekMax, 0) | 0 };   // 碎片兌換券的本週計數(有值才寫);舊存檔的 shardWk(請辭週上限)已廢,讀檔時丟棄
+  if (v.exWk && typeof v.exWk === 'object' && (cardNum(v.exWk.n, 0, 1e6, 0) | 0) > 0) n.exWk = { w: cardNum(v.exWk.w, -1, 1e9, -1) | 0, n: cardNum(v.exWk.n, 0, CARD_FURNACE.exchange.weekMax, 0) | 0 };   // 碎片兌換券的本週計數(有值才寫);舊存檔的 shardWk(遣散週上限)已廢,讀檔時丟棄
   if (v.gift) n.gift.day = cardNum(v.gift.day, -1, 1e9, -1) | 0;
   if (v.clock) n.clock.maxSeen = cardNum(v.clock.maxSeen, 0, 1e15, 0);
   if (v.tokenGiven && typeof v.tokenGiven === 'object') Object.keys(v.tokenGiven).slice(0, 600).forEach(function (k) {

@@ -107,7 +107,7 @@ function trafficMk(w, h) {
   return c;
 }
 // 烘焙一張(視角 × 解析度 × 時段):縮放到佔地大小、時段乘色、腳下柔影;存入 ART.cache(key 'chibi|trv_<kind>_<file>|<tod>|<res>')
-function trafficBake(kind, file, res, tod, slot) {
+function trafficBake(kind, file, res, tod, slot, tint) {
   var A = ART, K = TRS_KINDS[kind], img = TRS.imgs[slot.url] && TRS.imgs[slot.url].img, iw, ih, w, h, pad = 5, cw, ch, body, bx, tmp, tc, out, ox, td, c, key, id;
   if (!img) return null;
   iw = img.naturalWidth || img.width; ih = img.naturalHeight || img.height;
@@ -123,13 +123,14 @@ function trafficBake(kind, file, res, tod, slot) {
     tc.globalCompositeOperation = 'destination-in'; tc.drawImage(body, 0, 0); tc.globalCompositeOperation = 'source-over';
     body = tmp;
   }
+  if (tint) { tmp = trafficMk(cw, ch); tc = tmp.getContext('2d'); tc.drawImage(body, 0, 0); tc.globalCompositeOperation = 'source-atop'; tc.globalAlpha = 0.22; tc.fillStyle = tint; tc.fillRect(0, 0, cw, ch); tc.globalAlpha = 1; tc.globalCompositeOperation = 'source-over'; body = tmp; }   // 染色(caravan_vis 車隊依品階上色;只染有像素處)
   out = trafficMk(cw, ch); ox = out.getContext('2d');
   ox.fillStyle = 'rgba(30,40,20,' + (0.24 * (td && td.shadow !== undefined ? td.shadow : 1)).toFixed(3) + ')';
   ox.beginPath();
   ox.ellipse((pad + w / 2) * res, (pad + h * TRS_AY) * res, w * 0.36 * res, Math.max(3, w * 0.09) * res, 0, 0, Math.PI * 2);
   ox.fill();
   ox.drawImage(body, 0, 0);
-  id = 'trv_' + kind + '_' + file;
+  id = 'trv_' + kind + '_' + file + (tint ? '_' + tint.slice(1) : '');
   key = 'chibi|' + id + '|' + tod + '|' + res;
   c = { cv: out, l: -w / 2 - pad, t: -h * TRS_AY - pad, res: res, bytes: out.width * out.height * 4, last: ++A.cacheTick };
   A.cache[key] = c; A.cacheCount++; A.cacheBytes += c.bytes;
@@ -139,15 +140,17 @@ function trafficBake(kind, file, res, tod, slot) {
   return c;
 }
 // 取 sprite:slot 命中免組字串;未命中才查快取 / 烘焙(每幀烘焙數受 LIFE_BAKE_MAX 限制,超過回 null → 這一幀畫程式繪製的車)
-function trafficSprite(kind, file, res, tod) {
-  var A = ART, slot = TRS.slots[kind][file], c;
+function trafficSprite(kind, file, res, tod) { return trafficSpriteSlot(TRS.slots[kind][file], kind, file, res, tod, ''); }
+// 同 trafficSprite,但 slot 與染色由呼叫端指定(caravan_vis 的車隊用);tint = '#rrggbb' 或 '' = 不染。缺圖 / 烘焙失敗回 null
+function trafficSpriteSlot(slot, kind, file, res, tod, tint) {
+  var A = ART, c, id = 'trv_' + kind + '_' + file + (tint ? '_' + tint.slice(1) : ''), key = 'chibi|' + id + '|' + tod + '|' + res;
   if (slot.spr && slot.res === res && slot.tod === tod && A.cache[slot.key] === slot.spr) { slot.spr.last = ++A.cacheTick; return slot.spr; }
   if (trafficImgState(slot.url) !== 'ok') return null;
-  c = A.cache['chibi|trv_' + kind + '_' + file + '|' + tod + '|' + res];
-  if (c) { A.touch('chibi|trv_' + kind + '_' + file + '|' + tod + '|' + res); slot.key = 'chibi|trv_' + kind + '_' + file + '|' + tod + '|' + res; }
+  c = A.cache[key];
+  if (c) { A.touch(key); slot.key = key; }
   else {
     if (typeof LIFE !== 'undefined' && typeof LIFE_BAKE_MAX !== 'undefined' && LIFE.bakes >= LIFE_BAKE_MAX) return null;
-    try { c = trafficBake(kind, file, res, tod, slot); } catch (e) { TRS.imgs[slot.url].state = 'fail'; return null; }
+    try { c = trafficBake(kind, file, res, tod, slot, tint); } catch (e) { TRS.imgs[slot.url].state = 'fail'; return null; }
     if (!c) return null;
     if (typeof LIFE !== 'undefined') LIFE.bakes++;
     TRS.bakes++;

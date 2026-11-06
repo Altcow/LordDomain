@@ -21,7 +21,13 @@ function techNode(id) {
   }
   return techNode._m[id] || null;
 }
-function techLabelOf(n) { var s = (typeof fxTechLabel === 'function') ? fxTechLabel(n) : (n ? n.name : ''); return (n && n.id === 'md_cesuo' && s === '圊溷') ? '圊溷(茅廁)' : s; }   // 節點顯示名(魔幻世界讀覆寫,其餘原名)
+// 基本建築科技的白話括號(設計稿 tutorial_redesign.md §3 名詞對照表);只改顯示,不改 id
+var TECH_PLAIN = { md_cesuo: '茅廁', e_shiling: '市集', bd_hangtu: '石板路、城牆', rl_she: '里社', wr_lishu: '告示牌', md_bencao: '藥圃、藥舖', md_saochu: '掃帚、剃頭挑子', e_changping: '陶倉', ag_chazhong: '茶館', ed_xiangyin: '說書台、酒肆', df_jiaolou: '望樓', cr_fangzhi: '織坊' };
+// 節點顯示名(魔幻世界讀覆寫,其餘原名);括號只加在原名上,魔幻覆寫過的名稱不加漢式括號
+function techLabelOf(n) {
+  var s = (typeof fxTechLabel === 'function') ? fxTechLabel(n) : (n ? n.name : ''), ov = (typeof fxTechName === 'function' && n) ? fxTechName(n.id) : null;
+  return (n && TECH_PLAIN[n.id] && ov === null && s === n.name) ? s + '(' + TECH_PLAIN[n.id] + ')' : s;
+}
 function techIsStyle(n) { return !!n && n.id.indexOf('st_') === 0; }
 function techIsMega(n) { return !!n && (n.kind === 'mega' || n.id.indexOf('mg_') === 0); }   // 里程碑(大工程)不走研發序列
 

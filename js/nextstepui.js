@@ -39,6 +39,10 @@ function nsVp() {
   if (typeof window !== 'undefined' && window) { if (window.innerWidth) w = window.innerWidth; if (window.innerHeight) h = window.innerHeight; }
   return { w: w, h: h };
 }
+function nsSideW() {   // 右側側欄實際寬度 + 8px 間距(橫版約 91px、直版約 44px;量不到時 52)
+  var e = nsDoc() && document.getElementById ? document.getElementById('sideBar') : null, r = e && e.getBoundingClientRect ? e.getBoundingClientRect() : null;
+  return r && r.width > 0 ? Math.round(r.width) + 8 : 52;
+}
 function nsTopY() {
   var t, r;
   if (!nsDoc() || !document.getElementById) return 50;
@@ -56,7 +60,7 @@ var NS_CSS = [
   '#nsCard .ns-ic{flex:0 0 auto;font-size:14px;line-height:1.2}#nsCard .ns-ic.ns-img{display:inline-flex;align-items:center;gap:2px;min-height:36px}',
   '#nsCard .ns-tx{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;min-width:0}',
   '#nsCard .ns-why{color:#aebbd0;font-size:11px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}',
-  '#nsCard .ns-acts{display:flex;gap:4px;flex:0 0 auto;align-items:center}',
+  '#nsCard .ns-acts{display:flex;flex-wrap:wrap;gap:4px;flex:0 0 auto;align-items:center}',
   '#nsCard .ns-b{background:#34445e;color:#e8edf2;border:1px solid #5a6f92;border-radius:6px;min-height:24px;padding:0 8px;font-size:12px;line-height:22px}',
   '#nsCard .ns-go{background:#46618a;color:#fff}',
   '#nsCard .ns-sq{min-width:26px;padding:0 4px}',
@@ -111,7 +115,7 @@ function nsUiRefresh(force) {
 }
 
 function nsUiRender(cand, n) {
-  var e = nsUi.el, vp = nsVp(), top = nsTopY(), r = nsCardRect(vp.w, vp.h, top), sig, main, acts, mark, compact = false;
+  var e = nsUi.el, vp = nsVp(), top = nsTopY(), r = nsCardRect(vp.w, vp.h, top, nsSideW()), sig, main, acts, mark, compact = false;
   sig = [cand.id, cand.text, nsUi.menu, nsUi.why, vp.w, vp.h, top, n > 1].join('|');
   e.hidden = false;
   if (sig === nsUi.sig) return;
@@ -142,6 +146,7 @@ function nsUiRender(cand, n) {
   acts = nsE('div', 'ns-acts');
   if (cand.src === 'tut') {
     acts.appendChild(nsBtn(cand.go.kind === 'tut' ? (cand.go.id === 'grad' ? '好' : '開始') : '前往', 'ns-b ns-go', function () { nsUiGo(cand); }));
+    if (cand.alt) acts.appendChild(nsBtn(cand.alt.text, 'ns-b', function () { nsUiTutAlt(cand); }, cand.alt.text));
     if (cand.stepId === 'T0') acts.appendChild(nsBtn('跳過教學', 'ns-b', function () { nsUiTutSkip(); }, '跳過新手教學(補發學識 20)'));
   } else {
     acts.appendChild(nsBtn('前往', 'ns-b ns-go', function () { nsUiGo(cand); }));
@@ -153,6 +158,7 @@ function nsUiRender(cand, n) {
 
 function nsUiGo(cand) { if (typeof nsGo === 'function') nsGo(cand); nsUi.why = false; nsUiRefresh(true); }
 function nsUiDismiss(cand) { nsUi.why = false; nsDismiss(cand.id); nsUiRefresh(true); }
+function nsUiTutAlt(cand) { if (typeof tutAct === 'function' && cand.alt) tutAct(cand.alt.id); nsUi.sig = ''; nsRt.last = -1e15; nsRt.cache = null; nsUiRefresh(true); }
 function nsUiTutSkip() {
   if (typeof window !== 'undefined' && window && typeof window.confirm === 'function' && !window.confirm('跳過新手教學?會補發學識 20,之後的推薦回到一般模式。')) return;
   if (typeof tutSkip === 'function') tutSkip();

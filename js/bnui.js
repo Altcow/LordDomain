@@ -620,7 +620,7 @@ function bnUiShowResult() {
   bnUiDrawOnce();
   if (typeof bnsOnResult === 'function') bnsOnResult(d);   // 對戰練習(js/bnshare.js):不計進度、改結算按鈕
 }
-function bnPlSfxEnd(w) { if (typeof sfxwPlay === 'function') { try { sfxwPlay(w === 'A' ? 'win' : (w === 'B' ? 'lose' : 'flag')); } catch (e) { /* 略過 */ } } }
+function bnPlSfxEnd(w) { if (typeof bnSfxEnd === 'function') { try { bnSfxEnd(w); } catch (e) { /* 略過 */ } } else if (typeof sfxwPlay === 'function') { try { sfxwPlay(w === 'A' ? 'win' : (w === 'B' ? 'lose' : 'flag')); } catch (e) { /* 略過 */ } } }
 function bnUiToForm() {
   if (bnu.P) { bnPlDispose(bnu.P); bnu.P = null; }
   bnUiStopLoop();

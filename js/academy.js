@@ -1,7 +1,7 @@
 // js/academy.js — 學院系統引擎(PLAN_CARDS §7B、第四批決議 P4/P8;PLAN_INTERIORS §4 P6 請託『送學院進修』、P7 成長訓練)。
 // 院級 1~5 依學舍 / 學宮 / 精舍建築數與科技決定(不另蓋『學院』建築,無升級按鈕);課程:升階(白→青、青→藍)、精進(職業 +1 階)、習藝(新增職業 I 階)。
 // 花費以『碎片』(卡片熔爐所得,同一碎片池 cs.shards;碎片不再自動轉酒令,付費只扣 cs.shards)與金幣為主;數值全在 carddata.js 的 CARD_ACADEMY(PLACEHOLDER)。
-// 進修狀態寫在名冊 entry.study(只有進修中才有欄位)、entry.sn(累計送去進修次數,>0 才寫);在學者不能派駐 / 請辭。1 課 = 遊玩中 CARD_ACADEMY.lessonSec 秒(離線不推進)。
+// 進修狀態寫在名冊 entry.study(只有進修中才有欄位)、entry.sn(累計送去進修次數,>0 才寫);在學者不能派駐 / 遣散。1 課 = 遊玩中 CARD_ACADEMY.lessonSec 秒(離線不推進)。
 // 名人不進修;升星(cards.js cardsStarUp)與信物功能不在此實作。全部以 typeof 守衛外部模組。ES2017(不使用可選串接與空值合併運算子)。
 // 全域名稱:academyLevel academySeats academyUsed academyCtx academyCheck academyStart academyRush academyQuit academyTick academyFinish academyErrandOk academyShardTotal academyInfo
 
@@ -32,6 +32,42 @@ function academyUsed(cs) {
   (cs.roster || []).forEach(function (e) { if (e.study) n++; });
   return n;
 }
+// 教習(第二階段,PLAN §7B.3):名冊人物可設為教習(entry.tch,有值才寫),占教習席(院級 2 起,CARD_ACADEMY.teachers)。在學者不當教習;開始進修時教習席空出(tch 清除)。
+// 效果(自動選最有利的一位,教習不替自己上課):教習教化階 × teachPerTier = 花費 −%;教習與學生同職業且 ≥ teachLessonTier → 課數 −teachLessonCut(最少 1)。
+function academyTeachFlagged(cs) { return (cs.roster || []).filter(function (e) { return e.tch && !e.study; }); }
+function academyTeachSeats(lv) { return CARD_ACADEMY.teachers[Math.max(0, Math.min(CARD_ACADEMY.teachers.length - 1, lv | 0))] | 0; }
+function academyTeachEffect(cs, e, kind, arg) {
+  var A = CARD_ACADEMY, job = (kind === 'up') ? e.main : arg, lst, best = { t: null, pct: 0, cut: 0 }, i, t, cut, pct;
+  lst = academyTeachFlagged(cs).slice(0, academyTeachSeats(academyLevel()));
+  for (i = 0; i < lst.length; i++) {
+    t = lst[i];
+    if (t === e) continue;
+    cut = (job && t.ja && (t.ja[job] | 0) >= A.teachLessonTier) ? A.teachLessonCut : 0;
+    pct = ((t.ja && t.ja.jiaohua) | 0) * A.teachPerTier;
+    if (cut > best.cut || (cut === best.cut && pct > best.pct)) best = { t: t, pct: pct, cut: cut };
+  }
+  return best;
+}
+// 設為教習的擋因:'' = 可設;none 查無此人 / study 在學中 / lv 院級未達 2 / seats 教習席已滿
+function academyTeachBlock(cs, e) {
+  var lv = academyLevel();
+  if (!cs || !e) return 'none';
+  if (e.study) return 'study';
+  if (!academyTeachSeats(lv)) return 'lv';
+  if (academyTeachFlagged(cs).length >= academyTeachSeats(lv)) return 'seats';
+  return '';
+}
+// 設定 / 撤下教習。回 {ok, reason?}
+function academyTeachSet(cs, e, on) {
+  var why;
+  if (!cs || !e) return { ok: false, reason: 'none' };
+  if (!on) { delete e.tch; return { ok: true }; }
+  if (e.tch) return { ok: true };
+  why = academyTeachBlock(cs, e);
+  if (why) return { ok: false, reason: why };
+  e.tch = 1;
+  return { ok: true };
+}
 function academyInfo(cs) {
   var lv = academyLevel();
   return { lv: lv, name: lv ? CARD_ACADEMY.levels[lv].name : '', seats: academySeats(lv), used: academyUsed(cs) };
@@ -59,7 +95,7 @@ function acadAddWhy(why, s) { if (why.indexOf(s) < 0) why.push(s); }
 // 課程檢查。kind 'up' | 'adv'(arg = 職業 id) | 'learn'(arg = 職業 id);now 毫秒(派駐年資用)
 // 回 {ok, reasons[], cost:{shards,coin,lessons}|null, label, kind, arg}
 function academyCheck(cs, e, kind, arg, now) {
-  var A = CARD_ACADEMY, why = [], lv = academyLevel(), cost = null, label = '', chk, rule, t, sl, ten, res = acadRes(), C;
+  var A = CARD_ACADEMY, why = [], lv = academyLevel(), cost = null, label = '', chk, rule, t, sl, ten, res = acadRes(), C, teach = null;
   if (!cs || !e) return { ok: false, reasons: ['查無此人'], cost: null, label: '', kind: kind, arg: arg };
   if (e.fig) acadAddWhy(why, '名人不進修');
   if (e.study) acadAddWhy(why, '已在進修中');
@@ -103,10 +139,12 @@ function academyCheck(cs, e, kind, arg, now) {
     if (sl.used + 1 > sl.cap) acadAddWhy(why, '職業槽已滿');
   } else acadAddWhy(why, '未知課程');
   if (cost) {
+    teach = academyTeachEffect(cs, e, kind, arg);
+    if (teach.pct || teach.cut) cost = { shards: Math.floor(cost.shards * (1 - teach.pct) + 1e-9), coin: Math.floor(cost.coin * (1 - teach.pct) + 1e-9), lessons: Math.max(1, cost.lessons - teach.cut) };
     if (academyShardTotal(cs) < cost.shards) acadAddWhy(why, '碎片需 ' + cost.shards + '(現有 ' + academyShardTotal(cs) + ';到卡包熔爐熔卡可得)');
     if (!res || (res.coin || 0) < cost.coin) acadAddWhy(why, '金幣需 ' + cost.coin);
   }
-  return { ok: why.length === 0, reasons: why, cost: cost, label: label, kind: kind, arg: arg };
+  return { ok: why.length === 0, reasons: why, cost: cost, label: label, kind: kind, arg: arg, teach: teach };
 }
 
 // 開始進修:扣費、佔席、卸除派駐。回 {ok, reasons?, entry?}
@@ -117,6 +155,8 @@ function academyStart(cs, e, kind, arg, now) {
   res.coin -= chk.cost.coin;
   e.study = { k: kind, n: chk.cost.lessons, l: 0, p: 0, cs: chk.cost.shards, cc: chk.cost.coin };
   if (kind !== 'up') e.study.j = arg;
+  if (chk.teach && chk.teach.t) e.study.t = chk.teach.t.id;   // 教習 id(只用於顯示)
+  delete e.tch;   // 在學者不當教習,教習席空出
   e.sn = (e.sn | 0) + 1;
   if (e.at) { e.at = null; delete e.since; }
   if (typeof npcStaffDirty === 'function') npcStaffDirty();

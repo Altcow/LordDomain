@@ -2,7 +2,8 @@
 // 依賴(載入順序):carddata.js、bn_data.js(BN_DATA BN_TRAIT_MODS)、bn_skills_data.js(BN_SKILLS BN_FIG_SKILLS);bn_units.js 的 bnUnitSpec 以 typeof 守衛(唯讀取得實際戰法清單)。
 // 數值取自 BN_DATA.kinds 等表(隨平衡調整自動同步);PLACEHOLDER 字樣不顯示給玩家。ES2017;不用 ?. ??。
 // 戰鬥改版(2026-11-06):沒有士氣;大招 = 低機率戰法;對象條件 vs 一律寫成「對 XXX 時…」「被 XXX 攻擊時…」「XXX 在我方時…」。
-// 全域:bnSkillText bnSkillParts bnSkillHead bnTraitText bnXTraitText bnCardSkillIds bnCardSkillRows bnSkillShort bnSkillInfo bnSkillsBlockHtml bnSkillCatName BN_TEXT_CATS
+// B4:名人專屬詞條戰鬥面(BN_FIG_TRAIT)由 bnXTraitText / bnXTraitInfoFix 顯示。
+// 全域:bnSkillText bnSkillParts bnSkillHead bnTraitText bnXTraitText bnXTraitInfoFix bnFigTraitOf bnFigTraitText bnCardSkillIds bnCardSkillRows bnSkillShort bnSkillInfo bnSkillsBlockHtml bnSkillCatName BN_TEXT_CATS
 
 var BN_TEXT_CATS = { command: '指揮', active: '主動', pursuit: '追擊', passive: '被動', ult: '大招' };
 var BNT_PW = { S: 0, M: 1, L: 2, XL: 3 };
@@ -289,9 +290,9 @@ function bntModsText(m, id) {
   var o = [], k, s;
   if (m.atk) o.push('攻擊 ' + bntSgn(m.atk, 1));
   if (m.hp) o.push('兵力上限 ' + bntSgn(m.hp, 1));
-  if (m.stT) o.push('統 +' + m.stT);
-  if (m.stW) o.push('武 +' + m.stW);
-  if (m.stZ) o.push('智 +' + m.stZ);
+  if (m.stT) o.push('統 ' + bntSgn(m.stT));
+  if (m.stW) o.push('武 ' + bntSgn(m.stW));
+  if (m.stZ) o.push('智 ' + bntSgn(m.stZ));
   if (m.spd) o.push('速度 ' + bntSgn(m.spd));
   if (m.allMul) o.push('所有能力 ' + bntSgn(m.allMul - 1, 1));
   if (m.atkTroop) Object.keys(m.atkTroop).forEach(function (t) { o.push(t + '兵攻擊 ' + bntSgn(m.atkTroop[t], 1)); });
@@ -324,6 +325,16 @@ function bntModsText(m, id) {
   if (m.opening && BNT_OPENING[m.opening]) o.push(BNT_OPENING[m.opening]);
   if (m.fmt) o.push((m.fmt === 'fengshi' ? '鋒矢陣' : m.fmt === 'yuanzhen' ? '圓陣' : '雁行陣') + '加成 ×1.3');
   if (m.fmtAll) o.push('所有陣型加成 ' + bntSgn(m.fmtAll - 1, 1));
+  if (m.stratPct) o.push('謀略傷害 ' + bntSgn(m.stratPct, 1));
+  if (m.vsFac) Object.keys(m.vsFac).forEach(function (f) { o.push('對' + bntFacName(+f) + '陣營傷害 ' + bntSgn(m.vsFac[f], 1)); });
+  if (m.vsFig) o.push('對' + Object.keys(m.vsFig).map(function (f) { return (typeof CARD_FIG_BY_ID !== 'undefined' && CARD_FIG_BY_ID[f]) ? CARD_FIG_BY_ID[f].name : f; }).join('、') + '傷害 ' + bntSgn(m.vsFig[Object.keys(m.vsFig)[0]], 1));
+  if (m.vsTroop) Object.keys(m.vsTroop).forEach(function (t) { o.push('對' + t + '兵傷害 ' + bntSgn(m.vsTroop[t], 1)); });
+  if (m.takenStrat) o.push('受到謀略傷害 ' + bntSgn(m.takenStrat, 1));
+  if (m.lowHpTaken) o.push('兵力低於 ' + bntPct(m.lowHpTaken[0]) + ' 時受到傷害 ' + bntSgn(m.lowHpTaken[1], 1));
+  if (m.healOut) o.push('施放的治療量 ' + bntSgn(m.healOut, 1));
+  if (m.teamAtk) o.push('我方全隊攻擊 ' + bntSgn(m.teamAtk, 1));
+  if (m.teamTakenFac) o.push('我方' + bntFacName(m.teamTakenFac.fac) + '陣營受到傷害 ' + bntSgn(m.teamTakenFac.v, 1));
+  if (m.teamTroopSpd) Object.keys(m.teamTroopSpd).forEach(function (t) { o.push('我方' + t + '兵速度 ' + bntSgn(m.teamTroopSpd[t])); });
   if (m.scene) Object.keys(m.scene).forEach(function (sn) {
     var e = m.scene[sn], p = [];
     if (e.atk) p.push('攻擊 ' + bntSgn(e.atk, 1));
@@ -363,9 +374,40 @@ function bnCityTraitText(t) {
 // 名人專屬 / 個人詞條(tr = [名稱, 專屬, 說明]):說明含舊戰鬥用語者回傳 null(只顯示詞條名)
 var BNT_OLDWAR = /陣法|陣型|部隊|守方|攻方|放行|潰退|帥帳|偵察|伏兵|出征|糧草|守城|橋格|格內|混亂|胡騎|步兵移速|移速|支敵軍|兵力上限|器材|敵軍數|本軍|接戰|軍攻擊|攻擊 ?[+−]|傷害 ?[+−]|受傷/;
 function bnXTraitText(desc) {
-  var s = bntS(desc);
+  var s = bntS(desc), ft;
   if (!s) return null;
+  ft = bnFigTraitByDesc(s);
+  if (ft) return bnFigTraitText(ft);
   return BNT_OLDWAR.test(s) ? null : s;
+}
+// 名人專屬詞條的戰鬥面(js/bn_data.js BN_FIG_TRAIT)。卡面只傳說明字串,故以「說明 → 名人」反查(說明在 CARD_FIGS 內唯一,test_bn_data 檢查)
+var BNT_FT_DESC = null;
+function bnFigTraitByDesc(s) {
+  if (typeof BN_FIG_TRAIT === 'undefined' || typeof CARD_FIG_BY_ID === 'undefined') return null;
+  if (!BNT_FT_DESC) {
+    BNT_FT_DESC = {};
+    Object.keys(BN_FIG_TRAIT).forEach(function (fid) { var f = CARD_FIG_BY_ID[fid], e = BN_FIG_TRAIT[fid], t = f && f.tr[e.i]; if (t && t[2]) BNT_FT_DESC[String(t[2]).slice(0, 60)] = fid; });
+  }
+  s = s.slice(0, 60);
+  return BNT_FT_DESC[s] ? BN_FIG_TRAIT[BNT_FT_DESC[s]] : null;
+}
+function bnFigTraitOf(figId, idx) { var e = (typeof BN_FIG_TRAIT !== 'undefined') ? BN_FIG_TRAIT[figId] : null; return e && e.i === (idx | 0) ? e : null; }
+function bnFigTraitText(e) {
+  var p = bntModsText(e.m);
+  return p.length ? '戰鬥中:' + (e.m.troop ? '擔任' + e.m.troop + '兵時' : '') + p.join(';') : null;
+}
+// cardsui 名人詞條說明浮層的戰鬥面補充(cardsUiInfo kind=xtrait 呼叫;有戰鬥修正者改標「戰事」與討伐生效)
+function bnXTraitInfoFix(o, figId, idx) {
+  var e = bnFigTraitOf(figId, idx), i;
+  if (!e || !o) return o;
+  for (i = 0; i < o.tags.length; i++) if (o.tags[i] === '城建') o.tags[i] = '戰事';
+  for (i = 0; i < o.lines.length; i++) {
+    if (o.lines[i][0] === '效果') o.lines[i][1] = bnFigTraitText(e) || o.lines[i][1];
+    if (o.lines[i][0] === '適用職司') o.lines[i][1] = '上陣討伐時';
+    if (o.lines[i][0] === '目前生效') o.lines[i][1] = '討伐戰鬥中生效(人物天生特質,上陣即計入)';
+  }
+  if (e.note) o.lines.splice(1, 0, ['典故', e.note]);
+  return o;
 }
 
 // ---------- 卡 → 戰法清單 ----------

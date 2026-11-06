@@ -257,7 +257,7 @@ function nvCardRender() {
   h = '<div style="display:flex;gap:8px;align-items:center">' +
     '<div style="width:44px;height:44px;border-radius:6px;border:2px solid ' + aura + ';background:rgba(128,128,128,.2);overflow:hidden;flex:none"><img alt="" src="' + nvEsc(src) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.remove()"></div>' +
     '<div style="flex:1;min-width:0"><b>' + nvEsc(e.name) + '</b> <span style="color:#c9b98f;font-size:12px">' + g.ch + ' · ' + nvEsc(e.zi || '') + '</span>' +
-    '<div style="font-size:12px;color:' + aura + '">在野 · ' + nvEsc(e.name) + ' 路過本城</div></div>' +
+    '<div style="font-size:12px;color:' + aura + '">' + ((typeof fxVisitText === 'function' && fxVisitText(e, nvEsc)) || '在野 · ' + nvEsc(e.name) + ' 路過本城') + '</div></div>' +
     '<span data-a="x" style="cursor:pointer;padding:0 4px">✕</span></div>';
   h += '<div style="margin:8px 0;min-height:1.5em">「' + nvEsc(NPCV.card.line ? NPCV.card.line.text : '') + '」</div>';
   h += '<div style="font-size:12px;color:#c9b98f;margin-bottom:4px">只是路過,不能直接延攬。</div>';

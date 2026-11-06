@@ -1,6 +1,7 @@
 // js/nextstep_data.js — 「推薦下一步」資料:開局引導鏈 NS_CHAIN(純資料,無 DOM)。引擎 nextstep.js、介面 nextstepui.js。
 // 每步:id、icon、text(≤30 字,不命令式)、why(≤40 字)、go(前往動作,同 cityadvisor 的 go:build / panel / tech / camera,另加 bars)、
 //   done(完成判定:cnt 建築數量 / houses 民居數 / techAny 已研發或排入第一項 / seen 開過某面板)、obj(要蓋的建築 id,用來判斷科技是否已解鎖)、needLab(需先有研究院)。
+// text 可含 {n}:實際目標數 = min(done.n, 該建築的真實上限 nsCapOf);上限 0 的步驟略過(見 nextstep.js nsStepTarget)。
 // 所有 obj / go.type / go.id 必須是 NL_OBJ_TECH 或 CITY_TECHS 的真實 id(tools/test_nextstep.js 會核對)。
 // 前置科技未研發時,引擎自動插入「先研發 X」步驟;前置被時代擋住或已排入研發則略過該步(不卡死)。
 // 全域名稱:NS_PREF_KEY NS_THROTTLE_MS NS_TIER_MARK NS_CHAIN NS_FIELD_TYPES
@@ -36,7 +37,7 @@ var NS_CHAIN = [
     go: { kind: 'build', type: 'market' }, obj: 'market', done: { k: 'cnt', t: ['market'], n: 1 } },
   { id: 'n_goods', icon: '📦', text: '有空看看庫房裡存了什麼。', why: '木料、石料夠不夠,庫房一看便知。',
     go: { kind: 'panel', id: 'goods' }, done: { k: 'seen', id: 'goods' } },
-  { id: 'n_house6', icon: '🏠', text: '把民房擴到六間,城更像樣。', why: '住戶多了,各項民情才會真正吃緊。',
+  { id: 'n_house6', icon: '🏠', text: '把民房擴到 {n} 間,城更像樣。', why: '住戶多了,各項民情才會真正吃緊。',
     go: { kind: 'build', type: 'house' }, obj: 'house', done: { k: 'houses', n: 6 } },
   { id: 'n_notice', icon: '📜', text: '何不立座告示牌,安定地方?', why: '人多了治安會鬆,告示牌能穩住秩序。',
     go: { kind: 'build', type: 'notice_board' }, obj: 'notice_board', done: { k: 'cnt', t: ['notice_board'], n: 1 } },
@@ -46,6 +47,6 @@ var NS_CHAIN = [
     go: { kind: 'build', type: 'storyteller' }, obj: 'storyteller', done: { k: 'cnt', t: ['storyteller'], n: 1 } },
   { id: 'n_book', icon: '📖', text: '不妨蓋間書肆,教化百姓。', why: '教化高了,治安與研發都跟著受益。',
     go: { kind: 'build', type: 'shop_book' }, obj: 'shop_book', done: { k: 'cnt', t: ['shop_book'], n: 1 } },
-  { id: 'n_house10', icon: '🏠', text: '把民房擴到十間,成個像樣的鎮。', why: '到這地步,民情長條圖會常有話要說。',
+  { id: 'n_house10', icon: '🏠', text: '把民房擴到 {n} 間,成個像樣的鎮。', why: '到這地步,民情長條圖會常有話要說。',
     go: { kind: 'build', type: 'house' }, obj: 'house', done: { k: 'houses', n: 10 } }
 ];

@@ -120,11 +120,35 @@ function nsPrereq(techId, api, s) {
   if (api.queued(cur.id)) return { queued: true };
   return { tech: cur.id, name: (typeof techLabelOf === 'function' ? techLabelOf(cur) : cur.name) };
 }
+// 真實建築上限(依目前等級的 progProdCap;研究院走 techLabCap;null = 不限)
+function nsLvNow() { return (typeof prog !== 'undefined' && prog && typeof prog.lv === 'number') ? prog.lv : 1; }
+function nsCapOf(type) {
+  var c = (typeof progProdCap === 'function') ? progProdCap(type, nsLvNow()) : null;
+  if (type === 'research' && typeof techLabCap === 'function') c = techLabCap();
+  return (c === undefined) ? null : c;
+}
+// 上限為 0 或要等城市升級時,說明要做到什麼才有名額(找第一個有名額的等級;找不到回通用文字)
+function nsCapHint(type) {
+  var L, c;
+  if (typeof progProdCap !== 'function') return '目前還不能蓋';
+  for (L = nsLvNow() + 1; L <= 25; L++) { c = progProdCap(type, L); if (c === null || c > 0) return '城市升到 ' + L + ' 級才有名額'; }
+  return '目前還不能蓋';
+}
+// 步驟的實際目標:done.n 壓成上限(cap);cap 為 0 時 n = 0(呼叫端另行略過並推提示)
+function nsStepTarget(step) {
+  var d = step.done, type, cap;
+  if (!d || (d.k !== 'cnt' && d.k !== 'houses')) return { n: 0, cap: null, type: '' };
+  type = d.k === 'houses' ? 'house' : d.t[0];
+  cap = d.k === 'cnt' && d.t.length > 1 ? null : nsCapOf(type);
+  if (cap === null || cap === undefined) return { n: d.n, cap: null, type: type };
+  return { n: Math.min(d.n, cap), cap: cap, type: type };
+}
 function nsStepDone(step, s, mem) {
-  var d = step.done, i, n;
+  var d = step.done, i, n, tg;
   if (!d) return false;
-  if (d.k === 'cnt') { n = 0; for (i = 0; i < d.t.length; i++) n += s.cnt[d.t[i]] || 0; return n >= d.n; }
-  if (d.k === 'houses') return s.houses >= d.n;
+  tg = nsStepTarget(step);
+  if (d.k === 'cnt') { n = 0; for (i = 0; i < d.t.length; i++) n += s.cnt[d.t[i]] || 0; return n >= tg.n; }
+  if (d.k === 'houses') return s.houses >= tg.n;
   if (d.k === 'techAny') return s.techDoneN > 0 || s.busy;
   if (d.k === 'seen') return !!(mem && mem.seen[d.id]);
   return false;
@@ -134,11 +158,14 @@ function nsSynLab() {
 }
 // 引導鏈目前該推的一步(含前置);全完成 / 全被略過回 null
 function nsResolveChain(s, mem, api) {
-  var i, st, u, pre, techId, c;
+  var i, st, u, pre, techId, c, tg, capSkip = null, hid, tid;
   for (i = 0; i < NS_CHAIN.length; i++) {
     st = NS_CHAIN[i];
-    if (mem.dismissed[st.id] || nsStepDone(st, s, mem)) continue;
+    if (mem.dismissed[st.id]) continue;
     if (NS_TUT_OVERLAP.indexOf(st.id) >= 0 && typeof tutGraduated === 'function' && tutGraduated()) continue;   // 教學已做過的步驟(畢業後略過)
+    tg = nsStepTarget(st);
+    if (tg.cap === 0) { if (!capSkip) capSkip = { st: st, type: tg.type }; continue; }   // 上限 0(例:Lv1 市集)→ 略過,不推玩家做不到的事
+    if (nsStepDone(st, s, mem)) continue;
     if (st.obj && api) {
       techId = nsObjTechId(st.obj);
       if (techId) {
@@ -152,8 +179,14 @@ function nsResolveChain(s, mem, api) {
       }
     }
     if (st.needLab && !s.lab) { if (mem.dismissed.pre_lab) continue; return nsSynLab(); }
-    c = { id: st.id, src: 'chain', tier: 'C', icon: st.icon, text: st.text, why: st.why, go: st.go };
+    c = { id: st.id, src: 'chain', tier: 'C', icon: st.icon, text: st.text.replace('{n}', String(tg.n)), why: st.why, go: st.go };
     return c;
+  }
+  if (capSkip) {   // 整條鏈暫時做不到:推『等級提升後才有名額』提示卡(可 ✕ 關閉)
+    hid = 'cap_' + capSkip.type;
+    if (mem.dismissed[hid]) return null;
+    tid = nsObjTechId(capSkip.st.obj);
+    return { id: hid, src: 'chain', tier: 'C', icon: '🔒', text: '〈' + nsObjName(capSkip.st) + '〉要' + nsCapHint(capSkip.type) + '。', why: '名額有上限,先把現有的用好,等發展了再來。', go: tid ? { kind: 'tech', id: tid } : { kind: 'bars' } };
   }
   return null;
 }
@@ -224,6 +257,7 @@ function nsNext() { nsRt.rot++; }
 function nsGo(cand) {
   if (!cand || !cand.go) return false;
   if (cand.go.kind === 'tut') { if (typeof tutAct === 'function') tutAct(cand.go.id); nsRt.last = -1e15; return true; }
+  if (cand.src === 'tut' && cand.go.kind === 'build' && typeof tutGoBuild === 'function') { tutGoBuild(cand.go.type); nsRt.last = -1e15; return true; }   // 教學蓋建築:自動找位置 + 高亮
   if (cand.go.kind === 'bars') {
     if (typeof advUiOpenDock === 'function') advUiOpenDock('bars');
     nsMarkSeen('bars');
@@ -238,8 +272,8 @@ function nsGo(cand) {
 // ───────── 卡片幾何(純函式,供 UI 與測試)─────────
 // 右上小卡:直版 = 頂列下方、右側欄左邊,高度止於 y=20% 之前;橫版 = 右側 25% 欄、右側欄左邊。尺寸 ≤ 寬 60%、高 18%,絕不進正中央(x25~75% × y20~80%)。
 var NS_LAND_MIN_H = 96;
-function nsCardRect(vw, vh, topY) {
-  var side = 52, land = vw >= vh, maxW = vw * 0.6, maxH = vh * 0.18, x, y, w, h;
+function nsCardRect(vw, vh, topY, sideW) {
+  var side = (sideW > 0) ? sideW : 52, land = vw >= vh, maxW = vw * 0.6, maxH = vh * 0.18, x, y, w, h;
   y = Math.max(4, topY || 50);
   if (land) {
     x = vw * 0.75 + 2; w = Math.min(maxW, Math.max(96, vw - side - x));

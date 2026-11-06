@@ -1,7 +1,7 @@
 // js/bn_data.js — 戰鬥 A 模式(討伐戰)參數與係數(PLAN_BATTLE_A §2、§3.4、§4.1~§4.3、§4.11)。
 // 戰鬥改版(2026-11-06):拿掉士氣 / 氣力;所有戰法(含大招)每回合各自擲發動率;新增對象條件 vs、五行、發動率增減等。
 // 全部數字皆 PLACEHOLDER,集中在這一個檔;調參只改此檔(tools/bn_sim.js --tune 的建議對象)。不寫 DOM、不讀時間。ES2017,不用 ?. ??。
-// 全域:BN_DATA(係數)BN_TRAIT_MODS(詞條 → 戰鬥修正)BN_BONDS(陣營 / 職業標籤 / 特殊組合羈絆)。B1 範圍:僅純邏輯。
+// 全域:BN_DATA(係數)BN_TRAIT_MODS(詞條 → 戰鬥修正)BN_FIG_TRAIT(名人專屬詞條 → 戰鬥修正,B4)BN_FIG_TUNE(名人強度校正,B6)BN_BONDS(陣營 / 職業標籤 / 特殊組合羈絆)。僅純邏輯。
 var BN_DATA = {
   v: 1,
   K: 1.0,                      // 傷害總係數(§3.4);B1 調參 1.6 → 1.73;戰鬥改版(多戰法同時發動 + 放完戰法仍普攻 + cdCut)1.73 → 1.0,維持 5~7 回合
@@ -107,7 +107,8 @@ var BN_DATA = {
   formation: { fengshi: 0.08, yuanzhen: 0.08, yanxing: 0.08 },
   // 路人戰法欄(§4.8;PLACEHOLDER):自帶 1(職業預設)+ 學習欄。learnByGr = 各品階(白青藍紫金)的基本學習欄;learnBonus = 通才 / 升階 2 次再加;learnCap = 學習欄上限(總戰法數上限 1 + learnCap = 3)。
   // autoLearn:名冊卡沒有指定學習戰法時,依卡面雜湊從通用戰法池自動補滿(確定性),使白 1 / 青 2 / 藍 2 / 紫 3 / 金 3 皆有合理戰法欄
-  slots: { learnByGr: [0, 1, 1, 2, 2], learnBonus: 1, learnCap: 2, autoLearn: true }
+  slots: { learnByGr: [0, 1, 1, 2, 2], learnBonus: 1, learnCap: 2, autoLearn: true },
+  figTuneRate: 0.4             // BN_FIG_TUNE 係數對戰法發動率的連動:(係數 − 1) × 此值(例:0.9 → 發動率 −4 pp)
 };
 
 // 詞條 → 戰鬥修正(§2.7;只列戰鬥面;未列者無戰鬥效果)。欄位語意見 bn_engine.js 的 u.mods
@@ -165,6 +166,69 @@ var BN_TRAIT_MODS = {
   tianzhen: { allMul: 0.9 }
 };
 
+// 名人專屬詞條 → 戰鬥修正(§2.7 最後一點;B4)。key = 名人 id;i = CARD_FIGS[].tr 的序號(卡面那一條詞條);m = 修正(欄位同 BN_TRAIT_MODS,另加:
+//   vsFac {陣營: +%} / vsFig {名人: +%} / vsTroop {兵種: +%} 對特定對象傷害;takenStrat 受謀略傷害;lowHpTaken [兵力比, 受傷 ±];healOut 施放的治療量;
+//   teamAtk 全隊攻擊(光環);teamTakenFac {fac, v} 我方某陣營受傷;teamTroopSpd {兵種: 點} 我方某兵種速度);note = 典故(說明浮層用)。
+// 原則:舊即時戰用語依 §2.7 換算;與該名人 fac*.json 被動同一典故者改取另一面(個性 / 史事),不與其戰法重複;數值偏小(強者給有代價或對象條件的)。
+var BN_FIG_TRAIT = {
+  caocao: { i: 2, m: { fmtAll: 1.1 }, note: '注《孫子》,善用陣法' },
+  simayi: { i: 2, m: { takenPct: -0.05 }, note: '堅守不戰,隱忍待時' },
+  zhangliao: { i: 2, m: { vsFac: { 2: 0.08 } }, note: '合肥八百破孫權,江東小兒不敢夜啼' },
+  xuchu: { i: 1, m: { stW: 3, stZ: -5 }, note: '力如虎而癡' },
+  caoren: { i: 1, m: { takenStrat: -0.08 }, note: '江陵拒周瑜經年,不為計謀所動' },
+  xiahouyuan: { i: 0, m: { spd: 5 }, note: '三日五百,六日一千' },
+  xuhuang: { i: 1, m: { vsShield: 0.08 }, note: '樊城長驅直入,破關羽十重鹿角' },
+  liubei: { i: 2, m: { lowHpTaken: [0.3, -0.10] }, note: '屢敗而不撓,越到絕境越難擊倒' },
+  zhangfei: { i: 1, m: { frontTaken: -0.08 }, note: '長坂據水斷橋,瞋目橫矛' },
+  zhaoyun: { i: 0, m: { undyingOnce: 1 }, note: '長坂單騎,一身都是膽' },
+  machao: { i: 2, m: { vsFac: { 0: 0.08 } }, note: '渭南殺得曹操割鬚棄袍' },
+  weiyan: { i: 2, m: { r1Spd: 8 }, note: '鎮漢中、獻子午谷奇謀,出兵求快' },
+  maliang: { i: 1, m: { rowRate: 0.02 }, note: '白眉最良,說和五溪,同列皆受其益' },
+  sunce: { i: 1, m: { spd: 4, troop: '騎' }, note: '轉鬥千里,所向皆破' },
+  zhouyu: { i: 2, m: { immuneFirst: ['confuse'] }, note: '曲有誤,周郎顧:心神不亂' },
+  ganning: { i: 1, m: { vsFac: { 0: 0.06 } }, note: '百騎夜劫曹營' },
+  luxun: { i: 2, m: { vsFac: { 1: 0.08 } }, note: '夷陵火燒劉備連營' },
+  lvmeng: { i: 2, m: { firstHit: 0.12 }, note: '白衣渡江,襲取荊州於不備' },
+  huanggai: { i: 1, m: { lowHp: [0.5, 0.10] }, note: '苦肉詐降,傷得越重越拚命' },
+  chengpu: { i: 1, m: { rowTakenFront: -0.06 }, note: '三世老將,諸將皆稱程公' },
+  zhangjiao: { i: 2, m: { teamAtk: 0.03, takenPct: 0.05 }, note: '蒼天已死,黃天當立:眾人狂熱,自身也成眾矢之的' },
+  zhangbao: { i: 2, m: { stratPct: 0.06 }, note: '作法興雲布霧' },
+  zhangliang: { i: 2, m: { vsFig: { huangfusong: 0.15, zhujun: 0.15 } }, note: '廣宗與皇甫嵩死戰' },
+  zhangmancheng: { i: 2, m: { teamTakenFac: { fac: 3, v: -0.03 } }, note: '神上使號令南陽黃巾' },
+  mayuanyi: { i: 2, m: { firstHit: 0.10 }, note: '大方渠帥,潛入洛陽為內應' },
+  guotai: { i: 2, m: { takenRanged: -0.08 }, note: '據白波谷,依山谷掩蔽' },
+  zhangyan: { i: 0, m: { hp: 0.05 }, note: '黑山眾號百萬' },
+  lvbu: { i: 0, m: { r1Spd: 6 }, note: '飛將,馳馬最快' },
+  huangfusong: { i: 1, m: { vsFac: { 3: 0.08 } }, note: '平定黃巾的主帥' },
+  gongsunzan: { i: 0, m: { vsTroop: { '騎': 0.06 } }, note: '白馬義從專與胡騎爭鋒' },
+  zhujun: { i: 2, m: { vsShield: 0.08 }, note: '圍宛城、破堅壘' },
+  mateng: { i: 2, m: { teamTroopSpd: { '騎': 3 } }, note: '涼州豪帥,麾下多騎' },
+  huatuo: { i: 1, m: { healOut: 0.08 }, note: '五禽戲養生,醫術更精' },
+  youtu: { i: 1, m: { hp: 0.08 }, note: '丹陽宗帥,宗部人多' },
+  yufuluo: { i: 1, m: { teamTroopSpd: { '騎': 3 } }, note: '南匈奴單于,胡騎來去如風' }
+};
+
+// 名人強度校正(B6;tools/bn_fig_tune.js 解出,--apply 只改下面標記之間的一行):名人 id → 兵力 / 攻擊 / 謀略 / 治療 / 護盾量係數(未列 = 1)。
+// 目的:三國 100 位名人(全名人隊隨機對打)勝率落在約 45~58%、新舊兩批平均相近;魔幻 42 位同法校正。卡面五維不變,只影響討伐戰鬥數值。
+// BN_FIG_TUNE-BEGIN
+var BN_FIG_TUNE = { caocao: 0.88, xunyu: 0.8, guojia: 1.25, jiaxu: 1.04, simayi: 1.03, dianwei: 0.94, xiahoudun: 0.93, zhangliao: 0.8, xunyou: 0.91, xuchu: 0.97, caoren: 0.81, xiahouyuan: 0.8, xuhuang: 0.99, zhongyao: 0.98, liubei: 0.93, guanyu: 0.8, zhangfei: 0.8, zhaoyun: 0.89, zhugeliang: 0.8, machao: 0.85, pangtong: 1.05, fazheng: 0.9, weiyan: 0.94, huangzhong: 0.8, mizhu: 1.1, maliang: 1.25, xushu: 1.25, shamoke: 1.25, sunjian: 0.83, sunce: 0.8, zhouyu: 0.92, lusu: 0.8, ganning: 0.8, sunquan: 1.04, luxun: 0.98, lvmeng: 1.11, zhangzhao: 1.25, taishici: 0.83, huanggai: 1.25, zhoutai: 1.05, chengpu: 1.06, shixie: 0.88, zhangjiao: 0.8, zhangbao: 0.8, zhangliang: 0.94, zhangniujiao: 0.94, zhangmancheng: 0.8, mayuanyi: 1.25, guanhai: 0.89, zhanglu: 0.84, guotai: 0.84, boca: 1.1, zhangyan: 1.25, liupi: 0.99, yudu: 1.25, yuji: 0.99, dongzhuo: 0.8, lvbu: 0.8, yuanshao: 0.88, huangfusong: 0.92, luzhi: 1.25, gongsunzan: 0.8, zhujun: 0.8, zhengxuan: 1.25, mateng: 0.8, xurong: 1.25, huatuo: 0.83, caiyong: 1.22, youtu: 1.25, yufuluo: 0.86, zhenji: 1.1, caiyan: 0.96, caozhi: 1.25, yangxiu: 1.25, pangde: 0.85, zhanghe: 0.96, ganfuren: 1.25, mifuren: 1.24, masu: 1.25, huangyueying: 1.25, zhoucang: 1.13, yanyan: 0.94, sunshangxiang: 0.84, lingtong: 1.04, daqiao: 1.25, xiaoqiao: 1.25, kanze: 1.25, nanhua: 0.8, chengyuanzhi: 0.94, dengmao: 1.25, peiyuanshao: 1.25, heyi: 1.1, zhangkai: 0.99, diaochan: 1.25, zuoci: 1.25, panfeng: 1.23, caoxing: 0.91, huaxiong: 0.94, yuanshu: 1.25, elf_changqing: 0.85, elf_qinglan: 0.85, elf_baizhou: 0.85, elf_jiyu: 0.85, elf_tengluo: 1.18, elf_liguo: 1.18, elf_yueyao: 0.85, elf_shuanghua: 0.85, elf_luming: 0.85, elf_chenlu: 0.85, elf_hengzhi: 1.18, elf_xingchen: 0.85, elf_liuying: 1.18, elf_yedi: 1.18, dw_panshan: 0.85, dw_zhongyue: 0.85, dw_zaotian: 0.88, dw_heiyao: 0.85, dw_dengxin: 1.18, dw_qianchui: 0.97, dw_yinxu: 1.01, dw_duanlei: 0.85, dw_maoding: 1.14, dw_jincheng: 1.18, dw_lielu: 0.88, dw_kuangfu: 0.87, dw_rongxin: 0.85, dw_maiya: 1.14, kd_zhaoming: 0.83, kd_lingfeng: 0.83, kd_shoucheng: 0.86, kd_chuanyang: 0.87, kd_chenxing: 1.15, kd_wenyuan: 0.88, kd_xuandeng: 0.92, kd_suxin: 0.83, kd_jinghu: 1.15, kd_yushu: 1.15, kd_fengnian: 0.83, kd_wantong: 1.15, kd_heijing: 0.84, kd_xinghua: 0.93 };
+// BN_FIG_TUNE-END
+
+// 戰法平衡覆寫(B6):戰法 id → 要覆寫的欄位(rate 發動率 / power 檔位)。載入時由 bn_units.js 套到 BN_SKILLS(戰鬥與卡面文字一致);
+// 來源 json 與 js/bn_skills_data.js 不改(存檔相容、重新產生逐位不變)。對象:強度校正係數壓不下來的治療型 / 拉不上來的純輔助型。
+var BN_SKILL_TUNE = {
+  p_zhangjiao: { power: 'S' }, s_zhangjiao_1: { rate: 0.2 }, s_zhangjiao_vs1: { rate: 0.16 }, u_zhangjiao: { rate: 0.08 }, s_zhangjiao_2: { rate: 0.28 }, s_zhangjiao_3: { rate: 0.22 }, s_zhugeliang_2: { rate: 0.25 }, s_zhugeliang_3: { rate: 0.3 },   // 張角:三個全隊治療太穩
+  s_guanyu_1: { rate: 0.3 }, s_guanyu_vs1: { rate: 0.25 },
+  p_lusu: { power: 'S' }, s_lusu_1: { rate: 0.3 }, p_zhangmancheng: { power: 'S' },
+  s_lvbu_1: { rate: 0.38 }, s_zhangliao_2: { rate: 0.3 }, s_zhangliao_3: { rate: 0.3 },
+  s_peiyuanshao_1: { rate: 0.5 }, s_yuanshu_2: { rate: 0.45 }, s_zhengxuan_2: { rate: 0.45 }, s_zhengxuan_3: { rate: 0.4 },
+  s_kanze_3: { rate: 0.45 }, s_caozhi_1: { rate: 0.5 }, u_caozhi: { rate: 0.2 }, s_zhangzhao_3: { rate: 0.4 }, s_maliang_2: { rate: 0.5 },
+  s_dw_jincheng_1: { rate: 0.5 }, s_elf_liguo_1: { rate: 0.5 }, s_elf_liguo_2: { rate: 0.4 },
+  s_dw_dengxin_1: { rate: 0.45 }, s_dw_dengxin_2: { rate: 0.45 }, s_elf_yedi_1: { rate: 0.5 }, s_elf_yedi_2: { rate: 0.5, power: 'M' },
+  s_elf_tengluo_1: { rate: 0.45 }, s_elf_tengluo_2: { rate: 0.4 },
+  p_elf_yueyao: { power: 'S' }, s_elf_yueyao_1: { rate: 0.3 }, u_elf_yueyao: { rate: 0.1 }, s_dw_rongxin_1: { rate: 0.3 }, s_dw_jincheng_2: { rate: 0.5 }, p_dw_rongxin: { power: 'S' }, p_kd_fengnian: { power: 'S' }, s_kd_lingfeng_1: { rate: 0.34 }
+};
+
 // 羈絆(§2.6;PLACEHOLDER)。陣營 / 職業標籤由 bn_units.js bnBondsOf 計算;特殊組合另走 combos.json partB(BN_COMBOS.bonds)
 var BN_BONDS = {
   fac: { 3: { atk: 0.05 }, 4: { atk: 0.08 }, 5: { atk: 0.10, hp: 0.05 } },     // 魏蜀吳黃巾;中立不計
@@ -181,4 +245,4 @@ var BN_BONDS = {
   maxSpecial: 3
 };
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { BN_DATA: BN_DATA, BN_TRAIT_MODS: BN_TRAIT_MODS, BN_BONDS: BN_BONDS };
+if (typeof module !== 'undefined' && module.exports) module.exports = { BN_DATA: BN_DATA, BN_TRAIT_MODS: BN_TRAIT_MODS, BN_BONDS: BN_BONDS, BN_FIG_TRAIT: BN_FIG_TRAIT };

@@ -3,7 +3,8 @@
 // 走不通 / 沒有入口時退為直線淡入淡出。同時最多 3 組;省電模式 / 縮放 < 0.5 / 拍照 / 錄影 / 全景時不畫(也不生成)。
 // 掛點(citylife.js 各 1 行,typeof 守護):lifeFrame → caravanVisTick(dt)、lifeFrame 非作用分支 → caravanVisClear()、lifeDrawDiag 開頭 → caravanVisDraw(ctx, d)。
 // 繪製併入 lifeDrawDiag 的對角線分桶(每個成員依 floor(x)+floor(y) 放進自己的桶,與居民同序畫);桶與成員物件皆重用,每幀不配置。
-// 馬車與馬為程式繪製(依品階換色 / 裝飾);鏢師用 crowdLook('escort') 的外觀,身體色改為膚色、衣緣改為皮革色,表現赤膊 + 皮護腕。
+// 馬車優先用外部車馬圖(traffic_sprites.js 的 assets/traffic 12 張,沿用其載入、SE/NE 視角與鏡像、烘焙快取);依品階對映車型(CVV_CART_IMG)。
+//   缺圖 / 未載入 / 烘焙失敗 / 無 ART → 退回程式繪製的馬車(依品階換色 / 裝飾),不報錯。鏢師用 crowdLook('escort') 的外觀,身體色改為膚色、衣緣改為皮革色,表現赤膊 + 皮護腕。
 // ES2017;不用可選串連與空值合併運算子。
 
 var CVV_MAX = 3;                 // 同時顯示的車隊上限
@@ -15,9 +16,14 @@ var CVV_HINT_T = 2.4;            // 驛站小提示持續秒數
 var CVV_ESC_OFF = [1.25, 2.1];   // 鏢師落在車後的距離(格)
 var CVV_ESC_LAT = [0.2, -0.2];   // 鏢師側向偏移(格)
 
+// 品階 0~4(白、青、藍、紫、金)→ 外部車馬圖的車型(traffic_sprites.js 的 TRS_KINDS 鍵)。
+//   白 柴車 / 獨輪 = wheelbarrow;青 牛車 = oxcart;藍 輜車 / 客篷 = carriage;紫 軺車 = 無獨立圖,暫用 carriage 並以紫色染色代用;金 金根車 / 雙馬貨車 = wagon
+var CVV_CART_IMG = ['wheelbarrow', 'oxcart', 'carriage', 'carriage', 'wagon'];
+
 var CVV = {
   on: true, convoys: [], known: {}, syncT: 0, buck: [], used: [], n: 0, ms: 0, frames: 0, drawMs: 0,
-  specs: {}, scratch: new Float64Array(16), g: new Float64Array(8), pos: [0, 0, 1, 0], spawned: 0, skipped: 0
+  specs: {}, scratch: new Float64Array(16), g: new Float64Array(8), pos: [0, 0, 1, 0], spawned: 0, skipped: 0,
+  imgSlots: {}, useArt: false, res: 1, tod: 'noon'
 };
 
 // ───────── 小工具 ─────────
@@ -300,7 +306,29 @@ function cvvBox(ctx, cx, cy, ux, uy, hl, hw, z0, z1, h0, cTop, cNx, cNy) {
   cvvPrj(S, 4, gx[2], gx[6], h0, z1); cvvPrj(S, 6, gx[3], gx[7], h0, z1);
   rqPoly4(ctx, S[0], S[1], S[2], S[3], S[4], S[5], S[6], S[7], cTop);
 }
+// 外部車馬圖的烘焙 slot:每個品階 × 視角一個(重用,每幀不配置);URL 與 traffic_sprites.js 同規則
+function cvvImgSlot(grade, file, kind) {
+  var row = CVV.imgSlots[grade] || (CVV.imgSlots[grade] = {});
+  if (!row[file]) row[file] = { url: TRS_DIR + 'tr_' + kind + '_' + file + '.webp', res: 0, tod: '', key: '', spr: null };
+  return row[file];
+}
+// 畫外部車馬圖(SE/NE 與鏡像由 trafficView 決定);品階 0 白不染色,其餘依車色染色。回傳 false = 沒有可用圖,呼叫端退回程式繪製
+function cvvDrawImg(ctx, cv, m, alpha) {
+  var kind, v, slot, spr;
+  if (typeof trafficSpriteSlot !== 'function' || typeof trafficView !== 'function' || typeof trafficDirOf !== 'function' || typeof TRS_DIR === 'undefined') return false;
+  if (typeof ART === 'undefined' || !ART || !ART.cache) return false;
+  kind = CVV_CART_IMG[cv.grade] || 'carriage';
+  v = trafficView(kind, trafficDirOf(m.ux, m.uy));
+  slot = cvvImgSlot(cv.grade, v.file, kind);
+  spr = trafficSpriteSlot(slot, kind, v.file, CVV.res, CVV.tod, cv.grade > 0 ? cv.color : '');
+  if (!spr) return false;
+  if (v.flip) { rqSave(ctx); rqTranslate(ctx, m.px, 0); rqScale(ctx, -1, 1); rqTranslate(ctx, -m.px, 0); }
+  rqSprite(ctx, spr, m.px + spr.l, m.py + spr.t, spr.cv.width / spr.res, spr.cv.height / spr.res, alpha);
+  if (v.flip) rqRestore(ctx);
+  return true;
+}
 function cvvDrawCart(ctx, cv, m, alpha) {
+  if (CVV.useArt && cvvDrawImg(ctx, cv, m, alpha)) return;   // 外部圖優先;缺圖 → 下方程式繪製
   var ux = m.ux, uy = m.uy, vx = -uy, vy = ux, h0 = lifeHAt(m.x, m.y), k = cv.grade, S = CVV.scratch, Q = 1.55, sv, i, wx, wy, hx, hy, px, py, legA, horse, hdk, sux, suy, hs;
   rqAlpha(ctx, alpha * 0.28); rqDisc(ctx, m.px, m.py, 27, 11, '#000');
   rqAlpha(ctx, alpha);
@@ -371,6 +399,7 @@ function caravanVisDraw(ctx, d) {
   useArt = z >= 0.5 && typeof ART !== 'undefined' && !!ART.chibiPose && !!ART.resBucket;
   res = useArt ? Math.min(LIFE_RES_MAX, ART.resBucket(z * dpr)) : 1;
   tod = LIFE.tod; season = lifeSeason();
+  CVV.useArt = useArt; CVV.res = res; CVV.tod = tod || 'noon';
   var mult = LIFE.placing ? 0.5 : 1;
   LIFE.small = z < 0.5;
   for (i = 0; i < list.length; i++) {

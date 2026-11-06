@@ -1,4 +1,4 @@
-// js/cardsui.js — 卡牌與酒館 第一階段介面(PLAN_CARDS §2.3 名帖、§3A.6 卡面、§4.13.8 職業條、§7A 名額與請辭):招募頁(酒館 / 縣試 / 指名)+ 卡包頁(cardsui_bag.js)+ 名冊頁(列表 + 詳情)。
+// js/cardsui.js — 卡牌與酒館 第一階段介面(PLAN_CARDS §2.3 名帖、§3A.6 卡面、§4.13.8 職業條、§7A 名額與遣散):招募頁(酒館 / 縣試 / 指名)+ 卡包頁(cardsui_bag.js)+ 名冊頁(列表 + 詳情)。
 // 抽到就是抽到:開批的 7 張直接進卡包(cs.bag),酒令只在『任用』(卡包 → 名冊)時花;手動開批時以 typeof 守衛呼叫 cardsRevealPlay(cards, onDone)(js/cardsreveal.js),onDone 後才入包並刷新介面。
 // 文字卡 v1:品階用「色(--gr0~--gr4)+ 品字 + 角飾數」三重表示;陣營字用墨色;頭像 = 中性人物剪影(依品階上色)+ 職業名;名人用 assets/portraits/<id>.webp,路人用 assets/portraits/generic/<職業id>_<變體a-c>.webp(不分品階;舊命名 <職業id>_<品階0-3>_<a-d>.webp 次選;缺圖回退剪影)。詞條 / 技能 / 職業 / 圖例可點,彈出說明浮層(面板內自管:panelmgr 規定 card 不能與大面板並開)。
 // 美術卡(js/cardart.js,assets/card/):邊框 / 背景載入成功時卡面改畫美術卡(cuArtCard),名冊 / 卡包列加縮圖(cuArtThumb);載入中或缺檔退回文字卡。
@@ -288,7 +288,7 @@ function cuRosterHtml(cs) {
   var cap = cardsCap(), h = '', list = cs.roster.slice().sort(function (a, b) { return b.gr - a.gr || b.tai - a.tai || a.no - b.no; });
   if (cu.detail) { var f = cardsFind(cs, cu.detail); if (f) return cuDetailHtml(cs, f); cu.detail = null; }
   h += '<div class="cur"><span>名額 <b>' + cs.roster.length + '/' + cap + '</b></span><span class="cusub">待定席 ' + cs.wait.length + '/' + CARD_CFG.waitSeats + '</span></div>';
-  if (cs.lastRel) h += '<button class="cub" data-a="undo">復原最近請辭</button>';
+  if (cs.lastRel) h += '<button class="cub" data-a="undo">復原最近遣散</button>';
   if (!list.length) h += '<div class="cusub">名冊空空如也。到酒館、縣試、指名開批,再從卡包任用人才吧。</div>';
   list.forEach(function (e) { h += cuRowHtml(e, false); });
   if (cs.wait.length) { h += '<div class="cusec">待定席</div>'; cs.wait.forEach(function (e) { h += cuRowHtml(e, true); }); }
@@ -314,16 +314,17 @@ function cuDetailHtml(cs, f) {
   if (typeof cuAcademyHtml === 'function' && f.list === 'roster') h += cuAcademyHtml(cs, e);   // 學院進修 / 升階(academyui.js)
   else h += '<div class="cusec">升階</div><div class="cusub" style="opacity:1">' + (chk.ok ? '條件已達' : cuEsc(chk.reasons.join(';'))) + '</div>';
   if (typeof cuStarHtml === 'function' && f.list !== 'wander') h += cuStarHtml(cs, e);   // 強化(升星,卡片熔爐碎片;cardsui_bag.js)
+  if (typeof bnBookHtml === 'function' && f.list === 'roster') h += bnBookHtml(cs, e);   // 討伐戰法學習:兵書 / 名人傳授 / 研兵(bn_book.js)
   if (typeof cuNpcDetailHtml === 'function') h += cuNpcDetailHtml(cs, e, f);   // 親近 / 所在 / 請託 / 升階(npcui.js)
   h += '<div class="cusec">管理</div>';
   if (f.list === 'wait') h += '<button class="cub" data-a="accept" data-id="' + e.id + '"' + (cs.roster.length >= cardsCap() ? ' disabled' : '') + '>收入名冊</button>';
   if (f.list === 'wander') h += '<button class="cub" data-a="recall" data-id="' + e.id + '">請回(🎴' + CARD_RECALL_COST + ' + 1 名額)</button>';
-  if (f.list !== 'wander') h += '<button class="cub" data-a="star" data-id="' + e.id + '">' + (e.star ? '🔒 已鎖定(點此解除)' : '鎖定(防止誤請辭)') + '</button>';
-  if (f.list !== 'wander' && cu.confirm !== e.id) h += '<button class="cub warn" data-a="rel" data-id="' + e.id + '">請辭</button>';
+  if (f.list !== 'wander') h += '<button class="cub" data-a="star" data-id="' + e.id + '">' + (e.star ? '🔒 已鎖定(點此解除)' : '鎖定(防止誤遣散)') + '</button>';
+  if (f.list !== 'wander' && cu.confirm !== e.id) h += '<div class="cusub" style="opacity:1">' + (e.fig ? '遣散後轉為流浪,可花酒令請回;名人遣散不給碎片。' : '遣散後轉換成碎片(' + Math.round((e.cost || CARD_GRADE[e.gr].cost) * CARD_WINE.refundRate * CARD_WINE.shardPerToken) + ' 碎),路人遣散後不能招回,要重新招募。') + '</div><button class="cub warn" data-a="rel" data-id="' + e.id + '">遣散(換取碎片)</button> <button class="cub" data-a="info" data-k="release" data-key="">遣散與卸任的差別</button>';
   if (cu.confirm === e.id) {
-    var back = e.fig ? '名人將轉為流浪,可花酒令請回。' : '返還 ' + Math.round((e.cost || 0) * CARD_WINE.refundRate * CARD_WINE.shardPerToken) + ' 碎片。';
+    var back = e.fig ? '名人將轉為流浪,可花酒令請回(不給碎片)。' : '返還 ' + Math.round((e.cost || 0) * CARD_WINE.refundRate * CARD_WINE.shardPerToken) + ' 碎片;路人遣散後不能招回,要重新招募。';
     if (e.starLv) back += '已投入升星的碎片不退還。';
-    h += '<div class="cuwarn">確定請辭「' + cuEsc(e.name) + '」?' + back + (e.at ? ' 目前派駐中,將一併卸任。' : '') + '</div><button class="cub" data-a="relno">否</button><button class="cub warn" data-a="relyes" data-id="' + e.id + '">是,請辭</button>';
+    h += '<div class="cuwarn">確定遣散「' + cuEsc(e.name) + '」?' + back + (e.at ? ' 目前派駐中,將一併卸任。' : '') + '</div><button class="cub" data-a="relno">否</button><button class="cub warn" data-a="relyes" data-id="' + e.id + '">是,遣散</button>';
   }
   if (cu.msg) h += '<div class="cuwarn">' + cuEsc(cu.msg) + '</div>';
   return h;
@@ -365,6 +366,7 @@ function cardsUiInfo(kind, key) {
     o.lines.push(['適用職司', '依詞條所述職務(派駐時)']);
     o.lines.push(['目前生效', CU_LIVE_CITY]);
     o.lines.push(['疊加', '專屬詞條只屬於該名人,不與一般詞條重複;百分比加成與職業專精加算']);
+    if (typeof bnXTraitInfoFix === 'function') bnXTraitInfoFix(o, p[0], n);   // 有討伐戰鬥效果的名人詞條(bn_text.js)
     return o;
   }
   if (kind === 'job') {
@@ -399,10 +401,20 @@ function cardsUiInfo(kind, key) {
     o.lines.push(['職業 ●○', '職業專精階級(最高四階),四點亮幾點即第幾階;點職業可看加成百分比(' + CARD_JOB_TIERPCT.slice(1).map(function (v) { return '+' + v + ' %'; }).join('、') + ')']);
     o.lines.push(['專屬', '名人專屬詞條,只有該名人才有']);
     o.lines.push(['戰法', '討伐戰鬥用的戰法(指揮 / 主動 / 追擊 / 被動 / 大招),點戰法列可展開白話說明;路人依品階有 1~3 個,名人固定']);
-        o.lines.push(['🔒', '名冊鎖定,鎖定中無法請辭']);
+        o.lines.push(['🔒', '名冊鎖定,鎖定中無法遣散']);
     o.lines.push(['★', '強化星數(0~' + CARD_FURNACE.starMax + '),用卡片熔爐的碎片在名冊詳情升星;每星攻 / 防 / HP +' + Math.round(CARD_FURNACE.starBonus.atk * 100) + ' %,' + CARD_FURNACE.starBonus.skillStar + ' 星起技能強化、' + CARD_FURNACE.starBonus.markStar + ' 星專屬標記;與 🔒 無關']);
     o.lines.push(['卡面圖示', '邊框與頂端寶石顏色 = 品階;人物視窗左上為陣營徽章、右上為戰鬥類型(盾 / 步 / 騎 / 弓 / 謀),下緣為強化星數與鎖定;名牌卷軸寫姓名(字),下方面板為五維與主職']);
     o.lines.push(['點擊', '詞條、技能、職業、才字都可以點開看說明']);
+    return o;
+  }
+  if (kind === 'release') {
+    o.title = '遣散與卸任';
+    o.tags.push('名冊', '派駐');
+    o.lines.push(['卸任', '人仍留在名冊,只離開目前派駐的職務(建築 / 職司空出),名額不變、不給碎片。到派工頁按「卸任」即可,之後可再派駐。']);
+    o.lines.push(['遣散', '人離開名冊、名額空出。路人遣散後轉換成碎片,不能招回,要重新招募;名人遣散後轉為流浪,可花酒令請回,不給碎片。']);
+    o.lines.push(['差別', '卸任只是離開職務、人還在名冊;遣散會讓人離開名冊。遣散時若人正在派駐,會一併卸任。']);
+    o.lines.push(['限制', '🔒 鎖定與在學(學院進修中)的人不能遣散。']);
+    o.lines.push(['復原', '遣散後可按「復原最近遣散」撤回一次(人與碎片收回)。']);
     return o;
   }
   return null;
@@ -470,7 +482,7 @@ function cuClick(ev) {
   else if (a === 'relyes') {
     r = cardsRelease(cs, id, { unassign: true, now: cuNow() });
     cu.confirm = null;
-    if (r.ok) { cu.detail = null; cardsSyncTalents(); } else cu.msg = r.reason === 'locked' ? '已鎖定,先解除鎖定' : '無法請辭';
+    if (r.ok) { cu.detail = null; cardsSyncTalents(); } else cu.msg = r.reason === 'locked' ? '已鎖定,先解除鎖定' : '無法遣散';
     cuSave();
   }
   else if (a === 'undo') { cardsUndoRelease(cs); cardsSyncTalents(); cuSave(); }

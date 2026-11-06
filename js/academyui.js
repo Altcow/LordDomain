@@ -2,11 +2,21 @@
 // 引擎在 academy.js,數值在 carddata.js CARD_ACADEMY。顯示:院級 / 進修席、進修進度(課數、速成、退學)、可選課程與花費 / 未達原因。不發聲。ES2017;不用 ?. ??。
 // 全域名稱:cuAcademyHtml cuAcademyClick
 
-var CU_AC_ACTS = { acgo: 1, acrush: 1, acquit: 1, acquity: 1, acquitn: 1, acl: 1 };
+var CU_AC_ACTS = { acgo: 1, acrush: 1, acquit: 1, acquity: 1, acquitn: 1, acl: 1, actch: 1 };
 
 function cuAcCostText(c) { return '碎片 ' + c.shards + '、金幣 ' + c.coin + '、' + c.lessons + ' 課'; }
+function cuAcTeachText(t) {   // 課程列的教習效果(只在有教習時顯示)
+  var p = [];
+  if (!t || !t.t) return '';
+  if (t.pct) p.push('花費 −' + Math.round(t.pct * 100) + ' %');
+  if (t.cut) p.push('課數 −' + t.cut);
+  return '<br>' + cuEsc('教習 ' + t.t.name + ':' + p.join('、'));
+}
+function cuAcTeachWhy(code) {
+  return ({ none: '查無此人', study: '在學中不能當教習', lv: '院級 2 起才有教習席', seats: '教習席已滿' })[code] || '無法設為教習';
+}
 function cuAcCourseRow(chk, attrs, btn) {
-  return '<div class="cusub" style="opacity:1;margin:3px 0">' + cuEsc(chk.label) + (chk.cost ? '<br>' + cuEsc(cuAcCostText(chk.cost)) : '') +
+  return '<div class="cusub" style="opacity:1;margin:3px 0">' + cuEsc(chk.label) + (chk.cost ? '<br>' + cuEsc(cuAcCostText(chk.cost)) : '') + cuAcTeachText(chk.teach) +
     (chk.ok ? '' : '<br><span class="cuwarn">' + cuEsc(chk.reasons.join(';')) + '</span>') +
     '<br><button class="cub" data-a="acgo" ' + attrs + (chk.ok ? '' : ' disabled') + '>' + btn + '</button></div>';
 }
@@ -15,13 +25,19 @@ function cuAcademyHtml(cs, e) {
   h += '<div class="cusub" style="opacity:1">' + (I.lv ? '學院:' + cuEsc(I.name) + '(院級 ' + I.lv + ')· 進修席 ' + I.used + '/' + I.seats : '學院尚未開放(研〈郡國學校〉並建學舍)') +
     ' · 已進修 ' + (e.sn | 0) + ' 次 · 升階 ' + (e.up | 0) + '/' + CARD_CFG.upMax + '<br>1 課約遊玩 ' + min + ' 分鐘(離線不推進);花費以碎片(卡片熔爐所得)與金幣支付。</div>';
   if (e.fig) return h + '<div class="cusub">名人不進修、不升階。</div>';
+  h += '<div class="cusub" style="opacity:1">' + (academyTeachSeats(I.lv) ? '教習席 ' + academyTeachFlagged(cs).length + '/' + academyTeachSeats(I.lv) + '(教習:進修花費 −教化階 × ' + Math.round(A.teachPerTier * 100) + ' %;同職業且教習 III 以上,課數 −' + A.teachLessonCut + ';自動選最有利的一位)' : '教習席於院級 2 起開放') + '</div>';
   if (s) {
     h += '<div class="cusub" style="opacity:1"><b>進修中</b>:' + cuEsc(s.k === 'up' ? '升階 ' + CARD_GRADE[e.gr].name + '→' + CARD_GRADE[Math.min(4, e.gr + 1)].name : (s.k === 'adv' ? '精進 ' : '習藝 ') + acadJobName(s.j)) +
-      ' · 第 ' + Math.min(s.n, s.l + 1) + '/' + s.n + ' 課(本課 ' + Math.floor(s.p) + '/' + A.lessonSec + ' 秒)<br>進修期間不能派駐、不能請辭。</div>';
+      ' · 第 ' + Math.min(s.n, s.l + 1) + '/' + s.n + ' 課(本課 ' + Math.floor(s.p) + '/' + A.lessonSec + ' 秒)' + (s.t && cardsFind(cs, s.t) ? '<br>教習:' + cuEsc(cardsFind(cs, s.t).e.name) : '') + '<br>進修期間不能派駐、不能遣散。</div>';
     h += '<button class="cub" data-a="acrush" data-id="' + e.id + '">速成(再花 ' + Math.ceil(s.cs * A.rushRate) + ' 碎,立即結業)</button>';
     if (cu.acq === e.id) h += '<div class="cuwarn">退學將作廢進度,只退還一半碎片與金幣。</div><button class="cub" data-a="acquitn" data-id="' + e.id + '">不退學</button><button class="cub warn" data-a="acquity" data-id="' + e.id + '">確定退學</button>';
     else h += '<button class="cub warn" data-a="acquit" data-id="' + e.id + '">退學</button>';
     return h;
+  }
+  if (e.tch) h += '<button class="cub" data-a="actch" data-id="' + e.id + '">撤下教習</button>';
+  else {
+    var tw = academyTeachBlock(cs, e);
+    h += '<button class="cub" data-a="actch" data-id="' + e.id + '"' + (tw ? ' disabled' : '') + '>設為教習(占教習席)</button>' + (tw ? '<div class="cusub" style="opacity:1"><span class="cuwarn">' + cuEsc(cuAcTeachWhy(tw)) + '</span></div>' : '');
   }
   chk = academyCheck(cs, e, 'up', null, now);
   rows += cuAcCourseRow(chk, 'data-id="' + e.id + '" data-k="up"', '送去進修');
@@ -50,6 +66,7 @@ function cuAcademyClick(a, b, cs, f) {
   if (!CU_AC_ACTS[a]) return false;
   if (!f) return true;
   e = f.e;
+  if (a === 'actch') { r = academyTeachSet(cs, e, !e.tch); cuAcMsg(r.ok ? (e.tch ? '已設為教習' : '已撤下教習') : cuAcTeachWhy(r.reason)); cuAcSave(); return true; }
   if (a === 'acl') { cu.acl = (cu.acl === e.id) ? null : e.id; return true; }
   if (a === 'acquit') { cu.acq = e.id; return true; }
   if (a === 'acquitn') { cu.acq = null; return true; }

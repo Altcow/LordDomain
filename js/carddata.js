@@ -108,8 +108,8 @@ var CARD_COST = { zongBonus: 4 };
 var CARD_WINE = {
   startGift: 6,                    // 開館禮(PLACEHOLDER,待使用者決定)
   dailyGift: 2, dailyDaysMax: 7,   // 每日小禮 +2,最多存 7 天
-  shardPerToken: 5,                // 請辭回收的換算尺度(成本 c 令 → c 碎 = c × refundRate × 此值);碎片不再自動轉酒令
-  refundRate: 0.2,                 // 請辭返還成本 20 %(碎片計:成本 c 令 → c 碎;無每週上限)
+  shardPerToken: 5,                // 遣散回收的換算尺度(成本 c 令 → c 碎 = c × refundRate × 此值);碎片不再自動轉酒令
+  refundRate: 0.2,                 // 遣散返還成本 20 %(碎片計:成本 c 令 → c 碎;無每週上限)
   techGift: 1, techGiftEra: 3, techGiftHi: 2,   // 每完成一項科技 +1 令,科技所屬時代 ≥ 3 起 +2(每個節點只發一次,記 cards.tokenGiven)
   mileGift: 10                     // 完成一個里程碑(mg_*)+10 令
 };
@@ -137,6 +137,9 @@ var CARD_ACADEMY = {
   rushRate: 0.5,       // 速成:剩餘課數立即結業,額外花 原碎片 × 此值
   quitRefund: 0.5,     // 退學:退還已付碎片 / 金幣的比例
   seats: [0, 2, 3, 4, 5, 6],   // 進修席(依院級 0~5)
+  teachers: [0, 0, 1, 1, 2, 2],   // 教習席(依院級 0~5;PLAN §7B.2,PLACEHOLDER)
+  teachPerTier: 0.05,             // 教習:進修花費 −(教習教化階 × 此值)(PLAN §7B.3,PLACEHOLDER)
+  teachLessonTier: 3, teachLessonCut: 1,   // 教習與學生同職業且教習 ≥ 此階 → 課數 −cut(最少 1)
   // 院級條件:tech 科技、school 學舍 + 學宮數、jing 精舍數、gong 學宮數(逐級累積判定,取連續達成的最高級)
   levels: [null,
     { name: '庠舍', tech: 'ed_xuexiao', school: 1, jing: 0, gong: 0 },

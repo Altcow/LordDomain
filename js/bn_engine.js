@@ -257,7 +257,7 @@ function bnHeal(S, src, t, nominal, o) {
   S.stats.healEvents[t.side]++;
   if (ratio > 0) S.stats.healBlockedEvents[t.side]++;
   fat = bnFatigue(S) * BN_DATA.fatigue.heal;
-  nom0 = nominal * (1 + (t.mods.healTaken || 0)) * (1 - fat);
+  nom0 = nominal * (1 + (t.mods.healTaken || 0) + (src && src.mods.healOut || 0)) * (1 - fat);
   amt = nom0 * (1 - ratio);
   if (t.st.poison) amt *= BN_DATA.poisonHeal;
   cap = t.maxHp * (xl ? BN_DATA.healCap.xl : BN_DATA.healCap.single);
@@ -318,6 +318,9 @@ function bnHit(S, a, t, h) {
     if (S.round === 1 && mo.r1Dmg) outM *= 1 + mo.r1Dmg;
     if (mo.firstHit && !a.firstHitDone && (h.basic || h.sk)) { outM *= 1 + mo.firstHit; a.firstHitDone = true; }
     if (t.troop === '盾' && mo.vsShield) outM *= 1 + mo.vsShield;
+    if (mo.vsFac && mo.vsFac[t.fac]) outM *= 1 + mo.vsFac[t.fac];            // 名人專屬詞條:對特定陣營 / 名人 / 兵種
+    if (mo.vsFig && t.fig && mo.vsFig[t.fig]) outM *= 1 + mo.vsFig[t.fig];
+    if (mo.vsTroop && mo.vsTroop[t.troop]) outM *= 1 + mo.vsTroop[t.troop];
     if (ty === 'strat' && mo.stratPct) outM *= 1 + mo.stratPct;
     if (h.basic && mo.atkMelee && BN_DATA.troops[a.troop].R <= 2) outM *= 1 + mo.atkMelee;
     if (a.st.amp && h.sk) { for (i = 0; i < a.st.amp.list.length; i++) { cdm = a.st.amp.list[i]; if (cdm.exp && S.round > cdm.exp) continue; if ((cdm.skill && cdm.skill === h.sk.id) || (cdm.tag && h.sk.tags && h.sk.tags.indexOf(cdm.tag) >= 0)) outM *= cdm.mult; } }
@@ -363,6 +366,8 @@ function bnTakenPct(S, a, t, h) {
   if (a && tm.takenRanged && BN_DATA.troops[a.troop].R >= 3 && !h.dot) x += tm.takenRanged;
   if (tm.lateTaken && S.round > 2) x += tm.lateTaken;
   if (tm.rowTaken) x += tm.rowTaken;
+  if (tm.takenStrat && h && h.ty === 'strat' && !h.dot) x += tm.takenStrat;
+  if (tm.lowHpTaken && t.hp / t.maxHp < tm.lowHpTaken[0]) x += tm.lowHpTaken[1];
   if (t.st.taunt_cut) x -= t.st.taunt_cut.val;
   // 宿衛:同排有前排宿衛者
   list = S.teams[t.side].units;

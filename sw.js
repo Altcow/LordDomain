@@ -1,4 +1,4 @@
-const VERSION = 'v51';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v52';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -166,13 +166,18 @@ const PRECACHE = [
   './js/bn_stages.js',
   './js/bn_engine.js',
   './js/bn_effects.js',
+  './js/bn_book.js',
   './js/bndraw.js',
+  './js/bnsfx.js',
   './js/bnui.js',
   './js/bnlog.js',
   './js/bnmap.js',
   './js/bnshare.js',
   './js/bnteam.js',
   './js/minimap.js',
+  './js/fx_text_data.js',
+  './js/fx_stages_data.js',
+  './js/fx_text.js',
   './js/main.js',
   './js/installtip.js',
   './js/pwa.js',
