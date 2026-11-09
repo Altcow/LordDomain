@@ -407,6 +407,7 @@ var BNUI_GR = ['白', '青', '藍', '紫', '金'];
 function bnUiAptTxt(e, tr) { var a = bnAptOf(e).apt[tr] || 'C'; return a; }
 // 戰前準備:敵方陣容對照(依站位;只顯示頭像字、名稱、兵種、兵力 / 戰力,不顯示戰法 — 戰法開打後才看得到)
 // 兵種克制徽章:▲ = 克制幾名(綠)、▼ = 被幾名克制(紅);0 不顯示
+function bnUiTI(t) { return (typeof bnTroopIconHtml === 'function') ? bnTroopIconHtml(t) : ''; }   // 兵種小圖示(assets/troopicon/;載入失敗自動隱藏)
 function bnUiPreyChips(c) { return (c.up ? '<em class="py u">▲' + c.up + '</em>' : '') + (c.down ? '<em class="py d">▼' + c.down + '</em>' : ''); }
 // 敵方格從『我方』角度看:▲ = 我方克制它的人數(對我有利)、▼ = 它克制我方的人數;bnPreyCounts 是從該兵種自己的角度算,這裡對調
 function bnUiPreySwap(c) { return { up: c.down, down: c.up }; }
@@ -416,7 +417,7 @@ function bnUiFoeGridHtml(foes, mine) {
   for (c = 0; c < 3; c++) for (r = 0; r < 3; r++) {
     x = null;
     for (i = 0; i < foes.specs.length; i++) if (foes.specs[i].row === r && (foes.specs[i].col | 0) === c) x = foes.specs[i];
-    h += x ? '<div class="bnf-cell foe"><span class="av">' + bnUiEsc(Array.from(String(x.name))[0] || '?') + '</span><b>' + bnUiEsc(x.name) + '</b><small>' + bnUiEsc(x.troop) + bnUiPreyChips(typeof bnPreyCounts === 'function' ? bnUiPreySwap(bnPreyCounts(x.troop, bnUiTroopsOf(mine))) : { up: 0, down: 0 }) + ' · 兵力 ' + x.stats.hp + ' · 戰力 ' + bnPower(x) + '</small></div>' : '<div class="bnf-cell foe empty"></div>';
+    h += x ? '<div class="bnf-cell foe"><span class="av">' + bnUiEsc(Array.from(String(x.name))[0] || '?') + '</span><b>' + bnUiEsc(x.name) + '</b><small>' + bnUiTI(x.troop) + bnUiEsc(x.troop) + bnUiPreyChips(typeof bnPreyCounts === 'function' ? bnUiPreySwap(bnPreyCounts(x.troop, bnUiTroopsOf(mine))) : { up: 0, down: 0 }) + ' · 兵力 ' + x.stats.hp + ' · 戰力 ' + bnPower(x) + '</small></div>' : '<div class="bnf-cell foe empty"></div>';
   }
   return h + '</div>';
 }
@@ -434,7 +435,7 @@ function bnUiRenderForm() {
   foes = bnUiCurFoes(build.team.units);
   build.team.units.forEach(function (x) { mineP += bnPower(x); });
   h += '<div class="c1"><div class="bnf-foe">' + (foes.kind === 'practice' ? '敵將:山賊(練兵)' : '敵將:' + bnUiEsc(foes.label)) + ' · 建議戰力 <b>' + foes.power + '</b> · 我方 <b>' + mineP + '</b><br>' +
-    foes.specs.map(function (x) { return '<i>' + (x.title ? bnUiEsc(x.title) + ' ' : '') + bnUiEsc(x.name) + ' ' + bnUiEsc(x.troop) + '</i>'; }).join('') + '</div>';
+    foes.specs.map(function (x) { return '<i>' + (x.title ? bnUiEsc(x.title) + ' ' : '') + bnUiEsc(x.name) + ' ' + bnUiTI(x.troop) + bnUiEsc(x.troop) + '</i>'; }).join('') + '</div>';
   h += '<div class="bnf-bonds">羈絆:' + (bonds.on.length ? bonds.on.map(function (x) { return '<i>' + bnUiEsc(x) + '</i>'; }).join('') : '<u>尚未成立</u>') + bonds.hint.map(function (x) { return '<u>' + bnUiEsc(x) + '</u>'; }).join('') + '</div>';
   h += bnUiPreyHelpHtml();
   h += '<div class="bnf-grid"><div class="bnf-gh">後排</div><div class="bnf-gh">中排</div><div class="bnf-gh">前排 ▶ 敵</div>';
@@ -443,7 +444,7 @@ function bnUiRenderForm() {
       r = rows[i]; s = bnUiSlotAt(r, c); e = s ? bnUiEntry(s.id) : null;
       if (e) {
         tr = s.troop || bnUiTroopOf(e);
-        h += '<button class="bnf-cell occ' + (sel === e.id ? ' sel' : '') + '" data-a="cell" data-r="' + r + '" data-c="' + c + '"><b>' + bnUiEsc(e.name) + '</b><small>' + tr + ' ' + bnUiAptTxt(e, tr) + (typeof bnPreyCounts === 'function' ? bnUiPreyChips(bnPreyCounts(tr, bnUiTroopsOf(foes.specs))) : '') + '</small></button>';
+        h += '<button class="bnf-cell occ' + (sel === e.id ? ' sel' : '') + '" data-a="cell" data-r="' + r + '" data-c="' + c + '"><b>' + bnUiEsc(e.name) + '</b><small>' + bnUiTI(tr) + tr + ' ' + bnUiAptTxt(e, tr) + (typeof bnPreyCounts === 'function' ? bnUiPreyChips(bnPreyCounts(tr, bnUiTroopsOf(foes.specs))) : '') + '</small></button>';
       } else h += '<button class="bnf-cell" data-a="cell" data-r="' + r + '" data-c="' + c + '" aria-label="空格">＋</button>';
     }
   }
@@ -452,10 +453,10 @@ function bnUiRenderForm() {
     tr = bnUiTroopOf(selE); sc = bnUiSpec(selE, { troop: tr });
     h += '<div class="bnf-sel"><b>' + bnUiEsc(selE.name) + '</b>(' + BNUI_GR[selE.gr] + '階)戰力 ' + bnPower(sc) + ' · 建議站 ' + ['前', '中', '後'][bnRowOf(selE, tr)] + '排<br>' +
       '戰法:' + (typeof bnTeamSkillLinksHtml === 'function' ? bnTeamSkillLinksHtml(selE, tr) : sc.skills.concat(sc.ult ? [sc.ult] : []).map(function (id) { return BN_SKILLS[id] ? bnUiEsc(BN_SKILLS[id].name) : ''; }).filter(Boolean).join('、')) + '<div class="bnf-chips">' +
-      BN_DATA.troopList.map(function (t) { var a = bnUiAptTxt(selE, t); return '<button class="' + (t === tr ? 'on' : '') + (a === 'C' ? ' bad' : '') + '" data-a="troop" data-id="' + bnUiEsc(selE.id) + '" data-t="' + t + '">' + t + ' ' + a + '</button>'; }).join('') +
+      BN_DATA.troopList.map(function (t) { var a = bnUiAptTxt(selE, t); return '<button class="' + (t === tr ? 'on' : '') + (a === 'C' ? ' bad' : '') + '" data-a="troop" data-id="' + bnUiEsc(selE.id) + '" data-t="' + t + '">' + bnUiTI(t) + t + ' ' + a + '</button>'; }).join('') +
       (bnUiSlotOf(selE.id) ? '<button data-a="remove" data-id="' + bnUiEsc(selE.id) + '">撤下</button>' : '') + '</div></div>';
   } else h += '<div class="bnf-sel">點名冊人物,再點上方格子放入(最多 ' + BNUI.maxUnits + ' 人);點已上陣者可換兵種或撤下,再點另一格互換。</div>';
-  h += '<div class="bnf-chips">' + [['', '全部']].concat(BN_DATA.troopList.map(function (t) { return [t, t]; })).map(function (f) { return '<button class="' + (bnu.filter === f[0] ? 'on' : '') + '" data-a="filter" data-t="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>';
+  h += '<div class="bnf-chips">' + [['', '全部']].concat(BN_DATA.troopList.map(function (t) { return [t, bnUiTI(t) + t]; })).map(function (f) { return '<button class="' + (bnu.filter === f[0] ? 'on' : '') + '" data-a="filter" data-t="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>';
   if (typeof bnTeamRosterHtml === 'function') h += bnTeamRosterHtml();   // 武將戰法卡 + 搜尋 / 排序(js/bnteam.js)
   else {
   list = roster.map(function (x) { var t = bnUiTroopOf(x); return { e: x, t: t, pw: bnPower(bnUiSpec(x, { troop: t })) }; }).filter(function (x) { return !bnu.filter || x.t === bnu.filter; });
@@ -552,7 +553,7 @@ function bnUiUnitAt(x, y) {
 function bnUiInfoHtml(uid) {
   var S = bnu.P.S, u = S.units[uid], h, list, k, s, ST = (typeof BN_ST_NAME !== 'undefined') ? BN_ST_NAME : {}, sts = [];
   if (!u) return '';
-  h = '<div class="bnbox bninfo"><h2>' + bnUiEsc(u.name) + '</h2><p style="text-align:center">' + (u.side === 'A' ? '我方' : '敵方') + ' · ' + bnUiEsc(u.troop) + '兵 · 兵力 ' + Math.max(0, Math.round(u.hp)) + ' / ' + u.maxHp + '</p>';
+  h = '<div class="bnbox bninfo"><h2>' + bnUiEsc(u.name) + '</h2><p style="text-align:center">' + (u.side === 'A' ? '我方' : '敵方') + ' · ' + bnUiTI(u.troop) + bnUiEsc(u.troop) + '兵 · 兵力 ' + Math.max(0, Math.round(u.hp)) + ' / ' + u.maxHp + '</p>';
   for (k in u.st) {
     s = u.st[k];
     if (!ST[k] || !s) continue;

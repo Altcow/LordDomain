@@ -255,6 +255,55 @@ var BN_BONDS = {
   maxSpecial: 3
 };
 
+// ───────── 戰法欄位新制 B1(2026-11-09;只放資料,尚未接引擎;全部 PLACEHOLDER,以 tools/bn_sim.js 等模擬定案)─────────
+// 角色 = 1 固定戰法(名人 = 大招、路人 = 兵種大招;不可拆)+ 1 被動 + 選擇槽。對映表 BN_KIT_BY / 兵種卡 BN_LEGION / 階級 BN_SKILL_TIER 由 tools/gen_bn_skills.js 產生到 js/bn_skills_data.js。
+// 刻意放在 BN_DATA 之外:B1 不動既有資料版本雜湊(bnshare)。
+var BN_KIT_CFG = {
+  v: 1,
+  selSlots: [1, 2, 2, 2, 2],        // 選擇槽數(依品階 白青藍紫金):白 1、青以上 2
+  otherDefaultMul: 0.8,             // 名人專屬戰法裝給他人:效果預設 = 原主 ×0.8(戰法 params.other 或 BN_SKILL_OTHER 另有寫者以其為準)
+  homeRate: 0.05,                   // 『本命』:原主本人裝備自己的專屬戰法,發動率 +5pp
+  taughtRetired: true,              // 名人傳授退場旗標(B1 只留旗標,不刪 bn_book.js 的程式)
+  autoFill: true                    // 空的選擇槽沿用 autoLearn 從通用池補(B2 接)
+};
+// 發動率護欄(B1 只放資料,B2 接 bnRateOf):永久來源(羈絆 / 信物 / 被動 command / 本命 / 校正連動)合計 +15pp;永久 + rate_up 狀態合計 +25pp;rate_up 對大招只算一半
+var BN_RATE_CAP = {
+  permCap: 0.15, totalCap: 0.25, ultRateUpMul: 0.5,
+  activeCap: 0.70, ultCap: 0.45,    // 主動 / 追擊上限、大招上限(與 BN_DATA.rate.cap / ultCap 一致)
+  castsPerActMax: 1.6, perSkillMax: 5,   // 驗收:10 回合內平均每次行動施放數、單一戰法場均施放次數
+  wired: false                      // 引擎尚未接上(B2)
+};
+// 拆卡取技:拆卡 100% 消耗該卡;紫以上才拆得出戰法;拆出戰法為機率(名人較高),連續 N 次沒出 → 第 N+1 次必出(計數分名人 / 紫路人兩條)
+var BN_SKC = {
+  v: 1,
+  consume: 1,
+  minGr: 3,                         // 品階索引 3 = 紫(白0 青1 藍2 紫3 金4);名人最低即紫
+  chance: { figPurple: 0.60, figGold: 0.75, purple: 0.35, purpleMaster: 0.45 },   // 單次拆出機率:紫名人 / 金名人 / 紫路人 / 紫宗師路人
+  pity: { fig: 3, purple: 5 },      // 保底:名人連續 3 次、紫路人連續 5 次沒出 → 下一次必出
+  frag: { purple: 8, purpleMaster: 12, figPurple: 10, figGold: 20 },   // 拆卡必得碎片(不論拆出與否):紫路人 16 → 8(宗師 +4)、名人本體紫 20 → 10、金 40 → 20
+  invCap: 5,                        // 每種戰法卡庫存上限
+  overflowFrag: { generic: 4, fig: 8, legion: 12 },   // 超出上限轉碎片:通用 / 名人專屬 / 兵種卡
+  legionExtra: 1,                   // 兵種卡來源名人的可拆池額外含幾張兵種卡
+  figPick: 1,                       // 名人重複拆技:自選張數(本體手動拆 = 2,見 figBodyPick)
+  figBodyPick: 2
+};
+// 兵種卡共通規則(數值上限 / 分享;B3 接原語)。LP 記帳:優勢點數 − 弱點點數 ≈ 一張 M 級戰法(netTarget),弱點至少 conMin 點真代價
+var BN_LEGION_CFG = {
+  v: 1,
+  share: { self: 1.0, mates: 0.5 }, shareMax: 4, perTeamShare: 1, perUnitCards: 1,
+  cap: { atk: 0.20, taken: -0.15, spd: 12, total: 0.30 },
+  lp: { netTarget: 1.0, tol: 0.3, conMin: 1.0 }
+};
+// 戰法階級 S/A/B/C 自動計分(tools/bn_kit_gen.js):分數 = P × K × R × C + E + A,依百分位分級(大招另列一組)
+var BN_TIER_CFG = {
+  v: 1,
+  P: { S: 1, M: 2, L: 3, XL: 4 },
+  K: { '物理攻擊': 1.0, '謀略攻擊': 1.0, '弓系': 1.0, '控場': 1.2, '治療': 1.1, '防護': 0.9, '增益': 1.0, '減益': 0.9, '普攻強化': 0.8, '兵種卡': 1.0 },
+  rateRef: 0.40, extra: 0.3, recast: 0.3, vs: -0.2,
+  acq: { fig: 0.3, gold: 0.2, legion: 0.5 },
+  cuts: [0.10, 0.35, 0.75]          // 前 10% S、10~35% A、35~75% B、其餘 C
+};
+
 // 兵種名正規化:舊存檔 / 舊隊伍碼的『步』→『槍』;不認得的回空字串(呼叫端改用預設兵種)。永遠不丟例外
 function bnTroopNorm(t) {
   if (typeof t !== 'string') return '';
@@ -262,4 +311,4 @@ function bnTroopNorm(t) {
   return BN_DATA.troops[t] ? t : '';
 }
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { bnTroopNorm: bnTroopNorm, BN_DATA: BN_DATA, BN_TRAIT_MODS: BN_TRAIT_MODS, BN_BONDS: BN_BONDS, BN_FIG_TRAIT: BN_FIG_TRAIT };
+if (typeof module !== 'undefined' && module.exports) module.exports = { bnTroopNorm: bnTroopNorm, BN_DATA: BN_DATA, BN_TRAIT_MODS: BN_TRAIT_MODS, BN_BONDS: BN_BONDS, BN_FIG_TRAIT: BN_FIG_TRAIT, BN_SKILL_TUNE: BN_SKILL_TUNE, BN_KIT_CFG: BN_KIT_CFG, BN_RATE_CAP: BN_RATE_CAP, BN_SKC: BN_SKC, BN_LEGION_CFG: BN_LEGION_CFG, BN_TIER_CFG: BN_TIER_CFG };

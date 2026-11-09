@@ -27,13 +27,13 @@ var BN_PT_KIND = {
 var BN_ATK_SFX = { '盾': 'atk_blade', '槍': 'atk_spear', '騎': 'atk_cav', '弓': 'atk_bow', '謀': 'atk_strat' };
 var BN_SFX_ALT = { atk_blade: 'melee', atk_spear: 'blade', atk_cav: 'hoofH', atk_bow: 'arrow', atk_strat: 'bolt', block: 'shieldHit', kill: 'grunt', ult: 'flag', drum: 'drum' };   // 沒有 bnsfx.js 時退回 sfxwar 舊音色
 var BN_NUM_DMG = '#ff3b30', BN_NUM_HEAL = '#3ee05a', BN_NUM_MIN = 15;   // 浮字:扣血紅、補血綠,一律黑色描邊;最小字級(px)
-var BN_ST_ICON = { atk_up: 1, atk_down: 1, def_up: 1, def_down: 1, spd_up: 1, stun: 1, burn: 1, poison: 1, bleed: 1, shield: 1, silence: 1, taunt: 1, timid: 1, confuse: 1, heal_reduce: 'heal_block', ward: 1, rate_up: 'stc_rate_up', debuff_hit: 'stc_ink_blind', wx_mark: 'stc_wx_mark' };
+var BN_ST_ICON = { atk_up: 1, atk_down: 1, def_up: 1, def_down: 1, spd_up: 1, stun: 1, burn: 1, poison: 1, bleed: 1, shield: 1, silence: 1, taunt: 1, timid: 1, confuse: 1, heal_reduce: 'heal_block', ward: 1, rate_up: 'stc_rate_up', debuff_hit: 'stc_ink_blind', wx_mark: 'stc_wx_mark', sleep: 'stn_sleep', paralyze: 'stn_paralyze', evade: 'stn_evade', dodge_rate: 'stn_evade' };   // stn_* = assets/statusicon/(2026-11-09 GPT 圖;只補原本沒圖示的狀態,burn / poison 維持 bnfx/st_*)
 var BN_ST_NAME = {
   stun: '暈眩', fear: '威懾', confuse: '擾亂', timid: '怯戰', silence: '計窮', ult_lock: '封大', atk_down: '攻↓', def_down: '防↓', spd_down: '速↓', mark: '標記',
   burn: '燃燒', poison: '中毒', bleed: '流血', heal_reduce: '禁療', atk_up: '攻↑', def_up: '防↑', spd_up: '速↑', crit_up: '暴↑', taunt: '嘲諷', guard: '援護', evade: '規避',
-  ward: '抵禦', ccimm: '抗控', shield: '護盾', heal_hot: '回春', rate_up: '率↑', rate_down: '率↓', debuff_hit: '盲', wx_mark: '五行印', stealth: '隱匿', undying: '不倒'
+  ward: '抵禦', ccimm: '抗控', shield: '護盾', heal_hot: '回春', rate_up: '率↑', rate_down: '率↓', debuff_hit: '盲', wx_mark: '五行印', stealth: '隱匿', undying: '不倒', sleep: '睡眠', paralyze: '麻痺', dodge_rate: '閃避'
 };
-var BN_ST_GOOD = { atk_up: 1, def_up: 1, spd_up: 1, crit_up: 1, taunt: 1, guard: 1, evade: 1, ward: 1, ccimm: 1, shield: 1, heal_hot: 1, amp_atk: 1, rate_up: 1, stealth: 1, undying: 1 };
+var BN_ST_GOOD = { atk_up: 1, def_up: 1, spd_up: 1, crit_up: 1, taunt: 1, guard: 1, evade: 1, dodge_rate: 1, ward: 1, ccimm: 1, shield: 1, heal_hot: 1, amp_atk: 1, rate_up: 1, stealth: 1, undying: 1 };
 // 文化主題特效(new_heroes_draft §六):cast = 施放者身上、hit = 每個目標、area = 多目標時在目標群中央。缺圖時 alt = 原 fx_* 特效
 var BN_FX_THEME = {
   herb: { cast: 'fxc_herb_mortar', hit: 'fxc_herb_leaves', area: 'fxc_herb_smoke', alt: 'heal_motes' },
@@ -78,6 +78,27 @@ function bnDrImg(path) {
     e.img = im; im.src = path;
   } catch (err) { e.fail = true; }
   return e;
+}
+// ───────── 狀態 / 兵種 / 戰法分類 / 兵種卡 圖示輔助(2026-11-09)─────────
+// 狀態圖示路徑:ic 為 BN_ST_ICON 的值(1 = st_<狀態 id>、'stc_*' = bnfx 本名、'stn_*' = assets/statusicon/、其他字串 = st_<字串>)
+function bnStIconPath(ic, k) {
+  if (typeof ic === 'string' && ic.indexOf('stn_') === 0) return 'assets/statusicon/' + ic + '.webp';
+  return 'assets/bnfx/' + (typeof ic === 'string' && ic.indexOf('stc_') === 0 ? ic : 'st_' + (ic === 1 ? k : ic)) + '.webp';
+}
+var BN_TROOP_ICON = { '槍': 'troop_spear', '騎': 'troop_cav', '盾': 'troop_shield', '弓': 'troop_bow', '謀': 'troop_strat' };
+var BN_SKILLCAT_IDS = ['phys', 'strat', 'bow', 'pursuit', 'buff', 'control', 'heal', 'def', 'debuff'];   // assets/skillcat/cat_<id>.webp(512px,戰法大全用)
+var BN_LEGION_IDS = ['spear', 'cav', 'shield', 'bow', 'cover'];                                          // assets/legion/legion_<id>.webp(512px,兵種卡用)
+var BN_STATUS_ICON_IDS = ['sleep', 'paralyze', 'evade', 'freeze', 'burn', 'poison'];                    // assets/statusicon/stn_<id>.webp(128px)
+function bnTroopIconPath(t) { return BN_TROOP_ICON[t] ? 'assets/troopicon/' + BN_TROOP_ICON[t] + '.webp' : ''; }
+// 回傳載入項 {img, ok, fail};id 不合法回 null;呼叫端 ok 為 false 時畫既有色塊 / 文字(回退)
+function bnTroopIconImg(t) { var p = bnTroopIconPath(t); return p ? bnDrImg(p) : null; }
+function skillcatImg(id) { return BN_SKILLCAT_IDS.indexOf(id) >= 0 ? bnDrImg('assets/skillcat/cat_' + id + '.webp') : null; }
+function legionImg(id) { return BN_LEGION_IDS.indexOf(id) >= 0 ? bnDrImg('assets/legion/legion_' + id + '.webp') : null; }
+function statusIconImg(id) { return BN_STATUS_ICON_IDS.indexOf(id) >= 0 ? bnDrImg('assets/statusicon/stn_' + id + '.webp') : null; }
+// DOM 用:兵種小圖示 <img>(載入失敗自動隱藏,留下旁邊的兵種文字)。t 非兵種回空字串
+function bnTroopIconHtml(t) {
+  var p = bnTroopIconPath(t);
+  return p ? '<img class="tri" src="' + p + '" alt="" draggable="false" style="width:1.15em;height:1.15em;vertical-align:-.2em;margin-right:2px" onerror="this.style.display=\'none\'">' : '';
 }
 function bnDrNew(w, h) {
   var cv;
@@ -932,7 +953,7 @@ function bnDrBars(ctx, P, v, t, L) {
   keys = Object.keys(v.st).filter(function (kk) { return kk !== 'chill'; }); iy = y - sz - 3;   // chill 只是附體視覺標記,不佔狀態圖示格
   for (i = 0; i < keys.length && n < 3; i++) {
     k = keys[i]; ic = BN_ST_ICON[k];
-    ex = ic ? bnDrImg('assets/bnfx/' + (typeof ic === 'string' && ic.indexOf('stc_') === 0 ? ic : 'st_' + (ic === 1 ? k : ic)) + '.webp') : null;
+    ex = ic ? bnDrImg(bnStIconPath(ic, k)) : null;
     pp = v.stp && v.stp[k] > 0 ? v.stp[k] * 0.6 * sz : 0;   // 剛施加:圖示放大後縮回
     if (ex && ex.ok) ctx.drawImage(ex.img, x + n * (sz + 1) - pp / 2, iy - pp / 2, sz + pp, sz + pp);
     else { ctx.fillStyle = BN_ST_GOOD[k] ? '#4a8a4a' : '#9a4a3a'; ctx.fillRect(x + n * (sz + 1), iy, sz, sz); ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.round(sz * 0.7) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText((BN_ST_NAME[k] || k).charAt(0), x + n * (sz + 1) + sz / 2, iy + sz / 2); }

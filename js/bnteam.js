@@ -174,7 +174,7 @@ function bnTeamCardHtml(e, o) {
     apt = (bnAptOf(e).apt[tr] || 'C'), hp = o.hp !== undefined ? o.hp : sp.stats.hp, bar = o.hpBar !== undefined ? o.hpBar : 1, exp = !o.mini && !!BNTEAM.exp[e.id], n = exp ? rows.length : Math.min(BNTEAM.show, rows.length), h;
   bar = Math.max(0, Math.min(1, bar));
   h = '<div class="bntc g' + (e.gr | 0) + (o.mini ? ' mini' : '') + (o.sel ? ' sel' : '') + (o.on ? ' on' : '') + '"' + (o.act ? ' role="button" data-a="' + o.act + '" data-id="' + bnTeamEsc(e.id) + '"' : '') + '>' +
-    '<div class="bntc-hd">' + bnTeamPortrait(e) + '<span class="bntc-gr">' + (BNTEAM_GR[e.gr] || '') + '</span><span class="bntc-tr' + (apt === 'C' ? ' bad' : '') + '">' + bnTeamEsc(tr) + apt + '</span>' + (o.pos ? '<span class="bntc-pos">' + o.pos + '</span>' : '') + '</div>' +
+    '<div class="bntc-hd">' + bnTeamPortrait(e) + '<span class="bntc-gr">' + (BNTEAM_GR[e.gr] || '') + '</span><span class="bntc-tr' + (apt === 'C' ? ' bad' : '') + '">' + (typeof bnTroopIconHtml === 'function' ? bnTroopIconHtml(tr) : '') + bnTeamEsc(tr) + apt + '</span>' + (o.pos ? '<span class="bntc-pos">' + o.pos + '</span>' : '') + '</div>' +
     '<div class="bntc-nm">' + bnTeamEsc(e.name) + '</div>' +
     '<div class="bntc-st">' + (star > 0 ? '★'.repeat(star) : '<u>0 星</u>') + '</div>' +
     '<div class="bntc-pw">戰力 <b>' + pw + '</b></div>' +

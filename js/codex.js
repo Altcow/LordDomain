@@ -16,6 +16,7 @@ var CX_RACE = { elf: '精靈', dwarf: '矮人', kingdom: '王國' };
 var cx = { el: null, tool: null, list: null, ov: null, title: null, open: false, tab: 'fig', stack: [], ovId: '', q: '', fac: -1, troop: '', gr: -1, own: '', skq: '', cat: '', src: '', tfac: -1,
   page: 0, timer: 0, idx: null, key: '', cards: {}, rec: null, msg: '', scroll: {} };
 
+function cxTI(t) { return (typeof bnTroopIconHtml === 'function') ? bnTroopIconHtml(t) : ''; }   // 兵種小圖示(assets/troopicon/)
 function cxEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function cxNorm(s) { return (typeof srNorm === 'function') ? srNorm(s) : String(s == null ? '' : s).replace(/\s+/g, '').toLowerCase(); }
 function cxWorld() { var p = (typeof fxPack === 'function') ? fxPack() : null; return p || 'han'; }
@@ -181,7 +182,7 @@ function cxFigRowHtml(it, om) {
   var ow = om[it.id];
   return '<div class="cx-row" data-cx="fig" data-k="' + cxEsc(it.id) + '" role="button" tabindex="0">' + cxAvatar(it.id, !!ow, it.gr, true) +
     '<span class="cx-mn"><b>' + cxEsc(it.name) + (it.zi ? '<small>(' + cxEsc(it.zi) + ')</small>' : '') + '</b>' +
-    '<small>' + cxEsc(cxGrName(it.gr) + '・' + cxFacName(it.fac) + '・' + it.troop + '兵・' + CX_ROW[it.row]) + '</small>' +
+    '<small>' + cxEsc(cxGrName(it.gr) + '・' + cxFacName(it.fac) + '・') + cxTI(it.troop) + cxEsc(it.troop + '兵・' + CX_ROW[it.row]) + '</small>' +
     '<small class="cx-sks">' + it.sk.map(function (k) { return cxEsc(BN_SKILLS[k].name); }).join('・') + '</small></span>' +
     '<span class="cx-own' + (ow ? ' on' : '') + '">' + (ow ? '已擁有' : '未獲得') + '</span></div>';
 }
@@ -218,8 +219,8 @@ function cxFigDetailHtml(id) {
   if (c && typeof bnAptOf === 'function') { try { apt = bnAptOf(c).apt; } catch (e) { apt = null; } }
   h = '<div class="cx-det"><div class="cx-dh">' + cxAvatar(id, !!ow, it.gr, false) + '<div class="cx-mn"><b class="cx-big">' + cxEsc(it.name) + (it.zi ? '<small>(' + cxEsc(it.zi) + ')</small>' : '') + '</b>' +
     '<small>' + cxEsc(cxGrName(it.gr) + '階・' + cxFacName(it.fac) + (it.f.home ? '・' + it.f.home : '') + (it.f.birth ? '・' + it.f.birth : '')) + '</small>' +
-    '<small>擅長:' + cxEsc(it.troop) + '兵・預設' + CX_ROW[it.row] + '</small></div></div>';
-  if (apt) h += '<div class="cx-l">兵種適性:' + (typeof BN_DATA !== 'undefined' ? BN_DATA.troopList : ['槍', '騎', '盾', '弓', '謀']).map(function (t) { return '<span class="cx-apt a' + cxEsc(apt[t]) + '">' + cxEsc(t) + ' ' + cxEsc(apt[t]) + '</span>'; }).join('') + '<small>(S 最好,C 最差)</small></div>';
+    '<small>擅長:' + cxTI(it.troop) + cxEsc(it.troop) + '兵・預設' + CX_ROW[it.row] + '</small></div></div>';
+  if (apt) h += '<div class="cx-l">兵種適性:' + (typeof BN_DATA !== 'undefined' ? BN_DATA.troopList : ['槍', '騎', '盾', '弓', '謀']).map(function (t) { return '<span class="cx-apt a' + cxEsc(apt[t]) + '">' + cxTI(t) + cxEsc(t) + ' ' + cxEsc(apt[t]) + '</span>'; }).join('') + '<small>(S 最好,C 最差)</small></div>';
   h += ow ? '<div class="cx-l cx-ok">已擁有(' + ({ roster: '在名冊', wait: '在待定席', wander: '流浪中', bag: '在卡包' }[ow.list] || '') + ')<button type="button" data-cx="roster" data-k="' + cxEsc(id) + '">到名冊查看</button></div>' : '<div class="cx-l cx-dim">尚未獲得:可在酒館、指名抽到。下面的戰法與詞條先看好,方便規劃。</div>';
   rows = cxSkillRows(id);
   h += '<div class="cx-sec">戰法(點名稱看完整說明)</div>';
