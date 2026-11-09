@@ -19,7 +19,7 @@ function techNode(id) {
     techNode._m = {}; techNode._n = CITY_TECHS.length;
     CITY_TECHS.forEach(function (t) { techNode._m[t.id] = t; });
   }
-  return techNode._m[id] || null;
+  return techNode._m[id] || (typeof techAliasOf === 'function' ? techNode._m[techAliasOf(id)] : null) || null;   // 簡化模式:被併入的舊 id 查到新節點
 }
 // 基本建築科技的白話括號(設計稿 tutorial_redesign.md §3 名詞對照表);只改顯示,不改 id
 var TECH_PLAIN = { md_cesuo: '茅廁', e_shiling: '市集', bd_hangtu: '石板路、城牆', rl_she: '里社', wr_lishu: '告示牌', md_bencao: '藥圃、藥舖', md_saochu: '掃帚、剃頭挑子', e_changping: '陶倉', ag_chazhong: '茶館', ed_xiangyin: '說書台、酒肆', df_jiaolou: '望樓', cr_fangzhi: '織坊' };
@@ -48,6 +48,7 @@ function techNormState(v) {
     if (v.big && typeof v.big === 'object') for (k in v.big) if (v.big[k]) s.big[k] = 1;
     s.migrated = v.migrated ? 1 : 0;
     s.bigWaive = Number(v.bigWaive) || 0;
+    if (v.simple && typeof citySimpleOn === 'function' && citySimpleOn()) s.simple = Math.max(1, Number(v.simple) | 0);   // 簡化科技樹遷移已做過(版本 2 = 31 節點版)
   }
   return s;
 }
@@ -63,11 +64,12 @@ function techState() {
   if (typeof goodsCity === 'function') goodsCity();
   if (!world.city || typeof world.city !== 'object') world.city = {};
   if (!world.city.tech) world.city.tech = techNormState(null);
+  if (typeof techSimpleMigrate === 'function' && !(world.city.tech.simple >= 2)) techSimpleMigrate(world.city.tech);   // 簡化模式:舊存檔節點併入(只一次)
   return world.city.tech;
 }
 
 // ───────── 查詢 ─────────
-function techDone(id) { var s = techState(); return !!(s && s.done[id]); }
+function techDone(id) { var s = techState(); return !!(s && (s.done[id] || (typeof techAliasOf === 'function' && s.done[techAliasOf(id)]))); }
 function techReqMet(n) {
   if (n.req.every(techDone)) return true;
   return !!(n.reqOr && n.reqOr.length && n.reqOr.some(techDone));   // reqOr = 與 req 互為「或」
@@ -82,6 +84,7 @@ function techCostOf(id) {
 function techDurationOf(id) {
   var n = techNode(id); if (!n) return 0;
   if (typeof tutFreeTech === 'function' && tutFreeTech(id)) return TUT_MD_SECONDS;   // 新手教學:茅廁研發 30 秒(只一次)
+  if (typeof csTreeOn === 'function' && csTreeOn() && n.cost && n.cost.min > 0) return Math.round(n.cost.min * 60);   // 簡化科技樹:資料檔的研發分鐘
   var base = (TECH_MIN['C' + n.era] || 2) * 60;
   return Math.max(1, Math.round(techIsStyle(n) ? base / 2 : base));
 }
@@ -106,6 +109,7 @@ function techEraDoneCount(e) {
 // 時代開放規則:讀 nolevel_data.js 的 NL_ERA_RULE[e].cond = { prevEra, count, milestone?, anyOf? };缺資料用預設。
 // anyOf 每項抽出其中的 mg_* id,同一項內的 id 需全部達成(例:'mg_zhucheng|mg_kaiqu(未選的那項)' = 兩者皆成);外層任一項成立即可
 function techEraNeed(e) {
+  if (typeof csTreeOn === 'function' && csTreeOn()) return { k: e > TECH_SIMPLE.eras ? 1e9 : (TECH_SIMPLE.eraK[e] || 0), groups: null };   // 簡化:無大工程
   var rule = (typeof NL_ERA_RULE !== 'undefined' && NL_ERA_RULE) ? NL_ERA_RULE[e] : null, cond = rule && rule.cond, groups = null;
   if (!cond) return { k: TECH_ERA_K_DEFAULT[e], groups: TECH_ERA_BIG_DEFAULT[e] || null };
   if (cond.anyOf && cond.anyOf.length) {
@@ -159,6 +163,7 @@ function techCanStart(id) {
   var n = techNode(id), s = techState();
   if (!n || !s || s.done[id] || techIsMega(n)) return false;
   if (!techReqMet(n) || !techEraOpen(n.era)) return false;
+  if (typeof techNeedMiss === 'function' && techNeedMiss(id).length) return false;   // 簡化模式:前置建築未蓋
   if (s.cur.some(function (c) { return c.id === id; })) return false;
   if (s.cur.length >= techSlots()) return false;
   return techAffordable(id);
@@ -199,6 +204,7 @@ function techExpand(id) {
 }
 function techQueueFill(id, partial) {
   var s = techState(), ex;
+  if (typeof techAliasOf === 'function') id = techAliasOf(id);
   if (!s) return { ok: false, added: [], reason: 'nostate' };
   if (!techNode(id)) return { ok: false, added: [], reason: 'unknown' };
   if (s.done[id]) return { ok: false, added: [], reason: 'done' };
@@ -271,7 +277,7 @@ function techFinish(c, now) {
   s.done[c.id] = 1;
   techEvents.push({ type: 'done', id: c.id, t: now });
   if (typeof techOnDone === 'function') techOnDone(c.id);
-  if (typeof cardsOnTechDone === 'function') cardsOnTechDone(c.id, false);   // 酒館:完成科技得酒令(cards.js)
+  if (typeof cardsOnTechDone === 'function') cardsOnTechDone(c.id, false);   // 招賢:學院計課、抽卡節奏升級提示(cards.js)
   if (typeof cityUnlockApply === 'function') cityUnlockApply(c.id);
 }
 function techMulOf(c) { return techSpeedMul((techNode(c.id) || {}).branch) || 1; }
@@ -328,7 +334,7 @@ function nlObjTech(objId) {
   if (fx !== undefined) return fx;
   src = (typeof NL_OBJ_TECH !== 'undefined') ? NL_OBJ_TECH[objId] : undefined;
   if (src === undefined && typeof NL_NEW_OBJECTS !== 'undefined' && NL_NEW_OBJECTS[objId]) src = NL_NEW_OBJECTS[objId].tech;
-  return src;
+  return (typeof techAliasOf === 'function') ? techAliasOf(src) : src;
 }
 // 功能是否已開放(NL_FEATURE_GATE):open 恆真;node 需節點已研;bld 需場上有指定建築;focusHidden(legacy)與未登記回 null(沿用舊判定)
 function nlFeatureOpen(id) {

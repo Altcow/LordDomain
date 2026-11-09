@@ -68,6 +68,7 @@ function npcHeroCardRender() {
     '<div style="font-size:12px;color:#c9b98f">' + npcEsc(npcFavLabel(e.fav)) + ' 親近 ' + (e.fav | 0) + '/' + NPC_CFG.favMax + ' · ' + npcWhereText(e) + '</div></div>' +
     '<span data-a="x" style="cursor:pointer;padding:0 4px">✕</span></div>';
   h += '<div style="margin:8px 0;min-height:1.5em">「' + npcEsc(npcCard.line ? npcCard.line.text : '') + '」' + (npcCard.line && npcCard.line.priv ? ' <span style="color:#e6b84a;font-size:12px">(私話)</span>' : '') + '</div>';
+  if (n && n.gat > 0 && typeof gatherActText === 'function') h += '<div style="font-size:12px;color:#c9b98f;margin-bottom:4px">正在:' + npcEsc(gatherActText(n)) + '</div>';   // 駐足聚集(citygather.js),行程不變
   q = (typeof npcErrandOf === 'function') ? npcErrandOf(cs, e.id) : null;
   if (q) {
     st = npcErrandState(cs, { kind: q.kind, id: q.goods, n: q.n, type: q.type, base: q.base, eid: q.eid });

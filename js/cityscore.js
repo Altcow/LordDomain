@@ -147,6 +147,7 @@ function cityscoreCompute(objs, board, lvOverride) {
       if (c && needs.indexOf(s) >= 0) sat++;
     });
     sat = sat / needs.length;
+    if (typeof citySimpleOn === 'function' && citySimpleOn()) sat = 1;   // 簡化模式:人口 / 民居分只看建築種類與數量,不看服務覆蓋
     hv = CITY_TIER_SCORE[houses[i + 2]] * (0.5 + 0.5 * sat);
     occ = 0.6 + 0.4 * sat;
     pop += houses[i + 3] * occ;
@@ -247,7 +248,7 @@ function cityAxisVisible(axis, lv) { return lv >= CITY_AXIS_BY_ID[axis].reveal; 
 // 一句評語:服務缺口優先,其次最低的已揭露軸(相對目標)
 function cityComment(S, lv) {
   var worst = null, wr = 9, i, a, r, house = S.houses;
-  if (house > 0 && S.cover.water < 0.99) return '有 ' + Math.ceil(house * (1 - S.cover.water)) + ' 戶民居喝不到水:在它們 6 格內蓋口水井。';
+  if (house > 0 && S.cover.water < 0.99) return '有 ' + Math.ceil(house * (1 - S.cover.water)) + ' 棟民居喝不到水:在它們 6 格內蓋口水井。';
   if (house > 0 && lv >= 2 && S.cover.food < 0.7) return '糧食有點遠:民居旁種些田、備些糧。';
   for (i = 0; i < CITY_AXES.length; i++) {
     a = CITY_AXES[i];

@@ -3,7 +3,7 @@
 // 驗證:node tools/test_cards.js(含名人表 lint)。不寫 DOM、不讀時間。ES2017;不用 ?. ??。
 // 【占位,待手填】名人的職業欄位(CARD_FIGS 無 ja/main)目前由五維自動推導(cards.js cardFigJobs);之後可逐位寫入 CARD_FIG_JOB_OVERRIDE 覆寫,不必改 CARD_FIGS。
 // 全域名稱:CARD_GRADE CARD_STATS CARD_LEARN CARD_FAC CARD_ROWS CARD_JOB_TIERPCT CARD_JOBS CARD_JOB_BY_ID CARD_JOB_PORTRAIT CARD_POST_GROUP CARD_VENUE_ORDER CARD_VENUES
-//          CARD_EXAM_SUBJECTS CARD_COST CARD_WINE CARD_CFG CARD_BAG CARD_FURNACE CARD_FIG_WEIGHT CARD_UPGRADE CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_SKILLS CARD_SKILL_BY_ID CARD_SKILL_BY_ROW CARD_FIGS CARD_FIG_BY_ID CARD_FIG_JOB_OVERRIDE CARD_VISIT
+//          CARD_EXAM_SUBJECTS CARD_COST CARD_DRAW CARD_STARTER CARD_CFG CARD_BAG CARD_FURNACE CARD_FIG_WEIGHT CARD_UPGRADE CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_SKILLS CARD_SKILL_BY_ID CARD_SKILL_BY_ROW CARD_FIGS CARD_FIG_BY_ID CARD_FIG_JOB_OVERRIDE CARD_VISIT
 
 // 品階(§3A.1):lo/hi 生成參數;stCap 單項基礎上限;tai 才帶;jobSlots 職業詞條槽;jobMax 職業最高階;learn 學養型分布(通才/偏才/專才/宗師 %);trN 一般詞條數;skn 技能數(第一階段只記數量)
 var CARD_GRADE = [
@@ -84,6 +84,7 @@ var CARD_POST_GROUP = { '農': '工', '工': '工', '商': '商', '文': '文', 
 
 // 招募場所(§2.3、§2.4、§2.5):periodMs 期長(招募歲鐘 = 真實時間);cap 累積上限;gr 品階機率(%,白青藍紫金);
 // floor 批內保底品階(至少 1 位 ≥);upper 十批保底的「上等」(gr = 品階;zhuan = 1 表示紫須專才以上);bFig 紫中 B 級名人機率;aFig 金 = A 級名人
+// 2026-11-09 起酒館 / 縣試的節奏與每批張數改由 CARD_DRAW 決定(periodMs / cap / unit 只留給舊資料參考;batch = 一批最多張數)
 var CARD_VENUE_ORDER = ['T', 'E', 'G'];
 var CARD_VENUES = {
   T: { id: 'T', name: '酒館', alias: '招賢酒肆', periodMs: 3600000, cap: 48, batch: 7, gr: [65, 30, 5, 0, 0], floor: 1, upper: { gr: 2, zhuan: 0 }, gate: 'tavern', org: 'bu', orgName: '布衣', bFig: 0, aFig: 0, theme: 'wind', unit: '1 歲' },
@@ -103,19 +104,33 @@ var CARD_EXAM_SUBJECTS = [
   { id: 'litian', name: '力田', rows: ['農'] }
 ];
 
-// 酒令成本與經濟(§2.2、§3A.1、§2.3;PLACEHOLDER)。酒令 = 『任用成本』(從卡包任用到名冊時花費)= CARD_GRADE[gr].cost,宗師型 +4;開批本身免費
+// 遣散碎片(2026-11-09 使用者決議:酒令與『任用』已移除,抽到的卡直接進名冊):CARD_GRADE[gr].cost = 路人遣散換得的碎片基準(× CARD_DRAW.relRate),宗師型 +zongBonus
 var CARD_COST = { zongBonus: 4 };
-var CARD_WINE = {
-  startGift: 6,                    // 開館禮(PLACEHOLDER,待使用者決定)
-  dailyGift: 2, dailyDaysMax: 7,   // 每日小禮 +2,最多存 7 天
-  shardPerToken: 5,                // 遣散回收的換算尺度(成本 c 令 → c 碎 = c × refundRate × 此值);碎片不再自動轉酒令
-  refundRate: 0.2,                 // 遣散返還成本 20 %(碎片計:成本 c 令 → c 碎;無每週上限)
-  techGift: 1, techGiftEra: 3, techGiftHi: 2,   // 每完成一項科技 +1 令,科技所屬時代 ≥ 3 起 +2(每個節點只發一次,記 cards.tokenGiven)
-  mileGift: 10                     // 完成一個里程碑(mg_*)+10 令
+// 抽卡節奏『每日一抽』(2026-11-09 使用者決議;數值皆 PLACEHOLDER)。酒館(T)、縣試(E)各自計時:新存檔第一次進入立刻有 1 批;之後每 gap 小時 1 批、每批 size 張;
+//   離線最多累積 stock 批(不無限堆積);size / gap 依科技升級(取已研成的最高一階)。指名(G)不靠計時,仍用指名券。
+//   pity = 酒館 / 縣試連續幾批沒出上等,下一批保底(指名仍用 CARD_CFG.pityBatches)。
+//   舊存檔遷移(cs.v < 2,一次性):酒令 1 → 碎片 wineShard;里程碑原 +10 令 → +mileShard 碎;請回流浪名人原 10 令 → recallShard 碎;遣散路人碎片 = cost × relRate(與舊規則同值)
+//   階梯節點選在簡化科技樹(citysimple.js,預設開)裡仍各自獨立的文教節點:書肆(第 2 時代)→ 東觀校書(第 3)→ 鴻都門學(第 4);
+//   (舉孝廉在簡化樹併入了開酒館 / 考場的節點、月旦評 / 察舉考課 / 太學都併入鴻都門學,所以不用)。完整科技樹同樣有這三個節點。
+var CARD_DRAW = {
+  stock: 2,
+  size: [{ n: 4 }, { n: 5, tech: 'wr_shusi' }, { n: 6, tech: 'e_wuzhu' }, { n: 7, tech: 'ed_hongdu' }],
+  gap: [{ h: 24 }, { h: 18, tech: 'wr_shusi' }, { h: 12, tech: 'e_wuzhu' }, { h: 8, tech: 'ed_hongdu' }],
+  pity: 5,
+  wineShard: 5, mileShard: 50, recallShard: 50, relRate: 1
+};
+// 新手禮包(使用者回饋「前期抽卡太小氣」;數值皆 PLACEHOLDER)。新世界第一次開招賢面板時一次性領取,存 cs.starter(cards.js cardsStarter*;舊存檔已有卡片或已畢業教學 = 不適用、不補發)。
+//   pulls 張,分 batches 批開(沿用開批 → 抽卡特效 → 入卡包,不自動熔爐);gr = 禮包每張的基本品階機率(白青藍紫金 %),再套保底:至少 goldGuarantee 張金(名人;魔幻世界優先本族英雄)、另至少 purpleGuarantee 張紫
+//   namedTokens 指名券(指名池還沒研發也能用這幾張);禮包的卡與抽卡一樣直接進名冊(名冊滿了先放卡包)
+//   新手期:領取後的前 nbCards 張(酒館 / 縣試開批的卡)改用 nbGr 品階機率,並有逐張保底:連續 nbPurple − 1 張沒有紫以上 → 下一張必紫;連續 nbGold − 1 張沒有金 → 下一張必金(名人)
+//   (每日一抽後每批 4 張:nbPurple 10 → 8、nbGold 50 → 30,讓前一兩週仍有紫金進帳)
+var CARD_STARTER = {
+  pulls: 20, batches: 3, gr: [20, 40, 30, 10, 0], goldGuarantee: 1, purpleGuarantee: 2, namedTokens: 3,
+  nbCards: 100, nbGr: { T: [52, 30, 10, 6, 2], E: [26, 38, 26, 8, 2] }, nbPurple: 8, nbGold: 30
 };
 var CARD_CFG = {
   capBase: 14,             // 名額基數:缺官階模組(lordhallui)時的退路(§7A.1 Lv10 = 14);可由 cardsCapBonus() 追加
-  capRank0: 10, capPerRank: 2, capMax: 40,   // 無等級版名額 = 10 + 官階等級 × 2,上限 40(官階等級 = lordhallui 官階表序號 1~);官階降低不踢人,只是不能再任用
+  capRank0: 10, capPerRank: 2, capMax: 40,   // 無等級版名額 = 10 + 官階等級 × 2,上限 40(官階等級 = lordhallui 官階表序號 1~);官階降低不踢人,只是新抽到的卡先放卡包
   waitSeats: 5,            // 待定席(卡包上線後任用不再進待定席;只保留舊存檔既有的待定席人物)
   tokMax: 5,               // 名人信物上限
   paceMin: 10,             // 時鐘回撥容忍(分鐘)
@@ -133,7 +148,8 @@ var CARD_UPGRADE = [
 // 學院(§7B;數值皆 PLACEHOLDER,集中於此)。院級 = 學舍 / 學宮 / 精舍建築數 + 科技(academyLevel);進修花費以『碎片』與金幣為主
 // (碎片 = 卡片熔爐所得,同一碎片池 cs.shards;碎片不再自動轉酒令,付費直接扣 cs.shards)
 var CARD_ACADEMY = {
-  lessonSec: 300,      // 1 課 = 遊玩中 300 秒(離線 / 分頁關閉不推進,尚無『旬報』時的替代;之後接旬報再改)
+  // 旬報計課(PLAN_CARDS §7B.3、PLAN_CITY §16.2):1 課 = 1 次旬報。旬報觸發:施政動作累計 acts 次(放置 / 拆除 / 研發,5 秒內連續刷算 1 次)、本機換日後第一次開啟、名冊「結束本旬」鈕;每本機日最多 dayMax 次
+  xun: { acts: 12, dayMax: 6 },
   rushRate: 0.5,       // 速成:剩餘課數立即結業,額外花 原碎片 × 此值
   quitRefund: 0.5,     // 退學:退還已付碎片 / 金幣的比例
   seats: [0, 2, 3, 4, 5, 6],   // 進修席(依院級 0~5)
@@ -148,6 +164,12 @@ var CARD_ACADEMY = {
     { name: '郡學', tech: 'e_dongguan', school: 3, jing: 1, gong: 0 },
     { name: '太學', tech: 'ed_taixue',  school: 3, jing: 1, gong: 1 }],
   learn: { academy: 1, shards: 10, coin: 300, lessons: 1 },   // 習藝:新增一個職業 I 階(需空槽)
+  swap: { academy: 3, shards: 15, coin: 400, lessons: 1 },    // 轉職:一條 I 階職業換成別職業 I 階(PLAN §7B.3 / §4.13;碎片 PLACEHOLDER)
+  // 名師講學(院 5,PLACEHOLDER):教習有宗師(IV 階)職業 → 每本機日 daily 次,同職業的在學者各少 cut 課;花費碎片 / 金幣
+  lecture: { academy: 5, tier: 4, shards: 30, coin: 3000, daily: 1, cut: 1 },
+  // 生徒(PLAN §7B.3,院 2 起):每批縣試的最後一位換成本院生徒(非名人、至少青;院 blueLv 起 blueP 機率至少藍);
+  // 有教習時 biasP 機率帶教習的主職業 I 階;教習為宗師時必帶該宗師職業 I~II 階(PLACEHOLDER)
+  pupil: { academy: 2, minGr: 1, blueLv: 4, blueP: 0.3, biasP: 0.4 },
   adv: [null,                                                    // 精進:依『目前階』1/2/3 → +1 階;gr = 最低品階,tenure = 派駐年資(天)
     { academy: 2, gr: 1, shards: 20,  coin: 600,  lessons: 2, tenure: 0 },
     { academy: 3, gr: 2, shards: 60,  coin: 2000, lessons: 3, tenure: 0 },
@@ -212,7 +234,7 @@ var CARD_TRAITS = [
   { id: 'tanlan', n: '貪財', cls: 'econ', pw: 1, neg: 1, city: 1, d: '商職 +10 %;商店價格 +2 %' },
   { id: 'yufu', n: '漁父', cls: 'life', pw: 1, city: 1, conv: 'yulie:1', d: '釣魚咬鉤提示 +0.2 秒(已併入漁獵 I)' },
   { id: 'aishou', n: '愛獸', cls: 'life', pw: 1, city: 1, d: '仙獸苑圖鑑顯示合照(純趣味)' },
-  { id: 'haojiu', n: '好酒', cls: 'life', pw: 1, city: 1, d: '城內夜間走去酒館;每日小禮 +1 酒令(全城只算 1 次)' },
+  { id: 'haojiu', n: '好酒', cls: 'life', pw: 1, city: 1, d: '城內夜間走去酒館;當酒館掌櫃時加成略高' },
   { id: 'shanyue', n: '善樂', cls: 'life', pw: 1, city: 1, d: '城內常有吹塤場面;不影響數值' },
   { id: 'yishu2', n: '通醫', cls: 'life', pw: 2, city: 1, d: '本軍負傷機率 −50 %;轉換時送醫術 I' },
   { id: 'xiangma', n: '相馬', cls: 'life', pw: 1, city: 1, conv: 'xumu:1', d: '騎兵移速 +5 %(已併入畜牧 I)' },
@@ -239,7 +261,7 @@ var CARD_TRAITS = [
   { id: 'chengyu', n: '乘雨', cls: 'odd', pw: 2, d: '雨天攻擊 +10 %、移速不受雨減' },
   { id: 'zhoushi', n: '舟師', cls: 'odd', pw: 2, d: '浮橋施工 +30 %;水城攻擊 +8 %' },
   { id: 'shuoke', n: '說客', cls: 'odd', pw: 2, d: '借出客將可用次數 3 → 5' },
-  { id: 'jiren', n: '吉人天相', cls: 'odd', pw: 1, city: 1, d: '每次城市升級 +2 酒令;沒有戰鬥效果' }
+  { id: 'jiren', n: '吉人天相', cls: 'odd', pw: 1, city: 1, d: '每次城市升級 +10 碎片;沒有戰鬥效果' }
 ];
 var CARD_TRAIT_BY_ID = {};
 CARD_TRAITS.forEach(function (t) { CARD_TRAIT_BY_ID[t.id] = t; });
@@ -285,7 +307,7 @@ var CARD_FIGS = [
   {id:"fazheng",name:"法正",zi:"孝直",fac:1,home:"扶風郿",st:[72,42,94,74,62],tai:344,tr:[["算無遺策",0],["山戰",0],["睚眥必報",1,"宿怨羈絆效果 ×1.5"]],bio:"陳壽評「奇畫策算」;定軍山之謀;「一餐之德,睚眥之怨,無不報復」",fb:"史",gr:4,birth:"176–220"},
   {id:"weiyan",name:"魏延",zi:"文長",fac:1,home:"義陽",st:[88,92,62,52,66],tai:360,tr:[["陷陣",0],["傲上",0],["鎮守漢中",1,"守方:本軍受傷 −8 %"]],bio:"拔為漢中督;「性矜高,當時皆避下之」",fb:"史",gr:4,birth:"?–234"},
   {id:"huangzhong",name:"黃忠",zi:"漢升",fac:1,home:"南陽",st:[80,92,55,45,72],tai:344,tr:[["先登",0],["陷陣",0]],bio:"常先登陷陣,定軍山斬夏侯淵",fb:"史(先事劉表、韓玄)",gr:3,birth:"?–220"},
-  {id:"mizhu",name:"糜竺",zi:"子仲",fac:1,home:"東海朐縣",st:[30,30,66,80,86],tai:292,tr:[["貨殖",0],["富甲一方",1,"每次城市升級 +5 酒令"]],bio:"祖世貨殖,僮客萬人;傾家資助劉備",fb:"史",gr:3,birth:"?–221"},
+  {id:"mizhu",name:"糜竺",zi:"子仲",fac:1,home:"東海朐縣",st:[30,30,66,80,86],tai:292,tr:[["貨殖",0],["富甲一方",1,"每次城市升級 +25 碎片"]],bio:"祖世貨殖,僮客萬人;傾家資助劉備",fb:"史",gr:3,birth:"?–221"},
   {id:"maliang",name:"馬良",zi:"季常",fac:1,home:"襄陽宜城",st:[50,30,82,80,85],tai:327,tr:[["說客",0],["招納五溪",1,"籍貫武陵、五溪的人物出現率 ×1.5;與沙摩柯同場兩軍攻擊 +8 %"]],bio:"「馬氏五常,白眉最良」;入武陵招納五溪蠻夷",fb:"史",gr:3,birth:"187–222"},
   {id:"xushu",name:"徐庶",zi:"元直",fac:1,home:"潁川長社",st:[74,72,86,65,75],tai:372,tr:[["識破",0],["舉賢",0]],bio:"少好擊劍;薦諸葛亮;母為曹公所獲,辭先主北去",fb:"史(208 後入魏;以薦諸葛亮之事歸蜀)",gr:3,birth:"?–?"},
   {id:"shamoke",name:"沙摩柯",zi:"新",fac:1,home:"武陵五溪",st:[70,86,35,25,70],tai:286,tr:[["山戰",0],["膂力",0]],bio:"五溪蠻夷首領,夷陵隨劉備,為吳軍所斬",fb:"史",gr:3,birth:"?–222"},
@@ -386,18 +408,18 @@ var CARD_FIG_WEIGHT = {
 // 在野名人路過(js/npcvisit.js;使用者決議,數值皆 PLACEHOLDER)。名人來源 CARD_FIGS(金 / 紫階),依上面 CARD_FIG_WEIGHT 加權(缺項 金 10 / 紫 6),已在名冊 / 卡包的不來。
 //   countW = 每日 0 / 1 / 2 位的權重;startMin~endMin = 一天中可抵達的時段(分鐘,本機時間,白天);windowMin = 預定抵達後多久內才演(過了不補演);
 //   stops = 逛的停點數範圍;standSec = 每站停留秒數範圍;maxLifeSec = 單次停留上限(超過就離城);cap / capLow = 同時最多幾位(一般 / 省電或低階機);
-//   rewardDayMax = 每日小獎勵次數上限;reward = 依品階(3 紫 / 4 金)首次點擊的小獎勵(tok 酒令、shards 碎片;不碰抽卡機率與卡包);aura = 光環 / 小星顏色
+//   rewardDayMax = 每日小獎勵次數上限;reward = 依品階(3 紫 / 4 金)首次點擊的小獎勵(shards 碎片;原酒令 1 已換成碎片 5;不碰抽卡機率與卡包);aura = 光環 / 小星顏色
 var CARD_VISIT = {
   on: true, countW: [30, 45, 25], startMin: 420, endMin: 1110, windowMin: 45, stops: [3, 6], standSec: [6, 10], maxLifeSec: 300,
-  cap: 2, capLow: 1, rewardDayMax: 2, reward: { 3: { tok: 1 }, 4: { tok: 1, shards: 3 } }, aura: { 3: '#b48cf0', 4: '#f0c850' }
+  cap: 2, capLow: 1, rewardDayMax: 2, reward: { 3: { shards: 5 }, 4: { shards: 8 } }, aura: { 3: '#b48cf0', 4: '#f0c850' }
 };
-// 卡包(PLAN_CARDS 第四批決議;數字多為 PLACEHOLDER)。開批的卡直接進卡包 cs.bag;卡包不佔名冊名額。
+// 卡包(PLAN_CARDS 第四批決議;數字多為 PLACEHOLDER)。2026-11-09 起:開批的卡先進名冊,名冊滿了才放卡包 cs.bag(暫存);名冊有空位時卡包的卡自動補進名冊。卡包不佔名冊名額。
 var CARD_BAG = {
   capBase: 100, capPerRank: 80, capMax: 500,   // 容量 = 100 + (官階等級 − 1) × 80,上限 500(官階表 6 階:100/180/260/340/420/500;缺官階資料 = 100)
-  batchNeed: 7,                // 開一批需要的空位(一批 7 張;空位不足則該批暫存不開)
-  autoDefault: 0,              // 自動熔爐預設:品階 ≤ 白(0);-1 = 關
+  batchNeed: 7,                // 開一批需要的空位(名冊 + 卡包 + 溢出區合計;空位不足則該批暫存不開)
+  autoDefault: -1,             // 自動熔爐預設:關(-1);0 = 品階 ≤ 白
   autoMax: 2,                  // 自動熔爐最高可設到藍(紫以上不提供自動)
-  figDupShard: { 3: 8, 4: 16 }, // 名人重複且信物已滿(CARD_CFG.tokMax)時轉成的碎片數(= 同品階任用成本)
+  figDupShard: { 3: 8, 4: 16 }, // 名人重複且信物已滿(CARD_CFG.tokMax)時轉成的碎片數
   overMs: 24 * 3600000,        // 溢出區:卡包滿時多出的卡進溢出區(cs.bagOver),真實時間 24 小時倒數;有空位依剩餘時間短者先納入,歸零自動熔成碎片(名人不入溢出區)
   overWarnMs: 2 * 3600000      // 剩餘不足 2 小時:UI 換提示色
 };

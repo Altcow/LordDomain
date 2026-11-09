@@ -3,7 +3,7 @@
 // 隔離作法:在既有資料表的欄位掛 getter(fxPack() 為 null 時回原值),或包住「回傳字串」的面板函式(歷史世界原樣回傳),所以歷史世界輸出逐位不變;
 // 只有少數組字串的地方加一行 typeof 守衛的呼叫(cards.js cardGenName、npcvisit.js 路過文案)。
 // 載入順序:所有資料與面板檔之後(index.html 放在 minimap.js 後、main.js 前)。ES2017;不用 ?. ??。不發聲。
-// 全域:FX_TXT fxTxPack fxText fxTextInstall fxGenName fxVisitText fxFigMark fxJobRow fxVenue fxRankName
+// 全域:FX_TXT fxTxPack fxText fxTextInstall fxGenName fxVisitText fxFigMark fxJobRow fxVenue fxRankName fxSilHtml fxTxBossSlot
 var FX_TXT = { inst: false, terms: {}, cache: {}, wrapped: {} };
 
 function fxTxPack() { try { return (typeof fxPack === 'function') ? fxPack() : null; } catch (e) { return null; } }
@@ -25,7 +25,8 @@ function fxRankName(i, p) { var R = fxTxD('ranks'); p = p || fxTxPack(); return 
 function fxObjNow(type) { var t = (typeof fxGoType === 'function') ? fxGoType(type) : type; return (typeof OBJECTS !== 'undefined' && OBJECTS[t]) ? OBJECTS[t].name : null; }
 var FX_ACADEMY_NAMES = [null, '初級學舍', '學舍', '書院', '學院', '大學院'];
 // 殿試台建築名(B-1 未改名的漢式名)
-var FX_OBJ_TXT = { dian_shi_tai: { elf: '世界樹召集台', dwarf: '山王召見廳', kingdom: '御前召見台' } };
+var FX_OBJ_TXT = { dian_shi_tai: { elf: '世界樹召集台', dwarf: '山王召見廳', kingdom: '御前召見台' }, kao_chang: { elf: '試煉場', dwarf: '試煉場', kingdom: '試煉場' },
+  lou_che_fang: { elf: '播種機關坊', dwarf: '播種機關坊', kingdom: '播種機關坊' }, fan_che: { elf: '翻水轉輪', dwarf: '翻水轉輪', kingdom: '翻水轉輪' } };
 // 建造預覽的防災軸名(天災名取自 texts_map events.hazards)
 var FX_HAZ_LABEL = { common: { locust: '防蟲群' }, elf: { fire: '防林火', locust: '防枯葉蟲' }, dwarf: { fire: '防爐火', flood: '防湧水' }, kingdom: {} };
 
@@ -47,11 +48,13 @@ function fxTerms(p) {
     ['五銖錢', '銅幣'], ['五銖', '銅幣'], ['胡餅', '麵餅'], ['糖餳', '蜜糖'],
     ['名垂青史', '傳說留名'], ['州郡英才', '一方英才'], ['史實依據', '傳說'], ['史實設定', '傳說設定'], ['東漢', '這片土地']
   ].filter(function (x) { return x[1] && x[1] !== x[0]; });
+  list = (fxTxD('terms') || []).concat(list);   // 通用詞改名(gen_fx_text.js TERMS)排前面
   FX_TXT.terms[p] = list;
   return list;
 }
 var FX_TERM_KEYS = ['黃巾', '九品中正', '天子', '招賢酒肆', '縣試', '殿試', '徵辟', '太平道', '郡國學校', '縣衙', '郡府', '翻車', '縣學', '郡學', '太學', '庠舍',
-  '里正', '亭長', '縣尉', '縣令', '刺史', '太守', '五銖', '胡餅', '糖餳', '名垂青史', '州郡英才', '史實', '東漢'];
+  '里正', '亭長', '縣尉', '縣令', '刺史', '太守', '五銖', '胡餅', '糖餳', '名垂青史', '州郡英才', '史實', '東漢',
+  '兵書', '軍令', '流寇', '傳檄', '連夜趕工', '耬車', '翻水車', '考場'];
 function fxTermHit(s) { var i; if (typeof s !== 'string') return false; for (i = 0; i < FX_TERM_KEYS.length; i++) if (s.indexOf(FX_TERM_KEYS[i]) >= 0) return true; return false; }
 // 魔幻世界:把字串裡的漢式用語換成本族說法;歷史世界原樣回傳
 function fxText(s, p) {
@@ -142,15 +145,22 @@ function fxFigMark(c) {
 }
 
 // ───────── 討伐 6 章(fx_stages_data.js)─────────
-function fxStgBossName(st) {   // 該關第一位(對照後的)魔幻頭目名字
+function fxStgBossName(st) {   // 該關第一位(對照後的)魔幻頭目名字;有非英雄頭目(fxBoss)先用它
   var ch = (typeof BN_CHAPTERS !== 'undefined') ? BN_CHAPTERS[st.ch - 1] : null, k, e, m, f;
   if (!ch || typeof BN_STG_FX_FIG === 'undefined') return '';
+  for (k = 0; k < st.foeIdx.length; k++) { e = ch.roster[st.foeIdx[k]]; if (e && e.fxBoss) return e.fxBoss.name; }
   for (k = 0; k < st.foeIdx.length; k++) {
     e = ch.roster[st.foeIdx[k]]; m = e && e.fig ? BN_STG_FX_FIG[e.fig] : null;
     f = m && typeof CARD_FIG_BY_ID !== 'undefined' ? CARD_FIG_BY_ID[m[0]] : null;
     if (f) return f.name;
   }
   return '';
+}
+// 名人敵將格換成非英雄頭目名(PLAN_FANTASY_B §4.7):只換名字與稱號,戰力 / 戰法 / 兵種沿用該格的英雄(fig);非魔幻世界回 null(不讀)
+function fxTxBossSlot(ent, r) {
+  try {
+    Object.defineProperty(ent, 'fxBoss', { configurable: true, enumerable: false, get: function () { return fxTxPack() ? { name: r[0], title: r[1] } : null; } });
+  } catch (e) { /* 略過 */ }
 }
 function fxStagesInstall() {
   var D = (typeof FX_STG_DATA !== 'undefined') ? FX_STG_DATA : null;
@@ -162,6 +172,7 @@ function fxStagesInstall() {
     fxTxDef(ch, 'sub', function () { return X.sub; });
     ch.roster.forEach(function (ent, k) {
       var r = X.roster[k];
+      if (r && ent && !Array.isArray(ent) && ent.fig) fxTxBossSlot(ent, r);
       if (!r || !Array.isArray(ent)) return;
       fxTxDef(ent, 1, function () { return r[0]; });
       fxTxDef(ent, 2, function () { return r[1]; });
@@ -182,6 +193,20 @@ function fxStagesInstall() {
     if (to) fxTxDef(BN_STG_FIG_LOOK, k, function () { return to; });
   });
   return true;
+}
+
+// ───────── 路人剪影(PLAN Q12 第一版):魔幻世界的路人卡(非名人、無 fig)不用漢服頭像,改畫依族 / 性別的剪影,顏色取陣營色 ─────────
+// 回 svg 字串;非魔幻世界、名人卡回 null(呼叫端 cardsui.js cuSilPortrait 退回原頭像)
+function fxSilHtml(c) {
+  var p = fxTxPack(), race, col = '', extra = '', i, F;
+  if (!p || !c || c.fig) return null;
+  race = (typeof FX_FAC_RACE !== 'undefined' && FX_FAC_RACE[c.fac]) || p;
+  F = (typeof FX_FAC_LIST !== 'undefined') ? FX_FAC_LIST : [];
+  for (i = 0; i < F.length; i++) if (F[i].fac === c.fac) col = F[i].col;
+  if (c.sex === 'f') extra += '<path d="M12 13c0-8 16-8 16 0v7c0 2-1 3-2 3H14c-1 0-2-1-2-3z"/>';   // 長髮
+  if (race === 'elf') extra += '<path d="M12.5 13L6 9.5 12.5 16zM27.5 13L34 9.5 27.5 16z"/>';       // 尖耳
+  if (race === 'dwarf' && c.sex !== 'f') extra += '<path d="M14 20q6 16 12 0z"/>';                 // 鬍鬚
+  return '<svg class="cusil fxsil" viewBox="0 0 40 40" aria-hidden="true"' + (col ? ' style="fill:' + col + '"' : '') + '><circle cx="20" cy="14" r="7.5"/><path d="M5 40c0-9 6-14.5 15-14.5S35 31 35 40z"/>' + extra + '</svg>';
 }
 
 // ───────── 安裝(載入時一次)─────────
@@ -225,7 +250,7 @@ function fxTextInstall() {
   if (typeof LIFE_GREET !== 'undefined') fxTxDefArr(LIFE_GREET);
   if (typeof LIFE_NAMES !== 'undefined') LIFE_NAMES.forEach(function (x, i) { fxTxDef(LIFE_NAMES, i, function (b, p) { var r = fxResidentNames(p); return r && r[i % r.length]; }); });
   if (typeof NPC_TALK_GENERIC !== 'undefined' && N) NPC_TALK_GENERIC.forEach(function (x, i) {
-    fxTxDef(NPC_TALK_GENERIC, i, function (b, p) { var a = (N[p] || []).concat(N.common || []); return a[i % a.length]; });
+    fxTxDef(NPC_TALK_GENERIC, i, function (b, p) { var a = (N[p] || []).concat(N.common || []); return fxText(a[i % a.length], p); });
   });
   if (typeof NPC_TALK_JOB !== 'undefined') Object.keys(NPC_TALK_JOB).forEach(function (k) { fxTxDefArr(NPC_TALK_JOB[k]); });
   if (typeof NPC_TALK_PRIV !== 'undefined') Object.keys(NPC_TALK_PRIV).forEach(function (k) { fxTxDefArr(NPC_TALK_PRIV[k]); });
@@ -242,7 +267,7 @@ function fxTextInstall() {
 
 // ───────── 包住回傳字串的面板函式(魔幻世界過一次 fxText;歷史世界原樣)─────────
 var FX_TXT_WRAP = ['cuRosterHtml', 'cuOverviewHtml', 'cuNamedHtml', 'cuBagHtml', 'cuVenueHtml', 'cuLastHtml', 'cardsUiInfoHtml', 'cuAcademyHtml', 'cuNpcDetailHtml',
-  'lhHtmlOverview', 'lhHtmlJobs', 'lhHtmlPosts', 'bnMapRewardHtml', 'nextStepHtml'];
+  'lhHtmlOverview', 'lhHtmlJobs', 'lhHtmlPosts', 'bnMapRewardHtml', 'nextStepHtml', 'cuArtCard', 'tuLabel', 'tuDesc'];
 function fxTxGlobal() { return (typeof window !== 'undefined' && window) ? window : (typeof globalThis !== 'undefined' ? globalThis : null); }
 function fxTxWrap(name, post) {
   var g = fxTxGlobal(), f = g ? g[name] : null, w;
@@ -264,6 +289,8 @@ function fxTextWrapAll() {
     r.lines = o.lines.map(function (l) { return [l[0] === '史實依據' ? '傳說' : fxText(l[0], p), fxText(l[1], p)]; });
     return r;
   });
+  fxTxWrap('techUiUnlockNames', function (r, p) { return Array.isArray(r) ? r.map(function (s) { return fxText(s, p); }) : r; });   // 回陣列
+  fxTxWrap('bnStgMakeFoe', function (r, p, a) { var b = a[0] && a[0].fxBoss; if (b && r) { r.name = b.name; r.title = b.title; } return r; });
   fxTxWrap('bnStgBounty', function (t) { var D = typeof FX_STG_DATA !== 'undefined' ? FX_STG_DATA : null, ch; if (t && D && D.bounty) { ch = BN_CHAPTERS[t.ch - 1]; t.desc = D.bounty.replace('{ch}', ch ? ch.name : ''); } return t; });
   // 提示訊息(showToast):改的是「輸入」字串(例:「官階達『亭長』後開放戰鬥」)
   (function () {

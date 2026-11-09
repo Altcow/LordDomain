@@ -1,13 +1,13 @@
 // citygather.js — 城市聚集行為 P2 + P3 + P4(PLAN_CITYLIFE_GATHER.md §4):下棋、路邊休息;P3 告示(宣讀者 + 讀者)、叫賣(叫賣者 + 圍觀 / 成交);P4 看戲(百戲:擊鼓、跳丸、鼓掌;說書)。聚集成員就是 LIFE.npcs 裡的居民(算居民額度,不增加總人數)。
 // 告示 / 看戲 / 叫賣與下棋同屬「有劇本的組」(gthIsGame):每 15 分鐘時段以種子排一場(起訖與內容確定),場次內主角留在站位上、觀眾半圓站位輪替。
-// 告示的「張貼」以宣讀者在告示前比手勢表現(未另做亭卒角色);看戲沒有圈地 / 說書台時,退用路口空地的臨時圍場(每城 1 處);叫賣圍觀者只來自本系統,不改 citytraffic 的街景叫賣者。
+// P5:名人 / 名冊人物站停時 8 格內有聚集會當觀眾(gthFamousTick,n.gSv 還原行程);亭卒 bailiff(ext,張貼階段來,gthBailSpawn);臨時告示板(路口空地,gthMakeTemp notice);叫好(看戲小卡按鈕,gatherCheer,每場 1 次、每日上限);夜市攤(lifeNightStall,只在夜間)與夜戲(圈地旁有燈)、夜間光暈(省電關閉)。
 // 下棋:場景觸發物件 yi_zuo / stone_table / tbl_chess / tbl_stone;2 人對弈(坐姿)+ 圍觀 0~6 人半圓站位;白天傍晚;一局 90~240 秒,局間冷卻 30~90 秒;
 //   排程 = 純函式 hash(世界, 道路簽章, 日, 15 分鐘時段, 棋桌),所以同一時段重開 / 朋友參觀看到同一場棋局(含已下了幾手);沒有棋桌物件時退用路邊空地的臨時麻布棋盤。
 // 路邊休息:長凳 / 石凳 / 矮凳 / 胡床 / 樹蔭 / 槐蔭石台 / 井邊 / 涼棚茶座 / 港口貨堆;有人坐著聊天、打盹、乘涼;沒有座椅物件時退用路沿空地坐地。
 // 只維護「畫面附近」的聚集(畫面外的組直接解散,成員改回一般居民行程);組池固定 8 組、成員 / 站位預先配置;等級上限見 GATHER_CAP。
 // 掛點(citylife.js,皆 typeof 守護):lifeRebuild → gatherBuild;lifeReset → gatherReset;lifePrefill → gatherPrefill;lifeFrame → gatherTick;lifeDrawDiag → gatherDraw;
 //   lifeDrawOne → gatherPose;lifeTap → gatherTap;lifeCardShow / lifeGreetNext → gatherCardHide / gatherLines / gatherActText;lifeRetire 第 1 輪略過聚集成員。
-// 零數據影響:不讀寫 world 數據、不寫存檔、不給獎勵;不發聲。ES2017;不用 ?. ??。全域名稱:GATHER gatherBuild gatherReset gatherPrefill gatherTick gatherDraw gatherPose gatherTap gatherLines gatherActText gatherCardHide gatherStats gatherForce gatherNow
+// 零數據影響:不讀寫 world 數據、不寫存檔、不給獎勵;不發聲。ES2017;不用 ?. ??。全域名稱:GATHER gatherBuild gatherReset gatherPrefill gatherTick gatherDraw gatherPose gatherTap gatherLines gatherActText gatherCardHide gatherStats gatherForce gatherNow gatherCheer gatherCheering
 
 const GATHER_POOL = 8, GATHER_SLOTS = 24, GATHER_PROP_MAX = 48;
 const GATHER_SLOT_MS = 900000;   // 15 分鐘時段
@@ -29,8 +29,11 @@ const GATHER = {
   inited: false, spots: [], pool: [], clock: 0, tickT: 0, built: false, members: 0, groupsOn: 0, fakeNow: 0,
   tier: 'mid', cap: GATHER_CAP.mid, perMax: 16, watchMax: 4, pbuck: [], poseSpecs: {}, poseN: 0, base: 0, sig: -1,
   stats: { groups: 0, members: 0, props: 0, tickMs: 0, drawMs: 0, specsWithPose: 0 }, propN: 0, drawAcc: 0, tickAcc: 0,
-  cardEl: null, cardCv: null, force: '', pending: '', prefilling: false, tmpGame: null, lastD: 1e9, propLast: 0, snap: false
+  cardEl: null, cardCv: null, force: '', pending: '', prefilling: false, tmpGame: null, lastD: 1e9, propLast: 0, snap: false,
+  cheerEl: null, cheerBox: null, cardG: null, cheerDay: -1, cheerN: 0, lampN: -1
 };
+if (typeof LIFE_TYPES !== 'undefined' && !LIFE_TYPES.bailiff) LIFE_TYPES.bailiff = { name: '亭卒', looks: ['man'], w: 0, spd: 0.8, to: {} };   // 衙役(ext,不占居民額度,見 gthBailSpawn)
+let GTH_BAIL_SPEC = null;
 
 function gatherNow() { return GATHER.fakeNow || Date.now(); }
 function gthStr(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; }
@@ -39,6 +42,7 @@ function gthLerp(a, b, t) { return a + (b - a) * t; }
 
 function gthNewGroup(id) {
   return { id: id, on: false, kind: '', sp: null, game: null, seed: 0, iv: 6, gt0: 0, clk0: 0, closing: false, forced: false, n: 0, wantW: 0, nextRec: 0, openAt: 0,
+    cheered: false, cheerAt: -99, bailWant: false, bailDone: false,
     mem: new Array(GATHER_SLOTS).fill(null), until: new Float32Array(GATHER_SLOTS), mst: new Uint8Array(GATHER_SLOTS), mrole: new Uint8Array(GATHER_SLOTS), pd: -1, lastPiece: 0 };
 }
 (function () { for (let i = 0; i < GATHER_POOL; i++) GATHER.pool.push(gthNewGroup(i + 1)); })();
@@ -244,7 +248,7 @@ function gthMakeCrowd(o, oi, info, fp, ok) {
   const nx = rx / rl, ny = ry / rl, tx = -ny, ty = nx;
   const sp = { k: info.k, type: o.type, key: gthStr(o.type + '@' + o.x + ',' + o.y), oi: oi, cx: cx, cy: cy, fw: fw, fh: fh, hb: hb, road: road,
     diag: (o.x + fw - 1) + (o.y + fh - 1), px: isoX(cx, cy), py: isoY(cx, cy, hb), bz: info.big ? 10 : 6, slots: [], w: info.w || 1, tmp: false, lamp: false,
-    trait: info.story ? 'story' : info.k, night: false, np: 0, pk: '', nx: nx, ny: ny };
+    trait: info.story ? 'story' : info.k, night: false, np: 0, pk: '', nx: nx, ny: ny, nst: info.nstall ? 1 : 0 };
   const half = Math.max(fw, fh) / 2, big = !!info.big, dO = sp.diag, r0 = half + 0.45;
   // 站在地面的主角:前方那一格不能站(屋、水…)就退到道路格中心(宣讀者 / 叫賣者站在路邊)
   const rcx = (road % W) + 0.5, rcy = Math.floor(road / W) + 0.5;
@@ -262,6 +266,8 @@ function gthMakeCrowd(o, oi, info, fp, ok) {
     if (big) sp.slots.push(gthSlot(cx + nx * 0.3, cy + ny * 0.3, nx, ny, { onObj: true, gz: 8, dO: dO }));
     else { const p = ground(cx + nx * r0, cy + ny * r0); sp.slots.push(gthSlot(p[0], p[1], nx, ny, null)); }
     sp.pk = 'speak'; sp.np = 1;
+  } else if (info.nolead) {   // 夜市攤:攤主是街景叫賣者(citytraffic.js),聚集只排圍觀者
+    sp.pk = ''; sp.np = 0;
   } else {   // 告示:宣讀者站在告示前方
     const p = ground(cx + nx * r0, cy + ny * r0);
     sp.slots.push(gthSlot(p[0], p[1], nx, ny, null));
@@ -288,19 +294,25 @@ function gthMakeTemp(kind, R, taken) {
     }
   }
   cands.sort(function (a, b) { return a.h - b.h; });
-  for (let i = 0; i < cands.length && out.length < (kind === 'show' ? 1 : 2); i++) {
+  for (let i = 0; i < cands.length && out.length < (kind === 'show' || kind === 'notice' ? 1 : 2); i++) {
     const q = cands[i], cx = q.nx + 0.5, cy = q.ny + 0.5, hb = q.hb;
     let near = false;
     for (let k = 0; k < out.length; k++) if (Math.abs(out[k].cx - cx) + Math.abs(out[k].cy - cy) < 4) near = true;
     for (let k = 0; k < taken.length; k++) if (Math.abs(taken[k].cx - cx) + Math.abs(taken[k].cy - cy) < 3) near = true;
     if (near) continue;
     const sp = { k: kind, type: 'tmp_' + kind, key: gthStr('tmp' + kind + q.c), oi: -1, cx: cx, cy: cy, fw: 1, fh: 1, hb: hb, road: q.c, diag: q.nx + q.ny,
-      px: isoX(cx, cy), py: isoY(cx, cy, hb), bz: 0, slots: [], w: 1, tmp: true, lamp: false, trait: kind === 'chess' ? 'chess' : (kind === 'show' ? 'show' : 'rest'), night: false,
-      np: kind === 'show' ? 2 : (kind === 'chess' ? 2 : 0), pk: kind === 'show' ? 'perform' : '' };
+      px: isoX(cx, cy), py: isoY(cx, cy, hb), bz: 0, slots: [], w: 1, tmp: true, lamp: false, trait: kind === 'chess' ? 'chess' : (kind === 'show' ? 'show' : (kind === 'notice' ? 'notice' : 'rest')), night: false,
+      np: kind === 'show' ? 2 : (kind === 'chess' ? 2 : (kind === 'notice' ? 1 : 0)), pk: kind === 'show' ? 'perform' : (kind === 'notice' ? 'speak' : '') };
     if (kind === 'chess') {
       sp.slots.push(gthSlot(cx - 0.42, cy, 1, 0, { sit: true, gz: 0 }));
       sp.slots.push(gthSlot(cx + 0.42, cy, -1, 0, { sit: true, gz: 0 }));
       const ring = gthRing(cx, cy, 0.95, hb, [[1, 0]], 8, null);
+      for (let r = 0; r < ring.length; r++) sp.slots.push(gthSlot(ring[r].x, ring[r].y, cx - ring[r].x, cy - ring[r].y, null));
+    } else if (kind === 'notice') {   // 臨時告示板(衙役帶來,路口旁空草地):宣讀者在板前(路口側),讀者半圓
+      const dx = q.dx, dy = q.dy;
+      sp.nx = dx; sp.ny = dy;
+      sp.slots.push(gthSlot(cx + dx * 0.8, cy + dy * 0.8, dx, dy, null));
+      const ring = gthArc(cx, cy, 1.35, hb, dx, dy, 6);
       for (let r = 0; r < ring.length; r++) sp.slots.push(gthSlot(ring[r].x, ring[r].y, cx - ring[r].x, cy - ring[r].y, null));
     } else if (kind === 'show') {   // 臨時圍場(路口旁空草地):兩名表演者站在中央,觀眾半圓朝向路口
       const dx = q.dx, dy = q.dy, tx = -dy, ty = dx;
@@ -332,7 +344,7 @@ function gatherBuild(ok) {
   const D = boardW() + boardH();
   for (let k = GATHER.pbuck.length; k < D; k++) GATHER.pbuck.push([]);
   for (let k = 0; k < GATHER.pbuck.length; k++) GATHER.pbuck[k].length = 0;
-  const objs = world.objects, claimed = {}, lamps = [], chess = [], rest = [], crowd = { notice: [], show: [], market: [] };
+  const objs = world.objects, claimed = {}, lamps = [], chess = [], rest = [], crowd = { notice: [], show: [], market: [], nmarket: [] };
   let i, o, info, fp, sp;
   for (i = 0; i < objs.length; i++) {
     o = objs[i];
@@ -358,14 +370,19 @@ function gatherBuild(ok) {
     if (!info || !gthIsCrowd(info.k)) continue;
     fp = footprint(o.type, o.rot);
     sp = gthMakeCrowd(o, i, info, fp, ok);
-    if (sp) crowd[info.k].push(sp);
+    if (sp) (sp.nst ? crowd.nmarket : crowd[info.k]).push(sp);
   }
   if (!chess.length) { const t = gthMakeTemp('chess', R, []); for (i = 0; i < t.length; i++) chess.push(t[i]); }
   if (!rest.length) { const t = gthMakeTemp('rest', R, chess); for (i = 0; i < t.length; i++) rest.push(t[i]); }
   if (!crowd.show.length) { const t = gthMakeTemp('show', R, []); for (i = 0; i < t.length; i++) crowd.show.push(t[i]); }   // 沒有圈地 / 說書台:路口臨時圍場(PLAN Q5)
-  for (i = 0; i < chess.length; i++) {
-    for (let k = 0; k < lamps.length; k++) if (Math.abs(lamps[k].x - chess[i].cx) + Math.abs(lamps[k].y - chess[i].cy) <= 4) chess[i].lamp = true;
+  if (!crowd.notice.length) { const t = gthMakeTemp('notice', R, chess); for (i = 0; i < t.length; i++) crowd.notice.push(t[i]); }   // 沒有告示牌 / 縣衙:路口臨時告示板
+  for (i = 0; i < chess.length; i++) {   // 燈:下棋 / 夜戲(看戲點)附近有燈才開夜間場次
+    for (let k = 0; k < lamps.length; k++) if (Math.abs(lamps[k].x - chess[i].cx) + Math.abs(lamps[k].y - chess[i].cy) <= GATHER_NIGHT.lampR) chess[i].lamp = true;
   }
+  for (i = 0; i < crowd.show.length; i++) {
+    for (let k = 0; k < lamps.length; k++) if (Math.abs(lamps[k].x - crowd.show[i].cx) + Math.abs(lamps[k].y - crowd.show[i].cy) <= GATHER_NIGHT.lampR) crowd.show[i].lamp = true;
+  }
+  for (i = 0; i < crowd.nmarket.length; i++) crowd.nmarket[i].lamp = true;   // 夜市攤自帶燈籠
   // 相鄰去重(同種中心距 < 2.5 格者留一個),再依「非樹優先、雜湊」抽樣到上限
   const keep = function (list, max) {
     list.sort(function (a, b) { const ta = a.trait === 'shade' && a.fw === 1 ? 1 : 0, tb = b.trait === 'shade' && b.fw === 1 ? 1 : 0; return ta !== tb ? ta - tb : (lifeHash(GATHER.base, a.key) - lifeHash(GATHER.base, b.key)); });
@@ -385,6 +402,8 @@ function gatherBuild(ok) {
     const L = keep(crowd[kinds[k]], GATHER_SPOT_MAX);
     for (i = 0; i < L.length; i++) GATHER.spots.push(L[i]);
   }
+  const NM = keep(crowd.nmarket, GATHER_NIGHT.stallMax);   // 夜市攤前圍觀(只在夜間開場,gthTodMul)
+  for (i = 0; i < NM.length; i++) GATHER.spots.push(NM[i]);
   GATHER.built = true;
   // R.fBase(人口下限基礎)加入聚集點數 ×1(PLAN §3.2);只增不減,下限仍受時段與密度夾制
   R.fBase += Math.min(GATHER.spots.length, 12);
@@ -393,9 +412,10 @@ function gatherBuild(ok) {
 // ───────── 排程(純函式:同種子同結果) ─────────
 function gthTodMul(kind, sp) {
   const tod = LIFE.tod, season = (typeof lifeSeason === 'function') ? lifeSeason() : 'spring';
+  if (sp.nst) return tod === 'night' ? GATHER_NIGHT.lampMul * (GATHER_SEASON.market[season] || 1) * (sp.w || 1) : 0;   // 夜市攤:只在夜間
   let m = (GATHER_TOD[kind][tod] || 0) * (GATHER_SEASON[kind][season] || 1);
   if (kind === 'chess' && tod === 'night' && sp.lamp) m = 0.2;
-  if (kind === 'show' && tod === 'night' && !sp.lamp) m = 0;
+  if (kind === 'show' && tod === 'night') m = sp.lamp ? GATHER_NIGHT.showMul * (GATHER_SEASON.show[season] || 1) : 0;   // 夜戲:圈地 / 說書台旁有燈才演
   if (kind === 'rest') {
     if (tod === 'night' && !sp.night) m = 0;
     if (sp.trait === 'shade' && season === 'summer') m *= 1.5;
@@ -450,11 +470,12 @@ function gthOpen(sp, game, forced) {
   if (!g) return null;
   g.on = true; g.kind = sp.k; g.sp = sp; g.closing = false; g.forced = !!forced; g.n = 0; g.openAt = GATHER.clock; g.nextRec = 0;
   g.mem.fill(null); g.mst.fill(0); g.mrole.fill(0); g.until.fill(0);
-  g.game = null;
+  g.game = null; g.cheered = false; g.cheerAt = -99; g.bailDone = false; g.bailWant = false;
   if (gthIsGame(sp.k)) {
     g.game = { start: game.start, dur: game.dur, seed: game.seed, idx: game.idx, iv: game.iv };
     g.seed = game.seed; g.iv = game.iv;
     g.wantW = Math.min(GATHER.watchMax, Math.floor(gthRnd(game.seed, 5) * (GATHER.watchMax + 1)), sp.slots.length - sp.np);
+    g.bailWant = sp.k === 'notice' && gthRnd(game.seed, 77) < (LIFE.tod === 'dawn' ? GATHER_BAIL.pDawn : GATHER_BAIL.pDay);   // 本場要不要亭卒來張貼(清晨多)
   } else { g.seed = lifeHash(GATHER.base, sp.key); g.wantW = 0; }
   GATHER.groupsOn++;
   gthPropAdd(g);
@@ -472,6 +493,11 @@ function gthRelease(g, i) {
   g.mem[i] = null; g.mst[i] = 0; g.mrole[i] = 0; g.n--; GATHER.members--;
   n.gat = 0; n.gp = false; n.gbub = ''; n.dOver = 0; n.gz = 0; n.gmode = '';
   if (n.pp) { n.pp.lean = 0; n.pp.nod = 0; }
+  const sv = n.gSv; n.gSv = null;
+  if (sv && !n.dead && n.st === 'act' && n.act === 'gather') {   // 名人 / 名冊人物:回到原來的停點,把剩下的停留接著做(行程不變)
+    n.act = sv.act; n.dur = sv.rem; n.t = 0; n.lazy = sv.lazy; n.fid = false;
+    return;
+  }
   if (n.dead || n.st === 'fade') return;
   if (GATHER.snap && n.cur >= 0) {   // 改路重建時:站位多半不在道路格上(lifeRebuild 會把站在非道路格的人淡出)→ 先回到所屬道路格中心
     n.x = (n.cur % boardW()) + 0.5; n.y = Math.floor(n.cur / boardW()) + 0.5; n.px = isoX(n.x, n.y); n.py = isoY(n.x, n.y, lifeHAt(n.x, n.y));
@@ -501,6 +527,7 @@ function gthAttach(g, i, n, role, state, T) {
 }
 function gthSeatIn(g, i, n) {   // 到位(走到道路格後 / 直接生成):設站位、面向、保持時間
   const sl = g.sp.slots[i], role = g.mrole[i];
+  if (g.sp.nst && LIFE.tod === 'night' && n.spec && typeof lifeLantern === 'function') n.spec = lifeLantern(n.spec);   // 夜市圍觀者提燈
   n.gp = true; n.gx = sl.x; n.gy = sl.y; n.gz = sl.gz || 0; n.dOver = sl.onObj ? sl.dO : 0; n.fx = sl.fx; n.fy = sl.fy;
   n.fid = !sl.sit;
   n.st = 'act'; n.act = 'gather'; n.dur = 9e5; n.t = 0;
@@ -596,6 +623,7 @@ function gthUpdateMembers(dt) {
       if (!n) continue;
       if (n.dead || n.st === 'fade' || n.gat !== g.id || lifeRetiring(n)) {
         if (n.gat === g.id) { n.gat = 0; n.gp = false; n.gbub = ''; n.dOver = 0; n.gz = 0; if (n.pp) { n.pp.lean = 0; n.pp.nod = 0; } }
+        if (n.gSv) { gthRelease(g, i); continue; }   // 名人還要還原行程(gthRelease 內處理計數)
         g.mem[i] = null; g.mst[i] = 0; g.mrole[i] = 0; g.n--; GATHER.members--;
         continue;
       }
@@ -614,10 +642,151 @@ function gthUpdateMembers(dt) {
   }
 }
 
+// ───────── 名人加入 / 亭卒 / 叫好 / 夜間光暈(PLAN_CITYLIFE_GATHER §4.4.3、§4.4.5、§4.9) ─────────
+// 在野名人 / 名冊人物停在行程的「站著停點」時,8 格內有進行中的聚集 → 機率改當觀眾(下棋 / 告示 / 看戲 / 叫賣皆可);
+//   n.gSv 記下原動作與剩餘停留,散場時 gthRelease 還原為 stand,行程(plan / pi)不動,所以「不影響職務與行程」
+function gthFamousTick() {
+  const L = LIFE.npcs;
+  for (let k = 0; k < L.length; k++) {
+    const n = L[k];
+    if ((n.role !== 'visitor' && n.role !== 'hero') || n.dead || n.st !== 'act' || n.act !== 'stand' || n.gat > 0 || n.gSv || n.alpha < 0.9 || lifeRetiring(n)) continue;
+    if (Math.random() >= (n.role === 'visitor' ? GATHER_FAM.pVisitor : GATHER_FAM.pHero)) continue;
+    let best = null, bd = GATHER_FAM.radius + 1, slot = -1;
+    for (let gi = 0; gi < GATHER_POOL; gi++) {
+      const g = GATHER.pool[gi];
+      if (!g.on || g.closing || !gthIsGame(g.kind) || g.n === 0 || g.n >= GATHER.perMax) continue;
+      const d = Math.abs(g.sp.cx - n.x) + Math.abs(g.sp.cy - n.y);
+      if (d > GATHER_FAM.radius || d >= bd) continue;
+      let s = -1;
+      for (let i = g.sp.np; i < g.sp.slots.length && s < 0; i++) if (!g.mem[i]) s = i;
+      if (s < 0) continue;
+      bd = d; best = g; slot = s;
+    }
+    if (!best) continue;
+    const lazy = n.lazy, rem = Math.max(0.5, n.dur - n.t);
+    gthAttach(best, slot, n, 2, 2, null);
+    n.lazy = lazy;
+    n.gSv = { act: 'stand', rem: rem, lazy: lazy };
+    gthSeatIn(best, slot, n);
+    best.until[slot] = GATHER.clock + GATHER_FAM.stay[0] + Math.random() * (GATHER_FAM.stay[1] - GATHER_FAM.stay[0]);
+  }
+}
+// 亭卒(衙役):告示組開場時(張貼階段 gt < GATHER_BAIL.phase 秒)才來,從入口走到告示板前站 GATHER_BAIL.stay 秒後離開;全城同時最多 1 名
+function gthBailTick() {
+  let have = false;
+  const L = LIFE.npcs;
+  for (let k = 0; k < L.length && !have; k++) if (L[k].role === 'bailiff' && !L[k].dead && L[k].st !== 'fade') have = true;
+  for (let gi = 0; gi < GATHER_POOL; gi++) {
+    const g = GATHER.pool[gi];
+    if (!g.on || g.closing || g.kind !== 'notice' || !g.bailWant || g.bailDone) continue;
+    if (g.gt0 + (GATHER.clock - g.clk0) >= GATHER_BAIL.phase) { g.bailDone = true; continue; }
+    if (have || !gthBailSpawn(g)) continue;
+    g.bailDone = true; have = true;
+  }
+}
+function gthBailSpawn(g) {
+  const R = LIFE.road, T = (typeof LIFE_TYPES !== 'undefined') ? LIFE_TYPES.bailiff : null, W = boardW(), sp = g.sp;
+  if (!R || !R.ent || !T || typeof lifeEmit !== 'function' || typeof lifeField !== 'function') return false;
+  const sx = sp.road % W, sy = Math.floor(sp.road / W);
+  let ex = null, bd = 1e9;
+  for (let k = 0; k < R.ent.length; k++) {
+    const e = R.ent[k], d = Math.abs((e.cell % W) - sx) + Math.abs(Math.floor(e.cell / W) - sy);
+    if (d >= bd) continue;
+    const D = lifeField(e.cell);   // 由入口出發的距離場(同 npcVisitSpawn);預算用完 → 回 false,下次再試
+    if (!D) return false;
+    if (D[sp.road] < 0) continue;
+    bd = d; ex = e;
+  }
+  const mid = !ex;   // 入口都走不到張貼處(孤立道路):原地出現、站完即淡出(stat)
+  const plan = mid ? [{ cell: sp.road, act: 'stand', dur: GATHER_BAIL.stay }] : [{ cell: sp.road, act: 'stand', dur: GATHER_BAIL.stay }, { cell: ex.cell, end: 'exit', ent: ex }];
+  const before = LIFE.npcs.length;
+  if (!lifeEmit(T, 'bailiff', 1, mid ? sp.road : ex.cell, plan, mid ? null : ex, mid, { lane: 0.12 })) return false;
+  if (LIFE.npcs.length === before) return false;
+  const n = LIFE.npcs[LIFE.npcs.length - 1];
+  LIFE.live--;   // lifeEmit 已計入一般居民;亭卒不占居民額度
+  n.ext = true; n.role = 'bailiff'; n.name = T.name; n.stat = mid;
+  const s = gthBailSpec();
+  if (s) n.spec = s;
+  return true;
+}
+function gthBailSpec() {   // 赤幘衙役外觀(crowdLook 'guard' 的頭飾),快取一份;缺 ART / crowdparts 回 null(退回 lifeNew 的外觀)
+  if (GTH_BAIL_SPEC) return GTH_BAIL_SPEC;
+  if (typeof ART === 'undefined' || !ART || !ART.UNIT || !ART.UNIT.man || typeof crowdLook !== 'function') return null;
+  const L = crowdLook(GATHER_BAIL.job, 4242);
+  if (!L) return null;
+  const id = 'bailiff_' + L.id;
+  GTH_BAIL_SPEC = Object.assign({}, ART.UNIT.man, L, { id: id });
+  if (typeof LIFE !== 'undefined' && LIFE && LIFE.variantIds) LIFE.variantIds[id] = true;
+  return GTH_BAIL_SPEC;
+}
+// 叫好:看戲小卡的按鈕。每場 1 次、每日 GATHER_CHEER.dayMax 次;只影響動作(觀眾鼓掌、表演者鞠躬),不給獎勵、不寫數據
+function gatherCheering(g) { return !!g && g.cheerAt > -99 && GATHER.clock - g.cheerAt < GATHER_CHEER.sec; }
+function gatherCheer() {
+  const g = GATHER.cardG;
+  if (!g || !g.on || g.kind !== 'show' || g.cheered || g.closing) return '';
+  const day = Math.floor(gatherNow() / 86400000);
+  if (GATHER.cheerDay !== day) { GATHER.cheerDay = day; GATHER.cheerN = 0; }
+  if (GATHER.cheerN >= GATHER_CHEER.dayMax) return '今日叫好的次數已用完';
+  GATHER.cheerN++;
+  g.cheered = true; g.cheerAt = GATHER.clock;
+  if (GATHER.cheerEl) GATHER.cheerEl.style.display = 'none';
+  const L = GATHER_LINES.show.cheer;
+  return '表演者拱手致謝:「' + L[(g.seed >>> 0) % L.length] + '」';
+}
+function gthCheerBtn(c, show) {
+  if (!c || typeof document === 'undefined' || !document.createElement) return;
+  if (!GATHER.cheerEl || GATHER.cheerBox !== c.box) {
+    const b = document.createElement('span');
+    b.textContent = '叫好';
+    b.style.cssText = 'cursor:pointer;color:#e6b84a;font-size:13px;margin-left:14px;';
+    b.addEventListener('click', function () {
+      const m = gatherCheer();
+      if (m && LIFE.card) LIFE.card.greet.textContent = m;
+    });
+    c.box.appendChild(b);
+    GATHER.cheerEl = b; GATHER.cheerBox = c.box;
+  }
+  GATHER.cheerEl.style.display = show ? 'inline' : 'none';
+}
+// 夜間光暈(燈籠 / 夜市 / 夜戲):每組一團暖色半透明圓(1 個圖元);省電與白天不畫
+function gthDrawGlow(ctx, g) {
+  const sp = g.sp;
+  rqAlpha(ctx, GATHER_NIGHT.glowA);
+  rqDisc(ctx, sp.px, sp.py - (sp.bz || 8) - 8, 20, 11, '#ffcf6a');
+  rqAlpha(ctx, 1);
+  GATHER.propN += 1;
+}
+// 臨時告示板(路口空地,衙役帶來):兩柱 + 板 + 兩張紙 + 朱印(6 個圖元)
+function gthDrawBoard(ctx, g) {
+  const x = g.sp.px, y = g.sp.py;
+  rqRect(ctx, x - 8, y - 12, 1.6, 12, '#6a4a2a');
+  rqRect(ctx, x + 6.4, y - 12, 1.6, 12, '#6a4a2a');
+  rqPoly4(ctx, x - 8, y - 14, x + 8, y - 14, x + 8, y - 6, x - 8, y - 6, '#8a6a3a');
+  rqPoly4(ctx, x - 6, y - 12.5, x - 1.5, y - 12.5, x - 1.5, y - 7.5, x - 6, y - 7.5, '#f0e3bf');
+  rqPoly4(ctx, x + 0.5, y - 12.5, x + 5, y - 12.5, x + 5, y - 7.5, x + 0.5, y - 7.5, '#f0e3bf');
+  rqDisc(ctx, x + 4, y - 14, 1.3, 1.3, '#b03a2a');
+  GATHER.propN += 6;
+}
+
 // ───────── 排程與開關組(2 Hz;省電 1 Hz) ─────────
 function gthKindMul(sp) { return gthTodMul(sp.k, sp); }
+// 燈的增減不改道路簽章(不會觸發 gatherBuild):2 Hz 比對燈數,變了就重算下棋 / 夜戲點的 lamp 旗標(O(物件數),不配置)
+function gthLampSync() {
+  const objs = world.objects, lamps = [];
+  for (let i = 0; i < objs.length; i++) { const t = objs[i].type; if (t === 'lamp_stand' || t === 'stone_lamp' || t === 'lantern') lamps.push(objs[i]); }
+  if (lamps.length === GATHER.lampN) return;
+  GATHER.lampN = lamps.length;
+  for (let s = 0; s < GATHER.spots.length; s++) {
+    const sp = GATHER.spots[s];
+    if (sp.nst || (sp.k !== 'chess' && sp.k !== 'show')) continue;
+    let lit = false;
+    for (let k = 0; k < lamps.length && !lit; k++) if (Math.abs(lamps[k].x - sp.cx) + Math.abs(lamps[k].y - sp.cy) <= GATHER_NIGHT.lampR) lit = true;
+    sp.lamp = lit;
+  }
+}
 function gthManage(prefill) {
   gthCapUpdate();
+  gthLampSync();
   const now = gatherNow(), tmp = GATHER.tmpGame || (GATHER.tmpGame = { start: 0, dur: 0, seed: 0, idx: 0, iv: 6 });
   let gi, g, i;
   // 1) 既有組:局終 / 離開畫面 → 解散;維持成員
@@ -640,6 +809,8 @@ function gthManage(prefill) {
       if (g.n === 0 || GATHER.clock - g.openAt > 600) gthDeact(g);
     }
   }
+  gthFamousTick();   // 名人 / 名冊人物在停點附近加入觀眾(§4.9)
+  gthBailTick();     // 告示張貼階段:亭卒來貼告示(§4.4.3)
   // 2) 開新組:正在進行的棋局優先,其次畫面附近的休息點(依到畫面中心距離)
   if (LIFE.placing && !prefill) return;
   const cand = [];
@@ -780,7 +951,7 @@ function gthPoseEvt(n, pp, g, i) {
     return;
   }
   if (g.kind === 'show') {
-    const ph = gt % 40, applause = ph >= 37.5;
+    const ph = gt % 40, applause = ph >= 37.5 || gatherCheering(g);   // 段尾鼓掌,或觀眾叫好(GATHER_CHEER.sec 秒)
     if (lead) {
       if (sp.trait === 'story') { pp.fr = 2; if (Math.floor(gt / 5) % 2 === 0) { n.gbub = 'talk'; pp.lean = 1.2; } }
       else if (i === 0) pp.fr = (Math.floor(gt / 0.6) % 2 && !applause) ? 4 : 0;   // 擊鼓:單臂前伸交替
@@ -879,6 +1050,8 @@ function gatherDraw(ctx, d) {
       rqDisc(ctx, sp.px - 6, sp.py - 12, 1.7, 1, '#f4ead2'); rqDisc(ctx, sp.px + 5, sp.py - 11, 1.7, 1, '#f4ead2'); GATHER.propN += 2;
     }
     if (g.kind === 'show' && g.n > 0 && z >= 0.5 && GATHER.propN < GATHER_PROP_MAX) gthDrawShow(ctx, g, z);
+    if (g.kind === 'notice' && sp.tmp && GATHER.propN < GATHER_PROP_MAX - 6) gthDrawBoard(ctx, g);
+    if (sp.lamp && g.n > 0 && LIFE.tod === 'night' && GATHER.propN < GATHER_PROP_MAX && !(typeof isPowerSave === 'function' && isPowerSave())) gthDrawGlow(ctx, g);   // 夜間光暈(省電關閉)
     if (z >= 0.6 && g.n > 0 && gthUiOk() && GATHER.propN < GATHER_PROP_MAX) gthDrawHint(ctx, g);
   }
   GATHER.drawAcc += lifeNow() - t0;
@@ -985,6 +1158,8 @@ function gthCardShow(g) {
   if (g.kind === 'notice') txt += ' 告示:' + gthNoticeText(g);
   c.greet.textContent = txt + (g.kind === 'chess' ? '(第 ' + Math.floor(gt / g.iv) + ' 手)' : '');
   c.box.style.display = 'block';
+  GATHER.cardG = g;
+  gthCheerBtn(c, g.kind === 'show' && !g.cheered);
   if (g.kind === 'chess' && typeof document !== 'undefined' && document.createElement) {
     if (!GATHER.cardCv) {
       GATHER.cardCv = document.createElement('canvas');
@@ -1010,7 +1185,10 @@ function gthDrawCardBoard(cv, g, moves) {   // 9×9 小棋盤:依種子與手數
     x.beginPath(); x.arc(10 + (h % 9) * 11, 10 + ((h >>> 8) % 9) * 11, 4.6, 0, Math.PI * 2); x.fill();
   }
 }
-function gatherCardHide() { if (GATHER.cardCv) GATHER.cardCv.style.display = 'none'; }
+function gatherCardHide() {
+  if (GATHER.cardCv) GATHER.cardCv.style.display = 'none';
+  if (GATHER.cheerEl) GATHER.cheerEl.style.display = 'none';
+}
 
 // 小卡:聚集成員的台詞與「正在…」
 function gatherLines(n) {
@@ -1018,8 +1196,14 @@ function gatherLines(n) {
   if (!g || !g.on) return null;
   if (g.kind === 'chess') return n.gr === 1 ? GATHER_LINES.chess.player : GATHER_LINES.chess.watch;
   if (g.kind === 'notice') return n.gr === 1 ? GATHER_LINES.notice.speak : GATHER_LINES.notice.read;
-  if (g.kind === 'show') return g.sp.trait === 'story' ? GATHER_LINES.show.story : (n.gr === 1 ? GATHER_LINES.show.perf : GATHER_LINES.show.audience);
-  if (g.kind === 'market') return n.gr === 1 ? GATHER_LINES.market.crier : (n.gbub === 'trade' ? GATHER_LINES.market.trade : GATHER_LINES.market.watch);
+  if (g.kind === 'show') {
+    if (gatherCheering(g)) return n.gr === 1 ? GATHER_LINES.show.cheer : GATHER_LINES.show.cheerWatch;
+    return g.sp.trait === 'story' ? GATHER_LINES.show.story : (n.gr === 1 ? GATHER_LINES.show.perf : GATHER_LINES.show.audience);
+  }
+  if (g.kind === 'market') {
+    if (g.sp.nst) return GATHER_LINES.market.night;
+    return n.gr === 1 ? GATHER_LINES.market.crier : (n.gbub === 'trade' ? GATHER_LINES.market.trade : GATHER_LINES.market.watch);
+  }
   const R = GATHER_LINES.rest;
   if (n.gmode === 'nap') return R.nap;
   if (g.sp.trait === 'cargo') return R.porter;
@@ -1034,7 +1218,7 @@ function gatherActText(n) {
   }
   if (g.kind === 'notice') return n.gr === 1 ? '在告示前宣讀' : '圍看告示';
   if (g.kind === 'show') return g.sp.trait === 'story' ? '在說書台前說書' : (n.gr === 1 ? '表演百戲' : '圍看百戲');
-  if (g.kind === 'market') return n.gr === 1 ? '在攤前吆喝叫賣' : '在攤前挑貨';
+  if (g.kind === 'market') return g.sp.nst ? '在夜市攤前看貨' : (n.gr === 1 ? '在攤前吆喝叫賣' : '在攤前挑貨');
   if (n.gmode === 'nap') return '打盹';
   const tr = g.sp.trait;
   return tr === 'shade' ? '在樹蔭下乘涼' : tr === 'well' ? '在井邊閒聊' : tr === 'tea' ? '喝茶歇腳' : tr === 'cargo' ? '坐在貨堆上歇腳' : '坐著歇腳聊天';

@@ -56,6 +56,16 @@ function bnMapRatioTxt(mine, rec) {
   return ['極難', 'b'];
 }
 
+// 關卡走線:本章 6 關一個接一個的小旗(已通關 ● 金、目前選取 高亮、未解鎖 ○ 灰),旗與旗之間連線;上方標「第 N 章・第 M 關」與進度點 ●●○○○○
+function bnMapRouteHtml(d, env, ch) {
+  var list = BN_STAGES.filter(function (s) { return s.ch === ch.n; }), cur = bnStgById(BNMAP.sel), dots = '', h = '', i, s, cl, ok;
+  for (i = 0; i < list.length; i++) {
+    s = list[i]; cl = d.clear[s.id] | 0; ok = bnStgUnlock(d.clear, s.id, env).ok;
+    dots += cl ? '●' : '○';
+    h += (i ? '<i class="ln' + (cl || ok ? ' on' : '') + '"></i>' : '') + '<button class="nd' + (cl ? ' clr' : '') + (ok ? '' : ' lock') + (BNMAP.sel === s.id ? ' sel' : '') + '" data-a="stg" data-id="' + s.id + '" aria-label="' + s.id + '">' + (s.boss ? '⚑' : (i + 1)) + '</button>';
+  }
+  return '<div class="bnm-route"><div class="rt">第 ' + ch.n + ' 章・第 ' + (cur && cur.ch === ch.n ? list.indexOf(cur) + 1 : 1) + ' 關 <span class="dots">' + dots + '</span></div><div class="rp">' + h + '</div></div>';
+}
 function bnMapRender() {
   var el = bnu.mapEl, d, env, ord, mine, h = '', ch, st, rows = '', k, ui, cn, sel, f, rw, bt, doneB, can, ratio, stats, lock, cl, locked = {}, first;
   if (!el || typeof BN_STAGES === 'undefined') return;
@@ -74,7 +84,7 @@ function bnMapRender() {
   });
   h += '</div>';
   ch = bnStgChapter(BNMAP.ch);
-  h += '<div class="bnm-cols"><div class="c1"><div class="bnm-chn"><b>第 ' + ch.n + ' 章 ' + bnUiEsc(ch.name) + '</b> <small>' + bnUiEsc(ch.sub) + ' · 星 ' + bnStgChapterStars(d.clear, ch.n) + '/18</small></div><div class="bnm-list">';
+  h += '<div class="bnm-cols"><div class="c1"><div class="bnm-chn"><b>第 ' + ch.n + ' 章 ' + bnUiEsc(ch.name) + '</b> <small>' + bnUiEsc(ch.sub) + ' · 星 ' + bnStgChapterStars(d.clear, ch.n) + '/18</small></div>' + bnMapRouteHtml(d, env, ch) + '<div class="bnm-list">';
   BN_STAGES.filter(function (s) { return s.ch === ch.n; }).forEach(function (s) {
     f = bnStgFoes(s.id); lock = bnStgUnlock(d.clear, s.id, env); cl = d.clear[s.id] | 0; ratio = bnMapRatioTxt(mine, f.rec);
     h += '<button class="bnm-row' + (BNMAP.sel === s.id ? ' sel' : '') + (lock.ok ? '' : ' lock') + (cl ? ' clr' : '') + (s.boss ? ' boss' : '') + '" data-a="stg" data-id="' + s.id + '"><span class="n">' + s.id + '</span><span class="t">' + bnUiEsc(s.name) + (s.boss ? ' <i>頭目</i>' : '') + '</span><span class="s">' + (cl ? bnMapStars(cl) : (lock.ok ? '未通關' : '🔒')) + '</span><span class="p ' + ratio[1] + '">' + (lock.ok ? '建議 ' + f.rec : bnUiEsc(lock.why)) + '</span></button>';
@@ -96,7 +106,8 @@ function bnMapRender() {
   bt = bnMapBounty(d); doneB = bnStgBountyDone(d, env);
   h += '<div class="bnm-foot"><div class="bnm-b"><b>每日流寇</b> <small>' + bnUiEsc(BN_CHAPTERS[bt.ch - 1].name) + ' · 建議戰力 ' + bt.rec + ' · 獎勵:金幣 ' + BN_STG.bounty.gold + '、碎片 ' + BN_STG.bounty.shards + '、' + bnMapGoodsName(BN_CHAPTERS[bt.ch - 1].mats[0]) + '(不耗軍令)</small><br>' + bt.list.map(function (x) { return bnUiEsc(x.name); }).join('、') +
     '<button class="bnbtn" data-a="bounty"' + (doneB ? ' disabled' : '') + '>' + (doneB ? '今日已討平' : '出戰流寇') + '</button></div><div class="bnm-b"><b>練兵</b> <small>不計戰績、不給獎勵,敵將依我方戰力縮放,可自由試陣</small><br><button class="bnbtn" data-a="practice">進入練兵</button></div></div>';
-  el.innerHTML = h;
+  el.innerHTML = (typeof fxText === 'function') ? fxText(h) : h;   // 魔幻世界:軍令 → 號令、每日流寇 → 林間盜匪 …(歷史世界原樣)
+  try { var se = el.querySelector && el.querySelector('.bnm-row.sel'); if (se && se.scrollIntoView) se.scrollIntoView({ block: 'nearest' }); } catch (er) { /* 舊瀏覽器略過 */ }   // 聚焦目前(下一)關
 }
 
 // 進入階段:地圖 → 布陣

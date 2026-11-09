@@ -7,12 +7,13 @@
 // B5 動畫:前衝前傾 lean、受擊閃白(全身 / 半身 / 程式小人)與後退、閃避側閃 ev、倒下下沉淡出、治療 / 護盾 / 增減益粒子(物件池 BN_PT_N)、狀態圖示彈出、暴擊微震與放大浮字、待機呼吸晃動。
 // 視覺時間 = 模擬秒 ÷ bnPlStK(倍速時拉長,不閃一下就沒;前衝與命中同步仍用模擬秒);省電:待機靜止、無微震、粒子減量;低階機(平均繪製 > BNDR.lowMs)自動 BNDR.low 粒子減半。
 // 戰鬥改版(2026-11-06):沒有士氣條;文化主題施放特效 fxc_*、狀態圖示 stc_*、輔助虛影 fxg_*、主角專屬 fxhero_*(assets/bnfx/,透明底,一般混合;缺圖退回原 fx_* 特效)。
-// 全域:BNPL_T BNDR bnDrImg bnDrLook bnDrLayout bnDrFrame bnDrResize bnPlNew bnPlTick bnPlSkip bnPlDispose bnPlPredict bnPlStats bnPlSetSpeed BN_FX_THEME BN_FX_GHOST BN_FX_HERO BN_PT_KIND BN_ATK_SFX bnPlBurst bnDrIdle
+// 全域:BNPL_T BNDR bnDrImg bnDrLook bnDrLayout bnDrFrame bnDrResize bnPlNew bnPlTick bnPlSkip bnPlCutSkip bnPlDispose bnPlPredict bnPlStats bnPlSetSpeed BN_FX_THEME BN_FX_GHOST BN_FX_HERO BN_PT_KIND BN_ATK_SFX bnPlBurst bnDrIdle
 
 var BNPL_T = {
   round: 0.55, act: 0.1, cast: 0.28, lunge: 0.2, proj: 0.24, basicWait: 0.52, skillHit: 0.2, skillWait: 0.36, multi: 0.14, multiDelay: 0.06,
   dot: 0.26, heal: 0.26, healMore: 0.12, status: 0.08, txt: 0.3, end: 0.8, chain: 0.28, cutFull: 1.0, cutSmall: 0.45, killDelay: 0.05, dying: 0.45
 };
+var BNPL_PACE = 0.8;   // 基礎節奏:模擬秒 = 實際秒 × 倍速 × 0.8(1× 比改前慢 25%:出手間隔、動畫、浮字停留一併拉長)
 var BNDR = {
   imgs: {}, tint: {}, white: {}, glow: {}, bgKey: '', bg: null, dprMax: 2, whiteMax: 20, whiteN: 0, low: false, lowMs: 8,
   stats: { frames: 0, lastMs: 0, sumMs: 0, maxMs: 0, samples: [] }
@@ -48,6 +49,7 @@ var BN_FX_THEME = {
   crossbow: { cast: 'fxc_crossbow_volley', hit: 'fxc_crossbow_volley', alt: 'spark' },
   thunder: { cast: 'fxc_thunder_cloud', hit: 'fxc_thunder_strike', area: 'fxc_thunder_blast', alt: 'bolt_fork' }
 };
+var BN_FX_RX = { rx_ice_shatter: { file: 'fxc_wx_water', alt: 'impact_ring' }, rx_electrocute: { file: 'fxc_thunder_chain', alt: 'bolt_fork' } };
 var BN_FX_WX = { '金': 'fxc_wx_metal', '木': 'fxc_wx_wood', '水': 'fxc_wx_water', '火': 'fxc_wx_fire', '土': 'fxc_wx_earth' };
 // 輔助虛影:施放時在施放者身後半透明顯示(彈琴、跳舞、擊鼓 …)
 var BN_FX_GHOST = { s_xiaoqiao_3: 'fxg_qin', p_caiyong: 'fxg_qin', s_zhugeliang_2: 'fxg_qin', s_zhouyu_3: 'fxg_qin', s_diaochan_1: 'fxg_dance', s_zhenji_1: 'fxg_dance', s_yanyan_2: 'fxg_drum', s_dingfeng_1: 'fxg_drum',
@@ -150,7 +152,7 @@ function bnDrLook(u) {
 // 每方 3×3 九宮格:排(row 0 前 1 中 2 後)= 橫向,列(col)= 縱向;雙方中間留 gap。每格垂直佔用 = 頭上 head(血條 + 狀態圖示)+ 立繪 sh + 腳下 foot(名字),列距 pitch ≥ 這三者,立繪不互相蓋住血條。
 // 技能名標籤(bnDrLabels)放在各自陣營上方天空的牆角:區塊上方有空間就放 top 下方,否則放在頂端帶(左方讓出左上返回鈕 labX0)。
 function bnDrLayout(vw, vh, top, bot) {
-  var gap = Math.max(28, vw * 0.07), side = (vw - gap) / 2 - 10, colW = Math.max(30, side / 3), fh = Math.max(80, vh - top - bot), head = 34, foot = 16, sh, pitch, bt, L = { vw: vw, vh: vh, top: top, bot: bot, pos: { A: [], B: [] } }, r, c, x, y, fs, labH, room, stag;
+  var gap = Math.max(28, vw * 0.07), side = (vw - gap) / 2 - 10, colW = Math.max(30, side / 3), fh = Math.max(80, vh - top - bot), head = 34, foot = 28, sh, pitch, bt, L = { vw: vw, vh: vh, top: top, bot: bot, pos: { A: [], B: [] } }, r, c, x, y, fs, labH, room, stag;
   pitch = Math.max(30, (fh - head - foot) / 3);
   sh = Math.max(40, Math.min(colW * 1.35, pitch - 18, 170));
   pitch = Math.min(pitch, sh + head + foot + 10);
@@ -213,10 +215,10 @@ function bnPlDispose(P) {
   if (P.sfx && typeof bnSfxBattle === 'function') { try { bnSfxBattle(false); } catch (e) { /* 略過 */ } }
 }
 function bnPlHook(P, name, a, b) { var f = P.hooks && P.hooks[name]; if (f) { try { f(a, b); } catch (e) { /* 略過 */ } } }
-function bnPlSfx(P, kind) {
+function bnPlSfx(P, kind, o) {
   if (!P.sfx || P.skipped) return;
   try {
-    if (typeof bnSfxPlay === 'function') bnSfxPlay(kind);
+    if (typeof bnSfxPlay === 'function') bnSfxPlay(kind, o);
     else if (typeof sfxwPlay === 'function' && BN_SFX_ALT[kind]) sfxwPlay(BN_SFX_ALT[kind]);
   } catch (e) { /* 略過 */ }
 }
@@ -270,12 +272,40 @@ var BNLAB = { dur: 1.1, min: 0.45, fade: 0.15, qMax: 3 };
 // 陣營旗色(CARD_FAC 順序:魏 蜀 吳 黃巾 中立);無陣營 / 敵方小怪 = 中性色
 var BN_FAC_COL = ['#3a6ec8', '#2f9a5a', '#c8443a', '#d8b23a', '#8a8a8a'];
 var BN_FAC_NEUTRAL = '#8a8a8a';
-function bnPlLabel(P, v, text) {
+function bnPlLabel(P, v, text, sub) {
   var u = P.S && P.S.units[v.id], fac = u && u.fac >= 0 && BN_FAC_COL[u.fac] ? u.fac : -1, lb = P.lab[v.side], it;
   if (!text || !lb) return;
-  it = { text: text, col: fac >= 0 ? BN_FAC_COL[fac] : BN_FAC_NEUTRAL, t: 0, out: -1 };
+  it = { text: text, sub: sub || '', col: fac >= 0 ? BN_FAC_COL[fac] : BN_FAC_NEUTRAL, t: 0, out: -1 };
   if (!lb.cur) lb.cur = it;
   else { lb.q.push(it); if (lb.q.length > BNLAB.qMax) lb.q.shift(); }
+}
+// 戰法白話短句(bn_text bnSkillShort,≤ 16 字;缺 bn_text 時不顯示)
+function bnPlSkShort(id) {
+  var d = (typeof BN_SKILLS !== 'undefined') ? BN_SKILLS[id] : null;
+  if (!d || typeof bnSkillShort !== 'function') return '';
+  try { return bnSkillShort(d) || ''; } catch (er) { return ''; }
+}
+// 戰況播報:一次戰法(含其傷害 / 治療)整理成一行,經 hooks.feed 交給介面(只留最近幾行)
+function bnPlFeedStart(P, e) {
+  var v = P.vu[e.u];
+  bnPlFeedFlush(P);
+  if (!v || P.skipped) return;
+  P.fd = { u: e.u, who: v.name, sk: e.name || '', ult: e.cat === 'ult', tg: [], by: {} };
+}
+function bnPlFeedHit(P, e, heal) {
+  var f = P.fd, t, k;
+  if (!f || e.src !== f.u || !(e.v > 0) || e.ty === 'self') return;
+  k = (heal ? 'h' : 'd') + e.tgt;
+  if (!f.by[k]) { t = P.vu[e.tgt]; if (!t) return; f.by[k] = { n: t.name, v: 0, h: heal }; f.tg.push(f.by[k]); }
+  f.by[k].v += e.v;
+}
+function bnPlFeedFlush(P) {
+  var f = P.fd, s, a;
+  P.fd = null;
+  if (!f || P.skipped) return;
+  a = f.tg.slice(0, 2).map(function (x) { return x.n + ' ' + (x.h ? '+' : '−') + x.v; });
+  s = f.who + ' 發動' + (f.ult ? '大招' : '') + '「' + f.sk + '」' + (a.length ? '→ ' + a.join('、') + (f.tg.length > 2 ? ' 等' : '') : '');
+  bnPlHook(P, 'feed', s);
 }
 function bnPlLabAnim(P, dt) {
   ['A', 'B'].forEach(function (sd) {
@@ -293,16 +323,23 @@ function bnPlFx(P, name, x, y, o) {
   for (i = 0; i < P.fx.length; i++) if (!P.fx[i].on) { f = P.fx[i]; break; }
   if (!f) return null;
   f.on = true; f.name = name; f.x = x; f.y = y; f.x2 = o.x2 !== undefined ? o.x2 : x; f.y2 = o.y2 !== undefined ? o.y2 : y; f.t = -(o.delay || 0); f.dur = o.dur || 0.4; f.size = o.size || 60;
-  f.rot = o.rot || 0; f.col = o.col || '#ffe9a8'; f.mode = o.mode || 0; f.file = o.file || ''; f.alt = o.alt || '';
+  f.rot = o.rot || 0; f.col = o.col || '#ffe9a8'; f.mode = o.mode || 0; f.file = o.file || ''; f.alt = o.alt || ''; f.tint = o.tint || ''; f.ex = o.ex || null; f.under = o.under ? 1 : 0;
   if (f.mode !== 1 && f.mode !== 2) f.dur *= bnPlStK(P);   // 飛行物(箭 / 球)須與命中同步,維持模擬秒
   return f;
 }
 
+// 全體技範圍標示:在該方存活單位的中心畫一個大範圍環,大小涵蓋整個陣
+function bnPlAreaFx(P, side, delay) {
+  var k, w, xs = 0, ys = 0, n = 0, x0 = 1e9, x1 = -1e9;
+  for (k in P.vu) { w = P.vu[k]; if (w.side === side && w.alive) { xs += w.px; ys += w.py; n++; x0 = Math.min(x0, w.px); x1 = Math.max(x1, w.px); } }
+  if (!n) return;
+  bnPlFx(P, 'impact_ring', xs / n, ys / n - P.L.sh * 0.4, { size: Math.max(P.L.sh * 1.4, (x1 - x0) + P.L.colW), dur: 0.5, delay: delay || 0 });
+}
 function bnPlIsMelee(v, sk) {
   var k = sk ? sk.kind : '';
   if (v.troop === '弓' || v.troop === '謀') return false;
   if (!sk) return true;
-  return k === 'atk_single' || k === 'atk_exec' || k === 'atk_multi' || k === 'stun' || k === 'atk_pierce' || k === 'atk_cross';
+  return k === 'atk_single' || k === 'atk_exec' || k === 'atk_multi' || k === 'stun' || k === 'atk_pierce' || k === 'atk_cross' || k === 'atk_snipe' || k === 'atk_back' || k === 'lifesteal' || k === 'execute_chain';   // 近戰兵種的單體類主動 / 追擊:前衝到目標身上打
 }
 function bnPlTone(id) {
   var d = (typeof BN_SKILLS !== 'undefined') ? BN_SKILLS[id] : null, t = d && d.vfx ? BN_TONE[d.vfx] : '';
@@ -342,7 +379,7 @@ function bnPlHitFx(P, vt, e, first) {
     f = e.ty === 'strat' ? { n: 'bolt', s: 0.9 } : (e.crit ? { n: 'slash_x', s: 1 } : { n: 'slash_d', s: 0.85 });
     if (vt.troop === '盾' && !e.crit) f = { n: 'impact_ring', s: 0.7 };
   } else f = bnPlFxFor(sk, !first);
-  bnPlFx(P, f.n, c.x, c.y, { size: s * 0.8 * f.s, dur: 0.38, rot: (vt.id * 0.7) % 3 - 1.2 });
+  if (!(sk && !e.basic && bnPlSigHit(P, vt, sk, c, s, f))) bnPlFx(P, f.n, c.x, c.y, { size: s * 0.8 * f.s, dur: 0.38, rot: (vt.id * 0.7) % 3 - 1.2 });
   if (sk && !e.basic && sk.theme && BN_FX_THEME[sk.theme]) bnPlThemeHit(P, vt, sk);
 }
 // 文化主題:命中特效(五行 = 施放者屬性;其餘依主題)
@@ -356,7 +393,7 @@ function bnPlThemeHit(P, vt, sk) {
 function bnPlThemeCast(P, v, e) {
   var d = (typeof BN_SKILLS !== 'undefined') ? BN_SKILLS[e.id] : null, th = e.th || (d && d.theme) || '', T = BN_FX_THEME[th], c = bnPlCenter(v), L = P.L, g = BN_FX_GHOST[e.id];
   if (g) bnPlFx(P, g, v.px + (v.side === 'A' ? -1 : 1) * L.colW * 0.25, v.py - L.sh * 0.55, { file: g, alt: 'morale_burst', mode: 6, size: L.sh * 1.25, dur: 0.9 });
-  if (T && T.cast) bnPlFx(P, T.cast, c.x, c.y - L.sh * 0.15, { file: T.cast, alt: T.alt, mode: 7, size: L.sh * 1.05, dur: 0.6 });
+  if (T && T.cast) bnPlFx(P, T.cast, c.x, c.y - L.sh * 0.15, { file: T.cast, alt: T.alt, mode: 7, size: L.sh * 1.05, dur: 0.6, delay: BNPL_POSE.delay * bnPlStK(P) });   // 施法姿勢之後才出特效
 }
 function bnPlHeroFx(P, v, id) {
   var file = BN_FX_HERO[id], L = P.L, side, xs = 0, n = 0, k, w;
@@ -402,12 +439,14 @@ function bnPlDmg(P, e) {
       bnPlSfx(P, BN_ATK_SFX[vs.troop] || 'atk_blade');   // 出手音依兵種:盾刀、步槍、騎、弓、謀略
     } else if (vs) {
       delay = BNPL_T.skillHit; wait = BNPL_T.skillWait;
+      if (sk && (sk.kind === 'atk_all' || sk.kind === 'dot_spread')) bnPlAreaFx(P, vt.side, delay);   // 全體:整個敵陣標一圈範圍(稍延遲)
       if (bnPlIsMelee(vs, sk)) bnPlStartLunge(P, vs, vt, 0.5); else if (sk && (sk.kind === 'atk_back' || sk.kind === 'atk_snipe' || vs.troop === '弓' || vs.troop === '謀')) bnPlProj(P, vs, vt, e, delay);
       bnPlSfx(P, BN_ATK_SFX[vs.troop] || 'atk_blade');
     }
   }
   if (e.ctr && vs) { bnPlStartLunge(P, vs, vt, 0.4); }
   vt.hitAt = P.clock + delay;
+  if (P.uh && P.uh.src === e.src && !dot && !self && !basic) bnUltHit(P, vt, e, delay);   // 大招:該受害者的落點演出(峰值 = 命中刻)
   if (delay <= 0) bnPlHit(P, e, vt);
   else bnPlAt(P, delay, function () { if (!P.skipped) { bnPlHit(P, e, vt); if (!dot && !self) bnPlHitFx(P, vt, e, first); } });
   return wait;
@@ -418,7 +457,7 @@ function bnPlStatus(P, e) {
   v.st[e.id] = 1;
   if (e.id === 'shield') return 0;
   if (v.stp) v.stp[e.id] = 1;   // 狀態圖示彈出
-  if (nm && e.id !== 'ccimm') { bnPlStPop(P, v, e.id); bnPlBurst(P, v, good ? 'buff' : 'debuff'); bnPlSfx(P, good ? 'buff' : 'debuff'); }
+  if (nm && e.id !== 'ccimm') { bnPlStPop(P, v, e.id); bnPlBurst(P, v, good ? 'buff' : 'debuff'); bnPlSfx(P, good ? 'buff' : 'debuff', { uid: e.tgt, st: e.id, ult: P.ultOn ? 1 : 0 }); }   // 狀態音:大招期間或該單位第一次被施加此狀態才播(bnsfx.js 閘門)
   return BNPL_T.status;
 }
 // 狀態浮字:「+中毒」「−防禦」…;同一人連續被施加時排隊(間隔 BNST_POP.gap)、水平錯開,小字快速淡出。
@@ -464,10 +503,11 @@ function bnPlCutin(P, e) {
   if (!v) return 0;
   full = !!v.fig && !P.ultSeen[e.u] && !P.ps && P.speed < 4;
   P.ultSeen[e.u] = true;
+  P.noScene = false;
   v.tone = tone;
   dur = (full ? BNPL_T.cutFull : BNPL_T.cutSmall) * bnPlStK(P);   // 倍速時 cut-in 不縮成一閃(3× 實際約 0.7 秒)
   P.cut = { full: full, t: 0, dur: dur, side: v.side, name: v.name, fig: v.fig, skill: d ? d.name : '', tone: tone, uid: e.u, path: v.look.paths[0], big: !!v.fig };
-  if (!full) { bnPlFx(P, 'morale_burst', v.px, v.py - P.L.sh * 0.5, { size: P.L.sh * 1.3, dur: 0.5, delay: 0 }); bnPlLabel(P, v, '大招·' + (d ? d.name : '')); }
+  if (!full) { bnPlFx(P, 'morale_burst', v.px, v.py - P.L.sh * 0.5, { size: P.L.sh * 1.3, dur: 0.5, delay: 0 }); bnPlLabel(P, v, '大招·' + (d ? d.name : ''), bnPlSkShort(e.id)); }
   bnPlHeroFx(P, v, e.id);
   bnPlSfx(P, 'ult');
   bnPlHook(P, 'cut', P.cut);
@@ -481,14 +521,15 @@ function bnPlEvent(P, e) {
       for (i = 0; i < e.units.length; i++) { v = P.vu[e.units[i].id]; if (v) { v.hp = e.units[i].hp; v.mx = e.units[i].mx; v.hpShow = v.hp; } }
       return 0;
     case 'round':
-      P.round = e.n; P.chainN = 0;
+      P.round = e.n; P.chainN = 0; P.ultOn = false;
       P.banner = { text: '第 ' + e.n + ' 回合' + (e.fat ? ' · 疲兵' + e.fat : ''), t: 0, dur: 0.9, big: true };
       if (e.n === 1) bnPlSfx(P, 'drum');
       bnPlHook(P, 'round', e.n);
       bnPlHook(P, 'order', -1, bnPlPredict(P.S, 6));
       return t.round;
     case 'act':
-      P.actor = e.u; P.hitN = 0; P.sk = null; P.chainN = 0;
+      bnPlFeedFlush(P);
+      P.actor = e.u; P.hitN = 0; P.sk = null; P.chainN = 0; P.ultOn = false; P.uh = null;
       bnPlHook(P, 'order', e.u, bnPlPredict(P.S, 5));
       return t.act;
     case 'skip':
@@ -504,23 +545,27 @@ function bnPlEvent(P, e) {
       if (v) { v.cast = 1; bnPlText(P, v, '蓄力…', '#ffd25a', 0.8, 2, 0.8); }
       return t.txt;
     case 'ult':
+      P.ultOn = true;   // 大招期間(到下一次 act 為止)
       return bnPlCutin(P, e);
     case 'skill': {
       v = P.vu[e.u];
       P.sk = { id: e.id, kind: e.kind, cat: e.cat, tags: (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[e.id] && BN_SKILLS[e.id].tags) || [], name: e.name, theme: e.th || (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[e.id] && BN_SKILLS[e.id].theme) || '', u: e.u };
       if (!v) return 0;
       v.cast = 1;
-      if (e.cat !== 'ult') bnPlLabel(P, v, (e.rc ? '再放·' : (e.as !== undefined ? '補刀·' : '')) + (e.name || ''));   // 技能名 → 己方天空角落標籤
-      if (/^(heal|shield|buff|rate_up|cleanse|revive|guard|evade|reorder|taunt)/.test(e.kind || '')) { c = bnPlCenter(v); bnPlFx(P, 'morale_burst', c.x, c.y, { size: L.sh * 0.9, dur: 0.4 }); }
-      bnPlThemeCast(P, v, e);
+      if (e.cat !== 'ult') bnPlLabel(P, v, (e.rc ? '再放·' : (e.as !== undefined ? '補刀·' : '')) + (e.name || ''), bnPlSkShort(e.id));   // 技能名 → 己方天空角落標籤(下附白話效果)
+      bnPlFeedStart(P, e);
+      if (/^(heal|shield|buff|rate_up|cleanse|revive|guard|evade|reorder|taunt)/.test(e.kind || '')) { c = bnPlCenter(v); bnPlFx(P, 'morale_burst', c.x, c.y, { size: L.sh * 0.9, dur: 0.4, delay: BNPL_POSE.delay * bnPlStK(P) }); }
+      bnPlThemeCast(P, v, e); bnPlSigCast(P, v, e);
+      if (e.cat === 'ult') bnPlUltScene(P, v, e.id); else P.uh = null;
       if (P.sk.tags.indexOf('charge') >= 0) { bnPlFx(P, 'dust', v.px, v.py - L.sh * 0.1, { size: L.sh * 0.7, dur: 0.5 }); }
       return e.cat === 'ult' ? 0.12 : t.cast;
     }
-    case 'dmg': return bnPlDmg(P, e);
+    case 'dmg': bnPlFeedHit(P, e, false); return bnPlDmg(P, e);
     case 'evade':
       v = P.vu[e.tgt]; if (v) { bnPlText(P, v, e.miss ? '落空' : '閃避', '#cfe8ff', 0.9, 2, 0.7); v.ev = 1; bnPlSfx(P, 'evade'); }
       return t.status;
     case 'heal': {
+      bnPlFeedHit(P, e, true);
       v = P.vu[e.tgt];
       if (!v) return 0;
       v.hp = e.hp;
@@ -555,6 +600,7 @@ function bnPlEvent(P, e) {
     case 'react':
       v = P.vu[e.tgt]; if (v) bnPlText(P, v, e.name || '連環', '#ffb36a', 0.9, 2, 0.8);
       if (v && e.id === 'rx_invert') { c = bnPlCenter(v); bnPlFx(P, 'stc_yinyang_flip', c.x, c.y, { file: 'fxc_yy_flip', alt: 'morale_burst', mode: 7, size: L.sh * 0.9, dur: 0.55 }); }
+      if (v && BN_FX_RX[e.id]) { c = bnPlCenter(v); bnPlFx(P, BN_FX_RX[e.id].file, c.x, c.y, { file: BN_FX_RX[e.id].file, alt: BN_FX_RX[e.id].alt, mode: 7, size: L.sh * 0.95, dur: 0.5 }); }   // 魔幻反應:冰裂 / 感電(缺圖退回 fx_*)
       return 0.2;
     case 'bond':
       P.banner = { text: e.name || '羈絆', t: 0, dur: 0.8, big: false };
@@ -566,6 +612,7 @@ function bnPlEvent(P, e) {
       P.banner = { text: '連鎖上限', t: 0, dur: 0.8, big: false };
       return 0.2;
     case 'end':
+      bnPlFeedFlush(P);
       P.endEv = e;
       return t.end;
     default: return 0;
@@ -597,6 +644,16 @@ function bnPlPredict(S, n) {
   return out;
 }
 
+// 施法姿勢(v.cast 1 → 0,約 0.32 模擬秒):弓兵後拉弓(身體後仰、往後縮)、謀士舉手 / 舉杖 / 揮扇(上抬拉長 + 左右擺)、近戰蓄勢(下蹲壓扁、前傾);
+// 只動位移 / 縮放 / 傾斜,不需素材;省電模式只留輕微上下位移。範圍不超過半格,不遮血條
+var BNPL_POSE = { delay: 0.15 };   // 戰法特效在姿勢之後出現(模擬秒;倍速再乘 bnPlStK)
+function bnPlPose(P, v) {
+  var c = v.cast, d = v.side === 'A' ? 1 : -1, k = Math.sin(Math.min(1, c) * 3.1416 * 0.5), L = P.L;
+  if (P.ps) { v.dy -= L.sh * 0.03 * k; return; }
+  if (v.troop === '弓') { v.dx -= d * L.colW * 0.07 * k; v.lean -= 0.5 * k; v.sx *= 1 - 0.04 * k; }
+  else if (v.troop === '謀') { v.dy -= L.sh * 0.06 * k; v.sy *= 1 + 0.06 * k; v.lean += Math.sin(c * 12) * 0.25 * k; }
+  else { v.sy *= 1 - 0.07 * k; v.sx *= 1 + 0.05 * k; v.lean += 0.45 * k; v.dx -= d * L.colW * 0.03 * k; }
+}
 // ───────── 推進 ─────────
 function bnPlAnim(P, dt) {
   var id, v, n, f, i, l, tm, k, dv = dt / bnPlStK(P), pt = P.pt;   // dv = 視覺秒(倍速時較慢,短動畫不一閃即逝)
@@ -632,6 +689,7 @@ function bnPlAnim(P, dt) {
         v.lean = n;   // 前傾
       }
     }
+    if (v.cast > 0 && !v.lunge) bnPlPose(P, v);
     if (v.kb > 0) { v.dx += (v.side === 'A' ? -1 : 1) * v.kb * P.L.colW * 0.1; }
     if (v.ev > 0) { v.dx += (v.side === 'A' ? -1 : 1) * Math.sin(v.ev * 3.1416) * P.L.colW * 0.18; v.dy -= Math.sin(v.ev * 3.1416) * P.L.sh * 0.04; }   // 閃避:側身後閃再回位
     if (v.dying >= 0) {
@@ -672,7 +730,7 @@ function bnPlAnim(P, dt) {
 }
 // 推進 dt 秒(實際秒;內部乘倍速)。回是否仍在播放
 function bnPlTick(P, dtReal) {
-  var dt = Math.min(0.1, Math.max(0, dtReal)) * P.speed, guard = 0, e, S = P.S, n0;
+  var dt = Math.min(0.1, Math.max(0, dtReal)) * P.speed * BNPL_PACE, guard = 0, e, S = P.S, n0;
   if (P.over || P.done) return false;
   P.clock += dt;
   bnPlAnim(P, dt);
@@ -697,6 +755,15 @@ function bnPlFinish(P) {
   P.done = true;
   P.result = P.S.result;
   bnPlHook(P, 'end', P.S.result);
+}
+// 點擊跳過大招 cut-in:只收掉演出並把等待歸零,戰鬥事件與戰報照常;回是否有跳過
+function bnPlCutSkip(P) {
+  if (!P || P.done || !P.cut) return false;
+  P.cut = null;
+  P.noScene = true;   // 點擊跳過大招特寫:整段全螢幕演出也不播
+  if (P.wait > 0) P.wait = 0;
+  bnPlHook(P, 'cut', null);
+  return true;
 }
 // 略過:直接算到終局並把視覺調成終局狀態
 function bnPlSkip(P) {
@@ -796,7 +863,7 @@ function bnDrIdle(P, v, t) {
   return v;
 }
 function bnDrUnit(ctx, P, v, t, L, pw) {
-  var h = L.sh, lk = v.look, i, e, src = null, bust = false, w, dir = v.side === 'A' ? 1 : -1, br, tilt, flashSrc = null, pend = false, tinted, g;
+  var h = L.sh, lk = v.look, i, e, src = null, bust = false, w, dir = v.side === 'A' ? 1 : -1, br, tilt, flashSrc = null, pend = false, tinted, g, stc = '', ov;
   if (v.fade <= 0.01) return;
   bnDrIdle(P, v, t);
   br = v.ibr;
@@ -818,11 +885,13 @@ function bnDrUnit(ctx, P, v, t, L, pw) {
   if (src) {
     if (bust) {
       w = h * 0.7; ctx.drawImage(src.img, -w / 2, -h * 0.78, w, w * bnDrIh(src) / bnDrIw(src));
+      if (!P.ps && (stc = bnStTint(v)) && (ov = bnStTinted(src.path, stc, src.img))) ctx.drawImage(ov, -w / 2, -h * 0.78, w, w * bnDrIh(src) / bnDrIw(src));   // 狀態染色(快取)
       if (v.flash > 0) { flashSrc = bnDrWhite(src); if (flashSrc) { ctx.globalAlpha = v.fade * v.flash * 0.85; ctx.drawImage(flashSrc, -w / 2, -h * 0.78, w, w * bnDrIh(src) / bnDrIw(src)); ctx.globalAlpha = v.fade; } }
     } else {
       w = h * bnDrIw(src) / bnDrIh(src);
       tinted = lk.tint ? bnDrTinted(src, lk.tint) : null;
       ctx.drawImage(tinted || src.img, -w / 2, -h, w, h);
+      if (!P.ps && (stc = bnStTint(v)) && (ov = bnStTinted(src.path, stc, src.img))) ctx.drawImage(ov, -w / 2, -h, w, h);   // 狀態染色(快取)
       if (v.flash > 0) { flashSrc = bnDrWhite(src); if (flashSrc) { ctx.globalAlpha = v.fade * v.flash * 0.85; ctx.drawImage(flashSrc, -w / 2, -h, w, h); ctx.globalAlpha = v.fade; } }
     }
   } else if (!pend || true) {
@@ -862,11 +931,201 @@ function bnDrBars(ctx, P, v, t, L) {
   if (keys.length > 3) { ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.round(sz * 0.7) + 'px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('+' + (keys.length - 3), x + 3 * (sz + 1), iy + sz / 2); }
   ctx.fillStyle = '#f0e6cf'; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 3; ctx.font = Math.round(L.fs * 0.82) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.strokeText(v.name, v.px + v.dx, v.py + v.dy + 2); ctx.fillText(v.name, v.px + v.dx, v.py + v.dy + 2);
+  if (v.side === 'A' && P.sb !== false && v.alive) bnDrSkillBar(ctx, P, v, L, v.py + v.dy + 4 + Math.round(L.fs * 0.82));
   ctx.globalAlpha = 1;
+}
+// 戰法條(我方):名字下方最多 3 個戰法短名;被動 / 指揮淡色,主動 / 追擊 / 大招顯示剩餘冷卻(「火 2」= 還要 2 回合),可用就亮
+var BNSB = { n: 3, chars: 2, pas: '#9aa3ad', ready: '#ffe28a', cd: '#8f96a0' };
+function bnDrSkillBarItems(P, v) {
+  var u = P.S && P.S.units[v.id], out = [], list, i, inst, d, cd, nm;
+  if (!u) return out;
+  list = u.act.filter(function (x) { return x.def.cat !== 'ult'; }).concat(u.ult ? [u.ult] : []).concat(u.pas);
+  for (i = 0; i < list.length && out.length < BNSB.n; i++) {
+    inst = list[i]; d = inst.def;
+    nm = Array.from(String(d.name || '')).slice(0, BNSB.chars).join('');
+    if (d.cat === 'passive' || d.cat === 'command') { out.push({ id: d.id, t: nm, cd: 0, pas: 1 }); continue; }
+    cd = inst.cd | 0;
+    if (d.cat === 'ult' && P.S.round < BN_DATA.rate.ultFrom) cd = Math.max(cd, BN_DATA.rate.ultFrom - Math.max(1, P.S.round));
+    out.push({ id: d.id, t: nm + (cd > 0 ? ' ' + cd : ''), cd: cd, pas: 0 });
+  }
+  return out;
+}
+function bnDrSkillBar(ctx, P, v, L, y) {
+  var it = bnDrSkillBarItems(P, v), fz = Math.max(9, Math.round(L.fs * 0.62)), gap = 4, w = 0, maxW = L.colW * 0.92, x, i, ws = [];
+  if (!it.length) return;
+  ctx.font = fz + 'px sans-serif';
+  for (i = 0; i < it.length; i++) { ws.push(ctx.measureText(it[i].t).width); w += ws[i] + (i ? gap : 0); }
+  if (w > maxW) { fz = Math.max(8, Math.floor(fz * maxW / w)); ctx.font = fz + 'px sans-serif'; w = 0; ws = []; for (i = 0; i < it.length; i++) { ws.push(ctx.measureText(it[i].t).width); w += ws[i] + (i ? gap : 0); } }
+  while (w > maxW && it.length > 1) { w -= ws.pop() + gap; it.pop(); }   // 最小字級仍太寬:少顯示一項,避免和隔壁單位疊字
+  x = Math.max(2, Math.min(L.vw - w - 2, v.px + v.dx - w / 2));   // 不出畫面
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(0,0,0,.75)';
+  for (i = 0; i < it.length; i++) {
+    ctx.fillStyle = it[i].pas ? BNSB.pas : (it[i].cd > 0 ? BNSB.cd : BNSB.ready);
+    ctx.strokeText(it[i].t, x, y); ctx.fillText(it[i].t, x, y);
+    x += ws[i] + gap;
+  }
+}
+// ───────── 持續狀態附體(程式繪製,不需素材)─────────
+// 狀態 id(v.st 的 key,來自 status 事件)→ 視覺:fx 附體樣式、col 色、tint 身體染色(有色才染,快取)。
+// 粒子:每幀總數 ≤ BN_ST_BUDGET(40;低階機 20),每單位最多 2 種;省電全關;死亡 / 倒下 / 淡出中不畫(狀態表本身於 unstatus / kill 清除)。
+// 缺對映的 id 直接略過。寒凍(chill)需引擎在 status 事件帶 ice 旗標,目前事件不帶,故此項暫不會出現。
+var BN_ST_VIS = {
+  poison: { fx: 'bubble', col: '#b6f57a', tint: '#7fd04a' },   // 中毒:身體偏綠 + 冒綠泡
+  burn: { fx: 'flame', col: '#ff8a3a' },                        // 燃燒:身上掛火苗
+  chill: { fx: 'ice', col: '#dff4ff', tint: '#8fc8ff' },        // 寒凍:偏藍 + 冰晶(待 ice 旗標)
+  paralyze: { fx: 'arc', col: '#9ad0ff' },                      // 麻痺:電流在身上傳導跑動
+  stun: { fx: 'star', col: '#ffe27a' },                         // 暈眩:頭頂旋轉星星
+  sleep: { fx: 'zzz', col: '#cfd8ff' },                         // 睡眠:頭上飄 Z z z
+  silence: { fx: 'seal', col: '#b8a0ff' },                      // 封技(計窮 / 沉默)
+  ult_lock: { fx: 'seal', col: '#ff7a7a' },                     // 封大招
+  fear: { fx: 'sweat', col: '#9ad0ff' },                        // 恐懼(威懾):冷汗
+  bleed: { fx: 'drip', col: '#e0302a' },                        // 流血:滴血
+  confuse: { fx: 'heart', col: '#ff9ad0' },                     // 擾亂 / 魅惑:粉色繞心
+  timid: { fx: 'rope', col: '#c8b890' },                        // 怯戰 / 定身(bind 別名):腳下束縛圈
+};
+(function () {   // 增益 / 減益圈(金色上升 / 紫色下落)
+  var g = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'ward', 'guard', 'taunt', 'heal_hot', 'undying', 'stealth', 'amp_atk'], b = ['atk_down', 'def_down', 'spd_down', 'rate_down', 'debuff_hit', 'mark', 'wx_mark', 'heal_reduce'], i;
+  for (i = 0; i < g.length; i++) BN_ST_VIS[g[i]] = { fx: 'buff', col: '#ffd75a' };
+  for (i = 0; i < b.length; i++) BN_ST_VIS[b[i]] = { fx: 'debuff', col: '#c890ff' };
+})();
+var BN_ST_CACHE = { n: 0, max: 24, map: {} };   // 身體染色快取(上限 24 張,超過就不染色,不報錯)
+var BN_ST_BUDGET = 40;                          // 附體粒子每幀上限(低階機減半)
+function bnStTint(v) {
+  var k, d;
+  if (!v || !v.alive || v.dying >= 0 || v.fade < 0.5 || !v.st) return '';
+  for (k in v.st) { d = BN_ST_VIS.hasOwnProperty(k) ? BN_ST_VIS[k] : null; if (d && d.tint) return d.tint; }
+  return '';
+}
+function bnStTinted(path, col, img) {
+  var k = path + '|' + col, C = BN_ST_CACHE, w, h, cv, c;
+  if (!col || !img) return null;
+  if (C.map[k]) return C.map[k];
+  if (C.n >= C.max) return null;
+  w = img.naturalWidth || img.width || 64; h = img.naturalHeight || img.height || 64;
+  cv = bnDrNew(w, h); c = cv ? cv.getContext('2d') : null;
+  if (!c) return null;
+  c.drawImage(img, 0, 0);
+  c.globalCompositeOperation = 'source-atop'; c.globalAlpha = 0.35; c.fillStyle = col; c.fillRect(0, 0, w, h);
+  C.map[k] = cv; C.n++;
+  return cv;
+}
+function bnStPart(sb) { if (sb.n >= sb.max) return false; sb.n++; return true; }
+var BN_ST_FX = {
+  bubble: function (ctx, d, x, y0, h, t, v, sb) {
+    var i, p, bx, by, r;
+    for (i = 0; i < 4 && bnStPart(sb); i++) {
+      p = (t * 0.7 + i * 0.25 + v.phase * 0.1) % 1; bx = x + Math.sin(i * 2.3 + v.phase) * h * 0.18; by = y0 - h * 0.15 - p * h * 0.75; r = h * (0.02 + 0.01 * Math.sin(i + t * 4));
+      ctx.globalAlpha = 0.85 * (1 - p); ctx.strokeStyle = d.col; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(bx, by, r, 0, 6.2832); ctx.stroke();
+    }
+  },
+  flame: function (ctx, d, x, y0, h, t, v, sb) {
+    var i, px, base, tip, hw = h * 0.05, fl;
+    ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = d.col; ctx.globalAlpha = 0.8;
+    for (i = 0; i < 4 && bnStPart(sb); i++) {
+      px = x + (i - 1.5) * h * 0.14; base = y0 - h * (0.3 + 0.12 * (i % 2)); fl = Math.sin(t * 14 + i * 1.7); tip = base - h * (0.22 + 0.06 * fl);
+      ctx.beginPath(); ctx.moveTo(px - hw, base); ctx.quadraticCurveTo(px - hw, (base + tip) / 2, px + fl * h * 0.02, tip); ctx.quadraticCurveTo(px + hw, (base + tip) / 2, px + hw, base); ctx.fill();
+    }
+  },
+  ice: function (ctx, d, x, y0, h, t, v, sb) {
+    var i, a, cx, cy, s = h * 0.035;
+    ctx.fillStyle = d.col; ctx.strokeStyle = '#4a7aa8'; ctx.lineWidth = 1; ctx.globalAlpha = 0.9;
+    for (i = 0; i < 3 && bnStPart(sb); i++) {
+      a = i * 2.094 + t * 0.6; cx = x + Math.cos(a) * h * 0.24; cy = y0 - h * 0.5 + Math.sin(a) * h * 0.4;
+      ctx.beginPath(); ctx.moveTo(cx, cy - s); ctx.lineTo(cx + s * 0.6, cy); ctx.lineTo(cx, cy + s); ctx.lineTo(cx - s * 0.6, cy); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+  },
+  arc: function (ctx, d, x, y0, h, t, v, sb) {
+    var seg = Math.floor(t * 10), j, xx, yy;
+    if (!bnStPart(sb)) return;
+    ctx.strokeStyle = d.col; ctx.lineWidth = 1.6; ctx.globalAlpha = 0.55 + 0.45 * (seg % 2); ctx.lineJoin = 'round'; ctx.beginPath();
+    for (j = 0; j < 6; j++) { yy = y0 - h * (0.1 + 0.14 * j); xx = x + (j % 2 ? 1 : -1) * h * 0.12 * Math.sin(seg * 3.1 + j * 2.2); if (j === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy); }
+    ctx.stroke();
+  },
+  star: function (ctx, d, x, y0, h, t, v, sb) {
+    var i, a, sx, sy, s = h * 0.04, hy = y0 - h - 24;
+    ctx.strokeStyle = d.col; ctx.lineWidth = 2; ctx.globalAlpha = 0.95;
+    for (i = 0; i < 3 && bnStPart(sb); i++) {
+      a = t * 4 + i * 2.094; sx = x + Math.cos(a) * h * 0.2; sy = hy + Math.sin(a) * h * 0.05;
+      ctx.beginPath(); ctx.moveTo(sx - s, sy); ctx.lineTo(sx + s, sy); ctx.moveTo(sx, sy - s); ctx.lineTo(sx, sy + s); ctx.stroke();
+    }
+  },
+  zzz: function (ctx, d, x, y0, h, t, v, sb) {
+    var i, p, zx, zy, sz;
+    ctx.fillStyle = d.col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (i = 0; i < 3 && bnStPart(sb); i++) {
+      p = (t * 0.45 + i / 3) % 1; zx = x + h * 0.14 + p * h * 0.12; zy = y0 - h - 26 - p * h * 0.25; sz = Math.max(9, Math.round(h * (0.1 + 0.06 * p)));
+      ctx.globalAlpha = Math.sin(p * 3.1416) * 0.95; ctx.font = 'bold ' + sz + 'px sans-serif'; ctx.fillText('Z', zx, zy);
+    }
+  },
+  seal: function (ctx, d, x, y0, h, t, v, sb) {
+    var cx = x, cy = y0 - h * 0.55, r = h * 0.12;
+    if (!bnStPart(sb)) return;
+    ctx.strokeStyle = d.col; ctx.lineWidth = 1.6; ctx.globalAlpha = 0.6 + 0.4 * Math.sin(t * 5);
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.2832); ctx.moveTo(cx - r * 0.7, cy + r * 0.7); ctx.lineTo(cx + r * 0.7, cy - r * 0.7); ctx.stroke();
+  },
+  sweat: function (ctx, d, x, y0, h, t, v, sb) {
+    var i, p;
+    ctx.fillStyle = d.col;
+    for (i = 0; i < 2 && bnStPart(sb); i++) {
+      p = (t * 0.9 + i * 0.5) % 1; ctx.globalAlpha = 1 - p;
+      ctx.beginPath(); ctx.arc(x + (i ? 1 : -1) * h * 0.18, y0 - h * 0.85 + p * h * 0.25, h * 0.022, 0, 6.2832); ctx.fill();
+    }
+  },
+  drip: function (ctx, d, x, y0, h, t, v, sb) {
+    var i, p;
+    ctx.fillStyle = d.col;
+    for (i = 0; i < 3 && bnStPart(sb); i++) {
+      p = (t * 0.8 + i / 3) % 1; ctx.globalAlpha = 0.9 * (1 - p * 0.5);
+      ctx.beginPath(); ctx.arc(x + (i - 1) * h * 0.12, y0 - h * 0.6 + p * h * 0.5, h * 0.022, 0, 6.2832); ctx.fill();
+    }
+  },
+  heart: function (ctx, d, x, y0, h, t, v, sb) {
+    var i, a;
+    ctx.fillStyle = d.col; ctx.globalAlpha = 0.9;
+    for (i = 0; i < 3 && bnStPart(sb); i++) {
+      a = t * 2 + i * 2.094; ctx.beginPath(); ctx.arc(x + Math.cos(a) * h * 0.26, y0 - h * 0.62 + Math.sin(a) * h * 0.08, h * 0.03, 0, 6.2832); ctx.fill();
+    }
+  },
+  rope: function (ctx, d, x, y0, h, t, v, sb) {
+    if (!bnStPart(sb)) return;
+    ctx.strokeStyle = d.col; ctx.lineWidth = 2; ctx.globalAlpha = 0.85;
+    if (ctx.setLineDash) ctx.setLineDash([4, 3]);
+    ctx.beginPath(); if (ctx.ellipse) ctx.ellipse(x, y0 - 2, h * 0.22, h * 0.05, 0, 0, 6.2832); else ctx.arc(x, y0 - 2, h * 0.2, 0, 6.2832); ctx.stroke();
+    if (ctx.setLineDash) ctx.setLineDash([]);
+  },
+  buff: function (ctx, d, x, y0, h, t, v, sb) { BN_ST_FX.motes(ctx, d, x, y0, h, t, sb, 1); },
+  debuff: function (ctx, d, x, y0, h, t, v, sb) { BN_ST_FX.motes(ctx, d, x, y0, h, t, sb, -1); },
+  motes: function (ctx, d, x, y0, h, t, sb, dir) {   // 增益上升(dir 1)/ 減益下落(dir -1)的小點
+    var i, p, by;
+    ctx.fillStyle = d.col; ctx.globalCompositeOperation = 'lighter';
+    for (i = 0; i < 3 && bnStPart(sb); i++) {
+      p = (t * 0.6 + i / 3) % 1; ctx.globalAlpha = 0.9 * (1 - p);
+      by = dir > 0 ? y0 - h * 0.1 - p * h * 0.7 : y0 - h * 0.9 + p * h * 0.7;
+      ctx.beginPath(); ctx.arc(x + (i - 1) * h * 0.16, by, h * 0.022, 0, 6.2832); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+};
+// 單位附體(bnDrFrame 於單位之後、非 under 特效之前呼叫):只畫存活、未倒下、未淡出的單位;省電不畫
+function bnStDraw(ctx, P, v, t, L, sb) {
+  var keys, i, d, n = 0, h, x, y0;
+  if (P.ps || !v || !L || !sb || !v.alive || v.dying >= 0 || v.fade < 0.5 || !v.st) return;
+  keys = Object.keys(v.st); x = v.px + v.dx; y0 = v.py + v.dy; h = L.sh;
+  ctx.save();
+  for (i = 0; i < keys.length && n < 2 && sb.n < sb.max; i++) {
+    d = BN_ST_VIS.hasOwnProperty(keys[i]) ? BN_ST_VIS[keys[i]] : null;
+    if (!d || !BN_ST_FX[d.fx]) continue;
+    BN_ST_FX[d.fx](ctx, d, x, y0, h, t, v, sb);
+    n++;
+  }
+  ctx.restore();
 }
 function bnDrFx(ctx, P, f, L) {
   var k = f.t / f.dur, a, x, y, s, e, g;
   if (f.t < 0) return;
+  if (f.mode === 14) { bnSigPillarDraw(ctx, f, k, L); return; }   // 旋轉柱狀(五行色系)
+  if (f.mode >= 11) { bnScDraw(ctx, P, f, k, L); return; }   // 大招演出實例
+  if (f.mode >= 8) { bnSigDraw(ctx, f, k, L); return; }   // 名人招牌:軌跡 / 落款 / 閃屏(bnfx 配方)
   a = k < 0.15 ? k / 0.15 : 1 - (k - 0.15) / 0.85;
   if (f.mode === 1) {   // 箭
     x = f.x + (f.x2 - f.x) * k; y = f.y + (f.y2 - f.y) * k - Math.sin(k * 3.14) * L.sh * 0.15;
@@ -883,7 +1142,7 @@ function bnDrFx(ctx, P, f, L) {
     return;
   }
   if (f.file) {   // 第二批特效(透明底,一般混合;6 = 虛影半透明)。缺圖 / 載入中 → 退回原 fx_* 特效
-    e = bnDrImg('assets/bnfx/' + f.file + '.webp');
+    e = bnSigPick(f, bnDrImg('assets/bnfx/' + f.file + '.webp'), 'assets/bnfx/' + f.file + '.webp', false);
     if (e.ok) {
       s = f.size * (f.mode === 6 ? 1 : 0.85 + 0.25 * k);
       ctx.globalAlpha = Math.max(0, Math.min(1, a)) * (f.mode === 6 ? 0.55 : 1);
@@ -894,7 +1153,7 @@ function bnDrFx(ctx, P, f, L) {
     if (!f.alt) return;
     f.name = f.alt;
   }
-  e = bnDrImg('assets/bnfx/fx_' + f.name + '.webp');
+  e = bnSigPick(f, bnDrImg('assets/bnfx/fx_' + f.name + '.webp'), 'assets/bnfx/fx_' + f.name + '.webp', true);
   s = f.size * (0.7 + 0.5 * k);
   ctx.globalCompositeOperation = 'lighter';
   ctx.globalAlpha = Math.max(0, Math.min(1, a));
@@ -958,11 +1217,16 @@ function bnDrLabels(ctx, P, L) {
     ctx.textAlign = sd === 'A' ? 'left' : 'right';
     ctx.strokeText(c.text, sd === 'A' ? R.x + h * 0.6 + slide : R.x + R.w - h * 0.6 + slide, R.y + R.h / 2);
     ctx.fillText(c.text, sd === 'A' ? R.x + h * 0.6 + slide : R.x + R.w - h * 0.6 + slide, R.y + R.h / 2);
+    if (c.sub) {   // 白話效果(≤ 16 字):標籤下方一行小字
+      ctx.font = Math.max(10, Math.round(h * 0.44)) + 'px sans-serif'; ctx.textBaseline = 'top'; ctx.lineWidth = 3; ctx.fillStyle = '#e8f0ff';
+      ctx.strokeText(c.sub, sd === 'A' ? R.x + h * 0.6 + slide : R.x + R.w - h * 0.6 + slide, R.y + R.h + 1);
+      ctx.fillText(c.sub, sd === 'A' ? R.x + h * 0.6 + slide : R.x + R.w - h * 0.6 + slide, R.y + R.h + 1);
+    }
     ctx.restore();
   }
 }
 function bnDrFrame(ctx, P, dpr, nowSec) {
-  var L = P.L, S0 = (typeof performance !== 'undefined') ? performance.now() : 0, list = [], id, i, v, n, bg, sx = 0, sy = 0, b, by, fz, ps = P.ps, cut = P.cut;
+  var L = P.L, S0 = (typeof performance !== 'undefined') ? performance.now() : 0, list = [], id, i, v, n, bg, sx = 0, sy = 0, b, by, fz, ps = P.ps, cut = P.cut, sb;
   bg = bnDrBgFor(L, dpr, ps);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (bg) ctx.drawImage(bg, 0, 0); else { ctx.fillStyle = '#3a4228'; ctx.fillRect(0, 0, L.vw * dpr, L.vh * dpr); }
@@ -970,9 +1234,12 @@ function bnDrFrame(ctx, P, dpr, nowSec) {
   ctx.setTransform(dpr, 0, 0, dpr, sx * dpr, sy * dpr);
   for (id in P.vu) list.push(P.vu[id]);
   list.sort(function (a, c) { return (a.py + a.dy) - (c.py + c.dy); });
-  for (i = 0; i < P.fx.length; i++) if (P.fx[i].on && P.fx[i].mode === 6) bnDrFx(ctx, P, P.fx[i], L);   // 輔助虛影畫在人物後面
+  for (i = 0; i < P.fx.length; i++) if (P.fx[i].on && (P.fx[i].mode === 6 || P.fx[i].under)) bnDrFx(ctx, P, P.fx[i], L);   // 輔助虛影畫在人物後面
   for (i = 0; i < list.length; i++) bnDrUnit(ctx, P, list[i], nowSec, L);
-  for (i = 0; i < P.fx.length; i++) if (P.fx[i].on && P.fx[i].mode !== 6) bnDrFx(ctx, P, P.fx[i], L);
+  sb = { n: 0, max: BNDR.low ? BN_ST_BUDGET / 2 : BN_ST_BUDGET }; BNDR.stN = 0;
+  if (!ps) for (i = 0; i < list.length; i++) bnStDraw(ctx, P, list[i], nowSec, L, sb);   // 狀態附體(粒子上限 40 / 低階 20;省電關)
+  BNDR.stN = sb.n;
+  for (i = 0; i < P.fx.length; i++) if (P.fx[i].on && P.fx[i].mode !== 6 && !P.fx[i].under) bnDrFx(ctx, P, P.fx[i], L);
   bnDrPts(ctx, P);
   for (i = 0; i < list.length; i++) bnDrBars(ctx, P, list[i], nowSec, L);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
@@ -1004,4 +1271,550 @@ function bnDrFrame(ctx, P, dpr, nowSec) {
 // 低階裝置提示(記憶體 ≤ 2 GB 或 ≤ 2 核):一開始就降級
 try { if (typeof navigator !== 'undefined' && navigator && ((navigator.deviceMemory && navigator.deviceMemory <= 2) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2))) BNDR.low = true; } catch (e) { /* 略過 */ }
 
+// ───────── 名人招牌戰法特效(程式組合,不新增素材)─────────
+// 配方 BN_FX_SIGNATURE[戰法 id]:base 命中基礎特效(fx_* 黑底加色 / fxc_* 等透明底;缺圖退回 bnPlFxFor 原特效)、tint 染色(快取,不每幀著色)、
+// trail 程式繪製軌跡(arc 刀光月牙 / thrust 槍突刺 / cross 劍氣十字 / sweep 戟橫掃 / arrows 箭雨 / charge 騎兵塵土 / bolt 雷電分叉)、col 軌跡色、
+// flash [色, 強度] 全畫面閃屏、stamp 書法落款(名人名,紅印)。
+// 掛接:skill 事件 → bnPlSigCast(軌跡 / 落款 / 閃屏,施法姿勢之後);hit 事件 → bnPlSigHit(基礎特效換成染色版)。
+// 省電:只留命中基礎特效(無軌跡 / 落款 / 閃屏);低階機與減少動態偏好:關閉閃屏與落款。1× / 2× 時長沿用 bnPlFx 的 bnPlStK 縮放。
+var BN_FX_SIGNATURE = {
+  s_caocao_1: { base: 'fx_morale_burst', tint: '#ffd25a', trail: 'sweep', col: '#ffe9a8', flash: ['#ffd25a', 0.1], stamp: '曹操' },
+  s_liubei_2: { base: 'fx_shield_dome', tint: '#7fd39a', trail: '', col: '', flash: null, stamp: '劉備' },
+  s_sunquan_1: { base: 'fx_morale_burst', tint: '#9fe0c0', trail: '', col: '', flash: ['#ffe9a8', 0.08], stamp: '孫權' },
+  s_guanyu_2: { base: 'fx_slash_x', tint: '#7ad7ff', trail: 'arc', col: '#bfefff', flash: null, stamp: '關羽' },
+  s_zhugeliang_1: { base: 'fx_fire_l', tint: '', trail: 'cross', col: '#ff9a4a', flash: ['#ff7a30', 0.12], stamp: '諸葛亮' },
+  s_zhouyu_1: { base: 'fx_fire_wall', tint: '', trail: 'sweep', col: '#ff7a30', flash: ['#ff5a20', 0.12], stamp: '周瑜' },
+  s_lvbu_1: { base: 'fx_slash_h', tint: '#ffe0c0', trail: 'sweep', col: '#ffe9d0', flash: null, stamp: '呂布' },
+  s_simayi_1: { base: 'fxc_mirage', tint: '#b9a8d8', trail: '', col: '', flash: null, stamp: '司馬懿' },
+  s_zhangfei_3: { base: 'fx_impact_ring', tint: '', trail: 'thrust', col: '#ffd08a', flash: ['#ffffff', 0.08], stamp: '張飛' },
+  s_zhaoyun_1: { base: 'fx_shield_dome', tint: '#8ec7ff', trail: 'thrust', col: '#cfe8ff', flash: null, stamp: '趙雲' },
+  s_zhangliao_2: { base: 'fx_slash_h', tint: '#9fd0ff', trail: 'charge', col: '#d8c8a0', flash: null, stamp: '張遼' },
+  s_xuchu_2: { base: 'fx_slash_d', tint: '#ff8a6a', trail: 'arc', col: '#ffb070', flash: null, stamp: '許褚' },
+  s_dianwei_2: { base: 'fx_slash_d', tint: '#e0e0e0', trail: 'sweep', col: '#e8e8f0', flash: null, stamp: '典韋' },
+  s_xiahoudun_3: { base: 'fx_slash_x', tint: '#ff6a3a', trail: 'arc', col: '#ff8a5a', flash: ['#ff4a20', 0.1], stamp: '夏侯惇' },
+  s_machao_1: { base: 'fx_dust', tint: '#c8e0ff', trail: 'charge', col: '#e0d0b0', flash: null, stamp: '馬超' },
+  s_huangzhong_1: { base: 'fx_spark', tint: '#ffe9a8', trail: 'arrows', col: '#ffe9a8', flash: null, stamp: '黃忠' },
+  s_weiyan_1: { base: 'fx_slash_x', tint: '#7aa0c8', trail: 'arc', col: '#9ec8ff', flash: null, stamp: '魏延' },
+  s_luxun_1: { base: 'fx_fire_s', tint: '', trail: 'cross', col: '#ff9a4a', flash: ['#ff7a30', 0.1], stamp: '陸遜' },
+  s_ganning_1: { base: 'fx_slash_d', tint: '#3ac0a0', trail: 'arc', col: '#7ff0d0', flash: null, stamp: '甘寧' },
+  s_taishici_2: { base: 'fx_slash_h', tint: '', trail: 'thrust', col: '#ffe9a8', flash: null, stamp: '太史慈' },
+  s_sunce_1: { base: 'fx_impact_ring', tint: '#ff8a6a', trail: 'thrust', col: '#ffb08a', flash: null, stamp: '孫策' },
+  s_guojia_2: { base: 'fxc_ink_splash', tint: '#b9a8d8', trail: 'cross', col: '#d8c8ff', flash: null, stamp: '郭嘉' },
+  s_xunyu_1: { base: 'fx_morale_burst', tint: '#ffe9a8', trail: '', col: '', flash: null, stamp: '荀彧' },
+  s_diaochan_1: { base: 'fxc_mirage', tint: '#ff9ad0', trail: '', col: '', flash: null, stamp: '貂蟬' },
+  s_dongzhuo_1: { base: 'fx_spark', tint: '#ff9a6a', trail: 'arrows', col: '#ff9a6a', flash: ['#ff4a20', 0.08], stamp: '董卓' },
+  s_yuanshao_2: { base: 'fxc_banner', tint: '', trail: '', col: '', flash: null, stamp: '袁紹' },
+  s_zhangjiao_1: { base: 'fxc_talisman', tint: '#7af09a', trail: '', col: '', flash: null, stamp: '張角' },
+  s_huatuo_1: { base: 'fxc_herb_leaves', tint: '', trail: '', col: '', flash: null, stamp: '華佗' },
+  s_caiyan_1: { base: 'fxc_drum_wave', tint: '#ffb0c8', trail: '', col: '', flash: null, stamp: '蔡文姬' },
+  s_caozhi_1: { base: 'fxc_ink_brush', tint: '#b9a8d8', trail: 'sweep', col: '#d8c8ff', flash: null, stamp: '曹植' },
+  s_yangxiu_2: { base: 'fxc_ink_scroll', tint: '', trail: 'arc', col: '#e8e0ff', flash: null, stamp: '楊修' },
+  s_huangyueying_1: { base: 'fxc_crossbow_volley', tint: '', trail: 'arrows', col: '#ffe0a0', flash: null, stamp: '黃月英' },
+  s_sunshangxiang_2: { base: 'fx_slash_h', tint: '#ffc0d8', trail: 'sweep', col: '#ffd0e0', flash: null, stamp: '孫尚香' },
+  s_daqiao_1: { base: 'fx_heal_motes', tint: '#7ad7ff', trail: '', col: '', flash: null, stamp: '大喬' },
+  s_xiaoqiao_2: { base: 'fxc_mirage', tint: '#ffd0e8', trail: '', col: '', flash: null, stamp: '小喬' },
+  s_nanhua_2: { base: 'fxc_herb_smoke', tint: '', trail: '', col: '', flash: null, stamp: '南華' },
+  s_zuoci_1: { base: 'fxc_yy_taiji', tint: '#c78bff', trail: '', col: '', flash: null, stamp: '左慈' },
+  s_yuji_1: { base: 'fxc_talisman', tint: '#7af09a', trail: '', col: '', flash: null, stamp: '于吉' },
+  s_panfeng_2: { base: 'fx_slash_d', tint: '#ffb070', trail: 'sweep', col: '#ffd0a0', flash: null, stamp: '潘鳳' },
+  s_mateng_1: { base: 'fx_dust', tint: '#d8c8a0', trail: 'charge', col: '#e0c890', flash: null, stamp: '馬騰' },
+  s_gongsunzan_1: { base: 'fx_slash_h', tint: '#cfe8ff', trail: 'thrust', col: '#e8f4ff', flash: null, stamp: '公孫瓚' },
+  s_elf_qinglan_2: { base: 'fx_spark', tint: '#7af09a', trail: 'arrows', col: '#9ff0b0', flash: null, stamp: '青嵐' },
+  s_elf_shuanghua_1: { base: 'fx_impact_ring', tint: '#9fe0ff', trail: 'thrust', col: '#cfefff', flash: null, stamp: '霜華' },
+  s_elf_yueyao_1: { base: 'fx_heal_motes', tint: '#e8f4ff', trail: '', col: '', flash: null, stamp: '月瑤' },
+  s_elf_xingchen_1: { base: 'fx_spark', tint: '#c8a8ff', trail: 'cross', col: '#d8c0ff', flash: ['#b090ff', 0.1], stamp: '星沉' },
+  s_dw_duanlei_1: { base: 'fxc_thunder_strike', tint: '', trail: 'bolt', col: '#8ab8ff', flash: ['#9ac0ff', 0.12], stamp: '鍛雷' },
+  s_dw_lielu_1: { base: 'fx_fire_s', tint: '#ff8a3a', trail: 'cross', col: '#ff7a30', flash: ['#ff6020', 0.1], stamp: '烈爐' },
+  s_dw_heiyao_1: { base: 'fxc_crossbow_volley', tint: '#c8c8d8', trail: 'arrows', col: '#e0e0e8', flash: null, stamp: '黑曜' },
+  s_dw_panshan_1: { base: 'fx_shield_dome', tint: '#f0c060', trail: '', col: '', flash: null, stamp: '磐山' },
+  s_kd_zhaoming_1: { base: 'fx_slash_h', tint: '#ffd25a', trail: 'charge', col: '#ffe9a8', flash: null, stamp: '昭明' },
+  s_kd_lingfeng_1: { base: 'fx_slash_h', tint: '#fff0c0', trail: 'thrust', col: '#ffffff', flash: ['#ffffff', 0.06], stamp: '凌鋒' },
+  s_kd_xuandeng_1: { base: 'fxc_thunder_chain', tint: '', trail: 'bolt', col: '#9ad0ff', flash: ['#9ad0ff', 0.1], stamp: '玄燈' }
+};
+var BN_FX_SIG_MAX = 40;   // 染色 sprite 快取上限(超過就用原圖,不報錯)
+var BN_FX_SIG_CACHE = { n: 0, map: {} };
+function bnSigOf(id) { return BN_FX_SIGNATURE.hasOwnProperty(id) ? BN_FX_SIGNATURE[id] : null; }
+// 減少動態偏好(系統設定);取不到 matchMedia 時視為未開
+function bnSigReduce() {
+  try { return typeof matchMedia === 'function' && !!matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
+}
+// 各類特效是否關閉:軌跡只在省電關;落款省電 / 低階機關;閃屏省電 / 低階機 / 減少動態皆關
+function bnSigQuiet(P, what) {
+  if (what === 'trail') return !!P.ps;
+  if (what === 'stamp') return !!(P.ps || BNDR.low);
+  return !!(P.ps || BNDR.low || bnSigReduce());
+}
+// 染色 sprite(快取鍵 key|col,上限 BN_FX_SIG_MAX 張)。mul:黑底 fx_* 用正片疊底(黑仍黑、亮部上色);透明底用 source-atop 半透明上色
+function bnSigTint(key, col, img, mul) {
+  var k = key + '|' + col, C = BN_FX_SIG_CACHE, w, h, cv, c;
+  if (!col || !img) return null;
+  if (C.map[k]) return C.map[k];
+  if (C.n >= BN_FX_SIG_MAX) return null;
+  w = img.naturalWidth || img.width || 64; h = img.naturalHeight || img.height || 64;
+  cv = bnDrNew(w, h);
+  c = cv ? cv.getContext('2d') : null;
+  if (!c) return null;
+  c.drawImage(img, 0, 0);
+  c.globalCompositeOperation = mul ? 'multiply' : 'source-atop'; c.globalAlpha = mul ? 1 : 0.55;
+  c.fillStyle = col; c.fillRect(0, 0, w, h);
+  C.map[k] = cv; C.n++;
+  return cv;
+}
+// bnDrFx 取圖時的選擇:有染色且圖已載入 → 染色版(同樣 ok = true);否則原樣回傳
+function bnSigPick(f, e, key, mul) {
+  var t;
+  if (!f.tint || !e || !e.ok) return e;
+  t = bnSigTint(key, f.tint, e.img, mul);
+  return t ? { ok: true, img: t, path: key } : e;
+}
+// 離 caster 最近的存活敵人中心(找不到就往前方一段)
+function bnSigAim(P, v) {
+  var best = null, bd = 1e18, id, w, dd, d = v.side === 'A' ? 1 : -1;
+  for (id in P.vu) {
+    w = P.vu[id];
+    if (w.side === v.side || !w.alive) continue;
+    dd = Math.abs(w.px - v.px) + Math.abs(w.py - v.py);
+    if (dd < bd) { bd = dd; best = w; }
+  }
+  if (!best) return { x: v.px + d * P.L.colW * 1.5, y: v.py - P.L.sh * 0.5 };
+  return bnPlCenter(best);
+}
+// skill 事件:施法者身上的軌跡(朝最近敵人)、落款、閃屏;皆在施法姿勢之後(BNPL_POSE.delay)
+function bnPlSigCast(P, v, e) {
+  var S = bnSigOf(e.id), L = P.L, d, c, tg, dl, fl;
+  if (!S || !v || !L) return;
+  d = v.side === 'A' ? 1 : -1; c = bnPlCenter(v); tg = bnSigAim(P, v); dl = BNPL_POSE.delay * bnPlStK(P);
+  if (S.trail && !bnSigQuiet(P, 'trail')) bnPlFx(P, S.trail, c.x + d * L.colW * 0.2, c.y, { mode: 8, x2: tg.x, y2: tg.y, size: L.sh * 0.75, col: S.col || '#ffffff', dur: 0.42, delay: dl });
+  if (S.stamp && !bnSigQuiet(P, 'stamp')) bnPlFx(P, S.stamp, c.x + d * L.colW * 0.85, c.y - L.sh * 0.42, { mode: 9, size: L.fs * 2.2, col: '#c0392b', dur: 0.9, delay: dl });
+  fl = S.flash;
+  if (fl && !bnSigQuiet(P, 'flash')) bnPlFx(P, 'flash', 0, 0, { mode: 10, size: fl[1], col: fl[0], dur: 0.32, delay: dl });
+}
+// hit 事件:配方有 base 時以染色基礎特效取代原 bnPlFxFor 特效(回 true);沒有或缺資料回 false → 走原流程
+function bnPlSigHit(P, vt, sk, c, s, f) {
+  var S = bnSigOf(sk.id), base, mul;
+  if (!S || !S.base || !f) return false;
+  base = S.base; mul = base.indexOf('fx_') === 0;
+  bnPlFx(P, mul ? base.slice(3) : f.n, c.x, c.y, { file: mul ? '' : base, alt: f.n, tint: S.tint || '', mode: mul ? 0 : 7, size: s * 0.8 * f.s * 1.15, dur: 0.38, rot: (vt.id * 0.7) % 3 - 1.2 });
+  return true;
+}
+// 軌跡(mode 8):f.name = 種類、f.x/y 起點、f.x2/y2 目標、f.size 大小、f.col 色;k 為進度 0..1
+function bnSigTrail(ctx, f, k, a) {
+  var t = f.name, x = f.x, y = f.y, R = f.size, dx = f.x2 - x, dy = f.y2 - y, len = Math.sqrt(dx * dx + dy * dy) || 1, ux = dx / len, uy = dy / len, base = Math.atan2(uy, ux), i, sw, cx, cy, hx, hy, sx, sy, ex, ey, q, px, py, j, mx, my;
+  if (a <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(1, a); ctx.strokeStyle = f.col; ctx.fillStyle = f.col; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (t === 'arc') {   // 刀光月牙:弧線沿揮砍方向展開,外粗內細兩層
+    sw = Math.min(1, k * 1.6) * 1.5; cx = x + ux * R * 0.3; cy = y + uy * R * 0.3;
+    ctx.lineWidth = Math.max(2, R * 0.14) * (1 - k * 0.5); ctx.beginPath(); ctx.arc(cx, cy, R * 0.7, base - 0.75, base - 0.75 + sw); ctx.stroke();
+    ctx.globalAlpha *= 0.45; ctx.lineWidth *= 2.6; ctx.stroke();
+  } else if (t === 'thrust') {   // 槍突刺:一道直線刺向目標,頭端亮、尾端淡
+    hx = x + dx * Math.min(1, k * 1.6); hy = y + dy * Math.min(1, k * 1.6); sx = hx - ux * R * 0.8; sy = hy - uy * R * 0.8;
+    ctx.lineWidth = Math.max(2, R * 0.05); ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(hx, hy); ctx.stroke();
+    ctx.globalAlpha *= 0.4; ctx.lineWidth *= 3; ctx.stroke();
+  } else if (t === 'cross') {   // 劍氣十字:由中心擴張
+    sw = R * (0.4 + 0.6 * Math.min(1, k * 2)); ctx.lineWidth = Math.max(2, R * 0.06); ctx.beginPath();
+    ctx.moveTo(x - sw, y); ctx.lineTo(x + sw, y); ctx.moveTo(x, y - sw * 0.7); ctx.lineTo(x, y + sw * 0.7); ctx.stroke();
+  } else if (t === 'sweep') {   // 戟橫掃大弧
+    sw = Math.min(1, k * 1.4) * 2.4; ctx.lineWidth = Math.max(3, R * 0.1); ctx.beginPath(); ctx.arc(x, y, R * 0.9, base - 1.2, base - 1.2 + sw); ctx.stroke();
+  } else if (t === 'arrows') {   // 箭雨斜線:四支依序落在目標上方
+    for (i = 0; i < 4; i++) {
+      q = Math.max(0, Math.min(1, (k - i * 0.12) * 1.6)); if (q <= 0) continue;
+      ex = f.x2 + (i - 1.5) * R * 0.3; ey = f.y2; sx = ex - R * 0.4; sy = ey - R * 1.1;
+      hx = sx + (ex - sx) * q; hy = sy + (ey - sy) * q;
+      ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(hx - (ex - sx) * 0.25, hy - (ey - sy) * 0.25); ctx.lineTo(hx, hy); ctx.stroke();
+    }
+  } else if (t === 'charge') {   // 騎兵衝撞:沿地面的塵土帶(一般混合)
+    ctx.globalCompositeOperation = 'source-over';
+    for (i = 0; i < 6; i++) {
+      px = x + ux * R * (0.15 + i * 0.22) * Math.min(1, k * 1.3); py = y + R * 0.2 + Math.sin(i * 2.3) * R * 0.05;
+      ctx.globalAlpha = Math.min(1, a) * 0.35; ctx.beginPath(); ctx.arc(px, py, R * (0.09 + 0.03 * i) * (0.6 + k), 0, 6.2832); ctx.fill();
+    }
+  } else if (t === 'bolt') {   // 雷電分叉:鋸齒主線(每 1/6 秒換形)+ 一道分叉
+    j = Math.floor(k * 6); ctx.lineWidth = Math.max(2, R * 0.04); ctx.beginPath(); ctx.moveTo(x, y);
+    for (i = 1; i <= 6; i++) { sw = Math.sin(i * 12.9898 + j * 78.233) * R * 0.22; ctx.lineTo(x + dx * i / 6 - uy * sw, y + dy * i / 6 + ux * sw); }
+    ctx.stroke();
+    mx = x + dx * 0.5; my = y + dy * 0.5; ctx.lineWidth = Math.max(1, R * 0.02); ctx.beginPath(); ctx.moveTo(mx, my);
+    ctx.lineTo(mx - uy * R * 0.3 + ux * R * 0.1, my + ux * R * 0.3 + uy * R * 0.1); ctx.stroke();
+  }
+  ctx.restore();
+}
+// 落款(mode 9):紅色方印 + 名字(書法字體);進場縮放、結尾淡出。f.name = 名字、f.size = 印大小
+function bnSigStamp(ctx, f, k) {
+  var a = k < 0.12 ? k / 0.12 : (k > 0.7 ? Math.max(0, 1 - (k - 0.7) / 0.3) : 1), s = f.size, sc = 0.6 + 0.4 * Math.min(1, k / 0.12);
+  if (!f.name || a <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a * 0.92; ctx.translate(f.x, f.y); ctx.scale(sc, sc);
+  ctx.fillStyle = f.col; ctx.fillRect(-s / 2, -s / 2, s, s);
+  ctx.strokeStyle = 'rgba(255,236,214,.85)'; ctx.lineWidth = Math.max(1, s * 0.05); ctx.strokeRect(-s * 0.42, -s * 0.42, s * 0.84, s * 0.84);
+  ctx.fillStyle = '#fff6e6'; ctx.font = 'bold ' + Math.max(8, Math.round(s * (f.name.length > 2 ? 0.24 : 0.36))) + 'px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(f.name, 0, s * 0.03);
+  ctx.restore();
+}
+// 閃屏(mode 10):f.col 色、f.size 強度(上限 0.2);快進慢出
+function bnSigFlash(ctx, f, k, L) {
+  var a = k < 0.3 ? k / 0.3 : Math.max(0, 1 - (k - 0.3) / 0.7);
+  ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = Math.min(0.2, f.size) * Math.min(1, a); ctx.fillStyle = f.col; ctx.fillRect(0, 0, L.vw, L.vh); ctx.restore();
+}
+function bnSigDraw(ctx, f, k, L) {
+  var a = k < 0.2 ? k / 0.2 : Math.max(0, 1 - (k - 0.2) / 0.8);
+  if (f.mode === 8) bnSigTrail(ctx, f, k, a);
+  else if (f.mode === 9) bnSigStamp(ctx, f, k);
+  else if (f.mode === 10) bnSigFlash(ctx, f, k, L);
+}
+// ───────── 旋轉柱狀(bnSigPillar,mode 14)五行色系:火 / 雷 / 水 / 風 / 幽 ─────────
+// 柱身預烘一張(每系一張,共 5 張,不每幀著色);繪製只做水平縮放(旋轉投影 |cos|)與加色混合。
+// H = 峰值刻(模擬秒,自呼叫起算)= 受害者 hitAt,與傷害數字 / 閃白 / 血條下降同一刻;峰值前升起、峰值後淡出。
+// o:{ el 色系, big 放大 1.25 倍(暴擊或高傷害), box {w,h} 受害者外框(峰值前後短暫標示), ph 旋轉相位, quiet 減少動態(不轉、無外框) }
+var BN_PILLAR_PAL = { '火': { core: '#fff0b0', edge: '#ff5a18', key: 'fire' }, '雷': { core: '#f4faff', edge: '#5a9cff', key: 'thunder' }, '水': { core: '#e2fbff', edge: '#2a9ad8', key: 'water' }, '風': { core: '#ecfff6', edge: '#4fd8a0', key: 'wind' }, '幽': { core: '#e6dcff', edge: '#5a2a9a', key: 'dark' } };
+var BN_PILLAR_SPR = {};   // 色系 key → 預烘柱身(固定 5 張)
+function bnPillarSpr(el) {
+  var pal = BN_PILLAR_PAL.hasOwnProperty(el) ? BN_PILLAR_PAL[el] : BN_PILLAR_PAL['火'], k = pal.key, cv, c, g, y;
+  if (BN_PILLAR_SPR[k]) return BN_PILLAR_SPR[k];
+  cv = bnDrNew(32, 128); c = cv ? cv.getContext('2d') : null;
+  if (!c) return null;
+  if (c.createLinearGradient) { g = c.createLinearGradient(0, 0, 32, 0); g.addColorStop(0, pal.edge); g.addColorStop(0.5, pal.core); g.addColorStop(1, pal.edge); c.fillStyle = g; } else c.fillStyle = pal.edge;
+  c.fillRect(0, 0, 32, 128);
+  c.fillStyle = 'rgba(255,255,255,0.35)';
+  for (y = 0; y < 128; y += 16) c.fillRect(0, y, 32, 5);   // 紋路:每 16px 一條亮帶,隨旋轉投影即成螺旋感
+  BN_PILLAR_SPR[k] = cv;
+  return cv;
+}
+// 施放一根柱:c = 腳底座標,H = 峰值刻(模擬秒)。時長 1.0 由 bnPlFx 依倍速縮放;峰值刻 pkT = min(0.25 × 時長, H),故 delay = H − pkT ≥ 0
+function bnSigPillar(P, c, H, o) {
+  var L = P.L, o2 = o || {}, durS, pkT;
+  if (!c || !L) return null;
+  H = Math.max(0, H || 0);
+  durS = 1.0 * bnPlStK(P);
+  pkT = Math.min(0.25 * durS, H);
+  return bnPlFx(P, 'pillar', c.x, c.y, { mode: 14, size: L.sh * (o2.big ? 1.25 : 1), dur: 1.0, delay: H - pkT,
+    ex: { el: o2.el || '火', pkT: pkT, ph: o2.ph || 0, box: o2.box || null, quiet: !!o2.quiet } });
+}
+// 柱身繪製(mode 14);f.t 與 f.dur 同為模擬秒。f.ex.pkT = 峰值刻
+function bnSigPillarDraw(ctx, f, k, L) {
+  var ex = f.ex || {}, t = f.t, dur = f.dur, pk = ex.pkT > 0 ? ex.pkT : 0.01, a, rise, cw, hh, wid, spr, ao, bx;
+  if (dur <= pk) dur = pk + 0.01;
+  a = t < pk ? t / pk : (dur - t) / (dur - pk);
+  a = Math.max(0, Math.min(1, a));
+  rise = Math.max(0.25, Math.min(1, t / pk));
+  hh = f.size * 1.45 * rise;
+  cw = ex.quiet ? 0.8 : Math.abs(Math.cos(t * 9 + (ex.ph || 0)));   // 旋轉:柱身寬度隨旋轉週期起伏(減少動態時不轉)
+  wid = f.size * 0.34 * (0.3 + 0.7 * cw);
+  spr = bnPillarSpr(ex.el);
+  ctx.save();
+  if (spr) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a; ctx.drawImage(spr, f.x - wid / 2, f.y - hh, wid, hh); }
+  bx = ex.box;
+  if (bx && !ex.quiet && t > -0.001) {   // 受害者外框:峰值前後約 0.25 模擬秒短暫標示
+    ao = t < pk ? Math.max(0, t / pk) : Math.max(0, 1 - (t - pk) / 0.25);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 0.9 * ao; ctx.strokeStyle = '#fff3d0'; ctx.lineWidth = 2;
+    ctx.strokeRect(f.x - bx.w / 2, f.y - bx.h, bx.w, bx.h);
+  }
+  ctx.restore();
+}
+// ───────── 主角大招全螢幕演出(bnPlUltScene,純視覺;BN_FX_ULT_SCENE 配方)─────────
+// 演出由多個浮動實例組成(沿用 bnPlFx 池):spot 圖(mode 12:上飄 rise / 下落 rise<0 / 旋轉 spin / 消散 dissolve / 加色 add)、
+// ghost 黑化 / 血色剪影(mode 13,去色壓暗的結果於 bnScSil 快取一次)、trail 軌跡(mode 8,沿用 bnSigTrail)、dragon 青龍纏刀(mode 11)、
+// flash 閃屏(mode 10,≤ 0.2)、shake 微震(P.shake,≤ 0.16)。under = 畫在單位之下(半透明,血條與浮字仍在最上層)。
+// 時間(模擬秒):大招 cut-in 結束後的 skill 事件即開演;命中在演出後約 0.32 秒,配方峰值 delay ≈ 0.3,總長約 1 秒(dur 依 bnPlStK 縮放)。
+// 上限:全場 ≤ 24 個實例;省電 ≤ 6 且略過 ghost / dragon;低階機 ≤ 12 且略過 ghost / dragon / trail;減少動態略過閃屏與微震。
+// 跳過:大招特寫點擊跳過(bnPlCutSkip → P.noScene)或略過(P.skipped)時整段不演出。缺圖的 spot 退回光暈圓;ghost 缺圖退回 BN_FX_HERO 單張。
+var BN_FX_ULT_SCENE = {
+  u_caocao: { items: [   // 天下歸心:黑化虛影(四方聚攏向敵陣)+ 黑金旗海落下 + 暗色閃屏,最後化為黑霧
+    { g: 'flash', col: '#1b0f2a', str: 0.2, dur: 0.6, delay: 0 },
+    { g: 'ghost', at: 'ring', n: 4, to: 'center', pal: 'dark', sz: 1.5, a: 0.5, dur: 0.95, delay: 0, stag: 0.05, dissolve: 1 },
+    { g: 'spot', file: 'fxc_banner', tint: '#d8b23a', at: 'above', n: 3, sz: 1.1, rise: -0.6, dur: 0.9, delay: 0.05 },
+    { g: 'trail', kind: 'sweep', col: '#d8c8ff', from: 'self', at: 'cells', sz: 1.0, dur: 0.42, delay: 0.2 },
+    { g: 'shake', amt: 0.1, delay: 0.3 },
+    { g: 'spot', file: 'fxc_ink_splash', tint: '#2a2030', hit: 1, sz: 0.9, dur: 0.5, delay: 0.23, dissolve: 1 }
+  ] },
+  u_liubei: { items: [   // 桃園誓盟:雙劍十字 + 桃花漫天 + 粉色薄幕
+    { g: 'flash', col: '#ffb0c8', str: 0.08, dur: 0.5, delay: 0 },
+    { g: 'trail', kind: 'cross', col: '#ffd0e0', from: 'self', at: 'cells', sz: 0.9, dur: 0.4, delay: 0.2 },
+    { g: 'spot', file: 'fx_heal_motes', tint: '#ffb0c8', at: 'grid', sz: 0.9, rise: 0.35, dur: 1.0, delay: 0.05, add: 1 },
+    { g: 'spot', file: 'fxc_mirage', tint: '#ffd0e0', at: 'screen', sz: 2.0, dur: 0.9, delay: 0.1, under: 1 },
+    { g: 'spot', file: 'fx_morale_burst', tint: '#ffd0e0', hit: 1, sz: 0.7, dur: 0.6, add: 1 },
+    { g: 'shake', amt: 0.05, delay: 0.3 }
+  ] },
+  u_sunquan: { items: [   // 坐斷東南:江潮拍岸,全屏波浪
+    { g: 'spot', file: 'fxc_wx_water', tint: '#9fe0c0', at: 'row', sz: 1.4, rise: 0.25, dur: 0.95, delay: 0 },
+    { g: 'spot', file: 'fxc_wx_water', tint: '#7ad7ff', at: 'screen', sz: 2.2, dur: 0.9, delay: 0.1, a: 0.6, under: 1 },
+    { g: 'spot', file: 'fxc_wx_water', tint: '#9fe0c0', hit: 1, sz: 0.8, dur: 0.6, add: 1 },
+    { g: 'flash', col: '#ffe9a8', str: 0.08, dur: 0.5, delay: 0.3 },
+    { g: 'shake', amt: 0.08, delay: 0.3 }
+  ] },
+  u_guanyu: { items: [   // 水淹七軍(本次改為青龍纏刀):多條青龍光帶從施放者飛向各敵並纏繞
+    { g: 'dragon', from: 'self', at: 'cells', n: 5, col: '#7ff0c8', sz: 1.1, dur: 0.9, delay: 0, stag: 0.08 },
+    { g: 'flash', col: '#7ad7ff', str: 0.12, dur: 0.45, delay: 0.3 },
+    { g: 'spot', file: 'fx_slash_x', tint: '#bfefff', hit: 1, sz: 1.0, add: 1, dur: 0.38 },
+    { g: 'shake', amt: 0.1, delay: 0.32 },
+    { g: 'spot', file: 'fxc_wx_water', tint: '#7ad7ff', at: 'row', sz: 1.2, rise: 0.2, dur: 0.8, delay: 0.5, a: 0.7 }
+  ] },
+  u_zhugeliang: { items: [   // 八陣石兵:九宮石陣升起
+    { g: 'spot', file: 'fxc_bagua_disc', at: 'grid', sz: 0.8, dur: 1.0, delay: 0, under: 1 },
+    { g: 'spot', file: 'fxc_wx_earth', tint: '#c8b070', at: 'grid', sz: 0.9, rise: 0.5, dur: 0.8, delay: 0.05, under: 1 },
+    { g: 'spot', file: 'fx_impact_ring', tint: '#e0d0a0', hit: 1, sz: 1.2, dur: 0.5, add: 1 },
+    { g: 'flash', col: '#c8b070', str: 0.08, dur: 0.4, delay: 0.3 },
+    { g: 'shake', amt: 0.08, delay: 0.3 }
+  ] },
+  u_zhouyu: { items: [   // 火燒連營:整片敵陣火海蔓延、火星上飄、紅色閃屏與熱浪微震
+    { g: 'flash', col: '#ff5a20', str: 0.14, dur: 0.5, delay: 0.05 },
+    { g: 'spot', file: 'fx_fire_wall', at: 'row', sz: 1.3, rise: 0.3, dur: 1.0, delay: 0, add: 1, under: 1 },
+    { g: 'spot', file: 'fxc_fireox_trail', hit: 1, sz: 1.0, dur: 0.7 },
+    { g: 'pillar', el: '火', hit: 1 },
+    { g: 'spot', file: 'fx_spark', tint: '#ffb070', at: 'row', sz: 0.6, rise: 0.7, dur: 0.9, delay: 0.3, add: 1 },
+    { g: 'shake', amt: 0.08, delay: 0.3 },
+    { g: 'flash', col: '#ff5a20', str: 0.1, dur: 0.4, delay: 0.5 }
+  ] },
+  u_lvbu: { items: [   // 飛將無雙(鬼神附體):紅黑閃屏微震 → 鬼神虛影從四周附身 → 方天畫戟巨大刀影 + 多道紅色戟光連斬
+    { g: 'flash', col: '#c0102a', str: 0.18, dur: 0.45, delay: 0 },
+    { g: 'flash', col: '#000000', str: 0.14, dur: 0.4, delay: 0.1 },
+    { g: 'shake', amt: 0.14, delay: 0 },
+    { g: 'ghost', at: 'ring', n: 4, to: 'self', pal: 'red', sz: 1.4, a: 0.45, dur: 0.85, delay: 0, stag: 0.04, dissolve: 1 },
+    { g: 'trail', kind: 'sweep', col: '#ff3030', from: 'self', at: 'cells', sz: 1.7, dur: 0.5, delay: 0.12 },
+    { g: 'trail', kind: 'thrust', col: '#ff4040', from: 'self', at: 'cells', sz: 1.0, dur: 0.28, delay: 0.3, stag: 0.05 },
+    { g: 'trail', kind: 'cross', col: '#ff3030', from: 'self', at: 'cells', sz: 0.8, dur: 0.3, delay: 0.42 },
+    { g: 'spot', file: 'fx_slash_h', tint: '#ff3030', hit: 1, sz: 1.2, add: 1, dur: 0.38 },
+    { g: 'shake', amt: 0.1, delay: 0.32 }
+  ] },
+  u_zhangjiao: { items: [   // 蒼天已死 / 天公落雷:多道雷柱從天劈下
+    { g: 'trail', kind: 'bolt', col: '#8ab8ff', from: 'sky', at: 'cells', sz: 1.0, dur: 0.3, delay: 0, stag: 0.04 },
+    { g: 'flash', col: '#9ac0ff', str: 0.12, dur: 0.4, delay: 0.3 },
+    { g: 'spot', file: 'fxc_thunder_blast', hit: 1, sz: 1.1, dur: 0.5 },
+    { g: 'shake', amt: 0.12, delay: 0.3 },
+    { g: 'spot', file: 'fxc_thunder_scorch', hit: 1, sz: 0.9, dur: 0.6, delay: 0.2, under: 1 }
+  ] },
+  u_simayi: { items: [   // 高平陵變:紫黑旋風籠罩敵陣
+    { g: 'flash', col: '#2a1040', str: 0.12, dur: 0.5, delay: 0 },
+    { g: 'spot', file: 'fxc_mirage', tint: '#b9a8d8', at: 'ring', n: 4, sz: 1.3, spin: 1, dur: 0.9, delay: 0, under: 1, a: 0.6 },
+    { g: 'trail', kind: 'arc', col: '#a070e0', from: 'center', at: 'cells', sz: 1.4, dur: 0.45, delay: 0.15 },
+    { g: 'spot', file: 'fx_impact_ring', tint: '#8a5ac8', at: 'screen', sz: 2.2, add: 1, dur: 0.6, delay: 0.3 },
+    { g: 'spot', file: 'fx_impact_ring', tint: '#8a5ac8', hit: 1, sz: 0.8, dur: 0.45, add: 1 },
+    { g: 'shake', amt: 0.06, delay: 0.3 }
+  ] },
+  u_diaochan: { items: [   // 連環計:金色連環環扣擴散
+    { g: 'spot', file: 'fx_impact_ring', tint: '#ffd25a', hit: 1, sz: 0.9, dur: 0.5, add: 1 },
+    { g: 'trail', kind: 'arc', col: '#ffd0e8', from: 'self', at: 'cells', sz: 0.8, dur: 0.35, delay: 0.12, stag: 0.05 },
+    { g: 'spot', file: 'fxc_mirage', tint: '#ff9ad0', at: 'ring', n: 3, sz: 1.2, dur: 0.9, delay: 0.1, under: 1 },
+    { g: 'flash', col: '#ffd25a', str: 0.08, dur: 0.4, delay: 0.32 },
+    { g: 'shake', amt: 0.06, delay: 0.3 }
+  ] },
+  u_zuoci: { items: [   // 陰陽幻術:太極大圓盤全屏旋轉
+    { g: 'spot', file: 'fxc_yy_taiji', tint: '#c78bff', at: 'screen', sz: 2.0, spin: 1, dur: 1.0, delay: 0, under: 1, a: 0.8 },
+    { g: 'flash', col: '#c78bff', str: 0.12, dur: 0.45, delay: 0.1 },
+    { g: 'spot', file: 'fxc_yy_flip', tint: '#c78bff', hit: 1, sz: 1.0, dur: 0.6 },
+    { g: 'shake', amt: 0.07, delay: 0.3 }
+  ] },
+  u_nanhua: { items: [   // 五行天書:五色光柱圍陣
+    { g: 'spot', file: 'fxc_wx_metal', at: 'pillar', idx: 0, sz: 1.2, rise: 0.4, dur: 0.9, delay: 0 },
+    { g: 'spot', file: 'fxc_wx_wood', at: 'pillar', idx: 1, sz: 1.2, rise: 0.4, dur: 0.9, delay: 0 },
+    { g: 'spot', file: 'fxc_wx_water', at: 'pillar', idx: 2, sz: 1.2, rise: 0.4, dur: 0.9, delay: 0 },
+    { g: 'spot', file: 'fxc_wx_fire', at: 'pillar', idx: 3, sz: 1.2, rise: 0.4, dur: 0.9, delay: 0 },
+    { g: 'spot', file: 'fxc_wx_earth', at: 'pillar', idx: 4, sz: 1.2, rise: 0.4, dur: 0.9, delay: 0 },
+    { g: 'spot', file: 'fxc_wx_disc', at: 'screen', sz: 1.6, spin: 1, dur: 0.9, delay: 0.1, under: 1 },
+    { g: 'flash', col: '#ffe9a8', str: 0.08, dur: 0.4, delay: 0.3 },
+    { g: 'spot', file: 'fxc_wx_earth', tint: '#c8b070', hit: 1, sz: 0.7, dur: 0.6, add: 1 },
+    { g: 'shake', amt: 0.06, delay: 0.3 }
+  ] }
+};
+var BNSC = { n: 0, max: 16, map: {} };   // 黑化 / 血色剪影快取(上限 16 張,超過就不做剪影)
+// 演出用的敵方陣型:存活敵人中心、包圍盒(含邊界補值)、中心
+function bnScFormation(P, v) {
+  var sd = v.side === 'A' ? 'B' : 'A', L = P.L, k, w, c, F = { list: [], x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9, cx: 0, cy: 0 };
+  for (k in P.vu) { w = P.vu[k]; if (w.side !== sd || !w.alive) continue; c = bnPlCenter(w); F.list.push(c); F.x0 = Math.min(F.x0, c.x); F.x1 = Math.max(F.x1, c.x); F.y0 = Math.min(F.y0, c.y); F.y1 = Math.max(F.y1, c.y); }
+  if (!F.list.length) { F.x0 = F.x1 = L.vw / 2; F.y0 = F.y1 = L.top + (L.vh - L.top - L.bot) * 0.5; }
+  F.cx = (F.x0 + F.x1) / 2; F.cy = (F.y0 + F.y1) / 2;
+  return F;
+}
+// 依配置名稱取得實例位置(at):self / center / cells / grid(敵陣 3×3)/ row(陣下三點)/ above(陣上 n 點)/ screen / ring(敵陣周圍 n 點)/ pillar(螢幕環狀第 idx 根)
+function bnScPts(P, v, F, at, n, idx) {
+  var L = P.L, c = bnPlCenter(v), X0 = F.x0 - L.colW * 0.5, X1 = F.x1 + L.colW * 0.5, Y0 = F.y0 - L.sh * 0.35, Y1 = F.y1 + L.sh * 0.15, out = [], i, a, rx, ry, r, mid = L.top + (L.vh - L.top - L.bot) * 0.5;
+  n = n || 1;
+  if (at === 'self') out.push(c);
+  else if (at === 'center') out.push({ x: F.cx, y: F.cy });
+  else if (at === 'cells') { if (F.list.length) out = F.list.slice(); else out.push({ x: F.cx, y: F.cy }); }
+  else if (at === 'grid') { for (i = 0; i < 9; i++) out.push({ x: X0 + (X1 - X0) * (i % 3) / 2, y: Y0 + (Y1 - Y0) * Math.floor(i / 3) / 2 }); }
+  else if (at === 'row') { for (i = 0; i < 3; i++) out.push({ x: X0 + (X1 - X0) * i / 2, y: Y1 + L.sh * 0.05 }); }
+  else if (at === 'above') { for (i = 0; i < n; i++) out.push({ x: X0 + (X1 - X0) * (n < 2 ? 0.5 : i / (n - 1)), y: Y0 - L.sh * 0.2 }); }
+  else if (at === 'screen') out.push({ x: L.vw / 2, y: mid });
+  else if (at === 'ring') {
+    rx = Math.max(L.colW * 1.6, (X1 - X0) * 0.7); ry = Math.max(L.sh * 0.6, (Y1 - Y0) * 0.7);
+    for (i = 0; i < n; i++) { a = i / n * 6.283 + 0.5; out.push({ x: Math.max(4, Math.min(L.vw - 4, F.cx + Math.cos(a) * rx)), y: Math.max(L.top, Math.min(L.vh - L.bot, F.cy + Math.sin(a) * ry)) }); }
+  } else if (at === 'pillar') { a = (idx | 0) / 5 * 6.283 - 1.571; r = L.vw * 0.3; out.push({ x: L.vw / 2 + Math.cos(a) * r, y: mid + Math.sin(a) * r * 0.5 }); }
+  return out;
+}
+// 剪影來源:施放者第一張已載入的圖(未載入回 null,下一次再用)
+function bnScSrc(v) {
+  var i, e;
+  if (!v || !v.look || !v.look.paths) return null;
+  for (i = 0; i < v.look.paths.length; i++) { e = bnDrImg(v.look.paths[i]); if (e.ok) return v.look.paths[i]; }
+  return null;
+}
+// 去色壓暗的剪影(一次處理、快取):透明區不動;dark = 紫黑虛影、red = 血色鬼神。回 canvas 或 null(快取滿 / 圖未載入)
+function bnScSil(path, variant) {
+  var key = path + '|' + variant, e, cv, c, w, h;
+  if (BNSC.map[key]) return BNSC.map[key];
+  if (BNSC.n >= BNSC.max) return null;
+  e = bnDrImg(path);
+  if (!e.ok || !e.img) return null;
+  w = e.img.naturalWidth || e.img.width || 64; h = e.img.naturalHeight || e.img.height || 64;
+  cv = bnDrNew(w, h); c = cv ? cv.getContext('2d') : null;
+  if (!c) return null;
+  c.drawImage(e.img, 0, 0);
+  c.globalCompositeOperation = 'source-atop';
+  c.fillStyle = variant === 'red' ? 'rgba(150,18,34,0.9)' : 'rgba(18,8,28,0.86)'; c.fillRect(0, 0, w, h);
+  c.fillStyle = variant === 'red' ? 'rgba(60,0,8,0.25)' : 'rgba(0,0,0,0.2)'; c.fillRect(0, 0, w, h);
+  c.globalCompositeOperation = 'source-over';
+  BNSC.map[key] = cv; BNSC.n++;
+  return cv;
+}
+function bnScShake(P, amt) { return function () { if (!P.skipped && !P.over) P.shake = Math.max(P.shake, Math.min(0.16, amt)); }; }
+// 大招逐一受害者演出(BN_FX_ULT_SCENE 的 hit 項):bnPlDmg 在該受害者命中時呼叫(hd = 命中延遲,模擬秒),峰值 = 命中刻(與傷害數字 / 閃白 / 血條同刻)。
+// 不在施放時先鋪滿敵陣,而是落在實際受害者身上(閃避 / 未中者不出)。暴擊或單次傷害 ≥ 最大兵力 20% 時放大 1.25 倍。
+// 名額 P.uh.left = 該場大招剩餘上限(bnPlUltScene 設定),整場實例仍不超過 24(一般)/ 6(省電)/ 12(低階)。
+function bnUltHit(P, vt, e, hd) {
+  var uh = P.uh, R = uh && BN_FX_ULT_SCENE.hasOwnProperty(uh.id) ? BN_FX_ULT_SCENE[uh.id] : null, L = P.L, c, feet, big, i, it, H, dur, pkF, f, quiet = bnSigReduce();
+  if (!R || !L || !vt || P.skipped || P.noScene || uh.left <= 0) return 0;
+  c = bnPlCenter(vt); feet = { x: c.x, y: c.y + L.sh * 0.5 };
+  big = !!e.crit || (e.v | 0) >= Math.max(1, vt.mx || 1) * 0.2;
+  for (i = 0; i < R.items.length && uh.left > 0; i++) {
+    it = R.items[i];
+    if (!it.hit) continue;
+    H = hd + (it.delay || 0);
+    if (it.g === 'pillar') {
+      if (bnSigPillar(P, feet, H, { el: it.el, big: big, ph: vt.id * 0.9, quiet: quiet, box: quiet ? null : { w: L.sh * 0.5, h: L.sh * 0.9 } })) uh.left--;
+      continue;
+    }
+    if (it.g === 'spot') {
+      dur = (it.dur || 0.8) * bnPlStK(P);
+      pkF = Math.max(0.02, Math.min(0.15, H / Math.max(0.01, dur)));   // 峰值正好落在 H(H 很小時峰值前移,不會從半透明跳出)
+      f = bnPlFx(P, it.file, c.x, c.y, { file: it.file, tint: it.tint || '', mode: 12, size: L.sh * (it.sz || 1) * (big ? 1.25 : 1), dur: it.dur || 0.8, delay: H - pkF * dur, under: 0,
+        ex: { rise: it.rise || 0, add: it.add ? 1 : 0, spin: it.spin || 0, dis: it.dissolve ? 1 : 0, a: it.a || 1, ph: vt.id * 1.7, col: it.col || '#ffe9a8', pk: pkF } });
+      if (f) uh.left--;
+    }
+  }
+  return 0;
+}
+// 大招全螢幕演出(skill 事件、cat = ult 時呼叫;cut-in 之後)。回實際放出的實例數(測試用)
+function bnPlUltScene(P, v, id) {
+  var R = BN_FX_ULT_SCENE.hasOwnProperty(id) ? BN_FX_ULT_SCENE[id] : null, L = P.L, quiet = bnSigReduce(), ps = !!P.ps, low = !!BNDR.low;
+  var cap = ps ? 6 : (low ? 12 : 24), used = 0, F, c, i, j, it, pts, p, f, tg, src, from, fb, ox, oy, e, cutSz;
+  P.uh = null;
+  if (!R || !v || !L || P.skipped || P.noScene) return 0;
+  F = bnScFormation(P, v); c = bnPlCenter(v);
+  for (i = 0; i < R.items.length && used < cap; i++) {
+    it = R.items[i];
+    if (it.hit) continue;   // 逐一受害者的項目由 bnUltHit 於命中刻播放
+    if ((it.g === 'flash' || it.g === 'shake') && quiet) continue;
+    if ((ps || low) && (it.g === 'ghost' || it.g === 'dragon')) continue;
+    if (low && it.g === 'trail') continue;
+    if (it.g === 'flash') { if (bnPlFx(P, 'flash', 0, 0, { mode: 10, size: Math.min(0.2, it.str), col: it.col, dur: it.dur || 0.4, delay: it.delay || 0 })) used++; continue; }
+    if (it.g === 'shake') { bnPlAt(P, it.delay || 0, bnScShake(P, it.amt)); continue; }
+    if (it.g === 'spot') {
+      pts = bnScPts(P, v, F, it.at || 'cells', it.n, it.idx);
+      for (j = 0; j < pts.length && used < cap; j++) {
+        p = pts[j];
+        f = bnPlFx(P, it.file, p.x, p.y, { file: it.file, tint: it.tint || '', mode: 12, size: L.sh * (it.sz || 1) * (0.92 + 0.16 * ((j * 7) % 3) / 2), dur: it.dur || 0.8, delay: (it.delay || 0) + j * (it.stag || 0), under: it.under ? 1 : 0,
+          ex: { rise: it.rise || 0, add: it.add ? 1 : 0, spin: it.spin || 0, dis: it.dissolve ? 1 : 0, a: it.a || 1, ph: j * 1.7, col: it.col || '#ffe9a8' } });
+        if (f) used++;
+      }
+      continue;
+    }
+    if (it.g === 'ghost') {
+      src = bnScSrc(v); pts = bnScPts(P, v, F, it.at || 'ring', it.n || 4);
+      if (!src) { if (used < cap && bnPlFx(P, BN_FX_HERO[id] || 'fx_morale_burst', F.cx, F.cy, { file: BN_FX_HERO[id] || '', alt: 'morale_burst', mode: 7, size: L.sh * 1.6, dur: it.dur || 0.9, delay: it.delay || 0 })) used++; continue; }
+      for (j = 0; j < pts.length && used < cap; j++) {
+        p = pts[j];
+        tg = it.to === 'self' ? c : (it.to === 'up' ? { x: p.x, y: p.y - L.sh * 0.6 } : { x: F.cx, y: F.cy });
+        f = bnPlFx(P, 'ghost', p.x, p.y, { x2: tg.x, y2: tg.y, file: src, alt: it.pal || 'dark', mode: 13, size: L.sh * (it.sz || 1.4), dur: it.dur || 0.9, delay: (it.delay || 0) + j * (it.stag || 0), under: 1,
+          ex: { a: it.a || 0.5, dis: it.dissolve ? 1 : 0 } });
+        if (f) used++;
+      }
+      continue;
+    }
+    if (it.g === 'trail') {
+      pts = bnScPts(P, v, F, it.at || 'cells', it.n);
+      for (j = 0; j < pts.length && used < cap; j++) {
+        tg = pts[j];
+        if (it.from === 'sky') { ox = tg.x; oy = L.top + L.sh * 0.1; }
+        else if (it.from === 'center') { ox = F.cx; oy = F.cy; }
+        else { ox = c.x; oy = c.y; }
+        f = bnPlFx(P, it.kind, ox, oy, { mode: 8, x2: tg.x, y2: tg.y, size: L.sh * (it.sz || 0.75), col: it.col || '#ffffff', dur: it.dur || 0.42, delay: (it.delay || 0) + j * (it.stag || 0), under: 0 });
+        if (f) used++;
+      }
+      continue;
+    }
+    if (it.g === 'dragon') {
+      pts = bnScPts(P, v, F, it.at || 'cells', it.n);
+      for (j = 0; j < pts.length && j < (it.n || 5) && used < cap; j++) {
+        tg = pts[j];
+        f = bnPlFx(P, 'dragon', c.x, c.y, { mode: 11, x2: tg.x, y2: tg.y, size: L.sh * (it.sz || 1), col: it.col || '#7ff0c8', dur: it.dur || 0.9, delay: (it.delay || 0) + j * (it.stag || 0), ex: { ph: j * 2.1 } });
+        if (f) used++;
+      }
+      continue;
+    }
+  }
+  P.uh = { id: id, src: v.id, left: Math.max(0, cap - used) };   // 逐一命中演出共用的剩餘名額
+  return used;
+}
+// 演出繪製(mode 11 龍形光帶、12 圖片實例、13 剪影);f.t < 0 已由 bnDrFx 略過
+function bnScDraw(ctx, P, f, k, L) {
+  var ex = f.ex || {}, a, s, x, y, e, e2, sil, h, w, ease, ang, hx, hy, N = 14, i, t, px, py, nx, ny, amp, head, dx, dy, len, ux, uy, ph, sc, pkF;
+  function clamp01(q) { return Math.max(0, Math.min(1, q)); }
+  if (f.mode === 12) {
+    pkF = ex.pk || 0.15;   // 峰值比例(hit 項依命中刻設定;預設 0.15)
+    a = k < pkF ? k / pkF : 1 - (k - pkF) / (1 - pkF);
+    if (ex.dis) a = k < 0.1 ? k / 0.1 : (1 - k) / 0.9;
+    a = clamp01(a) * clamp01(0.85 + 0.15 * Math.sin(k * 38 + (ex.ph || 0))) * (ex.a || 1);
+    y = f.y - (ex.rise || 0) * L.sh * k;
+    s = f.size * (0.8 + 0.4 * k) * (ex.dis ? 1 + 0.6 * k : 1);
+    e = bnDrImg('assets/bnfx/' + f.file + '.webp');
+    e2 = e.ok ? bnSigPick(f, e, 'assets/bnfx/' + f.file + '.webp', f.file.indexOf('fx_') === 0) : null;
+    ctx.save();
+    ctx.globalCompositeOperation = (ex.add || f.file.indexOf('fx_') === 0) ? 'lighter' : 'source-over';
+    ctx.globalAlpha = a;
+    if (e2) {
+      if (ex.spin) { ctx.translate(f.x, y); ctx.rotate(ex.spin * k * 6.283); ctx.drawImage(e2.img, -s / 2, -s / 2, s, s); }
+      else ctx.drawImage(e2.img, f.x - s / 2, y - s / 2, s, s);
+    } else {
+      sc = bnDrGlow(ex.col || '#ffe9a8');
+      if (sc) ctx.drawImage(sc, f.x - s / 2, y - s / 2, s, s);
+    }
+    ctx.restore();
+    return;
+  }
+  if (f.mode === 13) {   // 剪影虛影:由 f.x/f.y(腳下)移向 f.x2/f.y2(smoothstep),淡入後淡出,dissolve 時尾段消散
+    a = k < 0.2 ? k / 0.2 : (1 - k) / 0.8;
+    if (ex.dis) a = k < 0.2 ? k / 0.2 : Math.max(0, (1 - k) / 0.8);
+    a = clamp01(a) * (ex.a || 0.5);
+    ease = k * k * (3 - 2 * k);
+    x = f.x + (f.x2 - f.x) * ease; y = f.y + (f.y2 - f.y) * ease;
+    sil = bnScSil(f.file, f.alt || 'dark');
+    if (!sil) { e = bnDrImg(f.file); if (!e.ok) return; sil = e.img; }
+    h = f.size * (0.9 + 0.2 * k); w = h * (sil.width || sil.naturalWidth || 1) / (sil.height || sil.naturalHeight || 1);
+    ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a;
+    ctx.drawImage(sil, x - w / 2, y - h, w, h);
+    ctx.restore();
+    return;
+  }
+  if (f.mode === 11) {   // 青龍纏刀:沿正弦曲線螺旋的光帶,頭端月牙、尾端淡;命中後在目標身上纏繞
+    a = k < 0.1 ? k / 0.1 : Math.max(0, (1 - k) / 0.9);
+    head = Math.min(1, k * 1.5);
+    dx = f.x2 - f.x; dy = f.y2 - f.y; len = Math.sqrt(dx * dx + dy * dy) || 1; ux = dx / len; uy = dy / len; nx = -uy; ny = ux;
+    amp = f.size * 0.22; ph = ex.ph || 0;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = f.col; ctx.globalAlpha = a * 0.35; ctx.lineWidth = Math.max(4, f.size * 0.16);
+    ctx.beginPath();
+    for (i = 0; i <= N; i++) {
+      t = i / N * head; px = f.x + dx * t + nx * Math.sin(t * 12.57 + ph + k * 6) * amp * (1 - t * 0.4); py = f.y + dy * t + ny * Math.sin(t * 12.57 + ph + k * 6) * amp * (1 - t * 0.4);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      if (i === N) { hx = px; hy = py; }
+    }
+    ctx.stroke();
+    ctx.globalAlpha = a; ctx.lineWidth = Math.max(1.5, f.size * 0.04); ctx.strokeStyle = '#eafff4'; ctx.stroke();
+    ang = Math.atan2(uy, ux);
+    if (head > 0) { ctx.strokeStyle = f.col; ctx.lineWidth = Math.max(2, f.size * 0.07); ctx.beginPath(); ctx.arc(hx, hy, f.size * 0.12, ang - 0.9, ang + 0.9); ctx.stroke(); }
+    if (k > 0.5 && ctx.ellipse) {   // 纏刀:目標身上的繞環
+      ctx.globalAlpha = a * 0.8; ctx.strokeStyle = f.col; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(f.x2, f.y2, f.size * 0.35, f.size * 0.12, k * 8, 0, 6.283); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
 if (typeof module !== 'undefined' && module.exports) module.exports = { BNPL_T: BNPL_T };

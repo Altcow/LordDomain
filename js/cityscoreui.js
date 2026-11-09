@@ -25,7 +25,7 @@ function csChipUpdate() {
   cs.chip.hidden = !csCity();
   if (cs.chip.hidden) return;
   S = cityscoreGet(false);
-  cs.chipTxt.textContent = '繁榮 ' + csFmt(S.pros) + ' · 👥' + csFmt(S.pop);
+  cs.chipTxt.textContent = '繁榮 ' + csFmt(S.pros) + ' · 👥' + (typeof fmtPop === 'function' ? fmtPop(S.pop) : csFmt(S.pop));
   cs.chip.setAttribute('title', '城市繁榮度與人口(點開看六軸)');
 }
 
@@ -54,8 +54,8 @@ function csRefresh() {
   if (lv < PROG_LV_MAX) B.appendChild(csBar(S.pros / req));
   row = csEl('div', 'cs-big');
   row.appendChild(csEl('span', 'cs-bigl', '人口'));
-  row.appendChild(csEl('b', 'cs-bign', csFmt(S.pop)));
-  row.appendChild(csEl('span', 'cs-bigs', lv < PROG_LV_MAX ? '升級門檻 ' + popReq : ''));
+  row.appendChild(csEl('b', 'cs-bign', typeof fmtPop === 'function' ? fmtPop(S.pop) : csFmt(S.pop)));
+  row.appendChild(csEl('span', 'cs-bigs', lv < PROG_LV_MAX ? '升級門檻 ' + (typeof fmtPop === 'function' ? fmtPop(popReq) : popReq) : ''));
   B.appendChild(row);
   if (lv < PROG_LV_MAX) B.appendChild(csBar(S.pop / popReq, 'cs-fill cs-fill2'));
   for (i = 0; i < CITY_AXES.length; i++) {
@@ -79,9 +79,10 @@ function csRefresh() {
     }
     B.appendChild(wrap);
   }
-  if (anyHidden) B.appendChild(csEl('div', 'cs-hint', '升到 Lv' + anyHidden.reveal + ' 開放「' + anyHidden.name + '」軸(其他軸之後逐步開放)。'));
+  if (anyHidden && !(typeof citySimpleOn === 'function' && citySimpleOn())) B.appendChild(csEl('div', 'cs-hint', '升到 Lv' + anyHidden.reveal + ' 開放「' + anyHidden.name + '」軸(其他軸之後逐步開放)。'));
   svcs.forEach(function (s) { if (lv >= svcLv[s] && S.houses > 0) covTxt.push(CITY_SVC[s].name + ' ' + Math.floor(S.cover[s] * 100 + 1e-6) + '%'); });
-  if (covTxt.length) B.appendChild(csEl('div', 'cs-cov', '民居 ' + S.houses + ' 戶 · 服務覆蓋:' + covTxt.join('、')));
+  if (covTxt.length && !(typeof citySimpleOn === 'function' && citySimpleOn())) B.appendChild(csEl('div', 'cs-cov', '民居 ' + S.houses + ' 戶 · 服務覆蓋:' + covTxt.join('、')));
+  if (S.houses > 0 && typeof fmtHh === 'function' && typeof citySimpleOn === 'function' && citySimpleOn()) B.appendChild(csEl('div', 'cs-cov', '民居 ' + fmtHh(S.houses) + ' · 每戶 ' + PERSON_PER_HOUSEHOLD + ' 人'));   // 簡化模式:不列服務覆蓋,改列棟 / 戶
   B.appendChild(csEl('div', 'cs-say', cityComment(S, lv)));
 }
 
@@ -160,7 +161,7 @@ function cityGoTo(cond) {
 function cityRenderReq(R, p, c) {
   var S = cityscoreGet(false), lv = p.lv, rl, ok;
   R.appendChild(puiReq(S.pros >= c.pros, '繁榮度', csFmt(S.pros), c.pros, '六軸總和;點頂列「繁榮」看各軸與貢獻'));
-  R.appendChild(puiReq(S.pop >= c.pop, '人口', csFmt(S.pop), c.pop, '民居住戶;民居旁有水井、糧食等服務,入住率更高'));
+  R.appendChild(puiReq(S.pop >= c.pop, '人口', typeof fmtPop === 'function' ? fmtPop(S.pop) : csFmt(S.pop), (typeof fmtPop === 'function' ? fmtPop(c.pop) : c.pop), '民居住戶;民居旁有水井、糧食等服務,入住率更高'));
   rl = cityReqList(lv, S);
   if (rl) {
     R.appendChild(puiEl('div', 'pg-sec', (rl.big ? '大工程:' : '營造要求:') + rl.title));

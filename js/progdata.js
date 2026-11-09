@@ -32,6 +32,50 @@ function progProdCap(type, lv) {                                                
   if (type === 'market') return lv < 3 ? 0 : 1 + Math.floor((lv - 3) / 3);
   return null;                                                                  // null = 不限(裝飾類)
 }
+// ───────── 1b. 無等級版(經營板)建築名額:依官階序號查表(lordhallui.js LH_RANKS:0 里正、1 亭長、2 縣尉、3 縣令、4 太守、5 刺史)─────────
+// 經營板已無升級入口,prog.lv 對新存檔永遠是 1,故名額改看官階。不死結原則:每階民房名額 × 3.6 口(民房 6 口 × 最低入住率 0.6)
+// ≥ 下一階人口門檻(20 / 60 / 150 / 400 / 900),只蓋民房也升得上去(tools/test_nlcap.js 驗證)。市集另受科技〈市令〉閘(nlUnlocked),研成即有名額。
+// 舊存檔 prog.lv 較高者取兩者較大,名額不倒退。表中沒有的建築 = 不受官階限制(沿用 OBJECTS.max 等)。
+const PROG_NL_RANK_CAP = {   // PLACEHOLDER
+  house:  [8, 20, 45, 115, 260, 300],
+  lumber: [2, 3, 4, 6, 8, 10],
+  quarry: [2, 3, 4, 6, 8, 10],
+  market: [1, 2, 3, 4, 6, 8]
+};
+// 是否走無等級名額:經營板且科技閘已載入(戰陣板 / 測試環境沿用 progProdCap(type, prog.lv))
+function progNlOn() { return typeof game !== 'undefined' && !!game && game.mode === 'estate' && typeof nlUnlocked === 'function' && typeof CITY_TECHS !== 'undefined'; }
+// 目前官階序號(與 lordhallRank 同規則:人口與繁榮都達標的最後一階);缺模組回 0
+function progRankIdx() {
+  var s, i, r = 0;
+  if (typeof LH_RANKS === 'undefined' || typeof cityscoreGet !== 'function') return 0;
+  try { s = cityscoreGet(false); } catch (e) { return 0; }
+  if (!s) return 0;
+  for (i = 0; i < LH_RANKS.length; i++) if ((s.pop || 0) >= LH_RANKS[i].pop && (s.pros || 0) >= LH_RANKS[i].pros) r = i;
+  return r;
+}
+function progRankName(i) { return (typeof LH_RANKS !== 'undefined' && LH_RANKS[i]) ? LH_RANKS[i].n : '第 ' + (i + 1) + ' 階'; }
+function progNlCap(type, ri) {
+  var t = PROG_NL_RANK_CAP[type];
+  return t ? t[Math.max(0, Math.min(t.length - 1, ri | 0))] : null;
+}
+// 目前實際名額(capOf / 推薦下一步 / 顧問共用);type 為民房類時請先 houseKindOf。null = 不限
+function progCapNow(type) {
+  var lv = (typeof prog !== 'undefined' && prog && typeof prog.lv === 'number') ? prog.lv : 1, old = progProdCap(type, lv), nl;
+  if (!progNlOn() || !PROG_NL_RANK_CAP[type]) return old;
+  nl = progNlCap(type, progRankIdx());
+  return old === null ? nl : Math.max(old, nl);
+}
+// 名額不足時的說明:無等級 →「官階達「亭長」後名額增加為 20 座」;有等級 →「城市升到 N 級才有名額」;都沒有回 ''
+function progCapHint(type) {
+  var cur = progCapNow(type), i, c, L, t = PROG_NL_RANK_CAP[type];
+  if (progNlOn() && t) {
+    for (i = progRankIdx() + 1; i < t.length; i++) { c = t[i]; if (cur !== null && c > cur) return '官階達「' + progRankName(i) + '」後名額增加為 ' + c + ' 座'; }
+    return '';
+  }
+  if (cur === null) return '';
+  for (L = ((typeof prog !== 'undefined' && prog && prog.lv) || 1) + 1; L <= PROG_LV_MAX; L++) { c = progProdCap(type, L); if (c === null || c > cur) return '城市升到 ' + L + ' 級才有' + (cur > 0 ? '更多' : '') + '名額'; }
+  return '';
+}
 
 // ───────── 2. 升級需求(PLACEHOLDER)─────────
 // 回傳 L → L+1 所需:{ res:{coin,wood,stone}, xp, mats:{ id:n }, boss:'npcId'|null, ftue:'stepId'|null }
@@ -76,7 +120,7 @@ const PROG_CITY_QUEST = [
   { id: 'cq_deco5', text: '④ 擺 5 件裝飾', hint: '樹、花圃、水井、石桌都算,讓小村熱鬧起來(也會提高繁榮度)', go: '下方建築列', kind: 'deco', n: 5 },
   { id: 'cq_lv2', text: '⑤ 點頂列 Lv,升到 Lv2', hint: '資源、經驗、繁榮度、人口與營造要求都達標就能升級(點頂列 Lv 看缺什麼);升級後土地會變大', go: '頂列 Lv', kind: 'lv', n: 2 },
   { id: 'cq_house7', text: '⑥ 趁土地變大,民房蓋到 7 座', hint: '人口越多,生產越多,經驗也越多', go: '下方建築列', kind: 'houses', n: 7 },
-  { id: 'cq_lv3', text: '⑦ 再升一級到 Lv3', hint: '每級有一條營造要求(例:每戶民居 6 格內有水井);蓋出更多種類的建築、擴大規模能累積經驗與繁榮度', go: '頂列 Lv', kind: 'lv', n: 3 }
+  { id: 'cq_lv3', text: '⑦ 再升一級到 Lv3', hint: '每級有一條營造要求(例:每棟民居 6 格內有水井);蓋出更多種類的建築、擴大規模能累積經驗與繁榮度', go: '頂列 Lv', kind: 'lv', n: 3 }
 ];
 // 升 L+1 之前必須在首領營拿到 ≥1★ 的 NPC id(結構)
 const PROG_BOSS_REQ = { 5: 'huangjin', 8: 'shankou', 12: 'shuizhai', 14: 'jun', 17: 'shanyue', 20: 'hulao', 22: 'chanyu', 24: 'luoyang' };

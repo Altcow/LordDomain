@@ -306,7 +306,7 @@ function ipSub(S) {
   if (S.subAt && now - S.subAt < 2) return S.subTxt;
   S.subAt = now;
   try {
-    if (k === 'council' && typeof lordhallOverview === 'function') { o = lordhallOverview(); S.subTxt = '官階 ' + o.rank + ' · 人口 ' + o.pop; }
+    if (k === 'council' && typeof lordhallOverview === 'function') { o = lordhallOverview(); S.subTxt = '官階 ' + o.rank + ' · 人口 ' + (typeof fmtPop === 'function' ? fmtPop(o.pop) : o.pop); }
     else if (k === 'research') {
       s = (typeof techState === 'function') ? techState() : null;
       S.subTxt = (s && s.cur && s.cur.length) ? '研發中 ' + s.cur.length + ' 項 · 學識 ' + Math.floor(s.xue || 0) : (s ? '學識 ' + Math.floor(s.xue || 0) : '');

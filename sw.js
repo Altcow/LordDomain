@@ -1,4 +1,4 @@
-const VERSION = 'v52';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v53';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -10,6 +10,7 @@ const PRECACHE = [
   './css/style.css',
   './css/cardsreveal.css',
   './css/search.css',
+  './css/codex.css',
   './css/bnshare.css',
   './js/data.js',
   './js/units.js',
@@ -27,6 +28,8 @@ const PRECACHE = [
   './js/goods.js',
   './js/techtree_data.js',
   './js/nolevel_data.js',
+  './js/techtree_simple_data.js',
+  './js/citysimple.js',
   './js/citytech.js',
   './js/stratagems.js',
   './js/fishdata.js',
@@ -124,10 +127,12 @@ const PRECACHE = [
   './js/carddata.js',
   './js/portrait_gender.js',
   './js/cards.js',
+  './js/cards_starter.js',
   './js/cardart.js',
   './js/cardsui.js',
   './js/cardsui_named.js',
   './js/cardsui_bag.js',
+  './js/cardsui_starter.js',
   './js/furnaceui.js',
   './js/cardsreveal.js',
   './js/npcdata.js',
@@ -158,6 +163,7 @@ const PRECACHE = [
   './js/interiors_pack1.js',
   './js/interiors_pack2_data.js',
   './js/interiors_pack2.js',
+  './js/bldtag.js',
   './js/bn_data.js',
   './js/bn_skills_data.js',
   './js/bn_units.js',
@@ -174,6 +180,8 @@ const PRECACHE = [
   './js/bnmap.js',
   './js/bnshare.js',
   './js/bnteam.js',
+  './js/codex_teams_data.js',
+  './js/codex.js',
   './js/minimap.js',
   './js/fx_text_data.js',
   './js/fx_stages_data.js',

@@ -19,7 +19,9 @@ var BN_STG = {
   // hardKinds / L 級 = 強戰法(只給精英 / 頭目);bossAdd = 各兵種頭目額外可抽的強戰法;bossN = 非名人頭目戰法數(依章);名人頭目保留名人戰法再加 bossFigAdd 個
   foeSk: { hardKinds: ['stun', 'silence', 'fear', 'reorder'], hardPow: ['L', 'XL'], bossN: [0, 3, 3, 3, 3, 3, 3], bossFigAdd: 1,
     bossAdd: { '步': ['g_chongfeng', 'g_huwei', 'g_haoling'], '騎': ['g_chongfeng', 'g_huwei', 'g_jixing'], '弓': ['g_banma', 'g_yibing', 'g_huwei'], '盾': ['g_jianbi', 'g_huwei', 'g_zhenshe'], '謀': ['g_chuanxi', 'g_haoling', 'g_miaoshou'] } },
-  rk: [0.999,0.99,0.911,0.982,0.929,0.992,1.096,1.089,1.06,1.102,1.031,1.183,1.098,1.107,1.114,1.051,1.082,1.163,1.019,1.023,1.109,1.03,1.039,1.051,0.881,0.97,1.035,0.967,1.003,0.966,1.003,1.055,1.106,0.981,1.089,1.026],                                    // 逐關建議戰力校正(36 個;使『我方戰力 = 建議戰力』約 50% 勝率,由 bn_stage_check --tune 解出)
+  rk: [0.999,0.99,0.911,0.982,0.929,0.992,1.096,1.089,1.06,1.102,1.075,1.183,1.098,1.107,1.114,1.051,1.082,1.163,1.019,1.023,1.109,1.03,1.039,1.051,0.881,0.97,1.035,0.967,1.003,0.966,1.003,1.055,1.106,0.981,1.089,1.026],                                    // 逐關建議戰力校正(36 個;使『我方戰力 = 建議戰力』約 50% 勝率,由 bn_stage_check --tune 解出)
+  // 魔幻世界(bnStgFxOn)的逐關建議戰力再乘一層(敵將名人格換成魔幻試煉頭目後強弱不同;1 = 同東漢)。由 bn_stage_check(fxPack = elf / dwarf / kingdom 三族平均)解出
+  rkFx: [1,1,1,1,1.03,1,1,1,1.086,1,1,1,1,1,1.055,1,1,0.92,1,1,1,1,1,1.05,1,1,1,1.09,1,1.065,1,0.92,1,1,1,1],
   recK: 1.0                                  // 建議戰力 = 敵將隊戰力 × recK(使『我方戰力 = 建議戰力』約 50% 勝率;由 bn_stage_check --kfit 解出)
 };
 
@@ -138,7 +140,7 @@ var BN_STAGES = [], BN_STG_BY_ID = {};
 })();
 function bnStgById(id) { return BN_STG_BY_ID[id] || null; }
 function bnStgChapter(n) { return BN_CHAPTERS[n - 1] || null; }
-function bnStgRecK(st) { var k = st ? BN_STG.rk[st.order] : 0; return BN_STG.recK * (typeof k === 'number' && k > 0 ? k : 1); }
+function bnStgRecK(st) { var k = st ? BN_STG.rk[st.order] : 0, f = st && BN_STG.rkFx && bnStgFxOn() ? BN_STG.rkFx[st.order] : 0; return BN_STG.recK * (typeof k === 'number' && k > 0 ? k : 1) * (typeof f === 'number' && f > 0 ? f : 1); }   // 魔幻世界另乘 rkFx(歷史世界不變)
 function bnStgV(st) {
   var v = BN_STG.v && BN_STG.v[st.order];
   return typeof v === 'number' && v > 0 ? v : 40 + st.order;
@@ -230,6 +232,7 @@ function bnStgSolveStage(id, target) {
   return bnStgSolveV(st.foeIdx.map(function (i) { return ch.roster[i]; }), ch, st, target);
 }
 
+function bnStgTx(s) { return (typeof fxText === 'function') ? fxText(s) : s; }   // 魔幻世界用語(fx_text.js);歷史世界原樣
 // ───────── 每日流寇(種子 = hash(世界種子, 日號);敵方戰力 = 我方最強隊 × 0.95~1.05)─────────
 // 回 {id:'B', name, desc, ch, units, power, list, seedKey}
 function bnStgBounty(worldSeed, dayNo, myPower, maxCh) {
@@ -242,7 +245,7 @@ function bnStgBounty(worldSeed, dayNo, myPower, maxCh) {
   v = bnStgSolveV(ents, ch, null, tgt, sk);
   team = bnStgBuildTeam(ents, v, ch, null, sk);
   team.rec = Math.round(team.power * BN_STG.bounty.k);
-  team.id = 'B'; team.name = '每日流寇'; team.ch = cn; team.desc = '今日出沒的' + ch.name + '流寇,實力與你的最強隊伍相當。'; team.scene = '';
+  team.id = 'B'; team.name = bnStgTx('流寇') === '流寇' ? '每日流寇' : bnStgTx('流寇'); team.ch = cn; team.desc = bnStgTx('今日出沒的' + ch.name + '流寇,實力與你的最強隊伍相當。'); team.scene = '';   // 顯示名:魔幻世界 → 林間盜匪(歷史世界原樣)
   return team;
 }
 

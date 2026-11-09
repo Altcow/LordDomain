@@ -25,7 +25,7 @@ const TEMPLATES = [
       { type: 'field_sprout', pts: [[7, 14], [11, 14]] },
       { type: 'lumber', pts: [[2, 7]] },
       { type: 'quarry', pts: [[16, 7]] },
-      { type: 'well', pts: [[7, 17]] },
+      { type: 'well', pts: [[8, 5]] },
       { type: 'tree', pts: [[5, 5], [14, 5], [5, 14], [14, 14]] },
       { type: 'flower_bed', pts: [[6, 6], [13, 6], [6, 13], [13, 13]] },
       { type: 'stone_table', pts: [[4, 17]] },

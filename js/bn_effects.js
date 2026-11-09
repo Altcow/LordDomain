@@ -111,6 +111,10 @@ function bnUseful(S, u, inst) {
     if (bnAllies(S, u, false).length === 0) return false;
   } else if (k === 'swap') {
     if (bnAllies(S, u, false).length === 0 && d.target !== 'enemy_front') return false;
+  } else if (k === 'sleep') {   // 敵方全員已沉睡或醒後免疫 → 不發動
+    if (!bnEnemies(S, u).some(function (x) { return !x.st.sleep && !(x.sleepImm >= S.round); })) return false;
+  } else if (k === 'paralyze') {
+    if (!bnEnemies(S, u).some(function (x) { return !x.st.paralyze; })) return false;
   } else if (k === 'buff_steal') {
     if (!bnEnemies(S, u).some(bnHasBuff)) return false;
   } else if (BN_ATTACK[k]) {
@@ -355,6 +359,16 @@ function bnApplyEffect2(S, u, eff, res, o) {
     case 'fear':
       for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'fear', { act: true, skip: bnKT('fear_skip', pw) }, {});
       break;
+    case 'sleep':   // 睡眠:無法行動、不會閃避;受攻擊傷害機率驚醒(bn_engine.js bnApplyDmg / bnWake)
+      for (i = 0; i < targets.length; i++) if (targets[i].alive && bnChance(S, P, targets[i], u)) bnStatusApply(S, u, targets[i], 'sleep', { left: (typeof P.dur === 'number' ? P.dur : bnKT('sleep', pw)) + bnVsDur(S, eff, targets[i]) }, {});
+      break;
+    case 'paralyze':   // 麻痺:每次行動前機率無法行動、速度下降;雷電系傳導給相鄰一名敵人
+      for (i = 0; i < targets.length; i++) {
+        t = targets[i];
+        if (!t.alive || !bnChance(S, P, t, u)) continue;
+        if (bnStatusApply(S, u, t, 'paralyze', { left: (typeof P.dur === 'number' ? P.dur : bnKT('paralyze', pw)) + bnVsDur(S, eff, t), val: BN_DATA.paralyze.spd }, {}) && bnPzConducts(eff)) bnPzConduct(S, u, t);
+      }
+      break;
     case 'confuse':
       for (i = 0; i < targets.length; i++) if (bnChance(S, P, targets[i], u)) bnStatusApply(S, u, targets[i], 'confuse', { act: true, ft: P.forceTarget || undefined }, {});
       break;
@@ -469,12 +483,28 @@ function bnChance(S, P, t, u) {
   if (c >= 1) return true;
   return S.rng() < c;
 }
+// 麻痺傳導(雷電系):戰法 theme / tags 為 thunder 或 params.conduct
+function bnPzConducts(eff) {
+  var sk = eff.sk, P = eff.params || {};
+  return !!(P.conduct || (sk && (sk.theme === 'thunder' || (sk.tags && sk.tags.indexOf('thunder') >= 0))));
+}
+// 傳給目標十字相鄰、尚未麻痺的第一名敵人(確定性,不抽亂數);每目標每回合 1 次;不造成傷害,與感電(傷害傳導)各自獨立
+function bnPzConduct(S, u, t) {
+  var en = bnAreaCross(S, t).filter(function (z) { return z !== t && !z.st.paralyze && !S.cnt.rx['pz:' + z.id]; }), z;
+  if (!en.length) return false;
+  z = en[0];
+  S.cnt.rx['pz:' + z.id] = 1;
+  S.stats.pzConduct++; S.stats.reactions++;
+  bnEv(S, 'react', { id: 'rx_pz_conduct', name: '麻痺傳導', tgt: z.id });
+  return bnStatusApply(S, u, z, 'paralyze', { left: BN_DATA.paralyze.conductLeft, val: BN_DATA.paralyze.spd }, {});
+}
 function bnCleanse(S, t, n, src) {
-  var order = ['heal_reduce', 'stun', 'fear', 'confuse', 'timid', 'silence', 'ult_lock', 'burn', 'poison', 'bleed', 'debuff_hit', 'atk_down', 'def_down', 'spd_down', 'rate_down', 'mark', 'wx_mark'], i, c = 0, hadPoison;
+  var order = ['heal_reduce', 'stun', 'sleep', 'paralyze', 'fear', 'confuse', 'timid', 'silence', 'ult_lock', 'burn', 'poison', 'bleed', 'debuff_hit', 'atk_down', 'def_down', 'spd_down', 'rate_down', 'mark', 'wx_mark'], i, c = 0, hadPoison;
   for (i = 0; i < order.length && c < n; i++) {
     if (t.st[order[i]]) {
       hadPoison = order[i] === 'poison' || order[i] === 'bleed';
-      bnStatusRemove(S, t, order[i], 'cleanse'); c++;
+      if (order[i] === 'sleep') bnWake(S, t, 'cleanse'); else bnStatusRemove(S, t, order[i], 'cleanse');
+      c++;
       if (hadPoison && src) { bnHeal(S, src, src, src.base.heal * bnKT('heal_single', 'S') * 0.5, {}); S.stats.reactions++; }
     }
   }
@@ -585,12 +615,15 @@ function bnRxList() {
   if (!bnRxList.c) bnRxList.c = BN_COMBOS.reactions.slice().sort(function (a, b) { return b.priority - a.priority; });
   return bnRxList.c;
 }
-function bnRxHasStatus(t, id) {
+function bnRxHasStatus(t, id, S) {
   if (id === 'bind') return !!(t.st.timid || t.st.stun && false);
   if (id === 'shield') return !!t.st.shield;
+  if (id === 'chill') return !!((t.st.stun && t.st.stun.ice) || (t.st.spd_down && t.st.spd_down.ice));   // 寒凍:寒冰類技能施加的暈眩 / 速度下降
+  if (id === 'soaked') return !!(S && t.soakR && S.round - t.soakR <= 1);                               // 浸水:本回合或上回合被水攻類技能命中
+  if (id === 'metal') return t.troop === '盾';                                                          // 金屬重甲:盾兵
   return !!t.st[BN_ALIAS[id] || id];
 }
-function bnRxMatch(rx, a, t, h) {
+function bnRxMatch(rx, a, t, h, S) {
   var tr = rx.trigger || {}, conds = [], req = rx.requires || {}, ok, i, sts, sk = h.sk;
   if (tr.event) return false;
   if (tr.tag) conds.push(!!(sk && sk.tags && sk.tags.indexOf(tr.tag) >= 0));
@@ -601,8 +634,8 @@ function bnRxMatch(rx, a, t, h) {
   if (!ok) return false;
   var sub = req.on === 'self' ? a : t;
   sts = req.status || [];
-  if (req.match === 'any') ok = sts.some(function (s) { return bnRxHasStatus(sub, s); });
-  else ok = sts.every(function (s) { return bnRxHasStatus(sub, s); });
+  if (req.match === 'any') ok = sts.some(function (s) { return bnRxHasStatus(sub, s, S); });
+  else ok = sts.every(function (s) { return bnRxHasStatus(sub, s, S); });
   return ok;
 }
 function bnRxFind(S, a, t, h) {
@@ -610,7 +643,7 @@ function bnRxFind(S, a, t, h) {
   if (!h.sk || h.dot || h.counter || h.noRx) return null;
   for (i = 0; i < list.length; i++) {
     rx = list[i];
-    if (!bnRxMatch(rx, a, t, h)) continue;
+    if (!bnRxMatch(rx, a, t, h, S)) continue;
     lim = rx.limit || {};
     if (lim.perTargetPerRound && S.cnt.rx[rx.id + ':' + t.id] >= lim.perTargetPerRound) continue;
     if (lim.perTeamPerRound && (S.cnt.rx[rx.id + ':T' + a.side] || 0) >= lim.perTeamPerRound) continue;
@@ -632,6 +665,8 @@ function bnRxPre(S, a, t, h, rx) {
     case 'rx_shatter': o.shieldIgnore = 0.5; break;
     case 'rx_breach': o.dmgMult = 1.25; break;
     case 'rx_slow_ambush': if (t.acted) return null; o.dmgMult = 1.3; break;
+    case 'rx_ice_shatter': o.dmgMult = e.dmgMult || 1; break;
+    case 'rx_electrocute': o.dmgMult = e.dmgMult || 1.15; break;
     default: break;
   }
   return o;
@@ -655,6 +690,7 @@ function bnHitWithRx(S, a, t, h) {
   }
   res = bnHit(S, a, t, h);
   if (pre && res && !res.evaded) bnRxPost(S, a, t, h, pre, res);
+  if (res && !res.evaded && t.alive && h.sk && h.sk.tags && h.sk.tags.indexOf('water') >= 0) t.soakR = S.round;   // 浸水(感電用)
   return res;
 }
 function bnRxPost(S, a, t, h, pre, res) {
@@ -684,6 +720,17 @@ function bnRxPost(S, a, t, h, pre, res) {
     case 'rx_rend': if (t.st.bleed && t.st.bleed.n < 3) t.st.bleed.n++; break;
     case 'rx_rout_pursuit': if (t.alive) bnStatusApply(S, a, t, 'spd_down', { val: 5, left: 1 }, {}); break;
     case 'rx_slow_ambush': if (t.alive) { delete t.st.spd_down; bnStatusApply(S, a, t, 'timid', { left: 1 }, {}); } break;
+    case 'rx_ice_shatter':   // 冰裂:追加本次傷害 × 0.4(無視防禦),寒凍消散(寒冰速度下降解除;暈眩照舊但不能再碎一次)
+      if (t.st.stun && t.st.stun.ice) delete t.st.stun.ice;
+      if (t.st.spd_down && t.st.spd_down.ice) bnStatusRemove(S, t, 'spd_down', 'rx');
+      if (t.alive && res.dmg > 0) bnHit(S, a, t, { ty: 'dot', dot: 'rx', fixed: res.dmg * 0.4, mul: 1, noGuard: true });
+      break;
+    case 'rx_electrocute':   // 感電:電流傳到目標十字相鄰的敵人(本次傷害 × 0.35)
+      if (res.dmg > 0) {
+        en = bnAreaCross(S, t).filter(function (z) { return z !== t; });
+        for (i = 0; i < en.length && !S.over; i++) bnHit(S, a, en[i], { ty: 'dot', dot: 'rx', fixed: res.dmg * 0.35, mul: 1, noGuard: true });
+      }
+      break;
     case 'rx_friendly_fire': break;
     default: break;
   }
@@ -693,7 +740,7 @@ function bnRxPost(S, a, t, h, pre, res) {
 function bnOnHit(S, a, t, h, hpLost) {
   var ct, cm, rate;
   // 反擊
-  if (t.st.counter && a && a.alive && !h.counter && h.ty === 'phys' && BN_DATA.troops[a.troop].R <= 2 && !t.counterHit[a.id] && t.side !== a.side) {
+  if (t.st.counter && !t.st.sleep && a && a.alive && !h.counter && h.ty === 'phys' && BN_DATA.troops[a.troop].R <= 2 && !t.counterHit[a.id] && t.side !== a.side) {
     t.counterHit[a.id] = 1;
     cm = t.st.counter.val * (1 + (t.sc.nin || 0) * 0.1);
     if (t.st.taunt) { cm *= 1.3; S.stats.reactions++; bnEv(S, 'react', { id: 'rx_taunt_counter', name: '嘲諷反擊', tgt: a.id }); }
@@ -767,7 +814,7 @@ function bnTryPursuit(S, u, target) {
 
 // ───────── 行動佇列 / 補刀 / 追加行動 ─────────
 function bnQueueExtra(S, t, normalOnly, force) {
-  if (!t.alive || t.st.stun) return;
+  if (!t.alive || bnCantAct(t)) return;
   if (!force && ((S.cnt.extraUnit[t.id] || 0) >= BN_DATA.chain.extraActionPerUnit || S.cnt.extraTeam[t.side] >= BN_DATA.chain.extraActionPerTeam)) return;
   if ((S.cnt.extraUnit[t.id] || 0) >= BN_DATA.chain.extraActionPerUnit) return;
   S.cnt.extraUnit[t.id] = (S.cnt.extraUnit[t.id] || 0) + 1;
@@ -812,7 +859,7 @@ function bnQueueAssists(S, u, sk, res, o) {
   for (i = 0; i < list.length; i++) {
     c = list[i].c; as = list[i].as;
     if ((S.cnt.assist[as.id] || 0) >= BN_DATA.chain.followUpPerUnit) continue;
-    if (as.st.stun) continue;
+    if (bnCantAct(as)) continue;
     if (c.on.targetStatus && tgt) {
       var any = (c.on.match === 'any');
       var okS = any ? c.on.targetStatus.some(function (s) { return bnRxHasStatus(tgt, s); }) : c.on.targetStatus.every(function (s) { return bnRxHasStatus(tgt, s); });
@@ -889,7 +936,7 @@ function bnPasTargetEff(S, o, inst, ctx, trig) {
   var d = inst.def, P = d.params || {}, tg = P.target || d.target, kind = d.kind;
   if (!tg) {
     if (kind === 'heal_hot' || kind === 'heal_all' || kind === 'shield_all' || kind === 'buff_all' || kind === 'rate_up') tg = 'ally_all';
-    else if (kind === 'mark' || kind === 'debuff_atk' || kind === 'debuff_def' || kind === 'debuff_spd' || kind === 'dot_burn' || kind === 'dot_poison' || kind === 'dot_bleed' || kind === 'silence' || kind === 'stun' || kind === 'fear' || kind === 'rate_down' || kind === 'debuff_hit') tg = 'enemy_one';
+    else if (kind === 'mark' || kind === 'debuff_atk' || kind === 'debuff_def' || kind === 'debuff_spd' || kind === 'dot_burn' || kind === 'dot_poison' || kind === 'dot_bleed' || kind === 'silence' || kind === 'stun' || kind === 'fear' || kind === 'rate_down' || kind === 'debuff_hit' || kind === 'sleep' || kind === 'paralyze') tg = 'enemy_one';
     else tg = 'self';
   }
   return { kind: kind, power: d.power, dmg: d.dmg, params: P, target: tg, sk: d };
@@ -1372,7 +1419,7 @@ function bnBondOp(S, bd, e, ctx) {
       break;
     case 'follow_up': {
       by = bnBondTok(S, bd, e.by, ctx)[0] || ctx.u;
-      if (!by || !by.alive || by.st.stun || !ch) break;
+      if (!by || !by.alive || bnCantAct(by) || !ch) break;
       if ((S.cnt.assist['f' + by.id] || 0) >= BN_DATA.chain.followUpPerUnit + 0) break;
       if (ch.depth >= BN_DATA.chain.maxDepth) break;
       S.cnt.assist['f' + by.id] = (S.cnt.assist['f' + by.id] || 0) + 1;

@@ -161,7 +161,7 @@ function advCapBlock(type, s) {
   if (c === undefined || c === null) return null;
   n = (s.capN && s.capN[type]) || 0;
   if (c <= 0) return '名額為 0,' + (typeof nsCapHint === 'function' ? nsCapHint(type) : '目前還不能蓋');
-  if (n >= c) return '名額已滿,上限 ' + c + ' 座';
+  if (n >= c) return '名額已滿,上限 ' + c + ' 座' + (typeof progCapHint === 'function' && progCapHint(type) ? ';' + progCapHint(type) : '');
   return null;
 }
 function advLockOf(type) {
@@ -225,10 +225,18 @@ function advIgnore(m, id, xun) {
 function advDone(m, id) { if (!m.done[id]) { m.done[id] = true; m.dirty = true; } }
 function advSeenHelp(m, stat) { if (!m.seenHelp[stat]) { m.seenHelp[stat] = true; m.dirty = true; } }
 
+// 簡化城市模式(citysimple.js):長條只留 糧食 / 飲水 / 衛生(資訊與引導用,不懲罰)+ 名望 / 研發 / 庫房;
+// 建議只留下列條目(民生三項改成一句「蓋什麼可改善」、最多黃色);治安 / 民心 / 疫病 / 住房% / 道路% / 教化 全部不出現
+var ADV_SIMPLE_BARS = ['food', 'water', 'sani', 'fame', 'tech', 'store'];
+var ADV_SIMPLE_KEEP = ['a_food_crit', 'a_food_warn', 'a_water_crit', 'a_water_warn', 'a_sani_crit', 'a_sani_warn', 'a_store_blocked', 'a_store_noroad', 'a_store_loom', 'a_store_full',
+  'a_store_first', 'a_lab_none', 'a_tech_idle', 'a_tech_afford', 'a_tech_gap', 'a_market_first', 'a_fame_first', 'a_idle_none'];
+var ADV_SIMPLE_TEXT = { food: '糧食不夠,蓋幾塊田就會改善。', water: '有人家喝不到水,在旁邊蓋口水井就會改善。', sani: '衛生偏低,在民房附近蓋座茅廁就會改善。' };
+function advSimple() { return typeof citySimpleOn === 'function' && citySimpleOn(); }
 // ───────── 核心:advCompute(純函式)─────────
 // 回傳 { bars, L, R, items(合併後排序), main, expand(≤5), alerts(紅黃,每 stat 一條), counts{R,Y,B}, worstTier }
 function advCompute(s, mem, xun, sticky) {
-  var m = mem || advMemNew(), bars = advBars(s, sticky), L = {}, R = {}, i, a, p, items = [], byStat = {}, kept = [], rm = {}, c, j, x, y;
+  var m = mem || advMemNew(), simple = advSimple(), bars = advBars(s, sticky), L = {}, R = {}, i, a, p, items = [], byStat = {}, kept = [], rm = {}, c, j, x, y;
+  if (simple) bars = bars.filter(function (b) { return ADV_SIMPLE_BARS.indexOf(b.id) >= 0; });
   for (i = 0; i < BAR_ITEMS.length; i++) {
     x = BAR_ITEMS[i].id;
     R[x] = advRevealed(x, s, sticky);
@@ -237,6 +245,7 @@ function advCompute(s, mem, xun, sticky) {
   }
   for (i = 0; i < ADVICE.length; i++) {
     a = ADVICE[i];
+    if (simple && ADV_SIMPLE_KEEP.indexOf(a.id) < 0) continue;   // 簡化模式:只留基本民生輕提示與名望 / 研發 / 庫房
     if (!a.core) {
       if (a.once && m.done[a.id]) continue;
       if (m.done[a.id] && a.tier === 'B' && a.once) continue;
@@ -246,6 +255,7 @@ function advCompute(s, mem, xun, sticky) {
     p = ADV_COND[a.cond](s, L, R);
     if (!p) continue;
     c = { id: a.id, tier: a.tier, pri: a.pri, stat: a.stat, go: a.go, core: !!a.core, text: advFill(a.text, p, a.id, xun), params: p };
+    if (simple && ADV_SIMPLE_TEXT[a.stat]) { c.text = ADV_SIMPLE_TEXT[a.stat]; if (c.tier === 'R') c.tier = 'Y'; c.go = { kind: 'build', type: a.go.type }; }   // 不懲罰:最多黃色、一句話
     if (a.go && a.go.kind === 'build' && advCapBlock(a.go.type, s)) { c.text += '(' + advCapBlock(a.go.type, s) + ')'; c.go = { kind: 'bars' }; c.capBlock = true; }   // 名額不足:說明原因,改導向長條,不叫玩家去蓋
     else if (a.go && a.go.kind === 'build' && s.lock && s.lock[a.go.type]) advApplyLock(c, s.lock[a.go.type]);
     items.push(c);
@@ -390,7 +400,7 @@ function advSnapshot() {
   });
   s.cap = {}; s.capN = {};   // 建造建議的真實名額上限(nsCapOf,依等級)與目前數量;名額 0 或已滿的建議不當成可執行
   ADVICE.forEach(function (a) { var t = a.go && a.go.kind === 'build' ? a.go.type : null; if (t && !(t in s.cap)) s.cap[t] = (typeof nsCapOf === 'function') ? nsCapOf(t) : null; });
-  if (typeof world !== 'undefined' && world && world.objects) world.objects.forEach(function (o) { if (o && o.type in s.cap) s.capN[o.type] = (s.capN[o.type] || 0) + 1; });
+  if (typeof world !== 'undefined' && world && world.objects) world.objects.forEach(function (o) { var k = o && (typeof houseKindOf === 'function' ? houseKindOf(o.type) : o.type); if (o && k in s.cap) s.capN[k] = (s.capN[k] || 0) + 1; });   // 風格住宅與民房共用名額
   if (typeof currentSeason === 'string') s.season = currentSeason;
   if (typeof nlEra === 'function') { try { s.era = nlEra() || 1; } catch (e4) { /* 略過 */ } }
   s.saniEverWarn = advRt.saniWarned || (s.houses > 0 && advLevelOf('sani', s.v.sani) >= 1);

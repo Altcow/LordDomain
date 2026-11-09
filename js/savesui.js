@@ -101,7 +101,7 @@ function svSay(msg) { if (svMsgEl) svMsgEl.textContent = msg || ''; }
 function svStats(m) {
   var s = [];
   if (m.lv) s.push('Lv' + m.lv);
-  s.push('人口 ' + m.pop);
+  s.push('人口 ' + (typeof fmtPop === 'function' ? fmtPop(m.pop) : m.pop));
   s.push('科技 ' + m.techN);
   if (m.kb) s.push(m.kb + ' KB' + (m.enc === 'raw' ? '(未壓縮)' : ''));
   return s.join(' · ');
@@ -309,7 +309,7 @@ async function savesUiUndo() {
   try { list = await savesListMeta(); } catch (e) { savesToast('讀取復原點失敗'); return; }
   m = list.undo1;
   if (!m) { savesToast('目前沒有可復原的備份'); return; }
-  if (!svConfirm('復原到「' + m.name + '」?\n(' + savesTimeText(m.ts) + ' · 人口 ' + m.pop + (m.wid ? ' · ' + worldLabel(m.wid) : '') + ')\n\n目前狀態會先備份,可再復原回來。' + (m.wid && m.wid !== worldsActive() ? '這份屬於其他世界,會救回到它自己的位置,不會動到目前世界。' : '完成後頁面會重新載入。'))) return;
+  if (!svConfirm('復原到「' + m.name + '」?\n(' + savesTimeText(m.ts) + ' · 人口 ' + (typeof fmtPop === 'function' ? fmtPop(m.pop) : m.pop) + (m.wid ? ' · ' + worldLabel(m.wid) : '') + ')\n\n目前狀態會先備份,可再復原回來。' + (m.wid && m.wid !== worldsActive() ? '這份屬於其他世界,會救回到它自己的位置,不會動到目前世界。' : '完成後頁面會重新載入。'))) return;
   r = await savesUndo();
   if (!r.ok) savesToast(svReasonText(r.reason));
 }

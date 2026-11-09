@@ -169,7 +169,10 @@ function bnBookBtn(label, act, args, dis) {
   return '<button class="cub"' + (dis ? ' disabled' : '') + ' data-bbk="' + act + '" data-bbv="' + bnBookEsc(args.join('|')) + '">' + bnBookEsc(label) + '</button>';
 }
 function bnBookOpen() { return typeof bnUnlocked !== 'function' || bnUnlocked(); }
-function bnBookHtml(cs, e) {
+// 魔幻世界顯示用語(fx_text.js fxText:兵書 → 戰技卷 …);歷史世界原樣回傳
+function bnBookTx(s) { return (typeof fxText === 'function') ? fxText(s) : s; }
+function bnBookHtml(cs, e) { return bnBookTx(bnBookHtml0(cs, e)); }
+function bnBookHtml0(cs, e) {
   var h = '<div class="cusec">戰法學習(討伐)</div>', d, n, spec, L, i, books, tr, lv, cost, pk;
   if (!e || typeof bnUnitSpec !== 'function' || typeof BN_SKILLS === 'undefined') return '';
   if (!bnBookOpen()) return h + '<div class="cusub">開放討伐(官階亭長、名冊 3 人)後,可用兵書、名人傳授學戰法,並研兵強化兵種。</div>';

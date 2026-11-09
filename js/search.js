@@ -1,4 +1,4 @@
-// js/search.js — 右側邊欄「搜尋」面板:建築 / 物件(含未解鎖)與科技節點;未解鎖者列出解鎖科技、前置鏈、成本與可否研發(缺什麼)。
+// js/search.js — 右側邊欄「搜尋」面板:建築 / 物件(含未解鎖)與科技節點;未解鎖者列出解鎖科技、前置鏈、成本與可否研發(缺什麼)。武將 / 戰法結果由 js/codex.js(codexSearch / codexSrHtml)提供,點了開圖鑑。
 // 入口:ui.js UI_SIDE_ITEMS key 'search'(special: 'search' → srToggle())。面板以 panelmgr 登錄為 big 面板(Esc / 返回先關它)。
 // 索引 srIndex 首次開啟時建立並快取;世界 / 風格切換(fxPack / themeGet)後自動失效重建。狀態與缺項每次查詢即時計算。
 // 不受功能閘與城建專注模式隱藏;城建專注隱藏的軍事建築仍列出,但「前往建造」停用並說明原因。
@@ -143,16 +143,17 @@ function srScoreTech(q, it) {
   return s;
 }
 function srSearch(raw) {
-  var q = srNorm(raw), idx = srIndex(), objs = [], techs = [], nO, nT;
-  if (!q) return { q: q, objs: [], techs: [], nO: 0, nT: 0 };
+  var q = srNorm(raw), idx = srIndex(), objs = [], techs = [], nO, nT, cx;
+  if (!q) return { q: q, objs: [], techs: [], nO: 0, nT: 0, figs: [], skills: [], nF: 0, nS: 0 };
   idx.obj.forEach(function (it, i) { var s = srScoreObj(q, it); if (s > 0) objs.push({ it: it, s: s, i: i }); });
   idx.tech.forEach(function (it, i) { var s = srScoreTech(q, it); if (s > 0) techs.push({ it: it, s: s, i: i }); });
   function byScore(a, b) { return (b.s - a.s) || (a.i - b.i); }
   objs.sort(byScore); techs.sort(byScore);
   nO = objs.length; nT = techs.length;
-  objs = objs.slice(0, SR_MAX);
-  techs = techs.slice(0, SR_MAX - objs.length);
-  return { q: q, objs: objs, techs: techs, nO: nO, nT: nT };
+  cx = (typeof codexSearch === 'function') ? codexSearch(q, SR_MAX) : { figs: [], skills: [], nF: 0, nS: 0 };   // 武將 / 戰法(js/codex.js,各最多 10 筆,先占名額)
+  objs = objs.slice(0, SR_MAX - cx.figs.length - cx.skills.length);
+  techs = techs.slice(0, SR_MAX - cx.figs.length - cx.skills.length - objs.length);
+  return { q: q, objs: objs, techs: techs, nO: nO, nT: nT, figs: cx.figs, skills: cx.skills, nF: cx.nF, nS: cx.nS };
 }
 
 // ───────── 狀態與缺項(即時計算) ─────────
@@ -172,7 +173,7 @@ function srObjStatus(id) {
 }
 function srTechKey(id) {
   var k = techUiState(id).k;
-  if (k === 'req' || k === 'era') return 'locked';
+  if (k === 'req' || k === 'era' || k === 'bld') return 'locked';
   return k;
 }
 // 為何現在不能研發(或已在做什麼);可立即研發回「可立即研發」
@@ -186,6 +187,7 @@ function srWhy(nid) {
   if (st.k === 'mega') return '里程碑不走研發序列';
   if (st.k === 'req') return '前置未滿:' + st.miss.join('、');
   if (st.k === 'era') return '第' + n.era + '時代尚未開放';
+  if (st.k === 'bld') return '先蓋 ' + st.miss.join('、') + '(前置建築)';
   slots = techSlots();
   if (!slots) out.push('尚無研究院,序列不會推進');
   else if (s.cur.length >= slots) out.push('研發槽已滿,可先排入序列');
@@ -210,11 +212,25 @@ function srMissSum(list) {   // 缺項合計:金 / 學識 / 貨品(分階)/ 研�
   if (min) p.push('約 ' + min + ' 分研發');
   return p.length ? p.join('　') : '無';
 }
+// 簡化模式:前置建築(研發前場上要先有);未蓋且已解鎖者給「前往建造」,未解鎖者寫出要先研哪一項
+function srNeedHtml(nid) {
+  var need = (typeof techNeedOf === 'function') ? techNeedOf(nid) : [], h = '';
+  if (!need.length) return '';
+  h += '<div class="sr-l">前置建築:' + need.map(function (b) { return (techNeedHave(b) > 0 ? '✓ ' : '✗ ') + srEsc(techNeedName(b)); }).join('、') + '</div>';
+  need.forEach(function (b) {
+    var t = techNeedType(b), src;
+    if (techNeedHave(b) > 0) return;
+    if (typeof isUnlocked === 'function' && isUnlocked('estate', t)) h += '<button type="button" data-sr="build" data-k="' + srEsc(t) + '">先蓋 ' + srEsc(techNeedName(b)) + '</button>';
+    else { src = srObjNode(t); if (src) h += '<div class="sr-l">' + srEsc(techNeedName(b)) + ' 需先研發〈' + srEsc(srTechName(techNode(src))) + '〉</div>'; }
+  });
+  return h;
+}
 function srTechBlock(nid) {
   var n = techNode(nid), ex, list, done, s = techState(), coin = (typeof world !== 'undefined' && world && world.res && world.res.coin) || 0, h = '';
   if (!n || !s) return '';
   h += '<div class="sr-l">研發狀態:<b>' + srEsc(SR_ST_TXT[srTechKey(nid)]) + '</b>　' + srEsc(srWhy(nid)) + '</div>';
   if (techDone(nid) || techIsMega(n)) return h;
+  h += srNeedHtml(nid);
   ex = techExpand(nid);
   if (!ex.ok) return h;
   list = ex.list;
@@ -233,8 +249,9 @@ function srBuildBlock(id) {   // 不能直接前往建造的原因;可以則回 
   if (typeof cityOnlyTopHidden === 'function' && cityOnlyTopHidden(srTopOf(id))) return '城建專注模式已隱藏軍事建築(設定可關閉)';
   m = (typeof capOf === 'function') ? capOf(id) : (d && d.max);
   if (m && typeof world !== 'undefined' && world && Array.isArray(world.objects)) {
-    world.objects.forEach(function (o) { if (o && o.type === id) n++; });
-    if (n >= m) return '已達數量上限 ' + m + ' 座';
+    n = (typeof countObjects === 'function') ? countObjects(id) : 0;   // 風格住宅與民房共用名額
+    if (typeof countObjects !== 'function') world.objects.forEach(function (o) { if (o && o.type === id) n++; });
+    if (n >= m) return '已達數量上限 ' + m + ' 座' + (typeof progCapHint === 'function' && progCapHint(typeof houseKindOf === 'function' ? houseKindOf(id) : id) ? ';' + progCapHint(typeof houseKindOf === 'function' ? houseKindOf(id) : id) : '');
   }
   return '';
 }
@@ -315,7 +332,7 @@ function srRowHtml(kind, it, st) {
 }
 function srEmptyHtml(raw) {
   var h = '<div class="sr-hint">';
-  if (!srNorm(raw)) h += '輸入建築或科技名稱。可用別稱(如「廁所」「市場」),也可只打其中幾個字(如「井」「門城」)。';
+  if (!srNorm(raw)) h += '輸入建築、科技、武將或戰法名稱。可用別稱(如「廁所」「市場」),也可只打其中幾個字(如「井」「門城」)。';
   else h += '找不到「' + srEsc(raw) + '」。試試別稱、部分字,或常用簡體(如「厕所」會轉成繁體再找)。';
   h += '</div><div class="sr-chips">' + SR_CHIPS.map(function (c) { return '<button type="button" data-sr="chip" data-k="' + srEsc(c) + '">' + srEsc(c) + '</button>'; }).join('') + '</div>';
   return h;
@@ -326,9 +343,10 @@ function srRender() {
   if (sr.world) sr.world.textContent = srWorldTxt();
   if (typeof world === 'undefined' || !world || typeof techState !== 'function' || !techState()) { sr.list.innerHTML = '<div class="sr-hint">尚未載入城市資料。</div>'; return; }
   res = srSearch(sr.q);
-  total = res.nO + res.nT;
+  total = res.nO + res.nT + res.nF + res.nS;
   if (!total) { sr.list.innerHTML = srEmptyHtml(sr.q); return; }
   html = '<div class="sr-sum">找到 ' + total + ' 筆' + (total > SR_MAX ? '(列前 ' + SR_MAX + ' 筆)' : '') + '</div>';
+  if (typeof codexSrHtml === 'function') html += codexSrHtml(res);   // 武將 / 戰法(點了開圖鑑)
   if (res.objs.length) {
     html += '<div class="sr-sec">建築與物件(' + res.nO + ')</div>';
     res.objs.forEach(function (r) { html += srRowHtml('o', r.it, srObjStatus(r.it.id)); });
@@ -350,8 +368,8 @@ function srEnsure() {
   title = document.createElement('b'); title.textContent = '搜尋';
   cls = document.createElement('button'); cls.type = 'button'; cls.className = 'sr-x'; cls.setAttribute('data-sr', 'close'); cls.setAttribute('aria-label', '關閉搜尋'); cls.title = '關閉'; cls.textContent = '✕';
   head.appendChild(title); head.appendChild(cls);
-  inp = document.createElement('input'); inp.type = 'search'; inp.id = 'srInput'; inp.placeholder = '建築或科技名稱,例如 茅廁、市集、鐵';
-  inp.setAttribute('autocomplete', 'off'); inp.setAttribute('enterkeyhint', 'search'); inp.setAttribute('aria-label', '搜尋建築或科技');
+  inp = document.createElement('input'); inp.type = 'search'; inp.id = 'srInput'; inp.placeholder = '建築、科技、武將或戰法,例如 茅廁、鐵、曹操、火攻';
+  inp.setAttribute('autocomplete', 'off'); inp.setAttribute('enterkeyhint', 'search'); inp.setAttribute('aria-label', '搜尋建築、科技、武將或戰法');
   world = document.createElement('div'); world.className = 'sr-world';
   list = document.createElement('div'); list.id = 'srList';
   el.appendChild(head); el.appendChild(inp); el.appendChild(world); el.appendChild(list);
@@ -404,10 +422,11 @@ function srOnClick(e) {
   else if (a === 'chip') srSetQ(k);
   else if (a === 'build') srGoBuild(k);
   else if (a === 'tech') srTechGo(k);
+  else if (a === 'cx' && typeof codexOpenKey === 'function') codexOpenKey(k);   // 開圖鑑(panelmgr 互斥關閉搜尋)
 }
 function srOnKey(e) {
   var t = e.target;
-  if (!t || (e.key !== 'Enter' && e.key !== ' ') || !t.getAttribute || t.getAttribute('data-sr') !== 'pick') return;
+  if (!t || (e.key !== 'Enter' && e.key !== ' ') || !t.getAttribute || (t.getAttribute('data-sr') !== 'pick' && t.getAttribute('data-sr') !== 'cx')) return;
   if (e.preventDefault) e.preventDefault();
   srOnClick({ target: t });
 }

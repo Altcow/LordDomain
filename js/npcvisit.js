@@ -260,6 +260,7 @@ function nvCardRender() {
     '<div style="font-size:12px;color:' + aura + '">' + ((typeof fxVisitText === 'function' && fxVisitText(e, nvEsc)) || '在野 · ' + nvEsc(e.name) + ' 路過本城') + '</div></div>' +
     '<span data-a="x" style="cursor:pointer;padding:0 4px">✕</span></div>';
   h += '<div style="margin:8px 0;min-height:1.5em">「' + nvEsc(NPCV.card.line ? NPCV.card.line.text : '') + '」</div>';
+  if (n && n.gat > 0 && typeof gatherActText === 'function') h += '<div style="font-size:12px;color:#c9b98f;margin-bottom:4px">正在:' + nvEsc(gatherActText(n)) + '</div>';   // 路過時駐足聚集(citygather.js)
   h += '<div style="font-size:12px;color:#c9b98f;margin-bottom:4px">只是路過,不能直接延攬。</div>';
   if (NPCV.card.msg) h += '<div style="font-size:12px;color:#f0a060;margin-bottom:4px">' + nvEsc(NPCV.card.msg) + '</div>';
   h += '<span data-a="next" style="cursor:pointer;color:#e6b84a;font-size:13px">換一句 ↻</span>';
@@ -279,7 +280,6 @@ function npcVisitClaim(figId, day) {
   if (!R) return { ok: false, reason: 'none' };
   cs = (typeof cardsGet === 'function') ? cardsGet() : null;
   if (!cs) return { ok: false, reason: 'none' };
-  if (R.tok) { cardsAddTokens(cs, R.tok); parts.push('酒令 ×' + R.tok); }
   if (R.shards) { cs.shards = (cs.shards | 0) + R.shards; parts.push('碎片 ×' + R.shards); }
   rec.c.push(figId);
   if (!rec.f.length || rec.f.indexOf(figId) < 0) rec.f.push(figId);   // 測試 / 例外路徑:保證「領過」必在「來過」之內

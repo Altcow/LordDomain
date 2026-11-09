@@ -11,16 +11,29 @@ var goodsPlanCache = null;   // 工坊 / 道路連通判定快取
 var goodsStatus = {};        // 'x,y' → 最近一次結算的工坊狀態(給面板;不存檔)
 var goodsLast = null;        // 最近一次離線結算摘要
 var goodsPanelOpen = false;
+// 基本 / 進階模式與自動調度(使用者回饋 2026-11-09:基本玩家只想知道缺什麼、去哪拿;鏈條圖移到「進階」)。偏好鍵,不進世界存檔
+var GOODS_PREF_MODE = 'lorddomain.goods.mode', GOODS_PREF_AUTO = 'lorddomain.goods.auto';   // 'adv' = 進階模式;'0' = 自動調度關
+var goodsAutoCache = null;    // 自動調度偏好快取(goodsStep 每秒讀,不每次碰 localStorage)
+var goodsAllow = {};          // 自動調度關時,「補料」發給各工坊的配額('x,y' → 還能產出幾件;不存檔)
+var goodsRefillLast = null;   // 最近一次「補料」結果(給面板)
 
 function goodsNum(v) { return typeof v === 'number' && isFinite(v) && v > 0 ? v : 0; }
 function goodsRound(v) { return Math.round(v * 10000) / 10000; }
 
 // 正規化 world.city(讀檔 / 補預設);未知貨品丟棄,壞值歸零
+var goodsRemovedRefund = null;   // 最近一次讀檔把已移除貨品折成的金幣 { coin, items:{ id: 數量 } }(不存檔)
 function goodsNormCity(v) {
-  var c = { inv: {}, sel: {}, autoSell: true, debt: {}, coinFrac: 0 }, k;
+  var c = { inv: {}, sel: {}, autoSell: true, debt: {}, coinFrac: 0 }, k, refund = 0, refItems = {};
   if (v && typeof v === 'object') {
     if (v.inv && typeof v.inv === 'object') {
-      for (k in v.inv) if (GOODS[k] && !GOODS[k].res) { var n = goodsNum(v.inv[k]); if (n > 0) c.inv[k] = goodsRound(n); }
+      for (k in v.inv) {
+        var n = goodsNum(v.inv[k]);
+        if (!GOODS[k] && typeof GOODS_REMOVED !== 'undefined' && GOODS_REMOVED[k]) {   // 已移除貨品:按原基價折算金幣(下方入帳)
+          if (n > 0) { refund += n * GOODS_REMOVED[k].price; refItems[k] = n; }
+          continue;
+        }
+        if (GOODS[k] && !GOODS[k].res && n > 0) c.inv[k] = goodsRound((c.inv[k] || 0) + n);
+      }
     }
     if (v.sel && typeof v.sel === 'object') {
       for (k in v.sel) if (typeof v.sel[k] === 'string' && RECIPES[v.sel[k]]) c.sel[k] = v.sel[k];
@@ -30,6 +43,13 @@ function goodsNormCity(v) {
       for (k in v.debt) if (GOODS[k] && GOODS[k].res) c.debt[k] = Math.min(0.9999, goodsNum(v.debt[k]));
     }
     c.coinFrac = Math.min(0.9999, goodsNum(v.coinFrac));
+    if (refund > 0 && typeof world !== 'undefined' && world && world.res) {   // 讀檔時 world.res 已還原(map.js loadWorldSave),金幣直接入帳;小數併入 coinFrac
+      var tot = refund + c.coinFrac, whole = Math.floor(tot + 1e-6);
+      world.res.coin = (world.res.coin || 0) + whole;
+      c.coinFrac = Math.min(0.9999, Math.max(0, tot - whole));
+      goodsRemovedRefund = { coin: whole, items: refItems };
+      if (typeof console !== 'undefined') console.info('[goods] 已移除貨品折算金幣', whole, refItems);
+    }
     if (typeof themeSkinHas === 'function' && themeSkinHas(v.theme) && v.theme !== 'han') c.theme = v.theme;   // 城市風格(theme_skin.js);預設漢不存
     if (v.adv && typeof advNormSave === 'function') c.adv = advNormSave(v.adv);   // 顧問已完成 / 已忽略 id(cityadvisor.js)
     if (v.ns && typeof nsNormSave === 'function') c.ns = nsNormSave(v.ns);   // 推薦下一步:已關閉 / 已看過 id(nextstep.js)
@@ -284,7 +304,7 @@ function goodsStep(dt, mul, noAge) {
   dtH = dt / GOODS_HOUR_SEC * mul;
   haveTool = goodsRaw(tool.id) > 1e-6;
   plan.entries.forEach(function (e) {
-    var st, n, id, f, miss, rec, pm;
+    var st, n, id, f, miss, rec, pm, hold, al = 0;
     if (e.kind === 'src') {
       var s = GOODS_SOURCES[e.sid];
       if (!e.ok) { status[e.key] = { kind: 'src', sid: e.sid, state: 'noore', eff: 0 }; return; }
@@ -301,6 +321,12 @@ function goodsStep(dt, mul, noAge) {
     rec = RECIPES[e.rid];
     pm = goodsProdMul(e, rec.tech) * (e.conn ? 1 : GOODS_ROAD_MUL);
     n = rec.rate * pm * dtH;
+    hold = !goodsAutoOn();   // 自動調度關:只用「補料」發的配額
+    if (hold) {
+      al = goodsAllow[e.key] || 0;
+      if (!(al > 1e-9)) { status[e.key] = { kind: 'rec', rid: e.rid, state: 'hold', miss: null, eff: 0, conn: e.conn }; return; }
+      if (n > al) n = al;
+    }
     f = 1; miss = null;
     for (id in rec.in) {
       var need = rec.in[id] * n;
@@ -316,6 +342,7 @@ function goodsStep(dt, mul, noAge) {
     if (f > 0) {
       for (id in rec.in) goodsTake(id, rec.in[id] * n * f);
       for (id in rec.out) goodsStore(id, rec.out[id] * n * f, tally);
+      if (hold) goodsAllow[e.key] = goodsRound(Math.max(0, al - n * f));
     }
     st = f >= 0.999 ? 'run' : (f > 0 ? 'short' : (miss === '#full' ? 'full' : 'blocked'));
     status[e.key] = { kind: 'rec', rid: e.rid, state: st, miss: miss === '#full' ? null : miss, eff: pm * f, conn: e.conn };
@@ -376,7 +403,8 @@ function goodsOfflineText() {
 }
 
 // ───────── 面板資料(也供測試)─────────
-var GOODS_STATE_TEXT = { run: '運轉中', short: '原料不足,部分運轉', blocked: '停工', full: '庫存已滿,停工', noore: '缺礦脈' };
+// 白話狀態只用四種:運轉中、缺料(缺哪個)、倉庫滿了、沒接路;部分運轉併入缺料。hold = 自動調度關且沒配額(玩家自己關的才會出現)
+var GOODS_STATE_TEXT = { run: '運轉中', short: '缺料', blocked: '缺料', full: '倉庫滿了', noore: '缺料:缺礦脈', hold: '等補料' };
 // 回傳 [{ key, name, icon, x, y, recipe, state, text, conn, rids }];沒跑過結算的建築顯示「等待結算」
 function goodsWorkshopList() {
   var plan = goodsPlan(), out = [];
@@ -385,13 +413,12 @@ function goodsWorkshopList() {
     if (st && st.kind !== e.kind) st = null;
     if (e.kind === 'src') {
       nm = goodsName(Object.keys(GOODS_SOURCES[e.sid].out)[0]);
-      text = !e.ok ? '缺礦脈:' + GOODS_SOURCES[e.sid].near.r + ' 格內放「鐵礦堆」' : (st ? GOODS_STATE_TEXT[st.state] : '等待結算');
+      text = !e.ok ? '缺料:缺礦脈 → ' + GOODS_SOURCES[e.sid].near.r + ' 格內放「鐵礦堆」' : (st ? GOODS_STATE_TEXT[st.state] : '等待結算');
     } else {
       nm = goodsRecipeName(e.rid);
       text = st ? GOODS_STATE_TEXT[st.state] : '等待結算';
-      if (st && st.state === 'blocked' && st.miss) text = '缺料:' + goodsName(st.miss);
-      else if (st && st.state === 'short' && st.miss) text = '缺料:' + goodsName(st.miss) + '(部分運轉)';
-      if (!e.conn) text += ' · 未通路 ×' + GOODS_ROAD_MUL;
+      if (st && (st.state === 'blocked' || st.state === 'short') && st.miss) text = '缺料:' + goodsName(st.miss);
+      if (!e.conn) text = (st && st.state === 'run') ? '沒接路(產量減半)' : text + ' · 沒接路';
     }
     out.push({ key: e.key, kind: e.kind, name: (d.name || e.type), icon: d.icon || '', x: e.x, y: e.y, recipe: nm, state: st ? st.state : 'wait', text: text, conn: e.conn, rids: e.rids || null, rid: e.rid || null });
   });
@@ -400,7 +427,7 @@ function goodsWorkshopList() {
 // ───────── 生產視圖資料(PLAN_INTERIORS §3 O3 / O9 / O10;chainvis.js 與顧問使用;純讀取,不改結算)─────────
 // 每個生產建築一列:cause = 主要原因('ok' 正常 / 'wait' 尚未結算 / 'miss' 缺料 / 'road' 未通路 / 'full' 庫滿 / 'ore' 缺礦脈)、
 // level = 0 正常 1 警示 2 停工;perHour = 目前實際產出(件 / 遊戲小時),直接取結算的 eff(已含派駐人事 npcStaffMul 與道路 ×0.5,這裡不再另乘)
-var GOODS_CAUSE_ICON = { miss: '⛔', road: '🛤️', full: '📦', ore: '⛰️' };
+var GOODS_CAUSE_ICON = { miss: '⛔', road: '🛤️', full: '📦', ore: '⛰️', hold: '⏸️' };
 function goodsProdRows() {
   var plan = goodsPlan(), out = [];
   plan.entries.forEach(function (e) {
@@ -409,6 +436,7 @@ function goodsProdRows() {
     if (e.kind === 'src') { s = GOODS_SOURCES[e.sid]; oid = Object.keys(s.out)[0]; nom = s.out[oid]; }
     else { r = RECIPES[e.rid]; oid = Object.keys(r.out)[0]; nom = r.out[oid] * r.rate; }
     if (st) {
+      if (st.state === 'hold') causes.push('hold');
       if (e.kind === 'src' && st.state === 'noore') causes.push('ore');
       if (e.kind === 'rec' && st.state === 'blocked' && st.miss) { causes.push('miss'); miss = st.miss; }
       if (st.state === 'full') causes.push('full');
@@ -422,7 +450,7 @@ function goodsProdRows() {
       out: oid, outName: goodsName(oid), outIcon: goodsIcon(oid), recipe: e.kind === 'rec' ? goodsRecipeName(e.rid) : goodsName(oid),
       state: st ? st.state : 'wait', miss: miss, missName: miss ? goodsName(miss) : '', conn: e.conn, causes: causes, cause: causes[0] || (st ? 'ok' : 'wait'),
       perHour: st && st.state !== 'blocked' && st.state !== 'full' && st.state !== 'noore' ? Math.round(nom * st.eff * 100) / 100 : 0,
-      nominal: nom, capped: capped
+      nominal: nom, capped: capped, rid: e.rid || null, rids: e.rids || null
     };
     row.level = (row.state === 'blocked' || row.state === 'full' || row.state === 'noore') ? 2 : (causes.length ? 1 : 0);
     row.reason = goodsProdReason(row);
@@ -432,25 +460,22 @@ function goodsProdRows() {
 }
 // 原因文字(點瓶頸圖示 / 生產視圖列表共用)
 function goodsProdReason(row) {
-  var c = row.cause, mk, bt;
-  if (c === 'miss') {
-    mk = goodsMakers(row.miss)[0];
-    bt = mk ? goodsBuiltTypes() : null;
-    return '缺料:' + row.missName + (row.state === 'short' ? '(部分運轉)' : '(停工)') + (mk ? '。' + row.missName + '由「' + mk.bldName + '」' + (bt[mk.bld] ? '供應,請擴產或接路' : '供應,但還沒蓋') : '');
-  }
-  if (c === 'road') return '沒有道路連到城主府,產量只剩 ×' + GOODS_ROAD_MUL + '。補一段路接上主幹道';
+  var c = row.cause;
+  if (c === 'miss') return '缺料:' + row.missName + ' → ' + goodsGapInfo(row.miss).where;   // 三段式「缺 X → 去哪裡」;按鈕由呼叫端給
+  if (c === 'road') return '沒接路 → 補一段路接到城主府(現在產量 ×' + GOODS_ROAD_MUL + ')';
   if (c === 'full') {
     var cc = goodsCity();
-    return '「' + row.outName + '」已滿倉(' + cityGoodsHave(row.out) + ' / ' + goodsCapOf(row.out) + ')' + (cc && cc.autoSell ? ',多出的自動賣掉(×' + GOODS_SELL_MUL + ')' : ',停工中。開自動賣或用掉它');
+    return '倉庫滿了:「' + row.outName + '」' + cityGoodsHave(row.out) + ' / ' + goodsCapOf(row.out) + (cc && cc.autoSell ? ' → 多出的自動賣掉(×' + GOODS_SELL_MUL + ')' : ' → 用掉它,或打開自動賣');
   }
-  if (c === 'ore') { var sid = goodsSourceIds().filter(function (k) { return GOODS_SOURCES[k].bld === row.type; })[0], nr = sid && GOODS_SOURCES[sid].near; return '缺礦脈:' + (nr ? nr.r + ' 格內要有「鐵礦堆」' : '附近要有礦脈'); }
+  if (c === 'ore') { var sid = goodsSourceIds().filter(function (k) { return GOODS_SOURCES[k].bld === row.type; })[0], nr = sid && GOODS_SOURCES[sid].near; return '缺料:缺礦脈 → ' + (nr ? nr.r + ' 格內要有「鐵礦堆」' : '附近要有礦脈'); }
+  if (c === 'hold') return '等補料:自動調度已關 → 按庫房「補料」';
   if (c === 'wait') return '等待結算';
   return '運轉中';
 }
 // 摘要:{ total, ok, miss, road, full, ore, wait, blocked, noroad(未通路工坊數), missIds }
 function goodsProdSummary(rows) {
   rows = rows || goodsProdRows();
-  var s = { total: rows.length, ok: 0, miss: 0, road: 0, full: 0, ore: 0, wait: 0, blocked: 0, noroad: 0, missIds: [] };
+  var s = { total: rows.length, ok: 0, miss: 0, road: 0, full: 0, ore: 0, wait: 0, hold: 0, blocked: 0, noroad: 0, missIds: [] };
   rows.forEach(function (r) {
     if (r.cause === 'ok') s.ok++; else s[r.cause]++;
     if (r.state === 'blocked') s.blocked++;
@@ -470,6 +495,157 @@ function goodsCycleRecipe(key) {
   return true;
 }
 function goodsToggleSell() { var c = goodsCity(); if (!c) return false; c.autoSell = !c.autoSell; return c.autoSell; }
+
+// ───────── 基本模式:材料清單 / 第一層缺口 / 補料(資料;面板見 goodsNeedHtml)─────────
+var GOODS_CONS_NAME = { food: '糧食', cloth: '穿衣' };
+var GOODS_PLAIN_TEXT = { run: '運轉中', miss: '缺料', full: '倉庫滿了', road: '沒接路', hold: '等補料' };
+var GOODS_PLAIN_RANK = { miss: 4, full: 3, road: 2, hold: 1, run: 0 };
+function goodsPrefGet(k) { try { return typeof localStorage !== 'undefined' && localStorage ? localStorage.getItem(k) : null; } catch (e) { return null; } }
+function goodsPrefSet(k, v) { try { if (typeof localStorage !== 'undefined' && localStorage) localStorage.setItem(k, v); } catch (e) { if (typeof console !== 'undefined') console.warn('[goods] 偏好寫入失敗', k); } }
+function goodsAutoOn() { if (goodsAutoCache === null) goodsAutoCache = goodsPrefGet(GOODS_PREF_AUTO) !== '0'; return goodsAutoCache; }
+function goodsSetAuto(on) { goodsAutoCache = !!on; goodsAllow = {}; goodsPrefSet(GOODS_PREF_AUTO, on ? '1' : '0'); return goodsAutoCache; }
+function goodsIsAdv() { return goodsPrefGet(GOODS_PREF_MODE) === 'adv'; }
+function goodsSetAdv(on) { goodsPrefSet(GOODS_PREF_MODE, on ? 'adv' : 'basic'); return !!on; }
+function goodsBldUnlocked(t) { try { return typeof isUnlocked === 'function' ? !!isUnlocked('estate', t) : true; } catch (e) { return true; } }
+// 建築為什麼還不能蓋:{ tech, techName } 或 { lv }
+function goodsBldLock(t) {
+  var tid = typeof nlObjTech === 'function' ? nlObjTech(t) : undefined, tn = null;
+  if (tid && tid !== 'start' && !(typeof techDone === 'function' && techDone(tid))) {
+    try { tn = typeof techNode === 'function' ? techNode(tid) : null; } catch (e) { tn = null; }
+    return { tech: tid, techName: tn && tn.name ? tn.name : '' };
+  }
+  return { lv: typeof progUnlockLv === 'function' ? progUnlockLv('estate', t) : null };
+}
+// 走鏢帶得回來嗎(走鏢只隨機帶回 T1~T4 貨品,不能指定)
+function goodsBuyable(id) {
+  var g = GOODS[id];
+  if (!g || g.res || g.legacy || !(g.tier >= 1) || typeof caravanPool !== 'function' || typeof caravanPanelToggle !== 'function') return false;
+  if (caravanPool(g.tier).indexOf(id) < 0) return false;
+  try { return typeof isUnlocked === 'function' ? !!isUnlocked('feature', 'caravan') : true; } catch (e) { return false; }
+}
+// 某建築 type 在場上的狀況(只看結算狀態,不呼叫 goodsProdRows,避免遞迴):'ok' | 'road' | 'miss' | 'ore' | 'hold';missId = 它自己缺的料
+function goodsBldHealth(t) {
+  var plan = goodsPlan(), best = null, rank = { ok: 0, hold: 1, road: 2, miss: 3, ore: 4 };
+  plan.entries.forEach(function (e) {
+    if (e.type !== t) return;
+    var st = goodsStatus[e.key], h = { s: 'ok', key: e.key, missId: null };
+    if (st && st.kind !== e.kind) st = null;
+    if (e.kind === 'src' && (!e.ok || (st && st.state === 'noore'))) h.s = 'ore';
+    else if (st && st.state === 'hold') h.s = 'hold';
+    else if (e.kind === 'rec' && st && (st.state === 'blocked' || st.state === 'short') && st.miss) { h.s = 'miss'; h.missId = st.miss; }
+    else if (e.kind === 'rec' && !e.conn) h.s = 'road';
+    if (!best || rank[h.s] < rank[best.s]) best = h;   // 只要有一座正常就算正常
+  });
+  return best;
+}
+// 第一層缺口:缺 X → 去哪裡。回傳 { id, name, where, act:'build'|'tech'|'go'|'buy'|'refill'|'', arg, label, buy }
+function goodsGapInfo(id, built) {
+  var g = GOODS[id] || {}, mk = goodsMakers(id), out = { id: id, name: goodsName(id), where: '', act: '', arg: '', label: '', buy: goodsBuyable(id) }, m = null, i, h, lk;
+  built = built || goodsBuiltTypes();
+  for (i = 0; i < mk.length && !m; i++) if (built[mk[i].bld]) m = mk[i];
+  if (m) {
+    h = m.kind === 'res' ? null : goodsBldHealth(m.bld);
+    if (h && h.s === 'road') { out.where = '「' + m.bldName + '」沒接路'; out.act = 'go'; out.arg = h.key; out.label = '前往接路'; }
+    else if (h && h.s === 'miss') { out.where = '「' + m.bldName + '」自己也缺料(缺 ' + goodsName(h.missId) + ')'; out.act = 'go'; out.arg = h.key; out.label = '前往'; }
+    else if (h && h.s === 'ore') { out.where = '「' + m.bldName + '」旁邊沒有鐵礦堆'; out.act = 'go'; out.arg = h.key; out.label = '前往'; }
+    else if (h && h.s === 'hold') { out.where = '「' + m.bldName + '」等補料'; out.act = 'refill'; out.label = '補料'; }
+    else { out.where = '「' + m.bldName + '」在產,等它產出或多蓋一座'; out.act = 'build'; out.arg = m.bld; out.label = '再蓋一座'; }
+  } else if (mk.length) {
+    for (i = 0; i < mk.length && !m; i++) if (goodsBldUnlocked(mk[i].bld)) m = mk[i];
+    if (m) { out.where = '蓋「' + m.bldName + '」(還沒蓋)'; out.act = 'build'; out.arg = m.bld; out.label = '前往蓋'; }
+    else {
+      m = mk[0]; lk = goodsBldLock(m.bld);
+      if (lk.tech) { out.where = '「' + m.bldName + '」要先研發' + (lk.techName ? '「' + lk.techName + '」' : '科技'); out.act = 'tech'; out.arg = lk.tech; out.label = '前往科技'; }
+      else out.where = '「' + m.bldName + '」' + (lk.lv ? '城市 Lv' + lk.lv + ' 開放' : '尚未開放');
+    }
+  } else out.where = g.legacy ? '舊材料,目前只能從獎勵取得' : '本城還做不出來';
+  if (!out.act && out.buy) { out.act = 'buy'; out.label = '走鏢'; out.where += out.where ? ';走鏢有機會帶回' : '走鏢有機會帶回'; }
+  return out;
+}
+// 白話狀態(四種 + 自動調度關時的「等補料」)
+function goodsPlainState(r) {
+  if (r.causes.indexOf('miss') >= 0 || r.causes.indexOf('ore') >= 0) return 'miss';
+  if (r.cause === 'hold') return 'hold';
+  if (r.causes.indexOf('full') >= 0) return 'full';
+  if (r.causes.indexOf('road') >= 0) return 'road';
+  if (r.cause === 'wait' && r.kind === 'rec' && r.rid) {   // 還沒結算過:用庫存預判
+    var rin = RECIPES[r.rid].in, id;
+    for (id in rin) if (cityGoodsHave(id) < rin[id]) return 'miss';
+  }
+  return 'run';
+}
+// 基本模式清單:同建築 + 同配方合併成一張卡;問題在前
+function goodsNeedList() {
+  var rows = goodsProdRows(), built = goodsBuiltTypes(), map = {}, list = [], memo = {};
+  function gap(id) { return memo[id] || (memo[id] = goodsGapInfo(id, built)); }
+  rows.forEach(function (r) {
+    var gk = r.type + '|' + (r.rid || r.out), g = map[gk], ps = goodsPlainState(r);
+    if (!g) {
+      g = map[gk] = { type: r.type, name: r.name, icon: r.icon, kind: r.kind, rid: r.rid, rids: r.rids, out: r.out, outName: r.outName, outIcon: r.outIcon, n: 0, keys: [], key: r.key, perHour: 0, state: 'run', missSet: {}, roadKey: '', ore: false, mats: [], gaps: [] };
+      list.push(g);
+    }
+    g.n++; g.keys.push(r.key); g.perHour += r.perHour;
+    if (GOODS_PLAIN_RANK[ps] > GOODS_PLAIN_RANK[g.state]) { g.state = ps; g.key = r.key; }
+    if (r.miss) g.missSet[r.miss] = true;
+    if (r.kind === 'rec' && !r.conn && !g.roadKey) g.roadKey = r.key;
+    if (r.cause === 'ore' || r.causes.indexOf('ore') >= 0) g.ore = true;
+  });
+  list.forEach(function (g) {
+    var rin = g.kind === 'rec' && g.rid ? RECIPES[g.rid].in : {}, id;
+    g.perHour = Math.round(g.perHour * 100) / 100;
+    for (id in rin) {
+      var have = cityGoodsHave(id), lack = g.state === 'miss' && (have < rin[id] || !!g.missSet[id]);   // 上游邊產邊用而仍在運轉的不算缺
+      g.mats.push({ id: id, name: goodsName(id), icon: goodsIcon(id), n: rin[id], have: have, lack: lack });
+      if (lack) g.gaps.push(gap(id));
+    }
+    if (g.ore) {
+      var ore = goodsBldUnlocked('ore_iron') && typeof OBJECTS !== 'undefined' && OBJECTS.ore_iron;
+      g.gaps.push({ id: '', name: '礦脈', where: GOODS_NEAR_R + ' 格內放「鐵礦堆」', act: ore ? 'build' : 'go', arg: ore ? 'ore_iron' : g.key, label: ore ? '前往蓋' : '前往', buy: false });
+    }
+    g.missNames = g.gaps.map(function (x) { return x.name; });
+    g.stateText = GOODS_PLAIN_TEXT[g.state] + (g.state === 'miss' && g.missNames.length ? '(缺 ' + g.missNames.join('、') + ')' : '');
+    delete g.missSet;
+  });
+  list.sort(function (a, b) { return GOODS_PLAIN_RANK[b.state] - GOODS_PLAIN_RANK[a.state]; });   // Array.sort 穩定(ES2019 起;舊 Safari 亦穩定),同級維持結算順序
+  return list;
+}
+// 「補料」:把庫房現有材料依優先順序(上游先、同結算順序)分給缺料的工坊,每座最多 1 遊戲小時份。
+// 自動調度開:工坊本來就每秒自己領料,這裡只重新分配試算並立刻更新狀態;自動調度關:真的發配額(goodsAllow)。回傳並記住結果
+function goodsRefill() {
+  var plan = goodsPlan(), auto = goodsAutoOn(), v = {}, filled = 0, still = [], missAll = {}, prev = goodsStatus;
+  plan.entries.forEach(function (e) {
+    if (e.kind !== 'rec') return;
+    var rec = RECIPES[e.rid], pm = goodsProdMul(e, rec.tech) * (e.conn ? 1 : GOODS_ROAD_MUL), f = 1, id, need, miss = [], st = prev[e.key];
+    var cand = !auto || !st || st.kind !== 'rec' || st.state === 'blocked' || st.state === 'short' || st.state === 'hold';
+    for (id in rec.in) {
+      need = rec.in[id] * rec.rate * pm;
+      if (!(id in v)) v[id] = goodsRaw(id);
+      if (need > 0 && v[id] < need - 1e-9) { miss.push(id); f = Math.min(f, Math.max(0, v[id] / need)); }
+    }
+    if (f < 1e-6) f = 0;
+    for (id in rec.in) v[id] = Math.max(0, v[id] - rec.in[id] * rec.rate * pm * f);
+    if (!auto) goodsAllow[e.key] = f > 0 ? goodsRound(rec.rate * pm * f) : 0;
+    if (!cand) return;
+    if (!miss.length) { filled++; goodsStatus[e.key] = { kind: 'rec', rid: e.rid, state: 'run', miss: null, eff: pm, conn: e.conn }; return; }
+    still.push({ key: e.key, type: e.type, name: goodsBldName(e.type), miss: miss, part: f > 0 });
+    miss.forEach(function (m) { missAll[m] = true; });
+    goodsStatus[e.key] = { kind: 'rec', rid: e.rid, state: f > 0 ? 'short' : 'blocked', miss: miss[0], eff: pm * f, conn: e.conn };
+  });
+  goodsRefillLast = { filled: filled, still: still, missing: Object.keys(missAll), auto: auto };
+  return goodsRefillLast;
+}
+// 補料結果白話:「已補 N 項,仍缺 M 項:織坊 ×2(缺 麻)」
+function goodsRefillText(r) {
+  if (!r) return '';
+  if (!r.filled && !r.still.length) return '目前沒有缺料的工坊。';
+  var grp = {}, order = [];
+  r.still.forEach(function (s) {
+    var k = s.name + '|' + s.miss.join(',');
+    if (!grp[k]) { grp[k] = { name: s.name, miss: s.miss, n: 0 }; order.push(k); }
+    grp[k].n++;
+  });
+  return '已補 ' + r.filled + ' 項,仍缺 ' + r.still.length + ' 項' + (order.length ? ':' + order.map(function (k) { var x = grp[k]; return x.name + (x.n > 1 ? ' ×' + x.n : '') + '(缺 ' + x.miss.map(goodsName).join('、') + ')'; }).join('、') : '') + '。';
+}
 
 // 要顯示的貨品:持有 > 0,或非遷移專用 / 未實作的貨品;木石在頂列,不列
 function goodsVisibleList() {
@@ -518,7 +694,7 @@ function goodsUsers(id) {
   });
   if (g && !g.res && g.tier >= 1 && !g.legacy && !g.pack) out.tags.push('科技研發成本(T' + g.tier + ' 任選)');
   if (g && GOODS_FARM_TOOL.id === id) out.tags.push('田糧產 ×' + GOODS_FARM_TOOL.bonus);
-  if (g && g.cons) out.tags.push('居民消費:' + g.cons);
+  if (g && g.cons) out.tags.push('居民消費:' + (GOODS_CONS_NAME[g.cons] || '日用'));   // 不外露英文鍵(food / cloth)
   return out;
 }
 // 上游樹:{ id, name, icon, tier, makers:[{ bldName, built, kind, rate, kids:[{ n, node }] }] };depth 限制展開層數
@@ -533,7 +709,7 @@ function goodsChainUp(id, depth, built) {
   });
   return node;
 }
-var goodsTab = 'inv', goodsChainSel = 'g_yifu', goodsChainFocus = null;   // goodsChainFocus:鏈條圖上標出缺口的貨品 id(瓶頸圖示 / 生產分頁帶入)
+var goodsTab = 'need', goodsChainSel = 'g_yifu', goodsChainFocus = null;   // goodsTab:need 材料(基本模式預設)/ inv 庫存 / chain 鏈條 / prod 生產(後兩者屬進階)   // goodsChainFocus:鏈條圖上標出缺口的貨品 id(瓶頸圖示 / 生產分頁帶入)
 function goodsChainNodeHtml(node, n, lv) {
   var h = '<div class="gch" style="margin-left:' + (lv ? 10 : 0) + 'px"><span' + (node.id === goodsChainFocus ? ' class="gfocus"' : '') + '>' + (n ? n + '× ' : '') + node.icon + ' ' + goodsEsc(node.name) + ' <i class="gtag">T' + node.tier + '</i>' + (node.id === goodsChainFocus ? ' ◀ 缺口' : '') + '</span>';
   node.makers.forEach(function (m) {
@@ -545,7 +721,7 @@ function goodsChainNodeHtml(node, n, lv) {
 // 生產分頁(O10):每個生產建築的狀態 / 產出每小時 / 缺什麼;問題在前
 function goodsProdHtml() {
   var rows = goodsProdRows(), sm = goodsProdSummary(rows), on = typeof chainVisIsOn === 'function' && chainVisIsOn();
-  var h = '<div class="gsub">共 ' + sm.total + ' 處:運轉 ' + sm.ok + ',缺料 ' + sm.miss + ',未通路 ' + sm.road + ',庫滿 ' + sm.full + (sm.ore ? ',缺礦 ' + sm.ore : '') + '。</div>';
+  var h = '<div class="gsub">共 ' + sm.total + ' 處:運轉中 ' + sm.ok + ',缺料 ' + (sm.miss + sm.ore) + ',沒接路 ' + sm.road + ',倉庫滿了 ' + sm.full + (sm.hold ? ',等補料 ' + sm.hold : '') + '。</div>';
   if (typeof chainVisToggle === 'function') h += '<div class="gsub">城市畫面生產視圖(顯示全部生產建築狀態與貨物流向):<button class="gmini' + (on ? ' on' : '') + '" data-gp="view">' + (on ? '開' : '關') + '</button></div>';
   if (!rows.length) return h + '<div class="gsub">還沒有生產建築:蓋麻田、木工棚、織坊、礦坑、打鐵舖、成衣鋪。</div>';
   rows = rows.slice().sort(function (a, b) { return (b.level - a.level) || (b.causes.length - a.causes.length) || (a.y - b.y) || (a.x - b.x); });
@@ -561,12 +737,27 @@ function goodsProdHtml() {
   if (okHidden) h += '<div class="gsub">另有 ' + okHidden + ' 處運轉正常(未列出)。</div>';
   return h;
 }
+// 工藝流程線(進階 / 鏈條畫面;歷史世界才有):〔材料 ×n〕→ 工序(灰色小標籤,只是文字)→ 成品;下一行為簡化說明
+function goodsCraftLine(rid) {
+  var cr = typeof goodsRecipeCraft === 'function' ? goodsRecipeCraft(rid) : null, r = RECIPES[rid];
+  if (!cr || !r) return '';
+  var mats = Object.keys(r.in).map(function (i) { return '<span class="gmat">' + goodsIcon(i) + goodsEsc(goodsName(i)) + ' ×' + r.in[i] + '</span>'; }).join(' ');
+  var steps = cr.steps.map(function (s) { return '<i class="gstep">🔧' + goodsEsc(s) + '</i>'; }).join(' → ');
+  var outId = Object.keys(r.out)[0];
+  return '<div class="gcraft">' + mats + ' → ' + steps + ' → <span class="gmat">' + goodsIcon(outId) + goodsEsc(goodsName(outId)) + '</span>' +
+    (cr.note ? '<small>簡化:' + goodsEsc(cr.note) + '</small>' : '') + '</div>';
+}
+function goodsCraftHtml(id) {
+  var h = '';
+  goodsRecipeIds().forEach(function (rid) { if (RECIPES[rid].out[id]) h += goodsCraftLine(rid); });
+  return h ? '<div class="gtier">工藝(真實工序;灰色只是說明,不是材料)</div>' + h : '';
+}
 function goodsChainHtml() {
   var h = '<div class="gsub">選一個貨品,看它的上游原料與下游用途;紅字 = 該生產建築還沒蓋。</div><div class="gchips">';
   goodsIds().filter(function (id) { var g = GOODS[id]; return !g.res && !g.legacy && !g.later && g.tier >= 1; }).sort(function (a, b) { return (GOODS[a].tier - GOODS[b].tier) || (a < b ? -1 : 1); }).forEach(function (id) {
     h += '<button class="gmini' + (id === goodsChainSel ? ' on' : '') + '" data-gp="chain" data-id="' + id + '">' + goodsIcon(id) + goodsEsc(goodsName(id)) + '</button>';
   });
-  h += '</div><div class="gtier">上游(怎麼做)</div>' + goodsChainNodeHtml(goodsChainUp(goodsChainSel, 6), 0, 0);
+  h += '</div><div class="gtier">上游(怎麼做)</div>' + goodsChainNodeHtml(goodsChainUp(goodsChainSel, 6), 0, 0) + goodsCraftHtml(goodsChainSel);
   var u = goodsUsers(goodsChainSel);
   h += '<div class="gtier">下游(拿來做什麼)</div>';
   if (!u.recipes.length && !u.tags.length) h += '<div class="gsub">目前只能賣給市集(基價 ' + goodsPrice(goodsChainSel) + ')</div>';
@@ -575,21 +766,88 @@ function goodsChainHtml() {
   return h;
 }
 
+// 基本模式「材料」分頁:每種生產建築一張卡——產出、需要材料(庫存 / 缺)、缺 X → 去哪裡 〔前往〕;不顯示鏈條文字
+function goodsGapBtn(gp) {
+  if (gp.act === 'build') return '<button class="gmini" data-gp="gbuild" data-v="' + goodsEsc(gp.arg) + '">' + gp.label + '</button>';
+  if (gp.act === 'tech') return '<button class="gmini" data-gp="gtech" data-v="' + goodsEsc(gp.arg) + '">' + gp.label + '</button>';
+  if (gp.act === 'go') return '<button class="gmini" data-gp="go" data-x="1" data-k="' + goodsEsc(gp.arg) + '">' + gp.label + '</button>';
+  if (gp.act === 'buy') return '<button class="gmini" data-gp="gbuy">' + gp.label + '</button>';
+  if (gp.act === 'refill') return '<button class="gmini" data-gp="refill">' + gp.label + '</button>';
+  return '';
+}
+function goodsGapLine(gp) {
+  return '<div class="ggap">缺 ' + goodsEsc(gp.name) + ' → ' + goodsEsc(gp.where) + ' ' + goodsGapBtn(gp) + (gp.buy && gp.act !== 'buy' ? ' <button class="gmini" data-gp="gbuy">走鏢</button>' : '') + '</div>';
+}
+function goodsNeedHtml() {
+  var c = goodsCity(), auto = goodsAutoOn(), list = goodsNeedList(), h = '', cnt = { run: 0, miss: 0, full: 0, road: 0, hold: 0 };
+  h += '<div class="gsub">把材料放進庫房(採集、走鏢帶回…),工坊會自己領料開工。</div>' +
+    '<div class="gsub"><button class="gmini' + (auto ? ' on' : '') + '" data-gp="auto">自動調度:' + (auto ? '開' : '關') + '</button> <button class="gmini" data-gp="refill">補料</button></div>';
+  if (!auto) h += '<div class="gsub">自動調度已關:工坊只在按「補料」時領 1 小時份的材料。</div>';
+  if (goodsRefillLast) {
+    h += '<div class="gnd grf"><div>' + goodsEsc(goodsRefillText(goodsRefillLast)) + '</div>';
+    goodsRefillLast.missing.forEach(function (id) { h += goodsGapLine(goodsGapInfo(id)); });
+    h += '</div>';
+  }
+  if (!list.length) return h + '<div class="gsub">還沒有生產建築:蓋麻田、木工棚、織坊、礦坑、打鐵舖、成衣鋪。</div>';
+  list.forEach(function (g) { cnt[g.state] += g.n; });
+  h += '<div class="gsub">運轉中 ' + cnt.run + '、缺料 ' + cnt.miss + '、倉庫滿了 ' + cnt.full + '、沒接路 ' + cnt.road + (cnt.hold ? '、等補料 ' + cnt.hold : '') + '</div>';
+  list.forEach(function (g) {
+    h += '<div class="gnd' + (g.state !== 'run' ? ' bad' : '') + '"><div class="gnh"><span>' + g.icon + ' ' + goodsEsc(g.name) + (g.n > 1 ? ' ×' + g.n : '') + '</span><b class="gst gst-' + g.state + '">' + goodsEsc(g.stateText) + '</b>' +
+      (g.roadKey === g.key ? '' : '<button class="gmini" data-gp="go" data-x="1" data-k="' + g.key + '">前往</button>') + '</div>' +
+      '<div>產出:' + g.outIcon + goodsEsc(g.outName) + (g.perHour > 0 ? ' ' + g.perHour + ' /時' : '') + '</div>';
+    if (g.kind === 'rec') h += '<div>需要材料:' + g.mats.map(function (m) { return m.lack ? '<b class="glack">' + m.icon + goodsEsc(m.name) + ' ×' + m.n + '(缺)</b>' : m.icon + goodsEsc(m.name) + ' ×' + m.n + '(庫存 ' + m.have + ')'; }).join('、') + '</div>';
+    else h += '<div class="gsub">不需材料</div>';
+    g.gaps.forEach(function (gp) { h += goodsGapLine(gp); });
+    if (g.roadKey) h += '<div class="ggap">沒接路 → 補一段路接到城主府(現在產量減半) <button class="gmini" data-gp="go" data-x="1" data-k="' + g.roadKey + '">前往接路</button></div>';
+    if (g.state === 'full') h += '<div class="ggap">倉庫滿了 → ' + (c && c.autoSell ? '多出的自動賣成金幣' : '用掉它,或打開溢出自動賣 <button class="gmini" data-gp="sell">打開</button>') + '</div>';
+    if (g.state === 'hold') h += '<div class="ggap">等補料 → 按上方「補料」 <button class="gmini" data-gp="refill">補料</button></div>';
+    if (g.rids && g.rids.length > 1) h += '<button class="gmini" data-gp="cyc" data-k="' + g.key + '">換配方</button>';
+    h += '</div>';
+  });
+  return h;
+}
+// 「前往蓋 / 前往科技 / 走鏢」:關庫房、開對應介面
+function goodsToast(m) { if (typeof showToast === 'function') { try { showToast(m); } catch (e) { if (typeof console !== 'undefined') console.warn('[goods] toast 失敗', e); } } }
+function goodsGoBuild(t) {
+  if (!t || typeof OBJECTS === 'undefined' || !OBJECTS[t]) return false;
+  goodsPanelToggle(false);
+  if (!(typeof srGoBuild === 'function' && srGoBuild(t)) && typeof setTool === 'function') setTool(t);
+  goodsToast('已選「' + goodsBldName(t) + '」,點地面放置');
+  return true;
+}
+function goodsGoTech(id) {
+  goodsPanelToggle(false);
+  if (typeof techPanelOpen === 'function' && techPanelOpen(id)) return true;
+  if (typeof toggleTechPanel === 'function') { toggleTechPanel(true); return true; }
+  return false;
+}
+function goodsGoBuy() {
+  if (typeof caravanPanelToggle !== 'function') return false;
+  goodsPanelToggle(false);
+  caravanPanelToggle(true);
+  goodsToast('走鏢會隨機帶回加工品以上的貨,回來自動入庫');
+  return true;
+}
+
 // ───────── 最小 UI:庫房面板(側欄「庫房」按鈕 → 隱藏的 #btnGoods)─────────
 function goodsEsc(s) { return String(s).replace(/[&<>"]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
 function goodsPanelHtml() {
-  var c = goodsCity(), h = '', tierName = ['原料', '加工品', '成品', '工藝品', '奢侈品'], last = -1;
+  var c = goodsCity(), h = '', tierName = ['原料', '加工品', '成品', '工藝品', '奢侈品'], last = -1, adv = goodsIsAdv();
   if (!c) return '';
-  h += '<button class="close" data-gp="close" title="關閉">✕</button><b>📦 庫房</b> ' +
-    '<button class="gmini' + (goodsTab === 'inv' ? ' on' : '') + '" data-gp="tab" data-v="inv">庫存</button><button class="gmini' + (goodsTab === 'chain' ? ' on' : '') + '" data-gp="tab" data-v="chain">鏈條</button><button class="gmini' + (goodsTab === 'prod' ? ' on' : '') + '" data-gp="tab" data-v="prod">生產</button>';
+  var tb = function (v, nm) { return '<button class="gmini' + (goodsTab === v ? ' on' : '') + '" data-gp="tab" data-v="' + v + '">' + nm + '</button>'; };
+  h += '<button class="close" data-gp="close" title="關閉">✕</button><b>📦 庫房</b> ' + tb('need', '材料') + tb('inv', '庫存') +
+    (adv || goodsTab === 'chain' || goodsTab === 'prod' ? tb('chain', '鏈條') + tb('prod', '生產') : '') +
+    '<button class="gmini" data-gp="mode">' + (adv ? '收起進階' : '進階 ▸') + '</button>';
   if (goodsTab === 'chain') return h + goodsChainHtml();
   if (goodsTab === 'prod') return h + goodsProdHtml();
+  if (goodsTab === 'need') return h + goodsNeedHtml();
   h += '<div class="gsub">每種貨品各有上限;<button data-gp="sell" class="gmini">溢出自動賣:' + (c.autoSell ? '開' : '關') + '</button></div>';
   goodsVisibleList().forEach(function (g) {
     if (g.tier !== last) { last = g.tier; h += '<div class="gtier">T' + g.tier + ' ' + tierName[g.tier] + '</div>'; }
     var pct = Math.max(0, Math.min(100, Math.round(g.have / g.cap * 100)));
     h += '<div class="grow"><span>' + g.icon + ' ' + goodsEsc(g.name) + '</span><span class="gn">' + g.have + ' / ' + g.cap + '</span><i class="gbar"><u style="width:' + pct + '%"></u></i></div>';
   });
+  if (!adv) return h + '<div class="gsub">工坊缺什麼、去哪拿 → 看「材料」分頁。</div>' + (goodsLast && goodsOfflineText() ? '<div class="gtier">離開期間</div><div class="gsub">' + goodsEsc(goodsOfflineText()) + '</div>' : '');
   var ws = goodsWorkshopList();
   h += '<div class="gtier">工坊與原料點</div>';
   if (!ws.length) h += '<div class="gsub">還沒有生產建築:蓋麻田、木工棚、織坊、礦坑、打鐵舖、成衣鋪。</div>';
@@ -630,9 +888,19 @@ function goodsPanelClick(e) {
   if (!t) return;
   var a = t.getAttribute('data-gp');
   if (a === 'close') goodsPanelToggle(false);
-  else if (a === 'tab') { var tv = t.getAttribute('data-v'); goodsTab = tv === 'chain' ? 'chain' : (tv === 'prod' ? 'prod' : 'inv'); if (goodsTab !== 'chain') goodsChainFocus = null; goodsPanelRender(); }
+  else if (a === 'tab') { var tv = t.getAttribute('data-v'); goodsTab = ['need', 'inv', 'chain', 'prod'].indexOf(tv) >= 0 ? tv : 'need'; if (goodsTab !== 'chain') goodsChainFocus = null; goodsPanelRender(); }
+  else if (a === 'mode') { var on = goodsSetAdv(!goodsIsAdv()); if (!on && (goodsTab === 'chain' || goodsTab === 'prod')) goodsTab = 'need'; if (on && goodsTab === 'need') goodsTab = 'chain'; goodsPanelRender(); }
+  else if (a === 'auto') { goodsSetAuto(!goodsAutoOn()); goodsRefillLast = null; goodsPanelRender(); }
+  else if (a === 'refill') { goodsRefill(); goodsPanelRender(); }
+  else if (a === 'gbuild') goodsGoBuild(t.getAttribute('data-v'));
+  else if (a === 'gtech') goodsGoTech(t.getAttribute('data-v'));
+  else if (a === 'gbuy') goodsGoBuy();
   else if (a === 'view') { if (typeof chainVisToggle === 'function') chainVisToggle(); goodsPanelRender(); }
-  else if (a === 'go') { var kk = (t.getAttribute('data-k') || '').split(','); if (typeof centerOnCell === 'function' && kk.length === 2) { centerOnCell(+kk[0], +kk[1]); if (typeof clampView === 'function') clampView(); } }
+  else if (a === 'go') {
+    var kk = (t.getAttribute('data-k') || '').split(',');
+    if (typeof centerOnCell === 'function' && kk.length === 2) { centerOnCell(+kk[0], +kk[1]); if (typeof clampView === 'function') clampView(); }
+    if (t.getAttribute('data-x') === '1') goodsPanelToggle(false);   // 基本模式的「前往」:關掉庫房讓玩家看到地圖
+  }
   else if (a === 'gap') { goodsOpenChain(t.getAttribute('data-id'), t.getAttribute('data-m')); }
   else if (a === 'chain') { goodsChainSel = t.getAttribute('data-id') || goodsChainSel; goodsPanelRender(); }
   else if (a === 'sell') { goodsToggleSell(); goodsPanelRender(); }
@@ -651,7 +919,13 @@ function goodsUiInit() {
       '#goodsPanel .gbar{display:block;flex:0 0 100%;height:4px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}#goodsPanel .gbar u{display:block;height:100%;background:#f0b45a;text-decoration:none}' +
       '#goodsPanel .gws{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;margin-top:5px}#goodsPanel .gws small{flex:1;min-width:0;opacity:.8}#goodsPanel .gws.bad small{color:#ff8a7a;opacity:1}' +
       '#goodsPanel .gmini{min-height:28px;padding:2px 8px;font-size:12px}#goodsPanel .gmini.on{background:#f0b45a;color:#222}' +
-      '#goodsPanel .gchips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}#goodsPanel .gch{margin-top:3px;border-left:1px solid rgba(255,255,255,.2);padding-left:6px}#goodsPanel .gch small{display:block;opacity:.8}#goodsPanel .gch small.bad{color:#ff8a7a;opacity:1}#goodsPanel .gtag{opacity:.6;font-size:11px}#goodsPanel .gfocus{color:#ff8a7a;font-weight:bold}';
+      '#goodsPanel .gchips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}#goodsPanel .gch{margin-top:3px;border-left:1px solid rgba(255,255,255,.2);padding-left:6px}#goodsPanel .gch small{display:block;opacity:.8}#goodsPanel .gch small.bad{color:#ff8a7a;opacity:1}#goodsPanel .gtag{opacity:.6;font-size:11px}#goodsPanel .gfocus{color:#ff8a7a;font-weight:bold}' +
+      '#goodsPanel .gnd{margin-top:6px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.06);line-height:1.5}#goodsPanel .gnd.bad{background:rgba(255,120,100,.10)}#goodsPanel .gnd.grf{background:rgba(240,180,90,.14)}' +
+      '#goodsPanel .gnh{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px}#goodsPanel .gnh span{flex:1;min-width:0;font-weight:bold}#goodsPanel .gnh .gmini{margin-top:0}#goodsPanel .gst{font-size:12px;padding:0 6px;border-radius:6px;background:#3f9d5a;color:#fff;font-weight:normal}' +
+      '#goodsPanel .gst-miss{background:#d9503f}#goodsPanel .gst-full{background:#4f8fd6}#goodsPanel .gst-road{background:#d98b2f}#goodsPanel .gst-hold{background:#7a7f88}' +
+      '#goodsPanel .glack{color:#ff8a7a}#goodsPanel .ggap{margin-top:3px;color:#ffb0a4}#goodsPanel .gnd .gmini{margin-top:3px}' +
+      '.gcraft{margin-top:4px;line-height:1.9;font-size:12px}.gcraft small{display:block;opacity:.75;line-height:1.4}.gcraft .gmat{font-weight:bold;white-space:nowrap}' +   // 庫房鏈條頁與生產視圖彈窗(chainvis.js)共用
+      '.gcraft .gstep{font-style:normal;padding:0 5px;border-radius:6px;background:rgba(255,255,255,.08);color:#b8bcc4;white-space:nowrap}';
     document.head.appendChild(css);
     var panel = document.createElement('div');
     panel.id = 'goodsPanel';

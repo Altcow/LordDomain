@@ -3,7 +3,8 @@
 //          techUiLayout techUiAncestors techUiSuccessors techUiHighlight techUiFirstReady techUiEraText techObjLockText techFeatLockText techFeatLockGo techLockedNames techCancelHint
 // 依賴(皆 typeof 守衛):citytech.js、techtree_data.js、nolevel_data.js、panelmgr.js、goods.js。ES2017;不用 ?. ??。
 var tu = { el: null, open: false, branch: 'ag', focus: '', sel: '', zoom: 1, confirm: '', sig: '', qSig: '', treeKey: '', builds: 0, last: {}, dragged: 0, timer: 0, msg: '', bodyEl: null, headEl: null, topEl: null, resEl: null, warnEl: null, qEl: null, tabsEl: null, eraEl: null, scEl: null, cvEl: null, detEl: null, lsZoom: 0, stripEl: null, sResEl: null, sCurEl: null, qOpen: false, sug: 1, sugSet: {}, sugWhy: {} };
-var TU_STATE_TXT = { done: '已研', cur: '研發中', queued: '排隊中', ready: '可研', req: '前置未滿', era: '本時代未開', mega: '里程碑' };
+function tuStTxt(st) { return st.k === 'bld' && st.miss && st.miss.length ? '先蓋' + st.miss[0] : TU_STATE_TXT[st.k]; }   // 簡化模式:缺建築直接寫要先蓋什麼
+var TU_STATE_TXT = { done: '已研', cur: '研發中', queued: '排隊中', ready: '可研', req: '前置未滿', era: '本時代未開', mega: '里程碑', bld: '缺建築' };
 
 function tuEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function tuToast(t) { if (typeof showToast === 'function') showToast(t); }
@@ -18,6 +19,7 @@ function tuNodeName(id) { var n = typeof techNode === 'function' ? techNode(id) 
 function techUiState(id) {
   var n = techNode(id), s = techState(), miss = [];
   if (!n) return { k: 'req', miss: [] };
+  id = n.id;   // 簡化模式:舊 id 查到併入的新節點
   if (s.done[id]) return { k: 'done', miss: miss };
   if (techIsMega(n)) return { k: 'mega', miss: miss };
   if (s.cur.some(function (c) { return c.id === id; })) return { k: 'cur', miss: miss };
@@ -27,22 +29,37 @@ function techUiState(id) {
     return { k: 'req', miss: miss };
   }
   if (!techEraOpen(n.era)) return { k: 'era', miss: miss };
+  if (typeof techNeedMiss === 'function') {   // 簡化模式:前置建築未蓋(可排入序列,蓋好才開工)
+    var nb = techNeedMiss(id);
+    if (nb.length) return { k: 'bld', miss: nb.map(techNeedName), need: nb };
+  }
   return { k: 'ready', miss: miss };
+}
+// 簡化模式:節點的前置建築 / 解鎖建築(皆為可蓋的物件 id;魔幻世界換成本族建築)
+function techUiNeedList(n) { return (typeof techNeedOf === 'function') ? techNeedOf(n.id) : []; }
+function techUiBldList(n) {
+  var out = [];
+  techUiUnlockList(n).forEach(function (u) { if (typeof OBJECTS !== 'undefined' && OBJECTS[u] && !OBJECTS[u].retired && out.indexOf(u) < 0) out.push(u); });
+  return out;
 }
 
 // 解鎖內容中文名(NL_UNLOCK_NAMES → 物件名 → 原 id)
 function techUiUnlockList(n) {   // 魔幻世界:漢式清單去隱藏物件 + 本族風格件 + 特色解鎖;歷史世界原樣
   var f = (typeof fxTechUnlock === 'function') ? fxTechUnlock(n.id, n.unlock || []) : null;
+  if (f && n.from && n.from.length > 1) {   // 簡化科技樹:併入的舊節點各自的魔幻解鎖清單取聯集
+    n.from.forEach(function (o) { (fxTechUnlock(o, []) || []).forEach(function (u) { if (f.indexOf(u) < 0) f.push(u); }); });
+  }
   return f || n.unlock || [];
 }
 function techUiUnlockNames(n) {
   var out = [];
   techUiUnlockList(n).forEach(function (u) {
-    var nm = (typeof fxUnlockName === 'function' && fxUnlockName(u)) || (typeof NL_UNLOCK_NAMES !== 'undefined' && NL_UNLOCK_NAMES[u]) || (typeof OBJECTS !== 'undefined' && OBJECTS[u] && OBJECTS[u].name) || (typeof NL_NEW_OBJECTS !== 'undefined' && NL_NEW_OBJECTS[u] && NL_NEW_OBJECTS[u].name) || u;
+    var nm = tuUName(u);
     if (out.indexOf(nm) < 0) out.push(nm);
   });
   return out;
 }
+function tuUName(u) { return (typeof fxUnlockName === 'function' && fxUnlockName(u)) || (typeof NL_UNLOCK_NAMES !== 'undefined' && NL_UNLOCK_NAMES[u]) || (typeof OBJECTS !== 'undefined' && OBJECTS[u] && OBJECTS[u].name) || (typeof NL_NEW_OBJECTS !== 'undefined' && NL_NEW_OBJECTS[u] && NL_NEW_OBJECTS[u].name) || u; }
 function tuCostText(id) {
   var c = techCostOf(id), p = [];
   if (!c) return '';
@@ -225,7 +242,7 @@ function techUiSuggest() {
   if (typeof estateObjects === 'function') { try { built = (estateObjects() || []).length > 3; } catch (e0) { built = true; } }
   Object.keys(TU_SUG_BAR).forEach(function (b) {
     var k = TU_SUG_BAR[b], v;
-    if (typeof cityFxCity !== 'function' || !built) return;
+    if (typeof cityFxCity !== 'function' || !built || (typeof citySimpleOn === 'function' && citySimpleOn())) return;   // 簡化模式:不看民生指標
     try { v = cityFxCity(k); } catch (e) { v = null; }
     if (typeof v === 'number' && isFinite(v) && v < 50) low[b] = k;
   });
@@ -251,7 +268,7 @@ function tuSugCalc() {
 // e 時代 → 開下一時代的進度:{ done, k, ms(大工程是否滿足,無條件為 true), hasMs, groups };第 5 時代回 null
 function techUiEraProg(e) {
   var need, ms;
-  if (e >= 5) return null;
+  if (e >= (typeof techEraMax === 'function' ? techEraMax() : 5)) return null;
   need = techEraNeed(e + 1);
   ms = !need.groups || techState().bigWaive >= e + 1 || need.groups.some(function (g) { return g.every(techBigHas); });
   return { done: techEraDoneCount(e), k: need.k, ms: ms, hasMs: !!need.groups, groups: need.groups };
@@ -381,6 +398,7 @@ function tuTabsHtml() {
   TECH_BRANCHES.forEach(function (b) {
     var done = 0, tot = 0;
     CITY_TECHS.forEach(function (n) { if (n.branch === b.id) { tot++; if (techDone(n.id)) done++; } });
+    if (!tot && typeof csTreeOn === 'function' && csTreeOn()) return;   // 簡化科技樹:空分支(里程碑)不顯示
     if (ic) h += '<button class="tu-tab ic' + (tu.branch === b.id ? ' on' : '') + '" data-tu="tab" data-id="' + b.id + '" title="' + tuEsc(tuBrName(b)) + '" aria-label="' + tuEsc(tuBrName(b)) + '">' + tuBrIcon(b.id, 32, tuBrName(b).charAt(0)) + '<span class="tu-tn">' + tuEsc(tuBrName(b)) + '</span><small> ' + done + '/' + tot + '</small></button>';
     else h += '<button class="tu-tab' + (tu.branch === b.id ? ' on' : '') + '" data-tu="tab" data-id="' + b.id + '">' + tuEsc(tuBrName(b)) + '<small> ' + done + '/' + tot + '</small></button>';
   });
@@ -388,8 +406,8 @@ function tuTabsHtml() {
 }
 // 時代僅作為頂部參考色帶(階別顏色對照),不參與節點分組
 function tuEraHtml() {
-  var h = '', e, p;
-  for (e = 1; e <= 5; e++) {
+  var h = '', e, p, em = (typeof techEraMax === 'function') ? techEraMax() : 5;
+  for (e = 1; e <= em; e++) {
     p = techUiEraProg(e);
     h += '<span class="tu-ec e' + e + (techEraOpen(e) ? '' : ' off') + '" data-tu="era" data-id="' + e + '">第' + TU_CN[e] + '時代' + (tuEraName(e) ? '〈' + tuEraName(e) + '〉' : '') + (techEraOpen(e) ? '' : '🔒') +
       (p ? ' ' + Math.min(p.done, p.k) + '/' + p.k + (p.hasMs ? ' 大工程' + (p.ms ? '✔' : '✘') : '') : '') + '</span>';
@@ -418,7 +436,7 @@ function tuTreeInner(branch, zoom) {
     if (n.branch !== branch) return;
     var p = lay.pos[n.id], st = techUiState(n.id);
     h += '<div class="tu-nw" style="left:' + p.x + 'px;top:' + p.y + 'px;width:' + Z.w + 'px"><div class="' + tuNodeClass(n.id, hs, st) + '" data-tu="sel" data-id="' + n.id + '" data-node="' + n.id + '" style="height:' + Z.h + 'px">' +
-      '<span class="tu-nm">' + tuEsc(tuLabel(n)) + '</span><span class="tu-nf"><span class="tu-era">第' + n.era + '階</span><i class="tu-lock">🔒</i><span class="tu-st ' + st.k + '">' + TU_STATE_TXT[st.k] + '</span></span></div>';
+      '<span class="tu-nm">' + tuEsc(tuLabel(n)) + '</span><span class="tu-nf"><span class="tu-era">第' + n.era + '階</span><i class="tu-lock">🔒</i><span class="tu-st ' + st.k + '">' + tuEsc(tuStTxt(st)) + '</span></span></div>';
     (lay.ext[n.id] || []).forEach(function (x) {
       h += '<span class="tu-xb" data-tu="goto" data-id="' + x.id + '" style="height:' + (TU_BADGE_H - 1) + 'px">' + (x.or ? '或 ' : '') + '← ' + tuEsc(techUiBranchName(x.branch)) + '·' + tuEsc(tuNodeName(x.id)) + '</span>';
     });
@@ -443,7 +461,7 @@ function tuApply() {
   for (i = 0; i < els.length; i++) {
     el = els[i]; id = el.getAttribute('data-node'); st = techUiState(id); c = tuNodeClass(id, hs, st);
     if (el.getAttribute('class') !== c) el.setAttribute('class', c);
-    s = el.querySelector ? el.querySelector('.tu-st') : null; t = TU_STATE_TXT[st.k];
+    s = el.querySelector ? el.querySelector('.tu-st') : null; t = tuStTxt(st);
     if (s && s.textContent !== t) { s.textContent = t; s.setAttribute('class', 'tu-st ' + st.k); }
   }
   lay = techUiLayout(tu.branch, tu.zoom);
@@ -461,21 +479,56 @@ function tuDetailHtml() {
   var n = tu.sel ? techNode(tu.sel) : null, st, h, un, c, pr;
   if (!n) return '<div class="tu-hint">點選節點看條件、成本與解鎖內容;選取後會高亮它的前置路徑與後繼,其餘淡化。</div>';
   st = techUiState(n.id); un = techUiUnlockNames(n);
-  h = '<div class="tu-dt"><b>' + tuEsc(tuLabel(n)) + '</b><span class="tu-era">第' + n.era + '階</span><span class="tu-st ' + st.k + '">' + TU_STATE_TXT[st.k] + '</span><span class="tu-sp"></span><button data-tu="desel">收起</button></div>';
+  h = '<div class="tu-dt"><b>' + tuEsc(tuLabel(n)) + '</b><span class="tu-era">第' + n.era + '階</span><span class="tu-st ' + st.k + '">' + tuEsc(tuStTxt(st)) + '</span><span class="tu-sp"></span><button data-tu="desel">收起</button></div>';
   if (tuDesc(n)) h += '<div class="tu-d">' + tuEsc(tuDesc(n)) + '</div>';
   if (st.k === 'mega') h += '<div class="tu-c">條件:' + tuEsc((n.cost && n.cost.goodsText) || '大工程達成') + '</div><div class="tu-d">里程碑不走研發序列,由大工程完成後記入。</div>';
   else h += '<div class="tu-c">' + tuEsc(tuCostText(n.id)) + '　時長 ' + tuDurText(techDurationOf(n.id)) + '</div>';
   if (tu.sugSet[n.id] && tu.sugWhy[n.id]) h += '<div class="tu-sg">★ 建議先研:' + tuEsc(tu.sugWhy[n.id]) + '</div>';
-  if (un.length) h += '<div class="tu-u">解鎖:' + tuEsc(un.join('、')) + '</div>';
+  if (n.need) h += tuBldHtml(n, st);   // 簡化模式:前置建築 / 解鎖建築(可點)
+  else if (un.length) h += '<div class="tu-u">解鎖:' + tuEsc(un.join('、')) + '</div>';
   pr = function (r) { return '<button class="tu-pr ' + (techDone(r) ? 'ok' : 'no') + '" data-tu="goto" data-id="' + r + '">' + (techDone(r) ? '✓ ' : '✗ ') + tuEsc(tuNodeName(r)) + '</button>'; };
   if (n.req && n.req.length) h += '<div class="tu-pq">前置:' + n.req.map(pr).join('') + (n.reqOr && n.reqOr.length ? ' <b>或</b> ' + n.reqOr.map(pr).join('') : '') + '</div>';
   if (st.k === 'req') h += '<div class="tu-lk">前置未滿:' + tuEsc(st.miss.join('、')) + (n.reqOr && n.reqOr.length ? '(或 ' + tuEsc(n.reqOr.map(tuNodeName).join('、')) + ')' : '') + '</div>';
   if (st.k !== 'done' && st.k !== 'mega' && !techEraOpen(n.era)) h += '<div class="tu-lk">🔒 ' + tuEsc(techUiEraText(n.era)) + '</div>';
   c = '';
   if (st.k === 'ready') c = '<button data-tu="add" data-id="' + n.id + '">研發</button>';
+  else if (st.k === 'bld') c = '<button data-tu="add" data-id="' + n.id + '">先排入研發(蓋好 ' + tuEsc(st.miss.join('、')) + ' 就開工)</button>';
   else if (st.k === 'req') c = techUiChainHtml(n.id) + '<button data-tu="addto" data-id="' + n.id + '">研發到這裡</button>';
   else if (st.k === 'done') techUiBuildable(n).forEach(function (u) { c += '<button data-tu="build" data-id="' + u + '">去蓋 ' + tuEsc(OBJECTS[u].name || u) + '</button>'; });
   return h + c;
+}
+// 簡化模式詳情:「先蓋 XX」→「研成可蓋 YY」;建築名可點(已解鎖 → 去蓋;未解鎖 → 跳到解鎖它的科技 / 搜尋)
+function tuBldHtml(n, st) {
+  var h = '', need = techUiNeedList(n), blds = techUiBldList(n), other = techUiUnlockList(n).filter(function (u) { return blds.indexOf(u) < 0; }), on;
+  if (need.length) {
+    h += '<div class="tu-bl">前置建築:';
+    need.forEach(function (b) {
+      on = (typeof techNeedHave === 'function') && techNeedHave(b) > 0;
+      h += '<button class="' + (on ? 'ok' : 'no') + '" data-tu="need" data-id="' + tuEsc(b) + '">' + (on ? '✓ ' : '先蓋 ') + tuEsc(techNeedName(b)) + (on ? '' : '(前往)') + '</button>';
+    });
+    h += '</div>';
+  }
+  if (blds.length) {
+    h += '<div class="tu-bl">研成可蓋:';
+    blds.forEach(function (u) { h += '<button data-tu="obj" data-id="' + tuEsc(u) + '">' + tuEsc(OBJECTS[u].name || u) + '</button>'; });
+    h += '</div>';
+  }
+  if (other.length) h += '<div class="tu-u">另開放:' + tuEsc(other.map(tuUName).filter(function (x, i, a) { return a.indexOf(x) === i; }).join('、')) + '</div>';
+  return h;
+}
+// 前置建築「前往」:已可蓋 → 選好工具;尚未解鎖 → 跳到解鎖它的科技
+function tuGoNeed(b) {
+  var t = (typeof techNeedType === 'function') ? techNeedType(b) : b, nid;
+  if (typeof isUnlocked === 'function' && isUnlocked('estate', t)) { tuGoObj(t); return; }
+  nid = techNodeOfObj(t);
+  if (nid) { tuGoto(nid); tu.msg = '要先研發〈' + tuNodeName(nid) + '〉才能蓋 ' + techNeedName(b); tuRender(false); }
+  else tuGoObj(t);
+}
+function tuGoObj(u) {
+  var nm = (typeof OBJECTS !== 'undefined' && OBJECTS[u] && OBJECTS[u].name) || u;
+  if (typeof isUnlocked === 'function' && isUnlocked('estate', u) && typeof srGoBuild === 'function') { techPanelClose(); if (!srGoBuild(u) && typeof setTool === 'function') setTool(u); tuToast('已選 ' + nm + ',點地面放置'); return; }
+  if (typeof srOpen === 'function' && typeof srSetQ === 'function') { techPanelClose(); srOpen(); srSetQ(nm); return; }
+  tu.msg = nm + ' 尚未解鎖'; tuRender(false);
 }
 function techUiHtml() {
   return tuHeadHtml() + '<div class="tu-tabs">' + tuTabsHtml() + '</div><div class="tu-es">' + tuEraHtml() + '</div><div class="tu-cv">' + tuTreeInner(tu.branch, tu.zoom) + '</div><div class="tu-det">' + tuDetailHtml() + '</div>';
@@ -532,6 +585,8 @@ function techUiAct(act, id) {
   if (act === 'sel') { tu.sel = tu.sel === id ? '' : id; tuRender(false); return; }
   if (act === 'desel') { tu.sel = ''; tuRender(false); return; }
   if (act === 'goto') { tuGoto(id); return; }
+  if (act === 'need') { tuGoNeed(id); return; }
+  if (act === 'obj') { tuGoObj(id); return; }
   if (act === 'zoom') { tu.zoom = (tu.zoom + 1) % TU_ZOOMS.length; tuRender(false); if (tu.sel) tuScrollTo(tu.sel); return; }
   if (act === 'sug') { tu.sug = tu.sug ? 0 : 1; tuSugSave(); tuRender(false); return; }
   if (act === 'era') {
@@ -610,7 +665,8 @@ var TU_CSS = '#techTreePanel{position:fixed;left:50%;top:3%;transform:translateX
   '.tu-cv{position:relative}.tu-svg{position:absolute;left:0;top:0;pointer-events:none}.tu-nw{position:absolute}' +
   '.tu-n{box-sizing:border-box;border:1px solid #5a4727;border-left:5px solid var(--ec,#888);border-radius:8px;padding:3px 5px;background:#2b2418;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;cursor:pointer;min-height:44px}' +
   '.tu-nm{font-weight:bold;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.tu-nf{display:flex;align-items:center;gap:4px;font-size:.85em}.tu-era{opacity:.7}.tu-lock{display:none;font-style:normal}.tu-n.lk .tu-lock{display:inline}' +
-  '.tu-st{font-size:.85em;border-radius:8px;padding:0 6px;background:#3a2f1a}.tu-st.ready{background:#2f5a2f}.tu-st.done{background:#2a4a6a}.tu-st.cur,.tu-st.queued{background:#6a5a1a}.tu-st.mega{background:#5a3a5a}.tu-st.era{background:#444}' +
+  '.tu-st{font-size:.85em;border-radius:8px;padding:0 6px;background:#3a2f1a}.tu-st.ready{background:#2f5a2f}.tu-st.done{background:#2a4a6a}.tu-st.cur,.tu-st.queued{background:#6a5a1a}.tu-st.mega{background:#5a3a5a}.tu-st.era{background:#444}.tu-st.bld{background:#6a3a1a}.tu-n.bld{background-color:#3a2a18;border-color:#d08a4a}' +
+  '.tu-bl{margin:4px 0;line-height:1.9}.tu-bl button{margin:0 4px 4px 0}.tu-bl .ok{opacity:.8}.tu-bl .no{border-color:#d08a4a;color:#ffd2a0}' +
   '.tu-n.ready{background-color:#294a29;border-color:#7fd37f}.tu-n.done{background-color:#1f3550}.tu-n.cur,.tu-n.queued{background-color:#52461a;border-color:#f0b45a}.tu-n.req{background-color:#2b2418;opacity:.85}.tu-n.era{background-color:#2a2a2a;opacity:.75}.tu-n.mega{background-color:#4a2f4a;border-color:#c89ac8}' +
   '.tu-n.focus{outline:2px solid #f0b45a}.tu-n.sel{outline:3px solid #fff}.tu-n.dim{opacity:.25}.tu-n.hl{opacity:1}' +
   '.tu-ec[data-tu]{cursor:pointer}.tu-n{position:relative}.tu-n.sug::after{content:"★";position:absolute;right:3px;top:0;color:#ffd36a;font-size:14px;line-height:1}.tu-sg{margin-top:3px;color:#ffd36a}.tu-chain{color:#ffd9a0}' +

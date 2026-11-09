@@ -29,7 +29,8 @@ var SAVE_PREF_KEYS = [
   'lorddomain.settings.v1', 'lorddomain.mute', 'lorddomain.bgm.pick', 'lorddomain.bgm.rot', 'lorddomain.art.v1', 'lorddomain.life.v1',
   'lorddomain.render', 'lorddomain.fps', 'lorddomain.powersave', 'lorddomain.cityonly', 'lorddomain.adv.mode', 'lorddomain.guide.v1', 'lorddomain.id.v1',
   'lorddomain.ui.top', 'lorddomain.ui.cat', 'lorddomain.ui.camptop', 'lorddomain.ui.campcat', 'lorddomain.ui.variant', 'lorddomain.ui.wallskin',
-  'lorddomain.ui.mode', 'lorddomain.ui.prevMode', 'lorddomain.ui.compact', 'lorddomain.ui.bpreview', 'lorddomain.ui.fsTipDismissed', 'lorddomain.ui.worldtag', 'lorddomain.ui.settingsTab', 'lorddomain.extsprites', 'lorddomain.nextstep', 'lorddomain.uiicons', 'lorddomain.terraintex', 'lorddomain.ui.minimap', 'lorddomain.bn.pref', 'lorddomain.bnshare.pref', 'lorddomain.ui.autoBrowse', 'lorddomain.ui.installTip'
+  'lorddomain.ui.mode', 'lorddomain.ui.prevMode', 'lorddomain.ui.compact', 'lorddomain.ui.bpreview', 'lorddomain.ui.fsTipDismissed', 'lorddomain.ui.worldtag', 'lorddomain.ui.settingsTab', 'lorddomain.extsprites', 'lorddomain.nextstep', 'lorddomain.uiicons', 'lorddomain.terraintex', 'lorddomain.ui.minimap', 'lorddomain.bn.pref', 'lorddomain.bnshare.pref', 'lorddomain.ui.autoBrowse', 'lorddomain.ui.installTip', 'lorddomain.ui.doorMarks',
+  'lorddomain.goods.mode', 'lorddomain.goods.auto'
 ];
 // 世界管理鍵:不進槽、不清除(世界清單 / 跨分頁鎖)
 var SAVE_WORLD_KEYS = ['lorddomain.worlds.v1', 'lorddomain.worlds.lock', 'lorddomain.legacymig.v1'];
@@ -182,7 +183,7 @@ function savesTimeText(ts) {
   return savesTwo(d.getMonth() + 1) + '/' + savesTwo(d.getDate()) + ' ' + savesTwo(d.getHours()) + ':' + savesTwo(d.getMinutes());
 }
 function savesDefaultName(sum, ts) {
-  return (sum.lv ? 'Lv' + sum.lv : '') + '城 · 人口' + sum.pop + ' · ' + savesTimeText(ts);
+  return (sum.lv ? 'Lv' + sum.lv : '') + '城 · 人口' + (typeof fmtPop === 'function' ? fmtPop(sum.pop) : sum.pop) + ' · ' + savesTimeText(ts);
 }
 function savesCleanName(n) { return Array.from(String(n == null ? '' : n).trim()).slice(0, 20).join(''); }
 function savesKb(bytes) { return Math.max(0.1, Math.round(bytes / 102.4) / 10); }

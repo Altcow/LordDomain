@@ -14409,6 +14409,7 @@ TEMPLATES.push(
       {"type":"market","pts":[[15,38]]},
       {"type":"brewery","pts":[[99,10]]},
       {"type":"jin_fang","rot":2,"pts":[[93,39]]},
+      {"type":"yin_lou","pts":[[15,31]]},
       {"type":"jiang_zuo","rot":3,"pts":[[100,62]]},
       {"type":"winnower","rot":3,"pts":[[91,68]]},
       {"type":"fan_che","rot":2,"pts":[[96,46]]},

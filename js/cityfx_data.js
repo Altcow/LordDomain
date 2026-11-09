@@ -11,6 +11,25 @@ var CITYFX_FOOD_PER_POP = 0.25;   // 糧耗 / 人(§14.2 v2.2)
 var CITYFX_THROTTLE_MS = 1000;    // 重算節流
 
 var CITYFX_KEYS = ['sani', 'water', 'food', 'order', 'mood'];
+var CITYFX_SIMPLE_KEYS = ['sani', 'water', 'food'];   // 簡化城市模式(js/citysimple.js)保留的三條基本長條(只顯示與引導,不懲罰)
+// 人口顯示:內部計算(CITYFX_POP_PER_HOUSE、cityscore 人口、官階門檻、名額表以棟計)全不變,只把「給玩家看的人口數」換算成每棟 100 戶 × 10 人。格式化用 fmtPop / fmtHh(本檔)
+var HOUSEHOLD_PER_BUILDING = 100;   // 顯示用:每棟民房代表 100 戶
+var PERSON_PER_HOUSEHOLD = 10;      // 顯示用:每戶 10 人 → 每棟顯示 1000 人
+var POP_INTERNAL_PER_BUILDING = 6;  // 內部人口(cityscore 民房 res)每棟 6 口;只用來換算顯示倍率,不影響計算
+var POP_DISPLAY_MULT = HOUSEHOLD_PER_BUILDING * PERSON_PER_HOUSEHOLD / POP_INTERNAL_PER_BUILDING;   // ≈ 166.7:內部 6 口 = 顯示 1000 人(300 棟 = 30 萬人)
+// 民房棟數 → 顯示「N 棟(M 戶)」;只是顯示,名額表與內部計算仍以棟為單位
+function fmtHh(n) {
+  var b = Math.round(+n || 0), h = b * HOUSEHOLD_PER_BUILDING;
+  return b + ' 棟(' + String(h).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' 戶)';
+}
+// 內部人口 n → 顯示字串(乘倍率後以 萬 / 千 縮寫):3 → 3 千;2.5 → 2.5 千;12 → 1.2 萬;300 → 30 萬;不到一千照寫。各處顯示人口一律呼叫此函式(typeof 守衛)
+function fmtPop(n) {
+  var v = Math.round((+n || 0) * POP_DISPLAY_MULT), a = Math.abs(v);
+  function d1(x) { return (Math.round(x * 10) / 10).toFixed(1).replace(/\.0$/, ''); }
+  if (a >= 10000) return d1(v / 10000) + ' 萬';
+  if (a >= 1000) return d1(v / 1000) + ' 千';
+  return String(v);
+}
 var CITYFX_NAME = { sani: '衛生', water: '飲水', food: '糧食', order: '治安', mood: '民心' };
 var CITYFX_ICON = { sani: '🧹', water: '💧', food: '🌾', order: '🛡', mood: '😊' };
 // 逐步揭露(§14.5):最低城市等級;面板整體 Lv3 起顯示(任務指定)

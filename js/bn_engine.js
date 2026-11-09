@@ -14,7 +14,7 @@
 //   init   {units:[{id,side,name,fig,troop,row,col,hp,mx}]}          開場快照(side 'A' 我方 / 'B' 敵方;row 0 前 1 中 2 後;col 0~2)
 //   round  {n, fat, first}                                                 回合開始(fat = 疲兵層數,first = 先手方)
 //   act    {u, x}                                                          單位行動開始(x=1 追加行動)
-//   skip   {u, why}                                                        why: stun fear trap
+//   skip   {u, why}                                                        why: stun fear trap sleep(沉睡中)paralyze(麻痺發作)
 //   idle   {u}                                                             射程不足,待命
 //   roll   {u, id, p, ok}                                                   戰法發動判定(p = 發動率 %,ok 1 成功 / 0 未發動)
 //   skill  {u, id, name, kind, cat, rc, as, th}                            戰法發動(rc = 第 n 次再放;as = 補刀者;th = 文化主題)
@@ -22,6 +22,8 @@
 //   dmg    {src, tgt, v, abs, ty, crit, hp, via, dot, ctr, basic, rx}      傷害(v = 實際扣血、abs = 護盾吸收、ty phys|strat|dot、via = 援護者 id、ctr = 反擊、rx = 反應 id)
 //   evade  {src, tgt, miss}(miss = 命中下降落空)   heal {src, tgt, v, nom, hp, blk}   shield {src, tgt, v, tot}   revive {tgt, hp}
 //   status {src, tgt, id, left, val}   unstatus {tgt, id, why}   resist {tgt, id, layers}(被抵禦擋下)   immune {tgt, id}(被免疫擋下)   ccimm {tgt, id}
+//          睡眠 / 麻痺(2026-11-09):status id 'sleep' / 'paralyze';unstatus sleep 的 why = wake(受擊驚醒)/ expire(睡醒)/ cleanse;醒後免疫睡眠時 immune {id:'sleep'};
+//          雷電麻痺傳導 = react {id:'rx_pz_conduct', name:'麻痺傳導', tgt}(接著對該目標一個 status paralyze)
 //   kill {src, tgt}    move {u, row, col}    cd {u, id, cd}
 //   react  {id, name, tgt}     bond {id, name}    trigger {u, id, trig}   chain {n, k}(連鎖步 n;k 類型)   chaincap {n}(觸發全局 8 步保險)   ult {u, id}
 //   end    {winner, reason, rounds, hp:{A,B}}
@@ -57,11 +59,11 @@ function bnEv(S, t, o) {
 
 // ───────── 單位 / 站位查詢 ─────────
 var BN_NEG = {
-  stun: 'control', fear: 'control', confuse: 'control', timid: 'control', silence: 'control', ult_lock: 'control',
+  stun: 'control', fear: 'control', confuse: 'control', timid: 'control', silence: 'control', ult_lock: 'control', sleep: 'control', paralyze: 'control',
   atk_down: 'debuff', def_down: 'debuff', spd_down: 'debuff', mark: 'debuff', rate_down: 'debuff', debuff_hit: 'debuff', wx_mark: 'debuff',
   burn: 'dot', poison: 'dot', bleed: 'dot', heal_reduce: 'heal_block'
 };
-var BN_STRONG = { stun: 1, fear: 1, confuse: 1 };
+var BN_STRONG = { stun: 1, fear: 1, confuse: 1, sleep: 1 };
 var BN_ALIAS = { bind: 'timid', heal_block: 'heal_reduce', def_down: 'def_down' };
 
 function bnAlive(S, side) { return S.teams[side].units.filter(function (u) { return u.alive; }); }
@@ -85,6 +87,16 @@ function bnReach(S, u) {
 }
 function bnHpPct(u) { return u.hp / u.maxHp; }
 function bnHas(u, id) { return !!u.st[BN_ALIAS[id] || id]; }
+function bnCantAct(u) { return !!(u.st.stun || u.st.sleep); }   // 暈眩 / 沉睡:不能援護、補刀、追加行動
+// 喚醒(受擊驚醒 / 淨化):移除睡眠並給醒後免疫(到期睡醒在 bnEndRound 同樣給免疫)
+function bnWake(S, t, why) {
+  if (!t.st.sleep) return false;
+  delete t.st.sleep;
+  t.sleepImm = S.round + BN_DATA.sleep.immRounds;
+  if (why === 'wake') S.stats.wakes++;
+  bnEv(S, 'unstatus', { tgt: t.id, id: 'sleep', why: why });
+  return true;
+}
 
 // 數值(含增減益)
 function bnAtkMod(S, u) {
@@ -113,6 +125,7 @@ function bnSpd(S, u) {
   if (u.st.spd_down) v -= u.st.spd_down.val;
   if (S.round === 1 && u.mods.r1Spd) v += u.mods.r1Spd;
   if (u.vsSpd && typeof bnVsSpd === 'function') v += bnVsSpd(S, u);
+  if (u.st.paralyze) v *= 1 - BN_DATA.paralyze.spd;   // 麻痺:速度 −15%
   return Math.max(BN_DATA.spdMin, v);
 }
 function bnCrit(S, u) { return bnClamp(u.base.crit + (u.st.crit_up ? u.st.crit_up.val : 0) + (u.sc.crit || 0) * BN_DATA.kinds.stat_charge[0], 0, 0.95); }
@@ -199,6 +212,7 @@ function bnStatusApply(S, src, t, id, data, o) {
     S.stats.negTry++; S.stats.negTryBy[t.side]++;
     if (fromHb) S.stats.hbTry++;
     if (bnImmuneHit(S, t, id) || (src && t.vsRules && typeof bnVsBlock === 'function' && bnVsBlock(S, src, t))) { bnEv(S, 'immune', { tgt: t.id, id: id }); S.stats.immuneBlock++; return false; }
+    if (id === 'sleep' && t.sleepImm >= S.round) { bnEv(S, 'immune', { tgt: t.id, id: id }); S.stats.immuneBlock++; return false; }   // 剛睡醒:免疫睡眠
     var vsForce = src && typeof bnVsChanceTo === 'function' && bnVsChanceTo(S, src, t) >= 1;   // 對象條件「必中」:無視抵禦與抵抗
     if (BN_STRONG[id] && t.st.ccimm) { bnEv(S, 'ccimm', { tgt: t.id, id: id }); S.stats.ccimmBlock++; return false; }
     w = t.st.ward;
@@ -224,8 +238,11 @@ function bnStatusApply(S, src, t, id, data, o) {
   } else {
     t.st[id] = data;
     if (id === 'heal_reduce') S.stats.hbOn++;
+    if (id === 'sleep') S.stats.sleepOn++;
+    if (id === 'paralyze') S.stats.pzOn++;
   }
   if (fromHb) { S.stats.hbApplied++; S.stats.hbTurnsSum += data.left || 0; }
+  if ((id === 'stun' || id === 'spd_down') && S.curEff && S.curEff.sk && S.curEff.sk.tags && S.curEff.sk.tags.indexOf('ice') >= 0) data.ice = 1;   // 寒凍(冰裂 / 感電反應用)
   if (id === 'ward') { S.stats.wardGiven += data.layers || 0; }
   bnEv(S, 'status', { src: src ? src.id : -1, tgt: t.id, id: id, left: data.left, val: data.val === undefined ? undefined : Math.round(data.val * 1000) / 1000 });
   return true;
@@ -284,7 +301,7 @@ function bnHit(S, a, t, h) {
   if (!t.alive) return null;
   // 援護:先算對原目標的傷害,再依比例分給援護者
   var guard = t.st.guard, guardian = null;
-  if (guard && !h.dot && !h.noGuard && !h.counter) { guardian = S.units[guard.by]; if (!guardian || !guardian.alive || guardian === t || guardian.st.stun) guardian = null; }
+  if (guard && !h.dot && !h.noGuard && !h.counter) { guardian = S.units[guard.by]; if (!guardian || !guardian.alive || guardian === t || bnCantAct(guardian)) guardian = null; }
   // 命中下降(debuff_hit):攻擊者有機率落空
   if (a && a.st.debuff_hit && !h.dot && !h.counter && a.side !== t.side && S.rng() < a.st.debuff_hit.val) {
     bnEv(S, 'evade', { src: a.id, tgt: t.id, miss: 1 });
@@ -292,13 +309,13 @@ function bnHit(S, a, t, h) {
     return { dmg: 0, evaded: true, t: t };
   }
   // 對象條件:被特定敵人攻擊時機率閃開(貂蟬對董卓 / 呂布等)
-  if (a && t.vsRules && !h.dot && !h.counter && typeof bnVsDodge === 'function' && bnVsDodge(S, a, t)) {
+  if (a && t.vsRules && !h.dot && !h.counter && !t.st.sleep && typeof bnVsDodge === 'function' && bnVsDodge(S, a, t)) {   // 沉睡中不會閃避
     bnEv(S, 'evade', { src: a.id, tgt: t.id });
     S.stats.evaded++;
     return { dmg: 0, evaded: true, t: t };
   }
   // 規避:確定性,不抽亂數
-  if (t.st.evade && !h.dot && !(h.rx && h.rx.ignoreEvade)) {
+  if (t.st.evade && !h.dot && !t.st.sleep && !(h.rx && h.rx.ignoreEvade)) {
     if (--t.st.evade.charges <= 0) delete t.st.evade;
     bnEv(S, 'evade', { src: a ? a.id : -1, tgt: t.id });
     S.stats.evaded++;
@@ -420,6 +437,7 @@ function bnApplyDmg(S, a, t, dmg, h, crit, viaOf) {
   }
   // 反擊、被動
   if (t.alive && hpLost >= 0 && !h.dot) bnOnHit(S, a, t, h, hpLost);
+  if (t.alive && t.st.sleep && hpLost > 0 && !h.dot) { S.stats.wakeRoll++; if (S.rng() < BN_DATA.sleep.wake) bnWake(S, t, 'wake'); }   // 沉睡受攻擊傷害:機率驚醒(持續傷害不會)
   if (a && a.alive && a.st.lifesteal && hpLost > 0 && !h.dot) {
     bnHeal(S, a, a, hpLost * a.st.lifesteal.val * (h.rx && h.rx.lifestealMult ? h.rx.lifestealMult : 1), {});
   }
@@ -525,7 +543,8 @@ function bnNewStats() {
     dmg: { A: 0, B: 0 }, dmgTaken: { A: 0, B: 0 }, healNom: { A: 0, B: 0 }, healAct: { A: 0, B: 0 }, healEvents: { A: 0, B: 0 }, healBlockedEvents: { A: 0, B: 0 }, hbLoss: { A: 0, B: 0 },
     shieldGiven: { A: 0, B: 0 }, kills: { A: 0, B: 0 }, roundKills: 0, killsPerRound: [], oneRoundKills: 0, evaded: 0, revives: 0, guardShared: 0,
     negTry: 0, resistBlock: 0, immuneBlock: 0, ccimmBlock: 0, wardUsed: 0, wardGiven: 0, hbTry: 0, hbApplied: 0, hbOn: 0, hbTurnsSum: 0, hbBlockedByWard: 0,
-    hbCasts: 0, fullHpUnitRounds: 0, hasHB: { A: false, B: false }, hbSrc: { A: 0, B: 0 }, hasWard: { A: false, B: false }, negTryBy: { A: 0, B: 0 }, resistBlockBy: { A: 0, B: 0 }, hbRollOK: 0, actDmg: [], skillUse: {}, chainLens: [], chainCap: 0, chainDmgPct: [], actions: 0, ults: 0, rolls: 0, rollOk: 0, castsPerAct: [], recasts: 0, assists: 0, reactions: 0, bondFires: 0, healCasts: { A: 0, B: 0 }, hasHealer: { A: false, B: false }
+    hbCasts: 0, fullHpUnitRounds: 0, hasHB: { A: false, B: false }, hbSrc: { A: 0, B: 0 }, hasWard: { A: false, B: false }, negTryBy: { A: 0, B: 0 }, resistBlockBy: { A: 0, B: 0 }, hbRollOK: 0, actDmg: [], skillUse: {}, chainLens: [], chainCap: 0, chainDmgPct: [], actions: 0, ults: 0, rolls: 0, rollOk: 0, castsPerAct: [], recasts: 0, assists: 0, reactions: 0, bondFires: 0, healCasts: { A: 0, B: 0 }, hasHealer: { A: false, B: false },
+    sleepOn: 0, sleepSkip: 0, wakeRoll: 0, wakes: 0, pzOn: 0, pzRoll: 0, pzSkip: 0, pzConduct: 0   // 睡眠 / 麻痺統計(bn_sim 用)
   };
 }
 function bnNewCnt() { return { assist: {}, bond: {}, rx: {}, extraUnit: {}, extraTeam: { A: 0, B: 0 }, ctr: {}, rxTeam: { A: 0, B: 0 } }; }
@@ -591,7 +610,7 @@ function bnEndRound(S) {
       k = ids[i]; st = x.st[k];
       if (st.act || st.left === undefined || st.left >= 900) continue;
       st.left -= 1;
-      if (st.left <= 0) { delete x.st[k]; bnEv(S, 'unstatus', { tgt: x.id, id: k, why: 'expire' }); }
+      if (st.left <= 0) { delete x.st[k]; if (k === 'sleep') x.sleepImm = S.round + BN_DATA.sleep.immRounds; bnEv(S, 'unstatus', { tgt: x.id, id: k, why: 'expire' }); }
     }
     for (i = 0; i < x.act.length; i++) if (x.act[i].cd > 0) x.act[i].cd--;
     for (i = 0; i < x.pas.length; i++) if (x.pas[i].cd > 0) x.pas[i].cd--;
@@ -652,6 +671,12 @@ function bnAct(S, u, o) {
       bnEv(S, 'skip', { u: u.id, why: 'stun' });
       bnActEnd(S, u); return;
     }
+    if (u.st.sleep) {   // 沉睡:整次行動跳過(持續回合在回合結束時遞減)
+      for (i = 0; i < u.act.length; i++) u.act[i].prepLeft = 0;
+      S.stats.sleepSkip++;
+      bnEv(S, 'skip', { u: u.id, why: 'sleep' });
+      bnActEnd(S, u); return;
+    }
     if (u.st.fear) {
       var f = u.st.fear, rr = S.rng();
       delete u.st.fear;
@@ -661,7 +686,8 @@ function bnAct(S, u, o) {
         bnActEnd(S, u); return;
       }
     }
-  } else if (u.st.stun) { bnActEnd(S, u); return; }
+    if (u.st.paralyze && bnPzSkip(S, u)) { bnActEnd(S, u); return; }
+  } else if (u.st.stun || u.st.sleep || (u.st.paralyze && bnPzSkip(S, u))) { bnActEnd(S, u); return; }
   if (S.over) { bnActEnd(S, u); return; }
   var casts = 0;
   if (!o.normalOnly) {
@@ -706,6 +732,14 @@ function bnAct(S, u, o) {
   }
   S.stats.castsPerAct.push(casts);
   bnActEnd(S, u);
+}
+// 麻痺發作判定:回傳 true = 本次行動無法行動(記 skip why paralyze)
+function bnPzSkip(S, u) {
+  S.stats.pzRoll++;
+  if (S.rng() >= BN_DATA.paralyze.skip) return false;
+  S.stats.pzSkip++;
+  bnEv(S, 'skip', { u: u.id, why: 'paralyze' });
+  return true;
 }
 // 施放一個戰法實例(大招另記 ult 事件與統計)
 function bnCastInst(S, u, inst, o) {

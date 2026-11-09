@@ -124,27 +124,27 @@ var CITY_TRADE_IDS = ['post_station', 'dock', 'ferry', 'toll_gate', 'warehouse_p
 //   cover{svc,frac} 民居被該服務半徑覆蓋的比例 / roadnear{frac} 民居 2 格內有路 / water{n} 水域格數 / trade{} 對外商路 / walls{n} 牆格數
 //   cluster{ids,d} 這些建築在 d 格內聚成一街坊 / axis{a,f} 該軸 ≥ f × 繁榮度門檻 / axesAll{f} 六軸皆 ≥ f × 繁榮度門檻
 var CITY_LV_REQ = {
-  1: { id: 'lr1', title: '安居', conds: [{ k: 'dwell', n: 3, text: '民居 3 戶', go: ['house'] }] },
-  2: { id: 'lr2', title: '飲水', conds: [{ k: 'cover', svc: 'water', frac: 1, text: '每戶民居 6 格內有水井', go: ['well', 'well_old'] }] },
+  1: { id: 'lr1', title: '安居', conds: [{ k: 'dwell', n: 3, text: '民居 3 棟', go: ['house'] }] },
+  2: { id: 'lr2', title: '飲水', conds: [{ k: 'cover', svc: 'water', frac: 1, text: '每棟民居 6 格內有水井', go: ['well', 'well_old'] }] },
   3: { id: 'lr3', title: '市井', conds: [{ k: 'kinds', cls: ['stall'], n: 2, text: '2 種攤位', go: ['stall_veg', 'stall_fruit'] }] },
   4: { id: 'lr4', title: '通衢', conds: [{ k: 'roadnear', frac: 0.8, text: '8 成民居 2 格內有路', go: ['road_stone'] }] },
   5: { id: 'lr5', title: '立市', big: true, conds: [
     { k: 'types', ids: ['market'], n: 1, text: '市集 1 座', go: ['market'] },
     { k: 'kinds', cls: ['stall', 'shop', 'tavern'], n: 4, text: '店攤 4 種', go: ['stall_veg', 'stall_fruit', 'stall_rice', 'stall_meat', 'shop_rice'] },
-    { k: 'dwell', n: 10, text: '民居 10 戶', go: ['house'] }] },
+    { k: 'dwell', n: 10, text: '民居 10 棟', go: ['house'] }] },
   6: { id: 'lr6', title: '臨水', conds: [{ k: 'water', n: 6, text: '水景 6 格', go: ['deco_pond', 'lotus', 'reeds'] }] },
   7: { id: 'lr7', title: '書香', conds: [{ k: 'cluster', ids: ['shop_book', 'stele'], d: 6, text: '書肆與石碑相距 6 格內', go: ['shop_book', 'stele'] }] },
   8: { id: 'lr8', title: '通商', conds: [{ k: 'trade', text: '對外商路(驛站或碼頭)', go: ['post_station', 'dock'] }] },
-  9: { id: 'lr9', title: '鄉紳', conds: [{ k: 'tier', t: 3, n: 3, text: '3 戶品級 3 以上民居', go: ['house_gentry'] }] },
+  9: { id: 'lr9', title: '鄉紳', conds: [{ k: 'tier', t: 3, n: 3, text: '3 棟品級 3 以上民居', go: ['house_gentry'] }] },
   10: { id: 'lr10', title: '築城', big: true, conds: [
     { k: 'walls', n: 40, text: '城牆 40 格', go: ['wall'] },
     { k: 'types', ids: ['gate', 'gate_courtyard'], n: 2, text: '城門 2 座', go: ['gate'] },
-    { k: 'dwell', n: 20, text: '民居 20 戶', go: ['house', 'hut_plank'] },
+    { k: 'dwell', n: 20, text: '民居 20 棟', go: ['house', 'hut_plank'] },
     { k: 'cover', svc: 'safe', frac: 0.8, text: '8 成民居有守望', go: ['notice_board', 'gate'] }] },
   11: { id: 'lr11', title: '農桑', conds: [{ k: 'kinds', cls: ['farm'], n: 5, text: '5 種田圃', go: ['field_wheat', 'orchard', 'mulberry_grove', 'herb_garden', 'beehive', 'field_millet'] }] },
   12: { id: 'lr12', title: '百工', conds: [{ k: 'kinds', cls: ['industry'], n: 3, text: '3 種工坊礦場', go: ['smithy', 'mine_entrance', 'shop_smith'] }] },
   13: { id: 'lr13', title: '社稷', conds: [{ k: 'types', ids: ['she_altar'], n: 1, text: '里社 1 座', go: ['she_altar'] }, { k: 'types', ids: ['tree_cypress'], n: 1, text: '社樹(柏)1 棵', go: ['tree_cypress'] }] },
-  14: { id: 'lr14', title: '豪門', conds: [{ k: 'tier', t: 4, n: 1, text: '1 戶品級 4 民居', go: ['mansion_great'] }] },
+  14: { id: 'lr14', title: '豪門', conds: [{ k: 'tier', t: 4, n: 1, text: '1 棟品級 4 民居', go: ['mansion_great'] }] },
   15: { id: 'lr15', title: '開渠通漕', big: true, conds: [
     { k: 'water', n: 12, text: '水景 12 格', go: ['deco_pond', 'lotus', 'reeds'] },
     { k: 'types', ids: ['dock'], n: 1, text: '碼頭 1 座', go: ['dock'] },
@@ -153,7 +153,7 @@ var CITY_LV_REQ = {
   16: { id: 'lr16', title: '禮制', conds: [{ k: 'types', ids: ['paifang'], n: 1, text: '牌坊 1 座', go: ['paifang'] }] },
   17: { id: 'lr17', title: '文風', conds: [{ k: 'kinds', cls: ['culture', 'scholar', 'tavern', 'monument'], n: 6, text: '6 種文娛建築', go: ['shop_book', 'stele', 'she_altar', 'censer', 'incense_burner', 'storyteller', 'shop_wine', 'shop_tea', 'research'] }] },
   18: { id: 'lr18', title: '世家', conds: [
-    { k: 'tier', t: 3, n: 6, text: '6 戶品級 3 以上民居', go: ['house_gentry'] },
+    { k: 'tier', t: 3, n: 6, text: '6 棟品級 3 以上民居', go: ['house_gentry'] },
     { k: 'types', ids: ['mansion_clan'], n: 1, text: '世家宅邸 1 座', go: ['mansion_clan'] }] },
   19: { id: 'lr19', title: '百肆', conds: [{ k: 'kinds', cls: ['stall', 'shop', 'ground', 'tavern', 'vice'], n: 12, text: '12 種店鋪攤位', go: ['shop_cloth', 'shop_herb', 'shop_rouge', 'shop_pawn', 'stall_cloth', 'stall_pottery', 'stall_book', 'stall_toy', 'shop_tea', 'shop_wine', 'shop_rice', 'stall_meat'] }] },
   20: { id: 'lr20', title: '興學宮', big: true, conds: [
@@ -165,7 +165,7 @@ var CITY_LV_REQ = {
   22: { id: 'lr22', title: '園林', conds: [{ k: 'axis', a: 'beau', f: 0.2, text: '美觀軸達標', go: ['rockery', 'tree_sakura', 'tree_peach', 'deco_pond', 'lotus', 'potted_plant', 'stone_lamp'] }] },
   23: { id: 'lr23', title: '百物', conds: [{ k: 'kindsAll', n: 100, text: '全城 100 種不同建築', go: [] }] },
   24: { id: 'lr24', title: '營建帝都', big: true, conds: [
-    { k: 'tier', t: 4, n: 3, text: '3 戶品級 4 民居', go: ['mansion_great', 'mansion_clan', 'manor_estate'] },
+    { k: 'tier', t: 4, n: 3, text: '3 棟品級 4 民居', go: ['mansion_great', 'mansion_clan', 'manor_estate'] },
     { k: 'axesAll', f: 0.06, text: '六軸皆有一定水準', go: [] }] },
   25: null
 };

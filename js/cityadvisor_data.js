@@ -30,7 +30,7 @@ var STAT_HELP = {
     id: 'food', name: '糧食', icon: '🌾',
     brief: '百姓每天要吃的糧,由田地供給。糧不夠,人會挨餓、民心大跌。',
     briefNovice: '田越多,大家越吃得飽;紅了就多蓋田。',
-    detail: ['糧食指標是「全城糧食供給 ÷ 全城糧食需求」的滿足度。每位居民每時耗糧約 0.25 件,人口越多耗得越多。', '田、粟田、麥田、菜圃、魚場都產糧;田離民居太遠,挑糧的路上耗損,效果會打折。'],
+    detail: ['糧食指標是「全城糧食供給 ÷ 全城糧食需求」的滿足度。每棟民房(100 戶)每時耗糧約 1 件,民房越多耗得越多。', '田、粟田、麥田、菜圃、魚場都產糧;田離民居太遠,挑糧的路上耗損,效果會打折。'],
     range: '滿足度 %:≥100 正常(●)、85~99 警示(▲)、<85 危急(■);<70 為危機。',
     causes: [{ id: 'field_sprout', kind: 'obj' }, { id: 'field_millet', kind: 'obj' }, { id: 'field_wheat', kind: 'obj' }, { id: 'vegetable_plot', kind: 'obj' }, { id: 'fishery', kind: 'obj' }],
     redResult: '民心下降、人口外移;嚴重時發生餓殍事件(新手保護期內不發生)。',
@@ -175,7 +175,7 @@ var STAT_HELP = {
 // 顧問條目。tier R/Y/B、pri 0~100、cond = ADV_COND 的鍵(cityadvisor.js)、stat = 所屬指標(同 stat 只留最高 pri)、
 // text 為陣列時依 id+旬 選句;{x} 由條件函式代入、go = 前往動作、cd = 冷卻(旬,按「知道了」後 ×3)、once = 完成後不再出現
 var ADVICE = [
-  { id: 'a_start_welcome', tier: 'B', pri: 92, stat: 'house', cond: 'startWelcome', once: true, cd: 6, text: '大人到任啦!先讓百姓有房住、有飯吃,從蓋幾戶民居開始吧。', go: { kind: 'build', type: 'house' } },
+  { id: 'a_start_welcome', tier: 'B', pri: 92, stat: 'house', cond: 'startWelcome', once: true, cd: 6, text: '大人到任啦!先讓百姓有房住、有飯吃,從蓋幾棟民房開始吧。', go: { kind: 'build', type: 'house' } },
   { id: 'a_start_field', tier: 'B', pri: 88, stat: 'food', cond: 'startField', cd: 6, text: '民居有了,下一步種幾塊田,別讓百姓餓肚子。', go: { kind: 'build', type: 'field_sprout' } },
   { id: 'a_well_first', tier: 'B', pri: 66, stat: 'water', cond: 'wellFirst', cd: 6, text: '人家漸多,鑿一口井讓大夥有乾淨的水喝。', go: { kind: 'build', type: 'well' } },
 
@@ -236,3 +236,27 @@ var ADV_CONFLICT = [
   ['a_house_empty', 'a_house_tight'], ['a_house_empty', 'a_start_welcome'], ['a_store_full', 'a_store_blocked'],
   ['a_mood_fun', 'a_mood_crit'], ['a_start_welcome', 'a_house_tight'], ['a_idle_none', 'a_food_crit']
 ];
+
+// 簡化城市模式(js/citysimple.js):三條基本長條只是資訊與引導,說明文字不提民心 / 疫病 / 治安等已砍的系統,也不說有後果
+if (typeof citySimpleOn === 'function' && citySimpleOn()) {
+  Object.assign(STAT_HELP.food, {
+    brief: '百姓每天要吃的糧,由田地供給。糧不夠只是提醒,不會有懲罰。',
+    briefNovice: '田越多,大家越吃得飽;變黃了就多蓋田。',
+    detail: ['糧食指標是「全城糧食供給 ÷ 全城糧食需求」。每戶住 4 人、每人耗糧 0.25;田的產量加成最多 +50%。', '田、粟田、麥田、菜圃、魚場都產糧。'],
+    fix: ['在民居旁加蓋 2 塊田', '研發〈鐵鏵耒耜〉、〈代田法〉開放更多田', '糧多了再蓋糧倉,別讓收成爛在田裡'],
+    techs: ['ag_lei', 'e_daitian'], links: []
+  });
+  Object.assign(STAT_HELP.water, {
+    briefNovice: '每片住宅附近鑿口井,就不缺水了。只是提醒,沒有懲罰。',
+    detail: ['飲水指標是「有水源覆蓋的民居比例」。水井、桔槔、水車各有覆蓋半徑與供水量,超過供水量的人口不算被供到。', '河邊可以架桔槔,供水量比水井大。'],
+    fix: ['在沒覆蓋到的民房旁鑿一口井', '研發〈陶圈井〉開放桔槔', '井不夠大時再補一口,別擠在同一處'],
+    techs: ['wa_jing'], links: []
+  });
+  Object.assign(STAT_HELP.sani, {
+    brief: '街坊乾不乾淨,取決於茅廁、水井和人口密度。只是提醒,不會有懲罰。',
+    briefNovice: '人多的地方蓋茅廁,衛生就會轉綠。',
+    detail: ['衛生以坊(12×12 格)為單位算平均,再得全城值。茅廁、醫館、藥圃、剃頭挑子等會加分;人口越密,基本分越低。'],
+    fix: ['在民房附近蓋茅廁', '補井,讓污水有出路', '研發〈神農本草〉開放藥圃與醫館'],
+    techs: ['md_cesuo', 'md_bencao'], links: []
+  });
+}

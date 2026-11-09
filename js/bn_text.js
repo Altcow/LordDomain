@@ -19,7 +19,7 @@ var BNT_TRIG = {
   on_ally_kill: '我方擊倒敵人時', on_ally_down: '友軍倒下時', on_death: '自身倒下時', on_ally_cast: '我方施放戰法時', enemy_next_action: '敵人下次行動時'
 };
 var BNT_ST = {
-  burn: '燃燒', poison: '中毒', bleed: '流血', stun: '暈眩', bind: '定身', silence: '沉默', fear: '威懾', taunt: '嘲諷', mark: '標記', timid: '怯戰', confuse: '擾亂',
+  burn: '燃燒', poison: '中毒', bleed: '流血', stun: '暈眩', sleep: '睡眠', paralyze: '麻痺', bind: '定身', silence: '沉默', fear: '威懾', taunt: '嘲諷', mark: '標記', timid: '怯戰', confuse: '擾亂',
   atk_down: '攻擊下降', def_down: '防禦下降', spd_down: '速度下降', rate_down: '發動率下降', rate_up: '發動率提升', debuff_hit: '命中下降', wx_mark: '五行印', invert: '陰陽互換',
   atk_up: '攻擊提升', def_up: '防禦提升', spd_up: '速度提升', crit_up: '暴擊提升', stealth: '隱匿', evade: '規避', shield: '護盾', ward: '抵禦', undying: '不倒', guard: '援護', counter: '反擊', heal_block: '禁療', heal_reduce: '治療降低', reorder: '插隊', swap: '換位', control: '控制類狀態', debuff: '減益類狀態', dot: '持續傷害類狀態', any: '任何負面狀態'
 };
@@ -145,6 +145,9 @@ function bntClause(kind, target, power, P, d, isExtra) {
     case 'dot_bleed': return '使' + bntTg(target, 'enemy_one') + '流血 ' + (pw === 'XL' ? BN_DATA.dotRoundsXL : BN_DATA.dotRounds) + ' 回合,每回合受到約 ' + bntPct(bntKT(kind, pw)) + ' 攻擊力的傷害';
     case 'dot_poison': return '使' + bntTg(target, 'enemy_one') + '中毒 ' + BN_DATA.poisonRounds + ' 回合,每回合損失 ' + bntPct(bntKT(kind, pw)) + ' 最大兵力,且中毒期間受到的治療減半';
     case 'stun': return '使' + bntTg(target, 'enemy_one') + bntChanceTxt(P) + '暈眩 ' + bntS(P.dur, 1) + ' 回合(無法行動)';
+    case 'sleep': return '使' + bntTg(target, 'enemy_one') + bntChanceTxt(P) + '沉睡 ' + bntS(P.dur, bntKT(kind, pw)) + ' 回合(無法行動、不會閃避),受到攻擊時有 ' + bntPct(BN_DATA.sleep.wake) + ' 機率驚醒;醒來後 ' + BN_DATA.sleep.immRounds + ' 回合內不會再被催眠';
+    case 'paralyze': return '使' + bntTg(target, 'enemy_one') + bntChanceTxt(P) + '麻痺 ' + bntS(P.dur, bntKT(kind, pw)) + ' 回合:每次行動有 ' + bntPct(BN_DATA.paralyze.skip) + ' 機率無法行動,速度 −' + bntPct(BN_DATA.paralyze.spd) +
+      (P.conduct || d.theme === 'thunder' || (d.tags && d.tags.indexOf('thunder') >= 0) ? ';雷電會傳導給相鄰一名敵人,使其麻痺 ' + BN_DATA.paralyze.conductLeft + ' 回合(每人每回合最多被傳導 1 次)' : '');
     case 'silence': return '使' + bntTg(target, 'enemy_one') + bntChanceTxt(P) + '沉默 ' + bntS(P.dur, bntKT(kind, pw)) + ' 回合(無法發動主動戰法)';
     case 'timid': return '使' + bntTg(target, 'enemy_one') + bntChanceTxt(P) + '怯戰 ' + bntS(P.dur, bntKT(kind, pw)) + ' 回合(無法普通攻擊,仍可發動戰法)';
     case 'bind': return '使' + bntTg(target, 'enemy_one') + bntChanceTxt(P) + '定身 ' + bntS(P.dur, bntKT(kind, pw)) + ' 回合(無法普通攻擊,仍可發動戰法)';
@@ -229,8 +232,15 @@ function bntNotes(d, P) {
   if (P.flaw && P.flaw.length) out.push('缺點:' + bntList(P.flaw, bntFlawTxt));
   if (P.onlyVs && d.vs) out.push('只有敵方有' + bntVsWho(d.vs) + '時才會發動,並鎖定其為目標');
   if (d.vs && !bntVsOnly(d) && bntVsText(d)) out.push(bntVsText(d));
+  if (d.tags && d.tags.indexOf('ice') >= 0) out.push(BNT_RX.ice);
+  if (d.tags && d.tags.indexOf('thunder') >= 0) out.push(BNT_RX.thunder);
   return out;
 }
+// 魔幻組合技(combos rx_ice_shatter / rx_electrocute)白話
+var BNT_RX = {
+  ice: '寒冰:造成的暈眩 / 速度下降會讓目標「寒凍」;寒凍的敵人被單體重擊時觸發「冰裂」,追加該次傷害 40%(無視防禦)並解除寒冰減速',
+  thunder: '雷擊:打中寒凍、剛被水攻或盾兵(金屬甲)的敵人時觸發「感電」,傷害 +15%,電流再傳給相鄰敵人(該次傷害 35%)'
+};
 
 function bnSkillResolve(sk) {
   if (typeof sk === 'string') return (typeof BN_SKILLS !== 'undefined') ? BN_SKILLS[sk] : null;
@@ -347,7 +357,7 @@ function bntModsText(m, id) {
 var BNT_CITY = {
   yanfa: '派駐產出 −5%', shusheng: '學職產出 +5%', yishu2: '轉換職業時送醫術 I', fanfu: '無法結義', gaoao: '擔任太守、掌櫃時職務無效', baonue: '偶爾誤傷身邊人',
   jiuxian: '好酒', tianzhen: '城內孩童圍觀', haoxue: '經驗 +20%', yeli: '鐵錠產出 +1(已併入冶鐵 I)', xiangma: '牲口棚與馬場產出略增(已併入畜牧 I)',
-  jiren: '每次城市升級 +2 酒令', mingwang: '「掌櫃」職:名人機率再 ×1.1', fengdian: '智 +10、魅 −20;不能擔任太守和掌櫃'
+  jiren: '每次城市升級 +10 碎片', mingwang: '「掌櫃」職:名人機率再 ×1.1', fengdian: '智 +10、魅 −20;不能擔任太守和掌櫃'
 };
 // 舊戰鬥系統專屬、新戰鬥沒有對應的詞條(無戰鬥修正且非城市詞條 → 不顯示)由規則判定:不在 BN_TRAIT_MODS(或修正為空)且未標 city
 function bnTraitHasBattle(traitId) {
@@ -436,7 +446,7 @@ var BNT_TS = { self: '自身', ally_one: '我單體', ally_all: '我全隊', all
 var BNT_KS = {
   heal_single: '回復兵力', heal_all: '回復兵力', heal_hot: '持續回復', shield_single: '加護盾', shield_all: '加護盾', cleanse: '解除負面', revive: '復活', dispel: '驅散增益', counter: '反擊', guard: '承傷', reorder: '插隊出手',
   swap: '換位', rate_up: '發動率提升', rate_down: '發動率下降', buff_steal: '偷取增益', debuff_hit: '命中下降', invert: '陰陽互換', wx_mark: '五行印', evade: '規避攻擊', stealth: '隱匿', immune: '免疫控制', resist: '獲得抵禦', heal_reduce: '治療降低', cd_reduce: '縮短冷卻', cd_reset: '冷卻歸零', extra_turn: '額外行動', self_sacrifice: '自損換資源',
-  summon: '召喚援兵', trap: '布下伏兵', stack_charge: '累積層數', undying: '死戰不倒', stat_mod: '微調能力', execute_chain: '擊倒連動', stun: '暈眩', silence: '沉默', timid: '怯戰', bind: '定身', confuse: '擾亂',
+  summon: '召喚援兵', trap: '布下伏兵', stack_charge: '累積層數', undying: '死戰不倒', stat_mod: '微調能力', execute_chain: '擊倒連動', stun: '暈眩', sleep: '沉睡', paralyze: '麻痺', silence: '沉默', timid: '怯戰', bind: '定身', confuse: '擾亂',
   taunt: '嘲諷', fear: '威懾', mark: '標記易傷', dot_burn: '燃燒', dot_poison: '中毒', dot_bleed: '流血', dot_spread: '火勢蔓延'
 };
 function bntShortCut(t) { var a = Array.from(t); return a.length > 16 ? a.slice(0, 16).join('') : t; }
@@ -445,7 +455,7 @@ function bnSkillShort(sk) {
   var d = bnSkillResolve(sk), k, pw, sc, T, o;
   if (!d) return '';
   k = d.kind; pw = d.power || 'M'; sc = bntScale(d, k, d.params || {});
-  T = BNT_TS[d.target] || (/^(atk|dot|execute|lifesteal|stun|silence|timid|bind|confuse|fear|mark|debuff|rate_down|buff_steal|invert|wx_mark|dispel|heal_reduce)/.test(k) ? '敵單體' : '自身');
+  T = BNT_TS[d.target] || (/^(atk|dot|execute|lifesteal|stun|sleep|paralyze|silence|timid|bind|confuse|fear|mark|debuff|rate_down|buff_steal|invert|wx_mark|dispel|heal_reduce)/.test(k) ? '敵單體' : '自身');
   if (/^atk_|^lifesteal$|^execute_chain$/.test(k) && d.cat !== 'passive') o = T + ' ' + bntPct(bntKT(k, pw)) + (d.dmg === 'strat' ? ' 謀略傷' : ' 傷害');
   else if (k === 'buff_atk' || k === 'buff_def' || k === 'buff_crit') o = T + (k === 'buff_atk' ? '攻擊' : k === 'buff_def' ? '防禦' : '暴擊') + ' +' + bntPct(bntKT(k, pw, sc));
   else if (k === 'buff_spd') o = T + '速度 +' + Math.round(bntKT(k, pw, sc));

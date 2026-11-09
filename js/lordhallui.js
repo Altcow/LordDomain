@@ -31,11 +31,12 @@ function lordhallOverview() {
   var o = { rank: '里正', pop: 0, pros: 0, score: null, mood: [], tech: null, warns: [], hasFx: false, hasScore: false, hasTech: false };
   var s = null, i, v, c;
   if (typeof cityscoreGet === 'function') { try { s = cityscoreGet(false); } catch (e) { s = null; } }
-  if (s) { o.hasScore = true; o.pop = s.pop || 0; o.pros = s.pros || 0; o.score = s.pros || 0; }
+  if (s) { o.hasScore = true; o.houses = s.houses || 0; o.pop = s.pop || 0; o.pros = s.pros || 0; o.score = s.pros || 0; }
   o.rank = lordhallRank(o.pop, o.pros);
   if (typeof cityFxGet === 'function') {
     o.hasFx = true;
     for (i = 0; i < LH_MOOD_KEYS.length; i++) {
+      if (LH_MOOD_KEYS[i][0] === 'mood' && typeof citySimpleOn === 'function' && citySimpleOn()) continue;   // 簡化模式:民心已砍,只列糧食 / 水源 / 衛生
       try { v = cityFxGet(LH_MOOD_KEYS[i][0]); } catch (e) { v = null; }
       if (typeof v === 'number' && isFinite(v)) o.mood.push({ k: LH_MOOD_KEYS[i][0], n: LH_MOOD_KEYS[i][1], v: Math.round(v) });
     }
@@ -144,10 +145,20 @@ function lhEnsure() {
 }
 function lhBar(v) { return '<span style="display:inline-block;width:80px;height:6px;border-radius:3px;background:rgba(255,255,255,.18);vertical-align:middle"><i style="display:block;height:100%;width:' + Math.max(0, Math.min(100, v)) + '%;background:#f0b45a"></i></span>'; }
 
+// 下一階門檻說明:「亭長:人口 2 萬、繁榮 40」(人口用顯示倍率 fmtPop;內部門檻不變);已到頂回 ''
+function lhNextRank(o) {
+  var i, r;
+  for (i = 0; i < LH_RANKS.length; i++) if (LH_RANKS[i].n === o.rank) break;
+  r = LH_RANKS[i + 1];
+  if (!r) return '';
+  return r.n + ':人口 ' + (typeof fmtPop === 'function' ? fmtPop(r.pop) : r.pop) + '、繁榮 ' + r.pros;
+}
 function lhHtmlOverview() {
   var o = lordhallOverview(), h = '';
   h += '<div class="lhr"><span>官階</span><b>' + lhEsc(o.rank) + '</b></div>';
-  h += '<div class="lhr"><span>人口</span><b>' + (o.hasScore ? o.pop : '—') + '</b></div>';
+  if (lhNextRank(o)) h += '<div class="lhr"><span>下一階</span><span>' + lhEsc(lhNextRank(o)) + '</span></div>';
+  h += '<div class="lhr"><span>人口</span><b>' + (o.hasScore ? (typeof fmtPop === 'function' ? fmtPop(o.pop) : o.pop) : '—') + '</b></div>';
+  if (o.hasScore && typeof fmtHh === 'function') h += '<div class="lhr"><span>民居</span><b>' + fmtHh(o.houses) + '</b></div>';
   h += '<div class="lhr"><span>繁榮度</span><b>' + (o.hasScore ? o.pros : '—') + '</b></div>';
   h += '<div class="lhr"><span>政績</span><b>' + (o.score === null ? '—' : o.score) + '</b></div>';
   h += '<div class="lhsec">民情</div>';
@@ -161,6 +172,20 @@ function lhHtmlOverview() {
   else h += '<div class="lhr"><span>庫房無警示</span></div>';
   var hasMood = (typeof cityAdvisorOpen === 'function') || (typeof cityOverviewOpen === 'function') || (typeof panelOpen === 'function' && typeof cityAdvisorRender === 'function');
   var hasTech = (typeof techPanelOpen === 'function') || (typeof toggleTechPanel === 'function');
+  if (typeof cardsUiOpen === 'function' && typeof cardsGet === 'function' && cardsGet()) {   // 招賢入口(新手禮包 / 每日一抽 / 名冊名額;cardsui_starter.js)
+    var cs = cardsGet(), stOk = typeof cardsStarterState === 'function' && cardsStarterState(cs) === 'ready', cap = (typeof cardsCap === 'function') ? cardsCap() : 0, ready = 0, nx = null, drawTxt = '';
+    ['T', 'E'].forEach(function (v) {
+      var t;
+      if (typeof cardsVenueOpen === 'function' && !cardsVenueOpen(v)) return;
+      t = (typeof cardsNextIn === 'function') ? cardsNextIn(cs, v, Date.now()) : null;
+      if (cs.acc[v].length) ready += cs.acc[v].length;
+      else if (t !== null && t <= 0) ready++;
+      else if (t !== null && (nx === null || t < nx)) nx = t;
+    });
+    drawTxt = ready ? ' · <b>可抽 ' + ready + ' 批</b>' : (nx !== null ? ' · 下一批:' + (nx < 3600000 ? '不到 1 小時' : Math.ceil(nx / 3600000) + ' 小時後') : '');
+    h += '<div class="lhsec">招賢</div><div class="lhr"><span>名冊 ' + cs.roster.length + '/' + cap + (cs.bag.length ? ' · 卡包 ' + cs.bag.length + ' 張' : '') + drawTxt + (stOk ? ' · <b>🎁 新手禮包可領</b>' : '') + '</span><button class="lhb" data-lh="cards">' + (stOk ? '領新手禮包' : '打開招賢') + '</button></div>';
+    if (cap && cs.roster.length >= cap) h += '<div class="lhr lhwarn"><span>名冊已滿,抽到的卡會先放卡包,可遣散或提升官階</span></div>';
+  }
   h += '<div><button class="lhb" data-lh="mood"' + (lhMoodFn() ? '' : ' disabled') + '>開啟民情總覽</button>' +
     '<button class="lhb" data-lh="tech"' + (hasTech ? '' : ' disabled') + '>開啟科技樹</button></div>';
   return h;
@@ -235,13 +260,14 @@ function lhClick(e) {
   else if (a === 'un') { lordhallAssign(b.getAttribute('data-t'), null); lordhallRender(); }
   else if (a === 'tech') { if (typeof techPanelOpen === 'function') { lordhallClose(); techPanelOpen(); } else if (typeof toggleTechPanel === 'function') { lordhallClose(); toggleTechPanel(true); } }
   else if (a === 'mood') { var f = lhMoodFn(); if (f) { lordhallClose(); f(); } }
+  else if (a === 'cards') { lordhallClose(); if (typeof cardsUiOpen === 'function') cardsUiOpen('O'); }
 }
 function lordhallOpen(tab) {
   var el = lhEnsure();
   if (!el) return;
   lh.tab = tab === 'job' ? 'job' : 'ov';
   lh.open = true;
-  if (typeof panelOpen === 'function') { try { panelOpen('lordhall', el); } catch (e) { } }
+  if (typeof panelOpen === 'function') { try { panelOpen('lordhall', { kind: 'big', el: el, close: lordhallClose }); } catch (e) { } }
   lordhallRender();
   el.hidden = false;
   if (typeof panelLsSet === 'function') panelLsSet('lordhall', true);

@@ -36,6 +36,7 @@ const GOODS = {
   g_tiekuang:  { name: '鐵礦',   icon: '⛏️', tier: 0, w: 3 },
   g_taotu:     { name: '陶土',   icon: '🟤', tier: 0, later: true, w: 3 },
   g_zhu:       { name: '竹',     icon: '🎋', tier: 0, later: true, w: 2 },
+  g_si:        { name: '絲',     icon: '🧶', tier: 0, w: 1 },   // 桑園產(採桑養蠶、繅絲);錦的原料
   // T1 加工品
   g_muban:     { name: '木板',   icon: '🪵', tier: 1, w: 2 },
   mat_mabu:    { name: '麻布',   icon: '🧵', tier: 1, w: 1 },
@@ -43,26 +44,30 @@ const GOODS = {
   // T2 成品
   g_nongju:    { name: '農具',   icon: '🔧', tier: 2, w: 2 },
   g_yifu:      { name: '衣物',   icon: '👘', tier: 2, cons: 'cloth', w: 1 },
-  // T3 工藝品(PLAN_INTERIORS §3 O1;科技 T3 成本與 T4 配方原料;上限 / 基價走階別表)
+  // T3 工藝品(PLAN_INTERIORS §3 O1;科技 T3 成本;上限 / 基價走階別表)
+  // 2026-11-09 工藝原料修正:錦改用絲、漆器改用生漆;銀器(遊戲無銀礦)、玉器(遊戲無玉料)移除,舊庫存見 GOODS_REMOVED
   g_qiqi:      { name: '漆器',   icon: '🏺', tier: 3, w: 2 },
   g_jin:       { name: '錦',     icon: '🎎', tier: 3, w: 1 },
   g_ciqi:      { name: '瓷器',   icon: '🍶', tier: 3, w: 3 },
   g_zhi:       { name: '紙',     icon: '📃', tier: 3, w: 1 },
   // T4 奢侈品(科技 T4 成本)
-  g_yuqi:      { name: '玉器',   icon: '💎', tier: 4, w: 2 },
-  g_yinqi:     { name: '銀器',   icon: '🥈', tier: 4, w: 2 },
-  g_mingjiu:   { name: '名酒',   icon: '🍷', tier: 4, w: 2 },
+  g_mingjiu:   { name: '醇酒',   icon: '🍷', tier: 4, w: 2 },   // id 沿用(存檔鍵);原名「名酒」,配方只用糧
   // 舊普材料(PLAN §23.1.3):id 與舊 PROG_MATS 相同,只供遷移與日後配方使用
   mat_zhujian: { name: '竹簡',   icon: '📜', tier: 1, legacy: true, w: 1 },
   mat_niupi:   { name: '牛皮',   icon: '🟫', tier: 1, legacy: true, w: 2 },
   mat_niujin:  { name: '牛筋',   icon: '〰️', tier: 1, legacy: true, w: 1 },
   mat_tongyou: { name: '桐油',   icon: '🛢️', tier: 1, legacy: true, w: 2 },
   mat_qingtong:{ name: '青銅',   icon: '🟨', tier: 1, legacy: true, w: 3 },
-  mat_shengqi: { name: '生漆',   icon: '🟥', tier: 0, legacy: true, w: 1 },
+  mat_shengqi: { name: '生漆',   icon: '🟥', tier: 0, w: 1 },   // 2026-11-09 起有來源(伐木場割漆),漆器的原料
   mat_jianyu:  { name: '雁翎',   icon: '🪶', tier: 0, legacy: true, w: 1 }
 };
 // 9 種舊普材料 → 貨品 id(同 id,§23.1.3)。遷移時複製 prog.mats[id] 進庫房
 const GOODS_LEGACY_MATS = ['mat_mabu', 'mat_zhujian', 'mat_niupi', 'mat_tieding', 'mat_tongyou', 'mat_shengqi', 'mat_jianyu', 'mat_qingtong', 'mat_niujin'];
+// 已移除的貨品:讀檔時舊庫存按 price(原基價,不打折)折算金幣入帳(不丟資源;goods.js goodsNormCity);name 只供舊紀錄顯示
+const GOODS_REMOVED = {
+  g_yinqi: { name: '銀器', price: 160 },   // 銀器須銀礦,遊戲沒有銀礦 → 移除(原 T4 基價 160)
+  g_yuqi:  { name: '玉器', price: 160 }    // 玉器須玉料,遊戲沒有玉料 → 移除(原 T4 基價 160)
+};
 
 // ───────── 3. 原料點(§23.2.2;無輸入)─────────
 // bld = 建築 type;out = 每遊戲小時產出;lv = 開放等級(對照 progdata.js,lint 驗證);farm = 吃農具加成;near = 需要 r 格內有某物件(礦脈)才出產
@@ -73,27 +78,39 @@ const GOODS_SOURCES = {
   e_field_hemp:     { bld: 'field_hemp',     out: { g_ma: 4 },     lv: 1 },
   e_field_millet:   { bld: 'field_millet',   out: { g_liang: 4 }, lv: 2, farm: true },
   e_mine_iron:      { bld: 'mine_entrance',  out: { g_tiekuang: 3 }, lv: 3, near: { type: 'ore_iron', r: 6 } },
-  e_field_wheat:    { bld: 'field_wheat',    out: { g_liang: 5 }, lv: 11, farm: true }
+  e_field_wheat:    { bld: 'field_wheat',    out: { g_liang: 5 }, lv: 11, farm: true },
+  e_mulberry:       { bld: 'mulberry_grove', out: { g_si: 2 },    lv: 11 },   // 桑園:採桑養蠶、煮繭繅絲(科技「蠶桑」解鎖)
+  e_lumber_qi:      { bld: 'lumber',         out: { mat_shengqi: 1 }, lv: 1 }  // 伐木場順帶割取漆樹汁液(木材仍走 OBJECTS.prod)
 };
 const GOODS_RES_SOURCES = { lumber: 'wood', quarry: 'stone' };
 
 // ───────── 4. 配方(§23.2.3)─────────
 // bld = 可執行的建築 type 陣列;in/out = 每「件」輸出所需的輸入與輸出量;rate = 每遊戲小時輸出件數(建築 Lv1、勞力 100%);jobs = 職缺(勞力比掛點);
 // lv = 開放等級;tech = 科技加成鍵(techMul('goods.' + id) 掛點,目前無節點 = ×1);opt = 選配料(預留);by = 副產(預留)
+// steps = 工藝流程文字(真實工序,只供進階 / 鏈條畫面顯示「材料 → 工序 → 成品」;不是貨品、不計庫存、不影響結算);
+// note = 遊戲簡化說明(一句)。原則:in 的主要原料必須是真實原料;中間工序與輔料(酒麴、木炭…)只寫在 steps / note。魔幻特色配方不需要。
 const RECIPES = {
-  r_muban:   { name: '木板', bld: ['sawbench'],     in: { wood: 20 },                out: { g_muban: 1 },    rate: 2, lv: 1, jobs: 4, tech: null, opt: null },
-  r_mabu:    { name: '麻布', bld: ['loom_shop'],    in: { g_ma: 2 },                 out: { mat_mabu: 1 },   rate: 2, lv: 2, jobs: 4, tech: null, opt: null },
-  r_tieding: { name: '鐵錠', bld: ['smith_awning'], in: { g_tiekuang: 2, wood: 10 }, out: { mat_tieding: 1 }, rate: 2, lv: 3, jobs: 4, tech: null, opt: null },
-  r_yifu:    { name: '衣物', bld: ['shop_cloth'],   in: { mat_mabu: 2 },             out: { g_yifu: 1 },     rate: 1, lv: 3, jobs: 6, tech: null, opt: null },
-  r_nongju:  { name: '農具', bld: ['smith_awning'], in: { mat_tieding: 1, g_muban: 1 }, out: { g_nongju: 1 }, rate: 1, lv: 3, jobs: 6, tech: null, opt: null },
+  r_muban:   { name: '木板', bld: ['sawbench'],     in: { wood: 20 },                out: { g_muban: 1 },    rate: 2, lv: 1, jobs: 4, tech: null, opt: null,
+    steps: ['原木去皮', '鋸開或劈開成板'] },
+  r_mabu:    { name: '麻布', bld: ['loom_shop'],    in: { g_ma: 2 },                 out: { mat_mabu: 1 },   rate: 2, lv: 2, jobs: 4, tech: null, opt: null,
+    steps: ['漚麻(泡水使纖維分離)', '績麻成線', '上機織布'], note: '遊戲把這幾道工序合成一步。' },
+  r_tieding: { name: '鐵錠', bld: ['smith_awning'], in: { g_tiekuang: 2, wood: 10 }, out: { mat_tieding: 1 }, rate: 2, lv: 3, jobs: 4, tech: null, opt: null,
+    steps: ['木材燒成木炭', '鼓風入爐冶煉鐵礦', '鑄成鐵錠'], note: '木材在這裡是燃料(先燒成木炭)。' },
+  r_yifu:    { name: '衣物', bld: ['shop_cloth'],   in: { mat_mabu: 2 },             out: { g_yifu: 1 },     rate: 1, lv: 3, jobs: 6, tech: null, opt: null,
+    steps: ['裁剪', '縫製'] },
+  r_nongju:  { name: '農具', bld: ['smith_awning'], in: { mat_tieding: 1, g_muban: 1 }, out: { g_nongju: 1 }, rate: 1, lv: 3, jobs: 6, tech: null, opt: null,
+    steps: ['鑄造或鍛打鐵製刃口', '裝上木柄'] },
   // T3 / T4(PLAN_INTERIORS §3 O1;全部 PLACEHOLDER)。建築沿用 nl_objects.js 的科技解鎖物件(lv 欄僅供參考,lint 對科技解鎖建築不比對等級)
-  r_qiqi:    { name: '漆器', bld: ['qi_qi_fang'],  in: { g_muban: 2, mat_mabu: 1 },       out: { g_qiqi: 1 },    rate: 1,   lv: 1, jobs: 6, tech: null, opt: null },
-  r_jin:     { name: '錦',   bld: ['jin_fang'],    in: { mat_mabu: 4 },                   out: { g_jin: 1 },     rate: 1,   lv: 1, jobs: 6, tech: null, opt: null },
-  r_ciqi:    { name: '瓷器', bld: ['ci_yao'],      in: { stone: 20, wood: 20 },           out: { g_ciqi: 1 },    rate: 1,   lv: 1, jobs: 6, tech: null, opt: null },
-  r_zhi:     { name: '紙',   bld: ['zao_zhi'],     in: { g_ma: 3, wood: 10 },             out: { g_zhi: 1 },     rate: 1.5, lv: 1, jobs: 4, tech: null, opt: null },
-  r_yuqi:    { name: '玉器', bld: ['yu_qi_fang'],  in: { stone: 30, mat_tieding: 1 },     out: { g_yuqi: 1 },    rate: 0.5, lv: 1, jobs: 6, tech: null, opt: null },
-  r_yinqi:   { name: '銀器', bld: ['yin_lou'],     in: { g_tiekuang: 4, wood: 10 },       out: { g_yinqi: 1 },   rate: 0.5, lv: 1, jobs: 6, tech: null, opt: null },
-  r_mingjiu: { name: '名酒', bld: ['brewery'],     in: { g_liang: 10, g_qiqi: 1 },        out: { g_mingjiu: 1 }, rate: 0.5, lv: 18, jobs: 6, tech: null, opt: null }
+  r_qiqi:    { name: '漆器', bld: ['qi_qi_fang'],  in: { g_muban: 2, mat_shengqi: 1 },    out: { g_qiqi: 1 },    rate: 1,   lv: 1, jobs: 6, tech: null, opt: null,
+    steps: ['木板製成木胎', '反覆髹塗生漆', '放在潮濕處陰乾'], note: '生漆是漆樹割出的汁液,遊戲由伐木場順帶割取;另有以麻布作胎的夾紵漆器。' },
+  r_jin:     { name: '錦',   bld: ['jin_fang'],    in: { g_si: 4 },                       out: { g_jin: 1 },     rate: 1,   lv: 1, jobs: 6, tech: null, opt: null,
+    steps: ['絲線先染好顏色', '提花織機織出花紋'], note: '絲來自桑園:採桑養蠶、煮繭繅絲,遊戲合成一步。' },
+  r_ciqi:    { name: '瓷器', bld: ['ci_yao'],      in: { stone: 20, wood: 20 },           out: { g_ciqi: 1 },    rate: 1,   lv: 1, jobs: 6, tech: null, opt: null,
+    steps: ['瓷石搗碎、淘洗成泥', '拉坯、上青釉', '燒柴入窯高溫燒成'], note: '石材指瓷石(早期青瓷胎用瓷石,不是一般陶土),木材是窯柴;東漢晚期南方才燒成成熟青瓷。' },
+  r_zhi:     { name: '紙',   bld: ['zao_zhi'],     in: { g_ma: 3, wood: 10 },             out: { g_zhi: 1 },     rate: 1.5, lv: 1, jobs: 4, tech: null, opt: null,
+    steps: ['麻料切碎、浸泡', '蒸煮後舂搗成漿', '抄紙、晾乾'], note: '木材在這裡是蒸煮的燃料;蔡倫造紙也用樹皮、破布、舊漁網。' },
+  r_mingjiu: { name: '醇酒', bld: ['brewery'],     in: { g_liang: 10 },                   out: { g_mingjiu: 1 }, rate: 0.5, lv: 18, jobs: 6, tech: null, opt: null,
+    steps: ['蒸熟穀物', '拌入酒麴發酵', '過濾取酒'], note: '酒麴也是穀物做的,遊戲不另列材料。' }
 };
 
 // ───────── 5. 查詢輔助(純函式,無外部相依)─────────
@@ -118,7 +135,13 @@ function goodsRecipeName(rid) {
   return r ? ((t && ((t[p] && t[p][rid]) || (t.common && t.common[rid]))) || r.name) : rid;
 }
 function goodsTier(id) { return GOODS[id] ? GOODS[id].tier : 0; }
-function goodsName(id) { var o = goodsFxName(id); return o ? o[0] : (GOODS[id] ? GOODS[id].name : id); }
+function goodsName(id) { var o = goodsFxName(id); return o ? o[0] : (GOODS[id] ? GOODS[id].name : (GOODS_REMOVED[id] ? GOODS_REMOVED[id].name : id)); }
+// 工藝流程(歷史世界才有;魔幻世界與無資料回 null):{ steps:[工序文字], note }
+function goodsRecipeCraft(rid) {
+  var r = RECIPES[rid];
+  if (!r || goodsPackNow() || !r.steps || !r.steps.length) return null;
+  return { steps: r.steps.slice(), note: r.note || '' };
+}
 function goodsIcon(id) { var o = goodsFxName(id); return o ? o[1] : (GOODS[id] ? (GOODS[id].icon || '') : ''); }
 function goodsPrice(id) {
   var g = GOODS[id];

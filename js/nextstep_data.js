@@ -21,7 +21,7 @@ var NS_CHAIN = [
     go: { kind: 'build', type: 'well' }, obj: 'well', done: { k: 'cnt', t: ['well'], n: 1 } },
   { id: 'n_field', icon: '🌾', text: '何不開一塊田,讓大家有飯吃?', why: '糧食是民心的底,田越近民居越好。',
     go: { kind: 'build', type: 'field_sprout' }, obj: 'field_sprout', done: { k: 'cnt', t: NS_FIELD_TYPES, n: 1 } },
-  { id: 'n_house3', icon: '🏠', text: '再添兩間民房,湊成三戶。', why: '人多了才有稅收,也才有人手去做事。',
+  { id: 'n_house3', icon: '🏠', text: '再添兩間民房,湊成三棟。', why: '人多了才有稅收,也才有人手去做事。',
     go: { kind: 'build', type: 'house' }, obj: 'house', done: { k: 'houses', n: 3 } },
   { id: 'n_lab', icon: '📜', text: '不妨蓋座研究院,開啟學問。', why: '新建築都要靠研發解鎖,研究院是起點。',
     go: { kind: 'build', type: 'research' }, obj: 'research', done: { k: 'cnt', t: ['research'], n: 1 } },

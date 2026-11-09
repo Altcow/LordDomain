@@ -573,7 +573,7 @@ function puiFtueWatch() {
     PROG_CITY_QUEST.forEach(function (q) {
       if (p.ftue.done[q.id] && !pui.doneSeen[q.id]) {
         pui.doneSeen[q.id] = true;
-        puiToast('✓ 完成:' + q.text);
+        if (!puiNsReplaces()) puiToast('✓ 完成:' + q.text);   // 無等級經營板由推薦下一步接手:舊城建任務(含「升到 Lv2」「土地變大」)不再跳完成提示
       }
     });
   }

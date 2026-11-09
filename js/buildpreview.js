@@ -7,7 +7,8 @@ var BPV_SEASONS = [['spring', '春'], ['summer', '夏'], ['autumn', '秋'], ['wi
 var BPV_TODS = [['dawn', '晨'], ['noon', '午'], ['dusk', '昏'], ['night', '夜']];
 var BPV_FX_NAME = { wei: '衛生', yi: '防疫', shui: '供水', liang: '糧食', store: '存糧', an: '治安', xin: '民心', jiao: '教化', lu: '通行', wang: '名望',
   min: '民生', mei: '美觀', xu: '蓄養', wen: '文風', shang: '商貿', chan: '產能', tian: '農田', fire: '防火', flood: '防洪', locust: '防蝗', warn: '預警', xue: '學識' };
-var BPV_SIZE_PORTRAIT = { w: 252, h: 124 };
+var BPV_SIMPLE_OFF = ['yi', 'an', 'xin', 'jiao', 'fire', 'flood', 'locust', 'warn'];   // 簡化城市模式(js/citysimple.js)關閉的效果軸
+var BPV_SIZE_PORTRAIT ={ w: 252, h: 124 };
 var BPV_SIZE_LANDSCAPE = { w: 200, h: 124 };
 var BPV_RES = 3;          // 烘焙解析度(ART.objSprite 的 res,等於世界像素 3 倍)
 var BPV_MAX_K = 2;        // 烘焙圖再放大上限(畫布 2× 取樣,所以最大約 3 CSS 像素/世界像素)
@@ -39,7 +40,7 @@ function bpvEffectText(id) {
   if (d.unit) parts.push('兵營');
   fx = (typeof CITY_FX !== 'undefined' && CITY_FX[id]) || (typeof CITY_FX_PENDING !== 'undefined' && CITY_FX_PENDING[id]) || null;
   if (fx && fx.fx) {
-    for (k in fx.fx) if (k !== 'mei') ks.push(BPV_FX_NAME[k] || k);
+    for (k in fx.fx) if (k !== 'mei' && !(typeof citySimpleOn === 'function' && citySimpleOn() && BPV_SIMPLE_OFF.indexOf(k) >= 0)) ks.push(BPV_FX_NAME[k] || k);   // 簡化模式:已砍的軸(防災 / 治安 / 民心 / 疫病 / 教化)不列
     if (ks.length) parts.push(ks.join('、'));
   }
   if (!parts.length && typeof cityInfo === 'function') {

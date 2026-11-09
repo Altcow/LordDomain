@@ -24,6 +24,9 @@ function nsSetEnabled(v) {
   nsRt.cache = null; nsRt.last = -1e15;
 }
 
+// 新手教學進行中不受「推薦下一步」總開關影響(教學不依賴該開關,否則關閉後教學不會推進)
+function nsTutForced() { return typeof tutActive === 'function' && tutActive(); }
+
 // ───────── 記憶(存檔只含 id)─────────
 function nsMemNew() { return { dismissed: {}, seen: {}, dirty: false }; }
 function nsNormSave(v) {
@@ -123,13 +126,14 @@ function nsPrereq(techId, api, s) {
 // 真實建築上限(依目前等級的 progProdCap;研究院走 techLabCap;null = 不限)
 function nsLvNow() { return (typeof prog !== 'undefined' && prog && typeof prog.lv === 'number') ? prog.lv : 1; }
 function nsCapOf(type) {
-  var c = (typeof progProdCap === 'function') ? progProdCap(type, nsLvNow()) : null;
+  var c = (typeof progCapNow === 'function') ? progCapNow(type) : (typeof progProdCap === 'function') ? progProdCap(type, nsLvNow()) : null;   // 與 map.js capOf 同源(無等級依官階)
   if (type === 'research' && typeof techLabCap === 'function') c = techLabCap();
   return (c === undefined) ? null : c;
 }
 // 上限為 0 或要等城市升級時,說明要做到什麼才有名額(找第一個有名額的等級;找不到回通用文字)
 function nsCapHint(type) {
   var L, c;
+  if (typeof progCapHint === 'function') return progCapHint(type) || '目前還不能蓋';
   if (typeof progProdCap !== 'function') return '目前還不能蓋';
   for (L = nsLvNow() + 1; L <= 25; L++) { c = progProdCap(type, L); if (c === null || c > 0) return '城市升到 ' + L + ' 級才有名額'; }
   return '目前還不能蓋';
@@ -197,15 +201,84 @@ function nsObjName(st) {
   return id;
 }
 
+// 教學畢業後、市令研成前:顧問的「蓋市集 / 研發市令」建議與教學 T9 / T10 重複,先不推(市令研成後恢復)
+function nsTutHoldLock(it) {
+  if (!it.lock || it.lock.tech !== 'e_shiling') return false;
+  if (typeof tutGraduated !== 'function' || !tutGraduated()) return false;
+  return !(typeof tutDoneTech === 'function' && tutDoneTech('e_shiling'));
+}
+
+// ───────── 簡化城市模式(citysimple.js):只推「蓋什麼 → 解鎖什麼」─────────
+// 順序:沒研究院 → 先蓋研究院;想研的科技缺前置建築(且已可蓋)→ 先蓋它;研究院有空槽 → 可研的科技(研成可蓋什麼);
+//   基本民生(糧 / 水 / 衛)偏低的一句話提示(顧問黃色);已解鎖但還沒蓋的建築。每類最多 2 張,總數最多 6 張
+var NS_SIMPLE_MAX = 6;
+function nsBldName(t) { return (typeof OBJECTS !== 'undefined' && OBJECTS[t] && OBJECTS[t].name) || t; }
+function nsTechLabel(n) { return (typeof techLabelOf === 'function') ? techLabelOf(n) : n.name; }
+function nsBldsOf(n) {   // 節點研成可蓋的實體建築(魔幻世界換本族;去重)
+  var out = [];
+  (n.unlock || []).forEach(function (u) {
+    var t = (typeof fxGoType === 'function') ? fxGoType(u) : u;
+    if (typeof OBJECTS !== 'undefined' && OBJECTS[t] && !OBJECTS[t].retired && out.indexOf(t) < 0 && !(typeof fxHiddenObj === 'function' && fxHiddenObj(t))) out.push(t);
+  });
+  return out;
+}
+function nsCanBuild(t) {
+  var m, n = 0;
+  if (typeof isUnlocked === 'function' && !isUnlocked('estate', t)) return false;
+  m = (typeof capOf === 'function') ? capOf(t) : null;
+  if (m === 0) return false;
+  if (m && typeof world !== 'undefined' && world && Array.isArray(world.objects)) { world.objects.forEach(function (o) { if (o && o.type === t) n++; }); if (n >= m) return false; }
+  return true;
+}
+function nsSimpleCands(s, adv, mem) {
+  var out = [], seen = {}, ts = (typeof techState === 'function') ? techState() : null, busy = 0, slots = 0, ready = [], blocked = [], built = [], k;
+  function push(c) { if (mem.dismissed[c.id] || seen[c.id] || out.length >= NS_SIMPLE_MAX) return; seen[c.id] = 1; out.push(c); }
+  if (!s.lab) push({ id: 's_lab', src: 'chain', tier: 'C', icon: '📜', text: '先蓋一座研究院,才能研發科技。', why: '新建築都要先研發對應的科技。', go: { kind: 'build', type: 'research' } });
+  if (ts && typeof CITY_TECHS !== 'undefined') {
+    busy = (ts.cur || []).length; slots = (typeof techSlots === 'function') ? techSlots() : 0;
+    CITY_TECHS.forEach(function (n) {
+      var miss;
+      if (techDone(n.id) || techIsMega(n) || !techReqMet(n) || !techEraOpen(n.era)) return;
+      if ((ts.cur || []).some(function (c) { return c.id === n.id; })) return;
+      miss = (typeof techNeedMiss === 'function') ? techNeedMiss(n.id) : [];
+      if (miss.length) blocked.push({ n: n, miss: miss }); else if ((ts.queue || []).indexOf(n.id) < 0) ready.push(n);
+    });
+  }
+  blocked.slice(0, 4).forEach(function (b) {
+    var t = (typeof techNeedType === 'function') ? techNeedType(b.miss[0]) : b.miss[0];
+    if (!nsCanBuild(t) || out.filter(function (c) { return c.id.indexOf('s_need_') === 0; }).length >= 2) return;
+    push({ id: 's_need_' + t, src: 'chain', tier: 'C', icon: '🏗', text: '先蓋〈' + nsBldName(t) + '〉,就能研發〈' + nsTechLabel(b.n) + '〉。', why: '「' + nsTechLabel(b.n) + '」的前置建築是' + nsBldName(t) + '。', go: { kind: 'build', type: t } });
+  });
+  if (s.lab && busy < Math.max(1, slots)) {
+    ready.sort(function (a, b) { return a.era - b.era || ((a.cost && a.cost.xue) || 0) - ((b.cost && b.cost.xue) || 0) || (a.id < b.id ? -1 : 1); });
+    ready.slice(0, 2).forEach(function (n) {
+      var bl = nsBldsOf(n).slice(0, 3).map(nsBldName);
+      push({ id: 's_tech_' + n.id, src: 'chain', tier: 'C', icon: '📜', text: '可以研發〈' + nsTechLabel(n) + '〉。', why: bl.length ? '研成可蓋:' + bl.join('、') + '。' : '研成開放新功能。', go: { kind: 'tech', id: n.id } });
+    });
+  }
+  ((adv && adv.items) || []).forEach(function (it) {   // 顧問在簡化模式只剩糧 / 水 / 衛的一句話提示與庫房、研發等
+    if (it.core || it.tier === 'B' || mem.dismissed['adv:' + it.id]) return;
+    push({ id: 'adv:' + it.id, src: 'advice', tier: it.tier, icon: (typeof STAT_HELP !== 'undefined' && STAT_HELP[it.stat]) ? STAT_HELP[it.stat].icon : '🧭', text: it.text, why: '', go: it.go, item: it });
+  });
+  if (ts) for (k in ts.done) {
+    var n = techNode(k);
+    if (!n || n.id !== k) continue;
+    nsBldsOf(n).forEach(function (t) { if (built.length < 2 && !(s.cnt[t] > 0) && nsCanBuild(t) && typeof OBJECTS !== 'undefined' && OBJECTS[t].w * OBJECTS[t].h >= 4) built.push({ t: t, n: n }); });
+  }
+  built.forEach(function (b) { push({ id: 's_bld_' + b.t, src: 'chain', tier: 'C', icon: '🏠', text: '〈' + nsBldName(b.t) + '〉已解鎖,還沒蓋。', why: '研成〈' + nsTechLabel(b.n) + '〉解鎖的建築。', go: { kind: 'build', type: b.t } }); });
+  return out;
+}
+
 // ───────── 核心:候選清單(純函式)─────────
 // adv = advCompute 的結果(或 null);回傳 { cands:[{id,src,tier,icon,text,why,go,item}], top }
 function nsCompute(s, adv, mem, api) {
   var reds = [], rest = [], chain, cands = [], items = (adv && adv.items) || [], i, tc;
   tc = (typeof tutCompute === 'function') ? tutCompute(s, mem) : null;   // 新手教學期間:只回傳教學卡(一次一步、不輪播、不能 ✕)
   if (tc) return { cands: [tc], top: tc };
+  if (typeof citySimpleOn === 'function' && citySimpleOn() && typeof csTreeOn === 'function' && csTreeOn()) { cands = nsSimpleCands(s, adv, mem); return { cands: cands, top: cands[0] || null }; }
   items.forEach(function (it) {
     var h, c;
-    if (it.core || mem.dismissed['adv:' + it.id]) return;
+    if (it.core || mem.dismissed['adv:' + it.id] || nsTutHoldLock(it)) return;
     h = (typeof STAT_HELP !== 'undefined' && STAT_HELP[it.stat]) || null;
     c = { id: 'adv:' + it.id, src: 'advice', tier: it.tier, icon: h ? h.icon : '🧭', text: it.text, why: h ? h.briefNovice : '', go: it.go, item: it };
     if (it.tier === 'R') reds.push(c); else rest.push(c);
@@ -223,7 +296,7 @@ function nsCompute(s, adv, mem, api) {
 // ───────── 節流計算 ─────────
 function nsGet(force) {
   var now, mem, adv, s;
-  if (!nsEnabled()) return null;
+  if (!nsEnabled() && !nsTutForced()) return null;
   now = nsRt.clock();
   if (!force && nsRt.cache && now - nsRt.last < NS_THROTTLE_MS) return nsRt.cache;
   mem = nsBind();
@@ -237,7 +310,7 @@ function nsGet(force) {
 // 外部每秒呼叫;順手偵測「開過某面板」
 function nsTick() {
   var m;
-  if (!nsEnabled()) return null;
+  if (!nsEnabled() && !nsTutForced()) return null;
   if (typeof document !== 'undefined' && document && document.hidden) return nsRt.cache;
   m = nsBind();
   if (typeof panelIsOpen === 'function') {
@@ -270,14 +343,15 @@ function nsGo(cand) {
 }
 
 // ───────── 卡片幾何(純函式,供 UI 與測試)─────────
-// 右上小卡:直版 = 頂列下方、右側欄左邊,高度止於 y=20% 之前;橫版 = 右側 25% 欄、右側欄左邊。尺寸 ≤ 寬 60%、高 18%,絕不進正中央(x25~75% × y20~80%)。
-var NS_LAND_MIN_H = 96;
+// 右上小卡:直版 = 頂列下方、右側欄左邊,高度止於 y=20% 之前,尺寸 ≤ 寬 60%、高 18%,絕不進正中央(x25~75% × y20~80%)。橫版 = 頂列下方、右側欄左邊,寬 240、高 124(允許伸入中央上緣,見 nsCardRect)。
+var NS_LAND_W = 240, NS_LAND_H = 124;   // 橫版卡片寬 240(≥200)、高 124:容得下 44px 按鈕 + 三行 14px 文字
 function nsCardRect(vw, vh, topY, sideW) {
   var side = (sideW > 0) ? sideW : 52, land = vw >= vh, maxW = vw * 0.6, maxH = vh * 0.18, x, y, w, h;
   y = Math.max(4, topY || 50);
   if (land) {
-    x = vw * 0.75 + 2; w = Math.min(maxW, Math.max(96, vw - side - x));
-    h = Math.max(maxH, NS_LAND_MIN_H);   // 橫版:卡片位於 x>=75%(不進正中央),高度可放寬到 >=96,容得下 44px 按鈕 + 兩行 14px 文字
+    // 橫版:貼在右側欄左邊、靠上(頂列下方),往內側伸入畫面;不蓋側欄、不進底部工具列與小地圖
+    w = Math.min(maxW, NS_LAND_W); x = Math.max(4, vw - side - 6 - w);
+    h = NS_LAND_H;
   } else {
     w = Math.min(maxW, vw - side - 6); x = vw - side - w;
     h = Math.min(maxH, vh * 0.2 - y - 2);

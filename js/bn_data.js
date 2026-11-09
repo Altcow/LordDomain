@@ -5,7 +5,7 @@
 var BN_DATA = {
   v: 1,
   K: 1.0,                      // 傷害總係數(§3.4);B1 調參 1.6 → 1.73;戰鬥改版(多戰法同時發動 + 放完戰法仍普攻 + cdCut)1.73 → 1.0,維持 5~7 回合
-  maxRound: 8,                 // 回合上限
+  maxRound: 50,                // 回合上限(2026-11-09 使用者決議 8 → 50:讓疲兵自然分出勝負;到上限仍依剩餘兵力比判定)
   critMul: 1.5,
   jitter: 0.10,                // 浮動 ±5 %:0.95 + 0.10 × r
   grade: [1.00, 1.04, 1.08, 1.12, 1.16],          // 品階係數 g(§2.1)
@@ -65,8 +65,13 @@ var BN_DATA = {
     evade: [1, 1, 2, 2], confuse: [1, 1, 2, 2], timid: [1, 1, 1, 2], dispel: [1, 2, 99, 99], dispel_shield: [0, 0.5, 1, 1], buff_steal: [1, 1, 2, 3], invert: [1, 1, 2, 3],
     cd_reduce: [1, 1, 2, 2], summon_hp: [0.15, 0.25, 0.35, 0.5], summon_atk: [0.4, 0.55, 0.7, 0.9],
     stat_charge: [0.03, 0.04, 0.05, 0.06],      // stack_charge 每層加成
-    execute_chain_stack: [0.05, 0.08, 0.10, 0.15], undying_dur: [1, 2, 2, 3], stealth_dur: [1, 1, 2, 2], immune_dur: [2, 2, 3, 3]
+    execute_chain_stack: [0.05, 0.08, 0.10, 0.15], undying_dur: [1, 2, 2, 3], stealth_dur: [1, 1, 2, 2], immune_dur: [2, 2, 3, 3],
+    sleep: [2, 2, 3, 3], paralyze: [1, 1, 2, 2]   // 睡眠 / 麻痺持續回合(2026-11-09 新增)
   },
+  // 睡眠(sleep):期間無法行動、不會閃避;受攻擊傷害(不含持續傷害)時 wake 機率被喚醒;醒來(到期 / 驚醒 / 淨化)後 immRounds 回合內免疫睡眠
+  sleep: { wake: 0.45, immRounds: 2 },
+  // 麻痺(paralyze):每次行動前 skip 機率無法行動、速度 ×(1 − spd);雷電系戰法施加時傳導給目標十字相鄰一名敵人(conductLeft 回合,每目標每回合 1 次)
+  paralyze: { skip: 0.5, spd: 0.15, conductLeft: 1 },
   dotRounds: 2, dotRoundsXL: 3, poisonRounds: 3, poisonHeal: 0.5,
   burnTickK: 1,
   healCap: { single: 0.35, xl: 0.50, round: 0.40, second: 0.7, third: 0.5 },
@@ -76,7 +81,7 @@ var BN_DATA = {
   ward: { maxLayers: 2, dur: 3, rateScale: 5.0 },   // B1 調參 1 → 5(抵禦來源稀少,否則擋下率 < 2%)
   ccImmRounds: 1,              // 強控後抗控
   // 疲兵(§4.11):第 5 回合起 受傷 +10 %/回合、受療 −10 %/回合,累加
-  fatigue: { start: 5, dmg: 0.10, heal: 0.10 },
+  fatigue: { start: 5, dmg: 0.10, heal: 0.10 },   // 回合上限改 50 後,疲兵累加足以讓戰鬥自然收斂(3000 場平均 6.7 回合、逾時 0%),不需加重
   // 連鎖(§3.10、combos partC)
   chain: { stepCap: 8, maxDepth: 3, followUpPerUnit: 1, extraActionPerUnit: 1, extraActionPerTeam: 2, comboHitBonus: 0.05, comboHitCap: 0.25, targetDmgCapPct: 0.60, teamDmgCapPct: 0.40, assistKillRecast: false, ultAssistMul: 0.5, assistBasicMul: 1.0, assistSmallMul: 0.7, recastDefaultMax: 2, recastDefaultDecay: 0.7, ultRecastMax: 2, ultRecastDecay: 0.7 },
   counterPerAttacker: 1,

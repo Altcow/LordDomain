@@ -399,10 +399,16 @@ function capOf(type) {
   let m = d.max || null;
   if (type === 'research' && typeof techLabCap === 'function' && typeof CITY_TECHS !== 'undefined') m = techLabCap();   // NL1:研究院上限依時代
   if (progRulesOn() && typeof progProdCap === 'function') {
-    const pc = progProdCap(typeof houseKindOf === 'function' ? houseKindOf(type) : type, prog.lv);
+    const kind = typeof houseKindOf === 'function' ? houseKindOf(type) : type;
+    const pc = typeof progCapNow === 'function' ? progCapNow(kind) : progProdCap(kind, prog.lv);   // 經營板無等級:依官階(progdata.js PROG_NL_RANK_CAP)
     if (pc !== null && (m === null || pc < m)) m = pc;
   }
   return m;
+}
+// 名額已滿時附在錯誤訊息後的說明(例:「;官階達「亭長」後名額增加為 20 座」);沒有則 ''
+function capMoreText(type) {
+  const h = progRulesOn() && typeof progCapHint === 'function' ? progCapHint(typeof houseKindOf === 'function' ? houseKindOf(type) : type) : '';
+  return h ? ';' + h : '';
 }
 
 function canPlace(type, x, y, rot) {

@@ -148,7 +148,7 @@ function bnUltFor(card, troop) {
   return BN_ULT_BY[k] || BN_ULT_BY['步'];
 }
 
-// 單位規格。card = 名冊 entry(或 cardGen 結果)。o = {troop, row, col, learned:[id], scene}
+// 單位規格。card = 名冊 entry(或 cardGen 結果)。o = {troop, row, col, learned:[id], scene, drill(研兵比例,可省略)}
 function bnUnitSpec(card, o) {
   o = o || {};
   var S5 = bnCardStats(card), apt = bnAptOf(card), troop = o.troop || bnDefaultTroop(card), c = BN_DATA.troops[troop], g = BN_DATA.grade[card.gr] || 1;
@@ -195,8 +195,8 @@ function bnUnitSpec(card, o) {
     ['hp', 'atk', 'mag', 'heal', 'sh'].forEach(function (k) { spec.stats[k] = bnRound(spec.stats[k] * tn); });
     spec.mods.rateBonus = (spec.mods.rateBonus || 0) + (tn - 1) * (BN_DATA.figTuneRate || 0);   // 同一係數也小幅影響戰法發動率(治療 / 控制型不吃數值縮放)
   }
-  // 研兵(bn_book.js;只對名冊卡):該兵種兵力 / 攻擊 / 謀略 / 治療 +n%
-  var dr = (typeof bnBookDrillOf === 'function') ? bnBookDrillOf(card, troop) : 0;
+  // 研兵(bn_book.js;只對名冊卡):該兵種兵力 / 攻擊 / 謀略 / 治療 +n%;o.drill = 指定比例(隊伍碼 / 戰報碼重建用,優先於本機兵書)
+  var dr = typeof o.drill === 'number' ? o.drill : ((typeof bnBookDrillOf === 'function') ? bnBookDrillOf(card, troop) : 0);
   if (dr > 0) { ['hp', 'atk', 'mag', 'heal'].forEach(function (k) { spec.stats[k] = bnRound(spec.stats[k] * (1 + dr)); }); spec.drill = dr; }
   // 升星加成(卡片熔爐 cardsStarBonus;缺函式 / 缺欄位 = 0)。注意 entry.star 是鎖定旗標,不是星等,不讀
   var sb = (typeof cardsStarBonus === 'function') ? cardsStarBonus(card) : null;

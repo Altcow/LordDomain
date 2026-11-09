@@ -224,7 +224,7 @@ function tavernOnAct(S, spot) {
 }
 function tavernSub() {
   var cs = (typeof cardsGet === 'function') ? cardsGet() : null;
-  return cs ? '🎴 ' + cs.tok + ' · 🎫 ' + (cs.nameTokens | 0) : '';
+  return cs ? '名冊 ' + cs.roster.length + '/' + ((typeof cardsCap === 'function') ? cardsCap() : 0) + ' · 🎫 ' + (cs.nameTokens | 0) : '';
 }
 function tavernSceneDef() {
   var L;

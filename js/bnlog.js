@@ -1,7 +1,7 @@
 // js/bnlog.js — 戰鬥 A 模式:文字戰報(最近 N 場自動保留、手動儲存、刪除、逐步 / 逐回合回放、同陣容同種子重打驗證)。
 // 資料來源 = 引擎事件日誌 S.events(bn_engine.js 檔頭註解)。存法:每個事件壓成一行短碼字串(類型 1 字母 + 逗號分隔欄位),字串欄位放進每場自己的字典 k;
 // 每場最多 BNLOG.maxLines 行,超過截斷並註明;整鍵超過 BNLOG.maxChars 時先丟最舊的「最近」紀錄。檢視時才把短碼還原成中文句子。
-// 存檔:世界內 'lorddomain.bnlog.v1'(SAVE_SLOT_KEYS,隨世界 / 回溯點切換)= {v:1, recent:[戰報], saved:[戰報]};有值才寫;壞檔 / 缺欄位 = 空,不報錯。
+// 存檔:世界內 'lorddomain.bnlog.v1'(SAVE_SLOT_KEYS,隨世界 / 回溯點切換)= {v:1, rules:BNLOG_RULES, recent:[戰報], saved:[戰報]};有值才寫;壞檔 / rules 不同 = 整批清除並提示一次。
 // 面板掛在 bnui.js 的 #bnLayer 內(#bnLog);Esc / 返回鍵先關面板(bnUiBack 先問 bnLogBack)。不發聲。ES2017;不用 ?. ??。
 // 戰鬥改版(2026-11-06):沒有士氣(舊戰報的 M 士氣行仍可顯示);新增 r = 戰法發動判定(哪個戰法擲骰成功 / 未發動、發動率)。
 // 全域:BNLOG bnLogEncode bnLogBuild bnLogLoad bnLogRecord bnLogSave bnLogDel bnLogGet bnLogItems bnLogVerify bnLogOpen bnLogClose bnLogIsOpen bnLogBack bnLogDo bnLogRender
@@ -16,7 +16,7 @@ var BNLOG_CODE = { round: 'R', act: 'A', skill: 'K', ult: 'U', dmg: 'D', evade: 
 var BNLOG_GR = ['白', '青', '藍', '紫', '金'];
 var BNLOG_WHY = {
   hit: '受擊', kill: '擊倒', skill: '戰法', allydown: '友軍倒下', act: '行動', idle: '待命', ult: '施放大招', aura: '光環', chain: '連鎖', bond: '羈絆', rx: '反應', down: '被削', steal: '被奪', killskill: '戰法擊倒', antidote: '解毒',
-  expire: '到期', used: '已生效', cleanse: '被淨化', dispel: '被驅散', stun: '暈眩', fear: '威懾', trap: '中伏', pursuit: '追擊', wipe: '全滅決勝', limit: '回合上限判定', retreat: '撤退(算敗北)'
+  expire: '到期', used: '已生效', cleanse: '被淨化', dispel: '被驅散', stun: '暈眩', fear: '威懾', trap: '中伏', sleep: '沉睡中', paralyze: '麻痺中', wake: '受擊驚醒', pursuit: '追擊', wipe: '全滅決勝', limit: '回合上限判定', retreat: '撤退(算敗北)'
 };
 var BNLOG_TY = { phys: '攻擊', strat: '謀略', dot: '持續', self: '自損' };
 var BNLOG_CAT = { command: '指揮', active: '主動', pursuit: '追擊', passive: '被動', ult: '大招', assist: '補刀', bond: '羈絆' };
@@ -112,9 +112,18 @@ function bnLogNormRep(r) {
   r.ts = +r.ts || 0; r.r = r.r | 0; r.st = r.st | 0; r.cut = r.cut | 0; r.ne = r.ne | 0; r.seed = r.seed >>> 0;
   return r;
 }
+// 戰鬥規則版本:存檔記 rules;載入時與目前不同(含壞檔 / 沒有版本欄位的舊戰報)→ 最近與已儲存整批清掉,提示一次(清完即寫入新版本記號,不會重複提示)
+var BNLOG_RULES = 'r50-sp2-20261109';   // 2026-11-09:回合上限 8 → 50;同日加入睡眠 / 麻痺狀態(sp);再加神醫 / 禁療戰法並移除華佗睡眠戰法(sp2)
 function bnLogLoad() {
-  var raw = bnLogLsGet(BNLOG.key), o = null, d = { v: 1, recent: [], saved: [] };
+  var raw = bnLogLsGet(BNLOG.key), o = null, d = { v: 1, recent: [], saved: [] }, had;
   if (raw) { try { o = JSON.parse(raw); } catch (e) { o = null; } }
+  if (raw && (!o || typeof o !== 'object' || o.rules !== BNLOG_RULES)) {
+    had = !o || (Array.isArray(o.recent) && o.recent.length > 0) || (Array.isArray(o.saved) && o.saved.length > 0);
+    bnLogLsSet(BNLOG.key, JSON.stringify({ v: 1, rules: BNLOG_RULES, recent: [], saved: [] }));
+    BNLOG.recs = {}; BNLOG.recIds = []; BNLOG.view = null;
+    if (had) bnLogToast('戰鬥規則已更新,舊戰報已清除');
+    return d;
+  }
   if (o && typeof o === 'object') {
     if (Array.isArray(o.recent)) d.recent = o.recent.filter(bnLogValid).map(bnLogNormRep).slice(0, BNLOG.recentMax);
     if (Array.isArray(o.saved)) d.saved = o.saved.filter(bnLogValid).map(bnLogNormRep).slice(0, BNLOG.savedMax);
@@ -124,9 +133,9 @@ function bnLogLoad() {
 // 寫回:超過 maxChars 或寫入失敗(容量滿)→ 先丟最舊的「最近」再試;已儲存的不自動丟
 function bnLogStore(d) {
   var s;
-  if (!d.recent.length && !d.saved.length) { if (bnLogLsGet(BNLOG.key) !== null) bnLogLsSet(BNLOG.key, JSON.stringify({ v: 1, recent: [], saved: [] })); return true; }
+  if (!d.recent.length && !d.saved.length) { if (bnLogLsGet(BNLOG.key) !== null) bnLogLsSet(BNLOG.key, JSON.stringify({ v: 1, rules: BNLOG_RULES, recent: [], saved: [] })); return true; }
   for (;;) {
-    s = JSON.stringify({ v: 1, recent: d.recent, saved: d.saved });
+    s = JSON.stringify({ v: 1, rules: BNLOG_RULES, recent: d.recent, saved: d.saved });
     if (s.length <= BNLOG.maxChars && bnLogLsSet(BNLOG.key, s)) return true;
     if (!d.recent.length) return false;
     d.recent.pop();
@@ -195,8 +204,13 @@ function bnLogItems(rep) {
       case 'H': push('heal', nm(f[0]) + ' 治療 ' + nm(f[1]) + ' +' + f[2] + (f[3] && +f[3] !== +f[2] ? '(原 ' + f[3] + (f[5] ? ',禁療減少' : '') + ')' : '') + ' · 剩兵力 ' + f[4]); break;
       case 'S': push('heal', nm(f[0]) + ' 給 ' + nm(f[1]) + ' 護盾 +' + f[2]); break;
       case 'V': push('heal', nm(f[0]) + ' 復活,兵力 ' + f[1]); break;
-      case 'T': push('st', nm(f[0]) + ' 對 ' + (f[1] === '-1' ? '全場' : nm(f[1])) + ' 施加〔' + bnLogStName(D(f[2])) + '〕' + (f[3] ? ' ' + f[3] + ' 回合' : '') + (f[4] ? ' 值 ' + f[4] : '')); break;
-      case 'X': push('st', nm(f[0]) + ' 的〔' + bnLogStName(D(f[1])) + '〕解除(' + W(D(f[2])) + ')'); break;
+      case 'T':
+        x = D(f[2]);
+        if (x === 'sleep' || x === 'paralyze') { push('st', nm(f[1]) + (x === 'sleep' ? ' 沉睡' : ' 麻痺') + (f[3] ? ' ' + f[3] + ' 回合' : '') + (f[0] && f[0] !== '-1' ? '(' + nm(f[0]) + ' 施加)' : '')); break; }   // 睡眠 / 麻痺(2026-11-09)
+        push('st', nm(f[0]) + ' 對 ' + (f[1] === '-1' ? '全場' : nm(f[1])) + ' 施加〔' + bnLogStName(D(f[2])) + '〕' + (f[3] ? ' ' + f[3] + ' 回合' : '') + (f[4] ? ' 值 ' + f[4] : '')); break;
+      case 'X':
+        if (D(f[1]) === 'sleep' && (D(f[2]) === 'wake' || D(f[2]) === 'expire')) { push('st', nm(f[0]) + (D(f[2]) === 'wake' ? ' 受到攻擊,被喚醒' : ' 睡醒了')); break; }
+        push('st', nm(f[0]) + ' 的〔' + bnLogStName(D(f[1])) + '〕解除(' + W(D(f[2])) + ')'); break;
       case 'Q': push('ef', nm(f[0]) + ' 抵禦了〔' + bnLogStName(D(f[1])) + '〕' + (f[2] ? '(剩 ' + f[2] + ' 層)' : '')); break;
       case 'I': push('ef', nm(f[0]) + ' 免疫〔' + bnLogStName(D(f[1])) + '〕'); break;
       case 'C': push('ef', nm(f[0]) + ' 抗控擋下〔' + bnLogStName(D(f[1])) + '〕'); break;
@@ -207,7 +221,7 @@ function bnLogItems(rep) {
       case 'Y': push('ef', '反應「' + D(f[0]) + '」' + (f[1] && f[1] !== '-1' ? '→ ' + nm(f[1]) : '')); break;
       case 'B': push('ef', '羈絆「' + D(f[0]) + '」生效'); break;
       case 'G': push('sk', nm(f[0]) + ' 觸發「' + D(f[1]) + '」' + (D(f[2]) ? '(' + ((typeof BNT_TRIG !== 'undefined' && BNT_TRIG[D(f[2])]) || D(f[2])) + ')' : '')); break;
-      case 'W': push('ef', nm(f[0]) + ' 無法行動(' + W(D(f[1])) + ')'); break;
+      case 'W': push('ef', nm(f[0]) + (D(f[1]) === 'sleep' || D(f[1]) === 'paralyze' ? ' ' + W(D(f[1])) + ',無法行動' : ' 無法行動(' + W(D(f[1])) + ')')); break;
       case 'L': push('ef', nm(f[0]) + ' 射程不足,待命'); break;
       case 'N': push('ef', '連鎖第 ' + f[0] + ' 步(' + W(D(f[1])) + ')'); break;
       case 'J': push('ef', '連鎖達上限(' + f[0] + ' 步)'); break;
@@ -313,6 +327,7 @@ function bnLogDo(a, id, i) {
     if (!r) { BNLOG.msg = '找不到這場戰報'; }
     else { items = bnLogItems(r); BNLOG.view = { rep: r, items: items, n: bnLogViewGroups(items), step: -1, rd: 0 }; BNLOG.msg = ''; }
   } else if (a === 'save') { r = bnLogSave(id); BNLOG.msg = r.ok ? '已儲存戰報' : r.why; bnLogToast(BNLOG.msg); }
+  else if (a === 'share') { if (typeof bnsDo === 'function') { bnLogClose(); bnsDo('rcode'); return true; } }   // 分享戰報碼(對戰練習;結算畫面只留「查看戰報 / 離開」,分享移到這裡)
   else if (a === 'del') { if (bnLogDel(id)) { BNLOG.msg = '已刪除'; if (v && v.rep.id === id) BNLOG.view = null; } }
   else if (v && (a === 'first' || a === 'prev' || a === 'next' || a === 'all' || a === 'rd')) {
     if (a === 'all') { v.step = -1; v.rd = 0; }
@@ -348,7 +363,8 @@ function bnLogRender() {
       (rep.bA.length ? '<br>羈絆 / 陣型:' + bnLogEsc(rep.bA.join('、')) : '') + '</div>';
     h += '<details' + (bnLogWide() ? ' open' : '') + '><summary>陣容快照(武將 / 品階 / 星 / 兵種 / 位置 / 兵力 / 戰力 / 戰法)</summary><div class="sm">我方陣容</div>' + bnLogUnitRows(rep.A, true) + '<div class="sm">敵方陣容</div>' + bnLogUnitRows(rep.B, false) + '</details>';
     saved = bnLogLoad().saved.some(function (x) { return x.id === rep.id; });
-    h += '<div class="ctl">' + (saved ? '<button data-l="del" data-id="' + bnLogEsc(rep.id) + '">刪除</button>' : '<button data-l="save" data-id="' + bnLogEsc(rep.id) + '">儲存戰報</button>') + (BNLOG.recs[rep.id] ? '<button data-l="verify">重打驗證</button>' : '') + '</div>';
+    h += '<div class="ctl">' + (saved ? '<button data-l="del" data-id="' + bnLogEsc(rep.id) + '">刪除</button>' : '<button data-l="save" data-id="' + bnLogEsc(rep.id) + '">儲存戰報</button>') + (BNLOG.recs[rep.id] ? '<button data-l="verify">重打驗證</button>' : '') +
+      (rep.kind === 'duel' && typeof BNS !== 'undefined' && BNS.last && typeof bnu !== 'undefined' && rep.id === bnu.logId ? '<button data-l="share">分享戰報碼</button>' : '') + '</div>';
     if (BNLOG.msg) h += '<div class="msg">' + bnLogEsc(BNLOG.msg) + '</div>';
     h += '</div><div class="c2">';
     v.items.forEach(function (x) { if (x.r > maxR) maxR = x.r; });

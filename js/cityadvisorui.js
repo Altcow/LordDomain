@@ -52,7 +52,10 @@ function advCityActive() {
 // 指標小圖示節點(js/uiicons.js 存在且開啟時回 <img>;否則回 fallback 文字或 null)
 function advIcon(id, px, fb) { return typeof uiIconNode === 'function' ? uiIconNode(id, px, fb) : (fb ? advE('span', null, fb) : null); }
 function advObjName(id) { return (typeof OBJECTS !== 'undefined' && OBJECTS[id] && OBJECTS[id].name) || id; }
-function advTechName(id) { return (typeof TECHS !== 'undefined' && TECHS[id] && TECHS[id].name) || id; }
+function advTechName(id) {
+  var n = (typeof advSimple === 'function' && advSimple() && typeof techNode === 'function') ? techNode(id) : null;   // 簡化模式:科技名取簡化樹
+  return (n && n.name) || (typeof TECHS !== 'undefined' && TECHS[id] && TECHS[id].name) || id;
+}
 
 // ───────── 樣式 ─────────
 var ADV_CSS = [
@@ -207,7 +210,7 @@ function advTopItem() { var c = advGet(false); return c.items.filter(function (i
 
 function advRenderBars(body, c) {
   var land = advVp().land, wrap = advE('div', land ? 'adv-rows' : 'adv-bars');
-  if (!c.bars.length) { body.appendChild(advE('div', 'adv-empty', '還沒有可看的民情,先蓋幾戶民居吧。')); return; }
+  if (!c.bars.length) { body.appendChild(advE('div', 'adv-empty', '還沒有可看的民情,先蓋幾棟民房吧。')); return; }
   c.bars.forEach(function (b) {
     var el = land ? advBarRow(b) : advBarCol(b);
     advBindPress(el, b.id);
@@ -393,13 +396,15 @@ function advUiHelp(id) {
   bd.appendChild(advE('h4', null, '範圍與門檻')); bd.appendChild(advE('div', null, h.range));
   bd.appendChild(advE('h4', null, '影響來源'));
   bd.appendChild(advE('div', null, h.causes.map(function (x) { return advObjName(x.id); }).join('、') || '—'));
-  bd.appendChild(advE('h4', null, '變紅的後果')); bd.appendChild(advE('div', null, h.redResult));
+  if (typeof advSimple === 'function' && advSimple()) { bd.appendChild(advE('h4', null, '變紅的後果')); bd.appendChild(advE('div', null, '只是提醒,不會有懲罰。照下面的方法蓋設施就會轉綠。')); }   // 簡化模式:不懲罰
+  else { bd.appendChild(advE('h4', null, '變紅的後果')); bd.appendChild(advE('div', null, h.redResult)); }
   bd.appendChild(advE('h4', null, '三步解法'));
   h.fix.forEach(function (f, i) { bd.appendChild(advE('div', null, (i + 1) + '. ' + f)); });
   if (h.techs && h.techs.length) { bd.appendChild(advE('h4', null, '相關科技')); bd.appendChild(advE('div', null, h.techs.map(advTechName).join('、'))); }
-  if (h.links && h.links.length) {
+  var links = (h.links || []).filter(function (l) { return !(typeof advSimple === 'function' && advSimple()) || ADV_SIMPLE_BARS.indexOf(l.stat) >= 0; });   // 簡化模式:已砍的指標不列
+  if (links.length) {
     bd.appendChild(advE('h4', null, '相關指標'));
-    h.links.forEach(function (l) {
+    links.forEach(function (l) {
       var a = advE('div', 'adv-link', (STAT_HELP[l.stat] ? STAT_HELP[l.stat].name : l.stat) + ':' + l.text);
       a.addEventListener('click', function () { advUiHelp(l.stat); });
       bd.appendChild(a);

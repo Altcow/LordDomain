@@ -11,10 +11,10 @@ var TUT_HOLD_MS = 5000;         // T8 三根長條綠色需維持的時間
 var TUT_IDLE_MS = 90000;        // 同一步閒置超過此時間,卡片加註「幫你選好位置」
 var TUT_T9_GUARANTEE_MS = 900000; // T9 起算 15 分鐘仍未排入,補到學識 10(保底)
 var TUT_MD_SECONDS = 30;        // md_cesuo 教學免費覆寫的研發秒數
-var TUT_SPOT_R = { privy: 5, well: 6, field_sprout: 3, house: 6 };   // 自動找位置的半徑:茅廁 / 水井 / 田 對民房;民房 對水井(與 cityfx_data CITY_FX.r 一致)
+var TUT_SPOT_R = { privy: 5, well: 6, field_sprout: 3, house: 6, market: 6, notice_board: 6 };   // 自動找位置的半徑:茅廁 / 水井 / 田 對民房;民房 對水井(與 cityfx_data CITY_FX.r 一致)
 var TUT_SHOP_TRY_MAX = 60;      // 商店聚光孔教學:連續 60 次(約 1.5 分鐘)叫不出來就放棄並記為看過
 
-function tutCity() { return (typeof world !== 'undefined' && world && world.city && typeof world.city === 'object') ? world.city : null; }
+function tutCity() { if (typeof goodsCity === 'function' && typeof world !== 'undefined' && world) goodsCity(); return (typeof world !== 'undefined' && world && world.city && typeof world.city === 'object') ? world.city : null; }   // 先正規化:goodsCity 可能換掉 world.city 物件(tut 會被複製),之後持有的 t 不能變孤兒
 function tutClock() { return (typeof nsRt !== 'undefined' && nsRt && typeof nsRt.clock === 'function') ? nsRt.clock() : Date.now(); }
 function tutActive() { var c = tutCity(); return !!(c && c.tut && c.tut.step !== 'END'); }
 function tutHas() { var c = tutCity(); return !!(c && c.tut); }
@@ -50,14 +50,18 @@ function tutSetStep(t, step, now) {
   delete t.hold;
 }
 
-// 教學期間 md_cesuo 成本歸零、研發 30 秒,只一次(citytech.js techCostOf / techDurationOf / techPay 掛點)
+// 簡化城市模式(citysimple.js):教學改成「蓋建築 ↔ 研科技」;教學用科技 / 建築見 TECH_SIMPLE.tut = { t1, b1, t2, b2 }
+function tutSimple() { return typeof citySimpleOn === 'function' && citySimpleOn() && typeof csTreeOn === 'function' && csTreeOn(); }
+function tutS(k) { return TECH_SIMPLE.tut[k]; }
+function tutFreeId() { return tutSimple() ? tutS('t1') : 'md_cesuo'; }
+// 教學期間 md_cesuo(簡化模式:第一項教學科技)成本歸零、研發 30 秒,只一次(citytech.js techCostOf / techDurationOf / techPay 掛點)
 function tutFreeTech(id) {
-  var c = tutCity();
-  return !!(id === 'md_cesuo' && c && c.tut && !c.tut.grants.md && typeof techDone === 'function' && !techDone('md_cesuo'));
+  var c = tutCity(), f = tutFreeId();
+  return !!(id === f && c && c.tut && !c.tut.grants.md && typeof techDone === 'function' && !techDone(f));
 }
 function tutUseFree(id) {
   var c = tutCity();
-  if (id === 'md_cesuo' && c && c.tut && !c.tut.grants.md) c.tut.grants.md = 1;
+  if (id === tutFreeId() && c && c.tut && !c.tut.grants.md) c.tut.grants.md = 1;
 }
 
 function tutCnt(s, id) { return (s && s.cnt && s.cnt[id]) || 0; }
@@ -78,8 +82,64 @@ function tutGrantXue(t, key, n) {
   t.grants[key] = 1;
 }
 
+// 簡化模式:教學科技以外,有沒有再排 / 研 / 研成任何一項
+function tutOtherTech() {
+  var ts = (typeof techState === 'function') ? techState() : null, skip = [tutS('t1'), tutS('t2')], k;
+  if (!ts) return false;
+  if ((ts.cur || []).some(function (c) { return skip.indexOf(c.id) < 0; }) || (ts.queue || []).some(function (id) { return skip.indexOf(id) < 0; })) return true;
+  for (k in ts.done) if (skip.indexOf(k) < 0 && typeof techNode === 'function' && techNode(k) && techNode(k).id === k) return true;
+  return false;
+}
+function tutDoneSimple(step, s) {
+  switch (step) {
+    case 'T1': return s.houses >= 1;
+    case 'T2': return tutCnt(s, 'research') >= 1;
+    case 'T3': return tutStarted(tutS('t1'));
+    case 'T4': return tutDoneTech(tutS('t1'));
+    case 'T5': return tutCnt(s, tutS('b1')) >= 1;
+    case 'T6': return tutQueued(tutS('t2')) || tutDoneTech(tutS('t2'));
+    case 'T7': return tutDoneTech(tutS('t2'));
+    case 'T8': return tutCnt(s, tutS('b2')) >= 1;
+    case 'T9': return s.houses >= 4;
+    case 'T10': return tutOtherTech();
+    default: return false;
+  }
+}
+function tutRepairSimple(step, s) {
+  var labs = tutCnt(s, 'research'), t1 = tutS('t1'), t2 = tutS('t2'), have, min, miss, c;
+  if (step === 'T3' && !tutStarted(t1) && tutQueued(t1)) return { text: '先研〈' + tutTechName(t1) + '〉,其他之後再研。', why: '它排在序列後面,研完再研別的科技。', go: { kind: 'tech', id: t1 } };
+  if ((step === 'T4' && !tutDoneTech(t1)) || (step === 'T7' && !tutDoneTech(t2))) { if (labs < 1) return { text: '研究院不見了,研發停住了,再蓋一座吧。', go: { kind: 'build', type: 'research' } }; }
+  if (step === 'T6' && !tutQueued(t2) && !tutDoneTech(t2)) {
+    miss = (typeof techNeedMiss === 'function') ? techNeedMiss(t2) : [];
+    if (miss.length) return { text: '〈' + tutTechName(t2) + '〉要先蓋' + techNeedName(miss[0]) + ',先去蓋一座。', why: '這就是「前置建築」:蓋好才能研。', go: { kind: 'build', type: miss[0] } };
+    c = (typeof techCostOf === 'function') ? techCostOf(t2) : null;
+    have = tutXue();
+    if (c && have < c.xue) {
+      min = Math.ceil((c.xue - have) / Math.max(1, labs));
+      return { text: '學識 ' + have + '/' + c.xue + ',約 ' + min + ' 分鐘後夠;先排進研發序列,夠了會自動開始。', why: '排入即算完成,序列會自動開工。', go: { kind: 'tech', id: t2 } };
+    }
+  }
+  return null;
+}
+function tutTechName(id) { var n = (typeof techNode === 'function') ? techNode(id) : null; return n ? ((typeof techLabelOf === 'function') ? techLabelOf(n) : n.name) : id; }
+// 文案代入 {t1}{b1}{t2}{b2}(魔幻世界用本族名)
+function tutFill(v) {
+  var map;
+  if (typeof v !== 'string') return v;
+  map = { t1: tutTechName(tutS('t1')), t2: tutTechName(tutS('t2')), b1: techNeedName(tutS('b1')), b2: techNeedName(tutS('b2')) };
+  return v.replace(/\{(t1|t2|b1|b2)\}/g, function (m, k) { return map[k]; });
+}
+function tutFillGo(go) {
+  var o = {}, k;
+  for (k in go) o[k] = go[k];
+  if (o.id && /^\{t[12]\}$/.test(o.id)) o.id = tutS(o.id.slice(1, 3));
+  if (o.type && /^\{b[12]\}$/.test(o.type)) o.type = tutS(o.type.slice(1, 3));
+  return o;
+}
+
 // 步驟完成條件(T0 / T11 只由按鈕推進,這裡不判斷)
 function tutDone(step, s, mem, t, now) {
+  if (tutSimple()) return tutDoneSimple(step, s);
   switch (step) {
     case 'T1': return s.houses >= 1 && tutWater() >= 80;   // 沒有民房時城市飲水值不具意義
     case 'T2': return s.houses >= 3;
@@ -104,12 +164,13 @@ function tutDone(step, s, mem, t, now) {
 
 // 完成時的獎勵(只給一次)
 function tutRewardOn(step, t, s) {
-  if (step === 'T3') tutGrantXue(t, 'xue1', 10);
+  if (step === (tutSimple() ? 'T2' : 'T3')) tutGrantXue(t, 'xue1', 10);   // 蓋好研究院的那一步
 }
 
 // 修復 / 退回提示:回傳 {text, why, go, alt} 覆蓋該步文案;沒有則 null
 function tutRepair(step, s, t) {
   var labs = tutCnt(s, 'research'), have, min;
+  if (tutSimple()) return tutRepairSimple(step, s);
   if (step === 'T1' && tutCnt(s, 'well') >= 1 && tutWater() < 80) return { text: '這口井離民房還是太遠,在民房旁再鑿一口。', go: { kind: 'build', type: 'well' } };
   if (step === 'T2' && tutWater() < 80) return { text: '新民房也要在井邊,否則會缺水。', go: { kind: 'build', type: 'house' } };
   if (step === 'T4' && !tutStarted('md_cesuo') && tutQueued('md_cesuo')) return { text: '先研茅廁,其他之後再研。', why: '茅廁排在序列前面,研完再研別的科技。', go: { kind: 'tech', id: 'md_cesuo' } };
@@ -158,14 +219,18 @@ function tutCompute(s, mem) {
     step = TUT_IDS[TUT_IDS.indexOf(step) + 1];
     tutSetStep(t, step, now);
   }
-  if (t.step === 'T9' && !t.grants.t9 && now - (t.at.T9 || now) >= TUT_T9_GUARANTEE_MS && !tutQueued('e_shiling') && !tutDoneTech('e_shiling')) {
-    tutGrantXue(t, 't9', Math.max(0, 10 - tutXue()));
+  var sim = tutSimple(), gStep = sim ? 'T6' : 'T9', gId = sim ? tutS('t2') : 'e_shiling', gNeed = 10;
+  if (sim && typeof techCostOf === 'function' && techCostOf(gId)) gNeed = techCostOf(gId).xue;
+  if (t.step === gStep && !t.grants.t9 && now - (t.at[gStep] || now) >= TUT_T9_GUARANTEE_MS && !tutQueued(gId) && !tutDoneTech(gId)) {   // 保底:等太久補學識
+    tutGrantXue(t, 't9', Math.max(0, gNeed - tutXue()));
   }
-  d = TUT_TEXT[t.step] || TUT_TEXT.T0;
+  d = sim ? (TUT_TEXT_SIMPLE[t.step] || TUT_TEXT_SIMPLE.T0) : (TUT_TEXT[t.step] || TUT_TEXT.T0);
   text = d.text; why = d.why; go = d.go;
+  if (sim) { text = tutFill(text); why = tutFill(why); go = tutFillGo(go); }
   rp = tutRepair(t.step, s, t);
   if (rp) { text = rp.text; if (rp.why) why = rp.why; go = rp.go || go; alt = rp.alt || null; }
-  if (t.step === 'T4' && !alt && !tutStarted('md_cesuo')) alt = { id: 'expedite', text: '先研茅廁,排到最前' };
+  if (sim && t.step === 'T3' && !alt && !tutStarted(tutS('t1'))) alt = { id: 'expedite', text: '先研〈' + tutTechName(tutS('t1')) + '〉,排到最前' };
+  if (!sim && t.step === 'T4' && !alt && !tutStarted('md_cesuo')) alt = { id: 'expedite', text: '先研茅廁,排到最前' };
   idle = now - (t.at[t.step] || now) >= TUT_IDLE_MS && go.kind === 'build';
   if (idle) why = (why ? why + ' ' : '') + '點「前往」,我幫你選好位置。';
   return { id: 'tut:' + t.step, src: 'tut', tier: 'T', icon: d.icon, text: text, why: why, go: go, progress: tutProgress(t.step), stepId: t.step, alt: alt };
@@ -191,6 +256,7 @@ function tutGrad() {
   tutGrantXue(t, 'grad', 10);
   tutSetStep(t, 'END', tutClock());
   t.gsp = 1;
+  if (typeof cardsStarterHint === 'function') cardsStarterHint();   // 新手禮包提示(cards_starter.js)
   return true;
 }
 // 跳過:補發學識 20(只一次);md_cesuo 免費覆寫仍保留到研成為止
@@ -206,20 +272,20 @@ function tutSkip() {
 
 // T4「把茅廁排到最前」:茅廁移到研發序列最前並開始研;研發槽滿時,把正在研的第一項全額退款、退回序列第二位(進度歸零),再開工
 function tutExpedite() {
-  var c = tutCity(), ts, id = 'md_cesuo', victim;
-  if (!c || !c.tut || c.tut.step !== 'T4' || typeof techState !== 'function' || typeof techQueueAdd !== 'function') return false;
+  var c = tutCity(), ts, sim = tutSimple(), id = sim ? tutS('t1') : 'md_cesuo', victim, nm = sim ? tutTechName(id) : '圊溷(茅廁)';
+  if (!c || !c.tut || c.tut.step !== (sim ? 'T3' : 'T4') || typeof techState !== 'function' || typeof techQueueAdd !== 'function') return false;
   if (tutStarted(id)) return false;
   if (typeof techSlots === 'function' && techSlots() < 1) { tutToast('要先蓋研究院,才能研發。'); return false; }
   ts = techState();
-  if (ts.queue.indexOf(id) < 0 && !techQueueAdd(id).ok) { tutToast('研發序列滿了,先移除一項再排茅廁。'); return false; }
+  if (ts.queue.indexOf(id) < 0 && !techQueueAdd(id).ok) { tutToast('研發序列滿了,先移除一項再排' + (sim ? '〈' + nm + '〉' : '茅廁') + '。'); return false; }
   techQueueMove(id, 0);
   if (ts.cur.length >= techSlots()) {
     victim = ts.cur[0];
     if (victim && techCancel(victim.id)) ts.queue.splice(1, 0, victim.id);
   }
   techFillSlots(tutClock());
-  if (!tutStarted(id)) { tutToast('茅廁還沒開工,看看金幣或學識是否足夠。'); return false; }
-  tutToast('已把〈圊溷(茅廁)〉排到最前,開始研發。');
+  if (!tutStarted(id)) { tutToast((sim ? '〈' + nm + '〉' : '茅廁') + '還沒開工,看看金幣或學識是否足夠。'); return false; }
+  tutToast('已把〈' + nm + '〉排到最前,開始研發。');
   return true;
 }
 
@@ -246,6 +312,20 @@ function tutSpotNear(type) {
     if (typeof CITYFX_HOUSES !== 'undefined' && CITYFX_HOUSES[o.type]) houses.push(o);
     else if (o.type === 'well') wells.push(o);
   });
+  if (tutSimple() && (type === 'house' || type === 'market' || type === 'notice_board' || type === 'research' || !TUT_SPOT_R[type])) {   // 簡化模式:蓋在現有民房 / 城主府附近即可,不必靠水井
+    anc = houses.length ? houses : objs.filter(function (o) { return o && o.type === 'palace'; });
+    R = TUT_SPOT_R[type] || 8; why = '這一棟請自己挑一塊空地放下去。';
+    var tt = (typeof fxGoType === 'function') ? fxGoType(type) : type;   // 魔幻世界:以本族建築檢查占地
+    if (!anc.length) return none(why);
+    for (a = 0; a < anc.length; a++) for (dx = -R; dx <= R; dx++) for (dy = -R; dy <= R; dy++) {
+      d2 = dx * dx + dy * dy; x = anc[a].x + dx; y = anc[a].y + dy;
+      if (d2 > R * R || (typeof inBounds === 'function' && !inBounds(x, y)) || !tutPlaceOk(tt, x, y)) continue;
+      road = tutRoadNear(tt, x, y); sc = (road ? 1000 : 0) - d2;
+      if (!best || sc > best.sc) best = { x: x, y: y, road: road, sc: sc };
+    }
+    if (!best) return none('附近找不到能放的空地,試試拉近視野,或自己挑一塊。');
+    return { cell: { x: best.x, y: best.y }, x: best.x, y: best.y, road: best.road, why: '' };
+  }
   if (type === 'house') { anc = wells; R = TUT_SPOT_R.well; why = '還沒有水井,先鑿一口井再蓋民房。'; }
   else if (TUT_SPOT_R[type]) { anc = houses; R = TUT_SPOT_R[type]; why = '還沒有民房,先蓋民房。'; }
   else return none('這一棟請自己挑一塊空地放下去。');

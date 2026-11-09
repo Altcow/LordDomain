@@ -244,6 +244,7 @@ function chainVisPopShow(row) {
   }
   html = '<div><b>' + (row.icon || '') + ' ' + goodsEsc(row.name) + ' → ' + (row.outIcon || '') + goodsEsc(row.outName) + '</b>' + (row.perHour > 0 ? ' <small>' + row.perHour + ' /時</small>' : '') + '</div>' +
     '<div style="margin:6px 0">' + (GOODS_CAUSE_ICON[row.cause] || '') + ' ' + goodsEsc(row.reason) + '</div>' +
+    (row.rid && typeof goodsCraftLine === 'function' ? goodsCraftLine(row.rid) : '') +   // 工藝流程線(歷史世界才有;魔幻世界回空字串)
     '<span data-cv="chain" data-id="' + row.out + '" data-m="' + (row.miss || '') + '" style="cursor:pointer;color:#e6b84a;margin-right:14px">開鏈條圖</span><span data-cv="close" style="cursor:pointer;opacity:.7">關閉</span>';
   box.innerHTML = html;
   box.style.display = 'block';

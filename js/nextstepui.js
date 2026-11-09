@@ -2,7 +2,7 @@
 // 面板管理:這是常駐的小提示條(HUD),不是浮卡 —— 只用 panelRegister('ns-card', {kind:'hud'}) 登記、從不 panelOpen,
 //   所以不進開啟清單、不觸發 PANEL_MUTEX、不計入「同時最多一張浮卡」;z-index 低於側欄與所有面板。全螢幕(拍照 / 錄影 / 戰鬥…)時自己隱藏。
 // 與縣丞:本功能開啟時,縣丞(cityadvisorui.js)只留小臉入口、不再跳氣泡(同一條提示不出現兩處);關閉本功能後縣丞氣泡恢復。
-// 關閉總開關:整張卡隱藏且不再計算(nsGet / nsTick 直接 return)。樣式由本檔注入。不發聲。ES2017;不用 ?. ??。
+// 關閉總開關:整張卡隱藏且不再計算(nsGet / nsTick 直接 return);例外:新手教學進行中(nsTutForced)仍顯示教學卡並計算。樣式由本檔注入。不發聲。ES2017;不用 ?. ??。
 // 全域名稱:initNsUI nsUiTick nsUiRefresh nsUiHidden nsUiGo nsUiDismiss nsUiMenu
 
 var nsUi = { inited: false, el: null, sig: '', menu: false, why: false, timer: 0 };
@@ -64,7 +64,10 @@ var NS_CSS = [
   '#nsCard .ns-b{background:#34445e;color:#e8edf2;border:1px solid #5a6f92;border-radius:6px;min-height:24px;padding:0 8px;font-size:12px;line-height:22px}',
   '#nsCard .ns-go{background:#46618a;color:#fff}',
   '#nsCard .ns-sq{min-width:26px;padding:0 4px}',
-  '#nsCard .ns-menu{display:flex;flex-wrap:wrap;gap:4px;overflow:auto;min-height:0}'
+  '#nsCard .ns-menu{display:flex;flex-wrap:wrap;gap:4px;overflow:auto;min-height:0}',
+  '#nsCard.ns-land .ns-tx{-webkit-line-clamp:3;font-size:14px}',
+  '#nsCard.ns-land .ns-b{min-height:44px;line-height:40px;font-size:14px;padding:0 10px}',
+  '#nsCard.ns-land .ns-go{min-width:64px}'
 ].join('\n');
 
 function nsInjectCss() {
@@ -101,7 +104,7 @@ function nsUiHidden() {
 function nsUiTick() {
   var c, cand;
   if (!nsUi.inited) return;
-  if (typeof nsEnabled !== 'function' || !nsEnabled() || nsUiHidden()) { nsUi.el.hidden = true; return; }
+  if (typeof nsEnabled !== 'function' || (!nsEnabled() && !nsTutForced()) || nsUiHidden()) { nsUi.el.hidden = true; return; }
   c = nsTick();
   cand = nsPick(c);
   if (!cand) { nsUi.el.hidden = true; return; }
@@ -110,7 +113,7 @@ function nsUiTick() {
 function nsUiRefresh(force) {
   if (!nsUi.inited) return;
   if (force) nsUi.sig = '';
-  if (typeof nsEnabled === 'function' && nsEnabled() && typeof nsGet === 'function') nsGet(true);
+  if (typeof nsEnabled === 'function' && (nsEnabled() || nsTutForced()) && typeof nsGet === 'function') nsGet(true);
   nsUiTick();
 }
 
@@ -121,7 +124,7 @@ function nsUiRender(cand, n) {
   if (sig === nsUi.sig) return;
   nsUi.sig = sig;
   e.style.left = r.x + 'px'; e.style.top = r.y + 'px'; e.style.width = r.w + 'px'; e.style.height = r.h + 'px';
-  e.className = 'ns-t' + cand.tier;
+  e.className = 'ns-t' + cand.tier + (r.land ? ' ns-land' : '') + (cand.src === 'tut' ? ' ns-tut' : '');   // ns-tut:放置中(body.ui-placing)縮成一行而非隱藏
   while (e.firstChild) e.removeChild(e.firstChild);
   if (nsUi.menu) {
     main = nsE('div', 'ns-menu');

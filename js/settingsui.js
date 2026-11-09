@@ -401,6 +401,12 @@ function stUiSec() {
       stRender();
     }), '關(預設):放完一件仍停在放置模式,要按「✋ 瀏覽」才退出。開:每放完一件自動退出放置、回到瀏覽,可直接拖曳地圖、點建築。');
   }
+  if (typeof bldDoorSet === 'function') {
+    stAdd(nodes, '顯示可進入標記', stSwitch(bldDoorOn(), function (v) {
+      bldDoorSet(v);
+      stRender();
+    }), '開(預設):畫面放大到一定程度時,有室內空間的建築頭上顯示小門 🚪;縮小或省電模式時自動隱藏。點建築會顯示名稱,可進入者再按〔進入〕。');
+  }
   return stSec('畫面', nodes.concat(stExtraNodesH('畫面')), 'view');
 }
 
@@ -598,7 +604,7 @@ let stIconOpen = false;
 let stHowtoOpen = false;
 const ST_ICON_LEGEND = [
   { icon: '🔨', name: '草稿布置(右側欄):另開一份草稿來設計,改完 💾 儲存到版面格,不影響正在用的城;平時直接點下方建築蓋即可(即時生效)' },
-  { icon: '🏘', city: '版面選擇(右側欄第一個):打開 3 格版面小面板,點一格把整座城換成那一格;「空」= 還沒存,點了可把目前版面存進去;面板不會自動關閉,再點一次該鈕才收起', name: '經營 / 戰鬥(右側欄第一個):打開 3 格版面小面板,點一格把整座城 / 整個戰陣換成那一格;「空」= 還沒存,點了可把目前版面存進去;面板不會自動關閉,再點一次該鈕才收起' },
+  { icon: '🏘', city: '版面選擇(右側欄第一個):打開 3 格版面小面板,點一格把整座城換成那一格;「空」= 還沒存,點了可把目前版面存進去;面板不會自動關閉,再點一次該鈕才收起', name: '版面 / 戰鬥(右側欄第一個):打開 3 格版面小面板,點一格把整座城 / 整個戰陣換成那一格;「空」= 還沒存,點了可把目前版面存進去;面板不會自動關閉,再點一次該鈕才收起' },
   { icon: '📋', name: '範本(設定→畫面):選了範本會載入到草稿,不會直接蓋掉你正在用的版面' },
   { icon: '⚔', hideInCity: true, name: '戰鬥選單(左下;內含 📜 戰報／錄影)' },
   { icon: '👁', name: '隱藏建築(整地用,H)' },
@@ -798,12 +804,14 @@ function stOpenPanel() {
   stRender();
   stRootEl.classList.add('st-open');
   stIsOpen = true;
+  if (typeof panelCoverSet === 'function') panelCoverSet('settings', true);   // 收起建造浮層與浮卡(panelmgr.js)
 }
 
 function stClosePanel() {
   if (!stRootEl) return;
   stRootEl.classList.remove('st-open');
   stIsOpen = false;
+  if (typeof panelCoverSet === 'function') panelCoverSet('settings', false);
   if (typeof bgmAuditionStop === 'function') bgmAuditionStop();
   stDangerOpen = false;
 }

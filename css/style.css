@@ -1009,10 +1009,10 @@ body.sandbox #varbar, body.atk-mode #varbar, body.replay-mode #varbar, body.phot
 #atkPanel .apool { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; }
 #atkPanel .apool b { font-size: 18px; }
 #atkPanel .apool span { font-size: 13px; opacity: .85; }
-/* #draftFloat:虛影旁的浮動圖示(ui.js draftFloatSync/draftFloatPlace),2×2、每鈕 42px(含透明 padding 的點擊範圍),位置由 JS 以 left/top 設定 */
-#draftFloat { position: fixed; z-index: 3; left: 0; top: 0; width: 84px; display: grid; grid-template-columns: 42px 42px; grid-auto-rows: 42px; }
+/* #draftFloat:虛影旁的浮動圖示(ui.js draftFloatSync/draftFloatPlace),2×2、每鈕 44px(含透明 padding 的點擊範圍,觸控 ≥ 44px),位置由 JS 以 left/top 設定 */
+#draftFloat { position: fixed; z-index: 3; left: 0; top: 0; width: 88px; display: grid; grid-template-columns: 44px 44px; grid-auto-rows: 44px; }
 #draftFloat[hidden] { display: none !important; }
-#draftFloat button { width: 42px; height: 42px; min-width: 42px; min-height: 42px; margin: 0; padding: 4px; border: none; background: transparent; display: flex; align-items: center; justify-content: center; touch-action: manipulation; }
+#draftFloat button { width: 44px; height: 44px; min-width: 44px; min-height: 44px; margin: 0; padding: 4px; border: none; background: transparent; display: flex; align-items: center; justify-content: center; touch-action: manipulation; }
 #draftFloat button i { font-style: normal; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 17px; line-height: 1; background: rgba(47, 59, 77, .95); border: 1px solid rgba(69, 86, 110, .95); color: #e8edf2; box-shadow: 0 2px 6px rgba(0, 0, 0, .45); }
 #draftFloat .pok i { background: #2e7d4f; border-color: #5fc98a; }
 #draftFloat .pno i { background: #6b2b2b; border-color: #c96a5f; }
@@ -1332,3 +1332,28 @@ body.panel-big-landscape #svPanel .svlist > .svsec { grid-column: 1 / -1; }
 #miniMap.mm-drag { border-color: #ffd56a; }
 body.ui-compact #miniMap { width: 98px; }
 body:is(.photo-mode, .shooting, .in-interior, .panel-big-landscape, .panel-fs, .atk-mode, .replay-mode, .sandbox) #miniMap { display: none !important; }
+
+/* ===== 大面板蓋著城市(js/panelmgr.js panelLsSync → body.panel-cover;直橫版都算,含城主府 / 設定抽屜):
+   建造相關浮層一律收起(底部建造選單、分類列、樹種列、頂層選單、草稿浮動鈕 / 草稿列、待購列、預覽卡、放置⇄瀏覽鈕、布置列),
+   順帶收起會疊在面板上的小地圖與加到主畫面提示。只隱藏不改狀態(工具 / 草稿 / 待購保留),面板全關後自動還原 ===== */
+body.panel-cover :is(#toolbar, #catbar, #varbar, #topMenu, #draftFloat, #draftBar, #pendBar, #bpvCard, #modeFloat, #editBar, #fsTip, #miniMap) { visibility: hidden !important; pointer-events: none !important; }
+
+/* ===== 放置中(js/ui.js uiSyncPlacing → body.ui-placing:經營板選了工具或有草稿虛影):收起與放置無關的東西 =====
+   側欄只留「布置」「隱藏建築」;推薦卡非教學時隱藏、教學時縮成精簡版(說明一行 + 按鈕,不顯示原因);縣丞氣泡、加到主畫面提示隱藏(縣丞小臉保留)。
+   退出放置用左側「✋ 瀏覽」浮動鈕;離開放置即還原 */
+body.ui-placing #sideBar :is(.side-more, .side-expand), body.ui-placing #sideBar .side-btn:not([data-px="edit"]):not([data-px="hide"]) { display: none !important; }
+body.ui-placing :is(#fsTip, #advTip, #installTip) { display: none !important; }
+body.ui-placing #nsCard:not(.ns-tut) { display: none !important; }
+body.ui-placing #nsCard.ns-tut { height: auto !important; }
+body.ui-placing #nsCard.ns-tut .ns-why { display: none !important; }
+body.ui-placing #nsCard.ns-tut .ns-tx { -webkit-line-clamp: 1; }
+
+/* ===== 建築名稱標籤 #bldTag(js/bldtag.js):瀏覽模式輕點建築,建築頭上顯示名稱;可進入者加「🚪 可進入」與〔進入〕鈕(≥ 44px)。位置由 JS 以 left/top 設定 ===== */
+#bldTag { position: fixed; z-index: 3; left: 0; top: 0; max-width: 220px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 10px; background: rgba(20, 26, 36, .9); border: 1px solid rgba(255, 255, 255, .35); box-shadow: 0 2px 8px rgba(0, 0, 0, .4); color: #f0e6d2; font-size: 14px; line-height: 1.3; pointer-events: auto; }
+#bldTag[hidden] { display: none !important; }
+#bldTag.bt-ent { border-color: #f0b45a; padding: 5px 8px 6px; }
+#bldTag .bt-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+#bldTag .bt-nm { font-weight: bold; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+#bldTag .bt-door { font-size: 12px; color: #ffd56a; }
+#bldTag .bt-go { min-width: 88px; min-height: 44px; padding: 4px 14px; font-size: 15px; font-weight: bold; background: #c9892f; border: 1px solid #f0b45a; color: #1b1308; border-radius: 22px; touch-action: manipulation; }
+body:is(.photo-mode, .panel-cover, .ui-placing, .panel-fs, .in-interior) #bldTag { display: none !important; }

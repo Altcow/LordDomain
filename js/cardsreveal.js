@@ -149,6 +149,7 @@ function rvFinal() {
   s.root.classList.add('final');
   s.btn.hidden = false; s.hint.hidden = true; s.skip.hidden = true;
   s.final = true;
+  if (typeof codexRevealHook === 'function') { try { codexRevealHook(s); } catch (e) { /* 圖鑑「看戰法」失敗不影響開獎 */ } }
 }
 
 function rvBuildSteps(plan) {

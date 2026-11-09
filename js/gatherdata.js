@@ -1,6 +1,6 @@
 // gatherdata.js — 城市聚集資料(PLAN_CITYLIFE_GATHER.md §4):聚集種類、物件 → 聚集點對照、時段 / 季節倍率、等級上限、台詞、小卡文字。
-// 只放資料,不含執行邏輯;執行期在 js/citygather.js。已接:下棋(chess)、路邊休息(rest)、告示 / 看戲 / 叫賣(notice、show、market,P3 / P4)。
-// 全域名稱:GATHER_KINDS GATHER_OBJ GATHER_TOD GATHER_SEASON GATHER_CAP GATHER_LINES GATHER_CARD GATHER_SHOW_PROG GATHER_NOTICE gatherObjInfo。ES2017;不用 ?. ??;不發聲。
+// 只放資料,不含執行邏輯;執行期在 js/citygather.js。已接:下棋(chess)、路邊休息(rest)、告示 / 看戲 / 叫賣(notice、show、market,P3 / P4)、P5 夜市 / 亭卒 / 叫好 / 名人加入參數。
+// 全域名稱:GATHER_KINDS GATHER_OBJ GATHER_TOD GATHER_SEASON GATHER_CAP GATHER_LINES GATHER_CARD GATHER_SHOW_PROG GATHER_NOTICE GATHER_NIGHT GATHER_BAIL GATHER_CHEER GATHER_FAM GATHER_NIGHT_STALL gatherObjInfo。ES2017;不用 ?. ??;不發聲。
 
 const GATHER_KINDS = {
   chess:  { name: '下棋', dur: [90, 240], cool: [30, 90], stay: [20, 60], move: [4, 8], finale: 8, game: 1 },
@@ -72,15 +72,26 @@ const GATHER_OBJ = {
   market:       { k: 'market', w: 0.6, front: 1 }
 };
 
-// 樹(tree、tree_pine…)與港口貨堆(cargo_*)以前綴規則對到聚集點
+// 樹(tree、tree_pine…)與港口貨堆(cargo_*)以前綴規則對到聚集點;夜市攤(lifeNightStall,citytraffic.js)只在夜間開場
 function gatherObjInfo(type) {
   if (GATHER_OBJ[type]) return GATHER_OBJ[type];
   if (type === 'tree' || type.indexOf('tree_') === 0) return GATHER_TREE;
   if (type.indexOf('cargo_') === 0) return GATHER_CARGO;
+  if (typeof lifeNightStall === 'function' && lifeNightStall(type)) return GATHER_NIGHT_STALL;
   return null;
 }
 const GATHER_TREE = { k: 'rest', shade: 1 };
 const GATHER_CARGO = { k: 'rest', seats: 1, gz: 6, cargo: 1 };
+const GATHER_NIGHT_STALL = { k: 'market', w: 0.6, front: 1, nolead: 1, nstall: 1 };   // 夜市:攤主是街景叫賣者(citytraffic),這裡只排圍觀者
+
+// 夜間設定(PLAN_CITYLIFE_GATHER §4.4):燈籠光暈半徑與透明度、夜市聚集點上限、夜戲所需燈的距離(格)、夜市 / 夜戲的倍率
+const GATHER_NIGHT = { lampR: 4, glowA: 0.2, stallMax: 6, lampMul: 0.3, showMul: 0.3 };
+// 亭卒(衙役,ext 角色,不占居民額度):清晨張貼機率 / 白天機率、停留秒數、張貼階段(gt 秒內)才會來
+const GATHER_BAIL = { job: 'guard', pDawn: 0.7, pDay: 0.3, stay: 25, phase: 8 };
+// 看戲「叫好」:每場 1 次、每日上限(PLACEHOLDER);morale = 民心微幅加成(PLACEHOLDER,目前未接數據:零數據影響鐵則,預設 0)
+const GATHER_CHEER = { dayMax: 3, sec: 3, morale: 0 };
+// 在野名人 / 名冊人物行程中「站著停點」時,8 格內有進行中聚集者,有機率改當觀眾停留
+const GATHER_FAM = { radius: 8, pVisitor: 0.5, pHero: 0.4, stay: [15, 30] };
 
 // 台詞(只寫東漢可用的口語;下棋稱「弈」「圍棋」,不寫象棋;不寫唐宋以後的俗語)
 const GATHER_LINES = {
@@ -103,12 +114,15 @@ const GATHER_LINES = {
   show: {
     perf: ['好!再來一個!', '跳丸跳得真俐落。', '鼓點打得真快!', '這一段看得過癮!'],
     story: ['且聽下回分解。', '說到這兒,真叫人捏把汗。', '哈哈,這個段子有趣。'],
-    audience: ['好!再來一個!', '跳丸跳得真俐落。', '鼓點打得真快!', '這一段看得過癮!', '看完這場,明日還來。']
+    audience: ['好!再來一個!', '跳丸跳得真俐落。', '鼓點打得真快!', '這一段看得過癮!', '看完這場,明日還來。'],
+    cheer: ['多謝諸位捧場!', '諸位鼓掌,小人再獻一段!'],
+    cheerWatch: ['好!叫得痛快!', '來,再來一個!']
   },
   market: {
     crier: ['新收的胡餅,又香又脆!', '鮮果鮮果,剛下的貨!', '布匹便宜賣啦,來來來,瞧一瞧!', '陶罐、陶碗,一文一個!'],
     watch: ['這胡餅幾個錢?', '再便宜些我就買了。', '這布成色不錯。', '先看看,價錢還沒談妥呢。'],
-    trade: ['成交!', '好,就這麼說定了。']
+    trade: ['成交!', '好,就這麼說定了。'],
+    night: ['燈籠一亮,攤子前就熱鬧了。', '夜裡的胡餅最香,來一個?', '收了攤再走,不耽誤。']
   }
 };
 

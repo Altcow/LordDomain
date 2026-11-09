@@ -23,6 +23,7 @@ var cfx = {
   ui: { sec: null, rows: null, open: {}, list: null }
 };
 
+function cfxSimple() { return typeof citySimpleOn === 'function' && citySimpleOn(); }   // 簡化城市模式(citysimple.js)
 function cfxEntry(type) { return CITY_FX[type] || CITY_FX_PENDING[type] || null; }
 
 function cfxTid(type) {
@@ -194,10 +195,10 @@ function cfxCalc() {
   var blk = { cnt: new Float32Array(nb), wei: new Float32Array(nb), an: new Float32Array(nb), xin: new Float32Array(nb), jiao: new Float32Array(nb),
               yi: new Float32Array(nb), served: new Float32Array(nb), sani: new Float32Array(nb), order: new Float32Array(nb) };
   for (i = 0; i < H; i++) { h = cfx.houses[i]; blk.cnt[h.b]++; if (h.served) blk.served[h.b]++; }
-  var sSani = 0, sOrder = 0, sXin = 0, sYi = 0, sJiao = 0, sServed = 0, pop, hs, ho, allWei = allV.wei || 0, allAn = allV.an || 0, allXin = allV.xin || 0,
+  var simple = cfxSimple(), sSani = 0, sOrder = 0, sXin = 0, sYi = 0, sJiao = 0, sServed = 0, pop, hs, ho, allWei = allV.wei || 0, allAn = allV.an || 0, allXin = allV.xin || 0,
       allJiao = allV.jiao || 0, allYi = allV.yi || 0, decWei = decV.wei || 0, decAn = decV.an || 0, decJiao = decV.jiao || 0, decYi = decV.yi || 0;
   for (i = 0; i < H; i++) {
-    h = cfx.houses[i]; vec = h.v; pop = blk.cnt[h.b] * CITYFX_POP_PER_HOUSE;
+    h = cfx.houses[i]; vec = h.v; pop = simple ? 0 : blk.cnt[h.b] * CITYFX_POP_PER_HOUSE;   // 簡化模式:人口密度不拖累衛生 / 治安
     hs = cfxClamp(CITYFX_BASE.sani + vec[0] + allWei + decWei - CITYFX_DENSITY_SANI * pop / 100, 0, 100);
     ho = cfxClamp(CITYFX_BASE.order + vec[2] + allAn + decAn + CITYFX_EDU_ORDER * (20 + vec[4] + allJiao + decJiao) - pop / CITYFX_DENSITY_ORDER, 0, 100);
     blk.sani[h.b] += hs; blk.order[h.b] += ho; blk.wei[h.b] += vec[0]; blk.an[h.b] += vec[2]; blk.xin[h.b] += vec[3]; blk.jiao[h.b] += vec[4]; blk.yi[h.b] += vec[1];
@@ -251,7 +252,7 @@ function cfxRoadT(t) { return typeof isRoadLikeTerrain === 'function' ? isRoadLi
 function cfxRoadCalc(w, ter) {
   var N = w * w, arr = new Float32Array(N), i, j, c, s, cell, m, sp, tcnt, tt, add, x, y, selfLu = {}, fl, ax, ay, cnt = {}, dx, dy;
   var allLu = (cfx.allV.lu || 0) + (cfx.decV.lu || 0);
-  var pen = cfxLevelOf('sani', cfx.city.sani) >= 2 ? CITYFX_ROAD_SANI_PEN : 1;
+  var pen = cfxLevelOf('sani', cfx.city.sani) >= 2 && !(typeof citySimpleOn === 'function' && citySimpleOn()) ? CITYFX_ROAD_SANI_PEN : 1;   // 簡化模式:衛生不拖慢路速
   arr.fill(1);
   for (i = 0; i < cfx.selfList.length; i++) {
     fl = cfx.selfList[i];
@@ -486,6 +487,7 @@ function cityFxPanelRender() {
   for (i = 0; i < CITYFX_KEYS.length; i++) {
     key = CITYFX_KEYS[i];
     if (lv < CITYFX_REVEAL[key]) continue;
+    if (cfxSimple() && CITYFX_SIMPLE_KEYS.indexOf(key) < 0) continue;   // 簡化模式:只列糧食 / 飲水 / 衛生
     v = cityFxCity(key); lvl = cfxLevelOf(key, v);
     row = document.createElement('div'); row.className = 'pg-row';
     ic = typeof uiIconNode === 'function' ? uiIconNode(key, 24, CITYFX_ICON[key]) : null;

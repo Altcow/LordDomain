@@ -1768,6 +1768,7 @@ function draw(ctx, time) {
   if (typeof fxHi !== 'undefined' && fxHi && !pano.open && !uiIsPhoto()) drawFx(ov);
   ctx.setTransform(r, 0, 0, r, 0, 0);
   if (ov !== ctx) ov.setTransform(r, 0, 0, r, 0, 0);
+  if (typeof bldDoorDraw === 'function' && !pano.open) bldDoorDraw(ov);   // 可進入建築頭上的小門(bldtag.js)
   if (typeof draftFloatSync === 'function') draftFloatSync();
   if (typeof drawScreenHud === 'function') drawScreenHud(ov, time);
   rqEnd(ctx);

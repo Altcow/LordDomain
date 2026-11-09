@@ -4,7 +4,7 @@
 // 存檔:世界內 'lorddomain.bn.v1'(進度鍵,有值才寫)、偏好 'lorddomain.bn.pref'。B2 敵人 = 固定「練習戰 1-1」山賊樣板(依我方戰力縮放);完整討伐地圖與獎勵是 B3,這裡不做。
 // 不發聲(音效經 bndraw 的 sfxwPlay,有守衛)、不新增音檔。ES2017;不用 ?. ??。
 // 戰鬥中頂列只留左上返回(= 暫停:繼續 / 撤退;撤退一律算敗北);工具列(回合 / 倍速 1-2-3×)在畫面下方(戰鬥改版:沒有士氣,大招為機率戰法,已移除自動大招鈕與點角色放大招);無右上關閉、無略過鈕、無行動順序條。文字戰報見 js/bnlog.js。
-// 全域:BNUI bnUnlocked bnUiOpen bnUiLeave bnUiActive bnUiState bnUiLoad bnUiSave bnUiPref bnUiFoes bnUiAct bnUiBuild bnUiBonds bnUiStart bnUiResultData bnUiPause bnUiBack bnUiStats
+// 全域:BNUI bnUnlocked bnUiOpen bnUiLeave bnUiActive bnUiState bnUiLoad bnUiSave bnUiPref bnUiFoes bnUiAct bnUiBuild bnUiBonds bnUiStart bnUiResultData bnUiPause bnUiBack bnUiStats bnUiCutTap
 
 var BNUI = {
   key: 'lorddomain.bn.v1', prefKey: 'lorddomain.bn.pref', fadeMs: 240, barH: 48, maxUnits: 5, stage: 'P', minRoster: 3, minRank: 2, dprMax: 2, pixMax: 3.6e6,
@@ -23,7 +23,7 @@ var bnu = {
 function bnUiActive() { return !!bnu.open; }
 function bnUiState() { return bnu; }
 function bnUiEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-function bnUiToast(m) { if (typeof showToast === 'function') { try { showToast(m); } catch (e) { /* 略過 */ } } }
+function bnUiToast(m) { if (typeof showToast === 'function') { try { showToast(typeof fxText === 'function' ? fxText(m) : m); } catch (e) { /* 略過 */ } } }   // 魔幻世界用語替換(歷史世界原樣)
 function bnUiPs() { return (typeof isPowerSave === 'function') && !!isPowerSave(); }
 
 // ───────── 功能閘(PLAN §1.2):官階 ≥ 亭長 且 名冊 ≥ 3 人;不需蓋建築,城建專注模式下照樣可見 ─────────
@@ -77,15 +77,15 @@ function bnUiSave() {
   return bnUiLsSet(BNUI.key, JSON.stringify(Object.assign({ v: 1, forms: d.forms, clear: d.clear, cur: d.cur, last: d.last }, typeof bnStgPack === 'function' ? bnStgPack(d) : {})));
 }
 function bnUiPref() {
-  var raw, o, p = { spd: 1 };
+  var raw, o, p = { spd: 1, sb: true };
   if (bnu.pref) return bnu.pref;
   raw = bnUiLsGet(BNUI.prefKey);
   if (raw) { try { o = JSON.parse(raw); } catch (e) { o = null; } }
-  if (o) { if (o.spd === 2 || o.spd === 3) p.spd = o.spd; else if (o.spd === 4) p.spd = 3; }   // 舊偏好 4× 已取消 → 退成 3×;舊 autoUlt 偏好忽略
+  if (o) { if (o.spd === 2 || o.spd === 3 || o.spd === 4) p.spd = 2; if (o.sb === 0) p.sb = false; }   // 倍速只剩 1× / 2×:舊偏好 3× / 4× 退成 2×;sb = 戰法條(預設開);舊 autoUlt 偏好忽略
   bnu.pref = p;
   return p;
 }
-function bnUiPrefSave() { var p = bnUiPref(); bnUiLsSet(BNUI.prefKey, JSON.stringify({ spd: p.spd })); }
+function bnUiPrefSave() { var p = bnUiPref(), o = { spd: p.spd }; if (!p.sb) o.sb = 0; bnUiLsSet(BNUI.prefKey, JSON.stringify(o)); }
 
 // ───────── 布陣資料 ─────────
 function bnUiEntry(id) {
@@ -274,6 +274,8 @@ function bnUiResize() {
     rc = bnu.backBtn && bnu.backBtn.getBoundingClientRect ? bnu.backBtn.getBoundingClientRect() : null;
     top = (rc && rc.bottom > 0 ? rc.bottom : BNUI.barH + 4);
     bot = ((bnu.top && bnu.top.offsetHeight) || BNUI.barH) + 4;
+    bnu.feedTop = vp.w > vp.h;   // 橫式:播報放上緣中央(返回鈕那一列,戰場上方),不再壓縮戰場高度
+    if (bnu.phase === 'fight' && bnu.feedEl) { if (!bnu.feedTop) bot += bnUiFeedH() + 2; bnUiFeedRender(); }   // 直式:播報占用底部一條,戰場往上收,不蓋人物
   } else {
     top = (bnu.top && bnu.top.offsetHeight) || BNUI.barH;
     bot = 30;
@@ -333,6 +335,14 @@ function bnUiCss() {
     '#bnCut .sk{position:absolute;left:0;right:0;bottom:12%;text-align:center;font-size:28px;font-weight:bold;color:#ffd25a;text-shadow:0 0 10px #000,2px 2px 0 #000}' +
     '#bnRes,#bnPause{position:absolute;left:0;top:0;right:0;bottom:0;z-index:6;display:none;align-items:center;justify-content:center;background:rgba(10,8,6,.72)}#bnRes.on,#bnPause.on{display:flex}' +
     '.bnbox{width:min(92vw,400px);max-height:90vh;overflow:auto;border-radius:14px;background:#2a2118;border:2px solid #c9892f;padding:14px 16px;text-align:center}.bnbox h2{margin:0 0 6px;font-size:30px;letter-spacing:4px}.bnbox p{margin:3px 0;font-size:14px;line-height:1.5}.bnbox .row{display:flex;gap:8px;margin-top:10px}.bnbox .row button{flex:1;min-height:48px;border:none;border-radius:10px;background:rgba(255,255,255,.16);color:#f4ead2;font-size:16px}.bnbox .row button.pri{background:#c9892f;color:#1b1308;font-weight:bold}' +
+    '#bnFeed{position:absolute;left:calc(6px + env(safe-area-inset-left));z-index:4;display:none;max-width:min(70vw,520px);padding:2px 8px 3px;border-radius:8px;background:rgba(10,8,6,.55);color:#f0e6cf;font-size:11px;line-height:14px;pointer-events:auto}#bnLayer.ph-fight #bnFeed{display:block}#bnFeed.top{top:calc(2px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);max-width:38vw;line-height:12px}' +
+    '#bnFeed .fl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#bnFeed .fl:last-child{color:#fff3c4}#bnFeed .fh{color:#c9b98f;font-size:10px}' +
+    '.bnm-route{margin:0 0 6px;padding:4px 8px 6px;border-radius:8px;background:rgba(255,255,255,.06)}.bnm-route .rt{font-size:13px;margin-bottom:4px}.bnm-route .dots{color:#ffd25a;letter-spacing:2px;margin-left:6px}' +
+    '.bnm-route .rp{display:flex;align-items:center}.bnm-route .ln{flex:1;height:3px;min-width:8px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.35) 0 5px,transparent 5px 9px)}.bnm-route .ln.on{background:repeating-linear-gradient(90deg,#c9892f 0 5px,transparent 5px 9px)}' +
+    '.bnm-route .nd{flex:0 0 auto;width:32px;height:32px;border-radius:50%;border:2px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#f4ead2;font-size:13px;padding:0}.bnm-route .nd.clr{background:#c9892f;color:#1b1308;border-color:#ffd25a}.bnm-route .nd.lock{opacity:.4}.bnm-route .nd.sel{box-shadow:0 0 0 3px #ffd25a,0 0 10px #ffd25a;transform:scale(1.12)}' +
+    '.bnf-egrid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin:4px 0 6px;padding:4px;border-radius:8px;background:rgba(168,74,58,.18)}.bnf-egrid .bnf-gh{font-size:11px;opacity:.8;text-align:center}' +
+    '.bnf-cell.foe{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:44px;padding:2px;border-radius:6px;background:rgba(168,74,58,.3);font-size:12px;line-height:1.2;text-align:center}.bnf-cell.foe.empty{background:rgba(255,255,255,.04)}.bnf-cell.foe .av{display:inline-block;width:20px;height:20px;border-radius:50%;background:#7a3a2a;color:#fff;font-size:12px;line-height:20px}.bnf-cell.foe small{font-size:10px;opacity:.85}' +
+    '.bnbox.bninfo{text-align:left}.bninfo h2{font-size:22px;letter-spacing:1px;text-align:center}.bninfo .sk{margin:6px 0;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.07);font-size:13px;line-height:1.5}.bninfo .sk b{color:#ffd25a}.bninfo .sk small{opacity:.8}.bninfo .st{font-size:13px}' +
     'html body.in-bn #toast{z-index:80}';
   document.head.appendChild(st);
 }
@@ -374,8 +384,10 @@ function bnUiBuildLayer() {
   bnu.mapEl = bnUiMk('div', 'bnMap'); bnu.mapEl.addEventListener('click', bnUiFormClick);
   bnu.resEl = bnUiMk('div', 'bnRes'); bnu.resEl.addEventListener('click', bnUiFormClick);
   bnu.pauseEl = bnUiMk('div', 'bnPause'); bnu.pauseEl.addEventListener('click', bnUiFormClick);
-  layer.appendChild(cv); layer.appendChild(bnu.formEl); layer.appendChild(bnu.mapEl); layer.appendChild(top); layer.appendChild(bnu.cutEl); layer.appendChild(bnu.resEl); layer.appendChild(bnu.pauseEl);
+  bnu.feedEl = bnUiMk('div', 'bnFeed'); bnu.feedEl.addEventListener('click', function () { bnu.feedOff = !bnu.feedOff; bnUiFeedRender(); bnUiResize(); });   // 戰況播報(點一下收合 / 展開)
+  layer.appendChild(cv); layer.appendChild(bnu.formEl); layer.appendChild(bnu.mapEl); layer.appendChild(top); layer.appendChild(bnu.feedEl); layer.appendChild(bnu.cutEl); layer.appendChild(bnu.resEl); layer.appendChild(bnu.pauseEl);
   cv.addEventListener('pointerup', bnUiCvTap);
+  cv.addEventListener('pointerup', bnUiCutTap);   // 點畫面跳過大招 cut-in(#bnCut 不吃點擊,點擊落在畫布)
   document.body.appendChild(layer);
   bnu.layer = layer; bnu.cv = cv; bnu.ctx = cv.getContext('2d'); bnu.top = top; bnu.bar = bar; bnu.strip = null;
 }
@@ -390,6 +402,16 @@ function bnUiSetPhase(ph) {
 // ───────── 布陣畫面 ─────────
 var BNUI_GR = ['白', '青', '藍', '紫', '金'];
 function bnUiAptTxt(e, tr) { var a = bnAptOf(e).apt[tr] || 'C'; return a; }
+// 戰前準備:敵方陣容對照(依站位;只顯示頭像字、名稱、兵種、兵力 / 戰力,不顯示戰法 — 戰法開打後才看得到)
+function bnUiFoeGridHtml(foes) {
+  var h = '<div class="bnf-egrid"><div class="bnf-gh">敵 ◀ 前排</div><div class="bnf-gh">中排</div><div class="bnf-gh">後排</div>', r, c, x, i;
+  for (c = 0; c < 3; c++) for (r = 0; r < 3; r++) {
+    x = null;
+    for (i = 0; i < foes.specs.length; i++) if (foes.specs[i].row === r && (foes.specs[i].col | 0) === c) x = foes.specs[i];
+    h += x ? '<div class="bnf-cell foe"><span class="av">' + bnUiEsc(Array.from(String(x.name))[0] || '?') + '</span><b>' + bnUiEsc(x.name) + '</b><small>' + bnUiEsc(x.troop) + ' · 兵力 ' + x.stats.hp + ' · 戰力 ' + bnPower(x) + '</small></div>' : '<div class="bnf-cell foe empty"></div>';
+  }
+  return h + '</div>';
+}
 function bnUiRenderForm() {
   var el = bnu.formEl, h = '', roster = bnUiRosterList(), build = bnUiBuild(), bonds = bnUiBonds(), foes, foeP = 0, mineP = 0, rows = [2, 1, 0], r, c, s, e, tr, list, i, sel = bnu.sel, selE = sel ? bnUiEntry(sel) : null, sc, msg = bnUiCheck(), keepL = 0, ro;
   if (!el) return;
@@ -410,7 +432,7 @@ function bnUiRenderForm() {
       } else h += '<button class="bnf-cell" data-a="cell" data-r="' + r + '" data-c="' + c + '" aria-label="空格">＋</button>';
     }
   }
-  h += '</div>' + (typeof bnTeamStripHtml === 'function' ? bnTeamStripHtml() : '') + '</div><div class="c2">';
+  h += '</div>' + bnUiFoeGridHtml(foes) + (typeof bnTeamStripHtml === 'function' ? bnTeamStripHtml() : '') + '</div><div class="c2">';
   if (selE) {
     tr = bnUiTroopOf(selE); sc = bnUiSpec(selE, { troop: tr });
     h += '<div class="bnf-sel"><b>' + bnUiEsc(selE.name) + '</b>(' + BNUI_GR[selE.gr] + '階)戰力 ' + bnPower(sc) + ' · 建議站 ' + ['前', '中', '後'][bnRowOf(selE, tr)] + '排<br>' +
@@ -465,6 +487,7 @@ function bnUiDo(a, id, r, c, t, i) {
   else if (a === 'again') { bnUiToForm(); }
   else if (a === 'leave') bnUiLeave();
   else if (a === 'resume') bnUiPause(false);
+  else if (a === 'sbar') { o = bnUiPref(); o.sb = o.sb === false; bnUiPrefSave(); if (bnu.P) bnu.P.sb = o.sb; if (bnu.paused && !bnu.info) bnUiPause(true); bnUiDrawOnce(); }   // 戰鬥設定:顯示戰法條
   else if (a === 'retreat') bnUiRetreat();
   else if (a === 'log' && typeof bnLogOpen === 'function') bnLogOpen('recent');
   else if (a === 'logview' && typeof bnLogOpen === 'function') bnLogOpen('recent', bnu.logId || '');
@@ -474,10 +497,73 @@ function bnUiDo(a, id, r, c, t, i) {
 // ───────── 戰鬥 ─────────
 function bnUiHooks() {
   return {   // 不接 order 鉤子:不預告下一位行動者
-    round: function (n) { if (bnu.roundEl) bnu.roundEl.textContent = n + ' / ' + BN_DATA.maxRound; },
+    round: function (n) { if (bnu.roundEl) bnu.roundEl.textContent = '第 ' + n + '/' + BN_DATA.maxRound + ' 回合'; },
     cut: function (c) { bnUiCutRender(c); },
+    feed: function (s) { bnUiFeed(s); },
     end: function (res) { bnUiShowResult(); }
   };
+}
+// 戰況播報:最近 BNUI_FEED.n 行;預設展開,點一下收合(只剩標題列)。位置 = 底部工具列正上方,bnUiResize 已把這塊高度從戰場扣掉,不蓋人物 / 血條
+var BNUI_FEED = { n: 3, lineH: 14, pad: 5 };
+function bnUiFeed(s) {
+  if (!bnu.feed) bnu.feed = [];
+  if (s === null) bnu.feed = []; else bnu.feed.push(String(s));
+  if (bnu.feed.length > BNUI_FEED.n) bnu.feed = bnu.feed.slice(-BNUI_FEED.n);
+  bnUiFeedRender();
+}
+function bnUiFeedH() { return bnu.feedOff ? BNUI_FEED.lineH + BNUI_FEED.pad : BNUI_FEED.lineH * (BNUI_FEED.n + 1) + BNUI_FEED.pad; }
+function bnUiFeedRender() {
+  var el = bnu.feedEl, h, i, L = bnu.feed || [];
+  if (!el) return;
+  h = (bnu.feedTop && !bnu.feedOff) ? '' : '<div class="fh">戰況播報 ' + (bnu.feedOff ? '▸ 點開' : '▾ 點收合') + '</div>';   // 橫式展開時省掉標題列(上緣空間小)
+  if (!bnu.feedOff) for (i = 0; i < BNUI_FEED.n; i++) h += '<div class="fl">' + (L[i] ? bnUiEsc(L[i]) : '&nbsp;') + '</div>';
+  el.innerHTML = h;
+  if (el.classList) el.classList.toggle('top', !!bnu.feedTop);
+  if (el.style) el.style.bottom = bnu.feedTop ? 'auto' : (((bnu.top && bnu.top.offsetHeight) || BNUI.barH) + 2) + 'px';
+}
+// 單位資訊卡:點任一單位 → 暫停並顯示完整戰法(白話 / 發動率 / 冷卻 / 對象條件)、目前狀態與兵力;「繼續」關閉後接著打
+function bnUiUnitAt(x, y) {
+  var P = bnu.P, L = bnu.L, k, v, best = null, bd = 1e9, dx, dy;
+  if (!P || !L) return null;
+  for (k in P.vu) {
+    v = P.vu[k];
+    if (!v.alive) continue;
+    dx = Math.abs(x - v.px); dy = y - v.py;
+    if (dx > L.colW * 0.55 || dy < -L.sh * 1.15 || dy > L.fs * 2.4) continue;
+    if (dx + Math.abs(dy + L.sh * 0.5) < bd) { bd = dx + Math.abs(dy + L.sh * 0.5); best = v; }
+  }
+  return best;
+}
+function bnUiInfoHtml(uid) {
+  var S = bnu.P.S, u = S.units[uid], h, list, k, s, ST = (typeof BN_ST_NAME !== 'undefined') ? BN_ST_NAME : {}, sts = [];
+  if (!u) return '';
+  h = '<div class="bnbox bninfo"><h2>' + bnUiEsc(u.name) + '</h2><p style="text-align:center">' + (u.side === 'A' ? '我方' : '敵方') + ' · ' + bnUiEsc(u.troop) + '兵 · 兵力 ' + Math.max(0, Math.round(u.hp)) + ' / ' + u.maxHp + '</p>';
+  for (k in u.st) {
+    s = u.st[k];
+    if (!ST[k] || !s) continue;
+    sts.push(ST[k] + (s.left && s.left < 900 ? ' ' + s.left + ' 回合' : (s.act ? '(到下次行動)' : (s.left >= 900 ? '(全程)' : ''))));
+  }
+  h += '<p class="st">狀態:' + (sts.length ? bnUiEsc(sts.join('、')) : '無') + '</p>';
+  list = u.pas.concat(u.act);
+  list.forEach(function (inst) {
+    var d = inst.def, rate = '', cd = '', txt = '';
+    if (d.cat !== 'passive' && d.cat !== 'command') {
+      if (typeof bnRateOf === 'function') { try { rate = '發動率 ' + Math.round(bnRateOf(S, u, inst) * 100) + '%'; } catch (er) { rate = ''; } }
+      cd = (inst.cd | 0) > 0 ? '冷卻中:還要 ' + inst.cd + ' 回合' : '可發動';
+      if (d.cat === 'ult' && S.round < BN_DATA.rate.ultFrom) cd = '第 ' + BN_DATA.rate.ultFrom + ' 回合起可發動';
+    }
+    if (typeof bnSkillText === 'function') { try { txt = bnSkillText(d); } catch (er) { txt = ''; } }
+    h += '<div class="sk"><b>' + bnUiEsc(d.name) + '</b> <small>' + bnUiEsc((typeof BN_TEXT_CATS !== 'undefined' && BN_TEXT_CATS[d.cat]) || d.cat) + (rate ? ' · ' + rate : '') + (cd ? ' · ' + cd : '') + '</small><br>' + bnUiEsc(txt || d.desc || '') + '</div>';
+  });
+  return h + '<div class="row"><button class="pri" data-a="resume">繼續</button></div></div>';
+}
+function bnUiInfo(uid) {
+  if (bnu.phase !== 'fight' || !bnu.P || bnu.P.done || !bnu.P.S.units[uid]) return false;
+  bnu.paused = true; bnUiStopLoop();
+  bnu.info = uid;
+  bnu.pauseEl.innerHTML = bnUiInfoHtml(uid);
+  bnUiShowPause(true);
+  return true;
 }
 function bnUiCutRender(c) {
   var el = bnu.cutEl, p = bnu.cutParts, k, op, sl, TONE;
@@ -516,7 +602,9 @@ function bnUiStart() {
   L = bnu.L;
   pr = bnUiPref();
   P = bnPlNew(S, L, { speed: pr.spd, hooks: bnUiHooks(), powerSave: bnUiPs(), sfx: true });
-  bnu.P = P; bnu.result = null; bnu.paused = false; bnu.retreat = false; bnu.manual = false; bnu.logId = '';
+  P.sb = pr.sb !== false;   // 戰法條(我方)
+  bnUiFeed(null);
+  bnu.P = P; bnu.result = null; bnu.info = null; bnu.paused = false; bnu.retreat = false; bnu.manual = false; bnu.logId = '';
   bnUiSyncBtns();
   if (bnu.roundEl) bnu.roundEl.textContent = '';
   bnUiResize();
@@ -529,7 +617,7 @@ function bnUiSyncBtns() {
 }
 function bnUiSetSpeed() {
   var pr = bnUiPref();
-  pr.spd = pr.spd === 1 ? 2 : (pr.spd === 2 ? 3 : 1);
+  pr.spd = pr.spd === 1 ? 2 : 1;   // 倍速只有 1× / 2×
   if (bnu.P) bnPlSetSpeed(bnu.P, pr.spd);
   bnUiPrefSave(); bnUiSyncBtns();
 }
@@ -537,7 +625,16 @@ function bnUiSkip() {   // 介面已無「略過 / 直接結束」入口;保留�
   if (bnu.phase !== 'fight' || !bnu.P || bnu.P.done) return;
   bnPlSkip(bnu.P);
 }
-function bnUiCvTap(e) {   // 戰鬥改版:大招為機率戰法,點角色不再手動放大招(保留空處理,避免舊監聽報錯)
+function bnUiCvTap(e) {   // 戰鬥中點任一單位 → 暫停並開單位資訊卡(大招 cut-in 播放中則交給 bnUiCutTap 跳過)
+  var rc, v;
+  if (bnu.phase !== 'fight' || !bnu.P || bnu.P.done || bnu.paused || bnu.P.cut || !e) return false;
+  rc = bnu.cv && bnu.cv.getBoundingClientRect ? bnu.cv.getBoundingClientRect() : { left: 0, top: 0 };
+  v = bnUiUnitAt((e.clientX || 0) - (rc.left || 0), (e.clientY || 0) - (rc.top || 0));
+  return v ? bnUiInfo(v.id) : false;
+}
+function bnUiCutTap() {
+  if (bnu.phase !== 'fight' || !bnu.P || bnu.paused || typeof bnPlCutSkip !== 'function') return false;
+  return bnPlCutSkip(bnu.P);
 }
 function bnUiDrawOnce() {
   if (bnu.P && bnu.ctx && bnu.L) bnDrFrame(bnu.ctx, bnu.P, bnu.dpr, (typeof performance !== 'undefined' ? performance.now() : 0) / 1000);
@@ -590,7 +687,7 @@ function bnUiShowResult() {
     '<p>' + (d.reason === 'retreat' ? '撤退(算敗北,不計通關、不給獎勵)' : (d.reason === 'limit' ? '回合上限判定' : '全滅決勝')) + ' · 共 ' + d.rounds + ' 回合 · 我方存活 ' + d.alive + '/' + d.total + '</p>' +
     (d.mvp ? '<p>本場 MVP:<b>' + bnUiEsc(d.mvp.name) + '</b><br>傷害 ' + d.mvp.dmg + ' · 治療 ' + d.mvp.heal + ' · 承傷 ' + d.mvp.taken + ' · 擊倒 ' + d.mvp.kills + '</p>' : '') +
     '@RW@' +
-    '<div class="row"><button data-a="again" class="pri">再戰</button><button data-a="tomap">討伐地圖</button><button data-a="leave">離開</button></div>@LOG@' + (typeof bnTeamStripHtml === 'function' ? bnTeamStripHtml({ mini: true, title: '我方戰後', S: S }) : '') + '</div>';
+    '@LOG@' + (typeof bnTeamStripHtml === 'function' ? bnTeamStripHtml({ mini: true, title: '我方戰後', S: S }) : '') + '</div>';
   // 戰績與獎勵(有值才寫)。討伐 / 流寇依 bn_stages 規則結算;練兵不計戰績、不給獎勵
   d0 = bnu.data || bnUiLoad();
   rep = null;
@@ -610,12 +707,14 @@ function bnUiShowResult() {
     bnLogRecord(lg, bnu.rec);
     bnu.logId = lg.id;
   }
-  h = h.replace('@LOG@', bnu.logId ? '<div class="row"><button data-a="logview">查看戰報</button><button data-a="logsave">儲存戰報</button></div>' : '');
+  // 結算只留兩個按鈕:查看戰報(內含儲存 / 分享戰報碼)、離開(回討伐地圖,聚焦下一關)
+  h = h.replace('@LOG@', '<div class="row bnres-row">' + (bnu.logId ? '<button data-a="logview" class="pri">查看戰報</button>' : '') + '<button data-a="tomap"' + (bnu.logId ? '' : ' class="pri"') + '>離開</button></div>');
   bnu.resEl.innerHTML = h;
   bnUiShowRes(true);
   d0.last = { stage: BNUI.stage, res: d.winner, rounds: d.rounds, stars: d.stars };
   bnUiCurSave(); bnUiSave();
   if (rep && rep.win && typeof saveWorld === 'function') { try { saveWorld(); } catch (e) { /* 略過 */ } }
+  if (rep && rep.win && g.kind === 'stage' && typeof BNMAP !== 'undefined') { BNMAP.sel = null; BNMAP.ch = 0; }   // 勝利 → 回地圖時預設選下一關(bnMapRender 預設選第一個未通關的已解鎖關)
   if (bnu.P) bnPlSfxEnd(d.winner);
   bnUiDrawOnce();
   if (typeof bnsOnResult === 'function') bnsOnResult(d);   // 對戰練習(js/bnshare.js):不計進度、改結算按鈕
@@ -657,10 +756,12 @@ function bnUiPause(on) {
   if (bnu.phase !== 'fight' || !bnu.P || bnu.P.done) { if (!on) bnUiShowPause(false); return; }
   if (on) {
     bnu.paused = true; bnUiStopLoop();
-    bnu.pauseEl.innerHTML = '<div class="bnbox"><h2>暫停</h2><p>撤退一律算敗北:不計通關、不給獎勵。</p><div class="row"><button class="pri" data-a="resume">繼續</button><button data-a="retreat">撤退</button></div></div>';
+    bnu.info = null;
+    bnu.pauseEl.innerHTML = '<div class="bnbox"><h2>暫停</h2><p>撤退一律算敗北:不計通關、不給獎勵。</p><div class="row"><button class="pri" data-a="resume">繼續</button><button data-a="retreat">撤退</button></div>' +
+      '<div class="row"><button data-a="sbar">顯示戰法條:' + (bnUiPref().sb !== false ? '開' : '關') + '</button></div></div>';
     bnUiShowPause(true);
   } else {
-    bnu.paused = false; bnUiShowPause(false);
+    bnu.paused = false; bnu.info = null; bnUiShowPause(false);
     bnUiLoop(true);
   }
 }

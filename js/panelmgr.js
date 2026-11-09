@@ -1,6 +1,6 @@
 // js/panelmgr.js — 面板管理器(PLAN_NOLEVEL §7 / NL3a):同時最多 1 大面板 + 1 停靠面板 + 1 浮卡;互斥、單一 Esc、浮卡幾何、全螢幕隱藏、狀態還原。
 // 全域名稱:panelRegister panelOpen panelClose panelCloseAll panelIsOpen panelTopId panelPlaceCard panelMapInputBlocked panelNoteMapGesture
-//   panelFullscreen panelFsActive panelSyncFs panelBack panelSetStateHooks panelNoteIntentMove panelKindOpen;資料表 PANEL_Z PANEL_MUTEX PANEL_BLOCKED_BY PANEL_ESC_ORDER PANEL_FS_AUTO。 panelLsActive panelLsSet panelLsSync;常數 PANEL_LS。
+//   panelFullscreen panelFsActive panelSyncFs panelBack panelSetStateHooks panelNoteIntentMove panelKindOpen;資料表 PANEL_Z PANEL_MUTEX PANEL_BLOCKED_BY PANEL_ESC_ORDER PANEL_FS_AUTO。 panelLsActive panelLsSet panelLsSync;常數 PANEL_LS。 panelCoverActive panelCoverSet(body.panel-cover)。
 // 漸進遷移:既有面板保留自己的 toggle 函式,只在開啟時呼叫 panelOpen(id)、關閉時呼叫 panelClose(id),並以 close 回呼讓管理器代為關閉互斥者。ES2017;不用 ?. ??。
 var PANEL_Z = { hud: 10, dock: 20, card: 30, bigMask: 40, big: 41, dlgMask: 50, dlg: 51, transient: 60, guide: 70, fullscreen: 80, photoBack: 90 };
 var PANEL_MUTEX = { big: ['big', 'card'], dock: ['dock'], card: ['card'] };      // 開啟某 kind 時,自動關閉這些 kind 的舊面板
@@ -36,12 +36,19 @@ function panelLsActive() {
     return !!panelLsMql.matches;
   } catch (e) { return false; }
 }
-function panelLsSet(key, on) { if (on) panelLsExtra[key] = 1; else delete panelLsExtra[key]; panelLsSync(); }
+function panelLsSet(key, on) { if (on) { panelLsExtra[key] = 1; panelCloseCardsAny(); } else delete panelLsExtra[key]; panelLsSync(); }
 function panelLsWant() { return panelLsActive() && !panelFsActive() && (!!panelKindOpen('big') || Object.keys(panelLsExtra).length > 0); }
+// 「大面板蓋著城市」(直橫版都算):kind:'big' 開著、panelLsSet 登記者(城主府)、panelCoverSet 登記者(設定抽屜)。
+// body.panel-cover → CSS 收起建造相關浮層(底部選單 / 分類列 / 草稿浮動鈕 / 草稿列 / 預覽卡…),只隱藏不改狀態,面板全關後自動還原。
+var PANEL_COVER_CLS = 'panel-cover';
+var panelCoverExtra = {};
+function panelCoverActive() { return !panelFsActive() && (!!panelKindOpen('big') || Object.keys(panelLsExtra).length > 0 || Object.keys(panelCoverExtra).length > 0); }
+function panelCoverSet(key, on) { if (on) { panelCoverExtra[key] = 1; panelCloseCardsAny(); } else delete panelCoverExtra[key]; panelLsSync(); }
 function panelLsSync() {
   var on = panelLsWant();
   if (typeof document === 'undefined' || !document.body || !document.body.classList) return on;
   document.body.classList.toggle(PANEL_LS.cls, on);
+  document.body.classList.toggle(PANEL_COVER_CLS, panelCoverActive());
   return on;
 }
 
@@ -406,7 +413,12 @@ function panelDialogOpen() {
   try {
     if (typeof ldAnyOpen === 'function' && ldAnyOpen()) return true;
     if (typeof document === 'undefined' || !document.getElementById) return false;
-    for (i = 0; i < PANEL_DIALOG_IDS.length; i++) { e = document.getElementById(PANEL_DIALOG_IDS[i]); if (e && !e.hidden) return true; }
+    for (i = 0; i < PANEL_DIALOG_IDS.length; i++) {
+      e = document.getElementById(PANEL_DIALOG_IDS[i]);
+      if (!e || e.hidden) continue;
+      if (e.id === 'stRoot' && e.classList && !e.classList.contains('st-open')) continue;   // 設定抽屜常駐 DOM(不設 hidden),以 st-open 判斷開關
+      return true;
+    }
   } catch (x) { /* 略過 */ }
   return false;
 }
@@ -431,6 +443,7 @@ function panelBind() {
   document.addEventListener('pointercancel', function () { panelGesture = null; }, true);
   document.addEventListener('wheel', panelOnWheel, { capture: true, passive: true });
   document.addEventListener('keydown', panelOnKey, true);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) panelCloseCardsAny(); });   // 切到別的 App 再回來:浮卡(版面格 / 預覽卡…)不殘留
   if (typeof setInterval === 'function') setInterval(panelSyncFs, 400);
   try {                                                // 旋轉 / 視窗變動:重算橫版大面板模式
     panelLsActive();

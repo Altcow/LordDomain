@@ -14,7 +14,7 @@ var BNSFX_KINDS = {
   atk_blade: { pri: 2, gap: 0.1, conc: 2, gain: 0.45 }, atk_spear: { pri: 2, gap: 0.1, conc: 2, gain: 0.45 }, atk_cav: { pri: 2, gap: 0.12, conc: 2, gain: 0.5 },
   atk_bow: { pri: 2, gap: 0.1, conc: 2, gain: 0.45 }, atk_strat: { pri: 2, gap: 0.12, conc: 2, gain: 0.4 },
   hit: { pri: 2, gap: 0.08, conc: 2, gain: 0.5 }, crit: { pri: 1, gap: 0.15, conc: 1, gain: 0.6 }, block: { pri: 2, gap: 0.12, conc: 1, gain: 0.4 }, evade: { pri: 2, gap: 0.15, conc: 1, gain: 0.35 },
-  heal: { pri: 1, gap: 0.2, conc: 1, gain: 0.4 }, shield: { pri: 1, gap: 0.2, conc: 1, gain: 0.4 }, buff: { pri: 2, gap: 0.15, conc: 1, gain: 0.35 }, debuff: { pri: 2, gap: 0.15, conc: 1, gain: 0.35 },
+  heal: { pri: 1, gap: 0.2, conc: 1, gain: 0.4 }, shield: { pri: 1, gap: 0.2, conc: 1, gain: 0.4 }, buff: { pri: 2, gap: 0.15, conc: 1, gain: 0.35, st: 1 }, debuff: { pri: 2, gap: 0.15, conc: 1, gain: 0.35, st: 1 },
   kill: { pri: 1, gap: 0.2, conc: 2, gain: 0.55 }, ult: { pri: 0, gap: 0.8, conc: 1, gain: 0.6 }, drum: { pri: 0, gap: 1.0, conc: 1, gain: 0.6 },
   win: { pri: 0, gap: 3.0, conc: 1, gain: 0.55 }, lose: { pri: 0, gap: 3.0, conc: 1, gain: 0.55 }, ui: { pri: 1, gap: 0.06, conc: 1, gain: 0.3, ui: 1 }
 };
@@ -128,6 +128,16 @@ function bnSfxNow() {
   return Date.now() / 1000;
 }
 function bnSfxDrop(k) { BNSFX.stats.dropped[k] = (BNSFX.stats.dropped[k] || 0) + 1; return false; }
+// 狀態音閘門:opt = {uid 單位, st 狀態 id, ult 大招期間};沒帶 uid / st(舊呼叫端)照舊播放。每場開戰(bnSfxBattle(true))重設
+function bnSfxStFirst(opt) {
+  var k;
+  if (!opt || opt.uid === undefined || !opt.st) return true;
+  k = opt.uid + ':' + opt.st;
+  if (!BNSFX.stSeen) BNSFX.stSeen = {};
+  if (BNSFX.stSeen[k]) return !!opt.ult;
+  BNSFX.stSeen[k] = 1;
+  return true;
+}
 // 讀設定:音效開關、音量、安靜、密度(缺設定模組 = 預設開)
 function bnSfxCfg() {
   var s = typeof settingsGet === 'function' ? settingsGet() : null, sf = s && s.sfx ? s.sfx : null;
@@ -175,6 +185,7 @@ function bnSfxPlay(kind, opt) {
   if (!def) return false;
   opt = opt || {};
   BNSFX.stats.req[kind] = (BNSFX.stats.req[kind] || 0) + 1;
+  if (def.st && !bnSfxStFirst(opt)) return bnSfxDrop(kind);   // 增益 / 減益音降噪:只在大招期間或同一單位第一次被施加某狀態時播放
   if (BNSFX.muted) return bnSfxDrop(kind);
   cfg = bnSfxCfg();
   if (!cfg.on || !(cfg.vol > 0)) return bnSfxDrop(kind);
@@ -231,6 +242,7 @@ function bnSfxPlay(kind, opt) {
 function bnSfxBattle(on) {
   var forced = typeof BG === 'object' && BG ? BG.forced : null;
   if (on) {
+    BNSFX.stSeen = {};
     bnSfxWarm();
     if (typeof bgmSetScene === 'function' && (!forced || BNSFX.bgmOwn)) { try { bgmSetScene('battle'); BNSFX.bgmOwn = true; } catch (e) { console.warn('[bnsfx] bgm', e); } }
   } else if (BNSFX.bgmOwn) {

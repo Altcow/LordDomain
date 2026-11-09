@@ -200,7 +200,7 @@ let uiSideExpanded = false;
 const UI_SIDE_NORMAL_MAX = 7;   // 正常模式第一層上限(拍照不在第一層,收進展開列)
 const UI_SIDE_ITEMS = [
   { key: 'search', icon: '🔍', label: '搜尋', title: '搜尋建築與科技(未解鎖者可看缺什麼)', scope: 'estate', special: 'search' },
-  { key: 'slots', icon: '🏘', label: '經營', title: '版面選擇(3 格):點一下打開,再點一次關閉', scope: 'all', special: 'slots' },
+  { key: 'slots', icon: '🏘', label: '版面', title: '版面選擇(3 格):點一下打開,再點一次關閉', scope: 'all', special: 'slots' },
   { key: 'edit', icon: '🔨', label: '布置', title: '草稿布置(單一草稿,存到版面格)', scope: 'all', special: 'edit' },
   { key: 'hide', icon: '👁', label: '建築', title: '隱藏建築（整地用，H）', top: true, scope: 'all', target: 'btnHide' },
   { key: 'fish', icon: '🎣', label: '釣魚', title: '釣魚', top: true, scope: 'estate', target: 'btnFish', gate: 'fishing' },
@@ -309,6 +309,7 @@ function uiSideAct(key) {
 // 邊欄按鈕跟隨原按鈕的隱藏與狀態(定時同步;行為仍由原按鈕負責)
 function syncSideBar() {
   if (document.hidden) return;
+  uiSyncPlacing();
   syncFeatureGate();
   editSyncUi();
   const side = document.getElementById('sideBar');
@@ -328,7 +329,7 @@ function syncSideBar() {
     } else if (it.special === 'slots') {
       const camp = game.mode === 'battleDesign';
       icon = camp ? '⚔' : '🏘';
-      label = camp ? '戰鬥' : '經營';
+      label = camp ? '戰鬥' : '版面';
     }
     let hid = it.target ? (!orig || !!orig.hidden) : false;
     if (it.special === 'slots') hid = typeof slotPopAvail === 'function' ? !slotPopAvail() : true;
@@ -1175,6 +1176,8 @@ function setTool(id) {
   if (hide.on && id !== null && (OBJECTS[id] || uiIsCombo(id)) && !toggleHide(false)) return;
   draftDiscard();
   closeSettle();
+  // 進入放置:先收起浮卡(版面格 / 預覽卡 / 縣丞卡),免得第一下點地圖被「點外關卡」吃掉
+  if (id !== null && typeof panelCloseCardsAny === 'function') panelCloseCardsAny();
   ui.tool = id;
   const key = id === null ? '' : varLeader(id);
   document.querySelectorAll('#toolbar button').forEach(b => {
@@ -1275,7 +1278,7 @@ function placeFailReason(type, x, y, rot) {
   const lk = progLockText(type);
   if (lk) return lk;
   const cap = capOf(type);
-  if (cap !== null && countObjects(type) >= cap) return OBJECTS[type].name + '最多只能蓋 ' + cap + ' 座';
+  if (cap !== null && countObjects(type) >= cap) return OBJECTS[type].name + '最多只能蓋 ' + cap + ' 座' + (typeof capMoreText === 'function' ? capMoreText(type) : '');
   const [w, h] = footprint(type, rot);
   if (x < 0 || y < 0 || x + w > boardW() || y + h > boardH()) return '超出邊界';
   if (!landFits(x, y, w, h)) return '超出城市土地範圍';
@@ -1296,7 +1299,7 @@ function pendFailReason(type, x, y, rot, skip) {
   const lk = progLockText(type);
   if (lk) return lk;
   const cap = capOf(type);
-  if (cap !== null && countObjects(type) + pendCount(type, skip) >= cap) return d.name + '最多只能蓋 ' + cap + ' 座（含待購）';
+  if (cap !== null && countObjects(type) + pendCount(type, skip) >= cap) return d.name + '最多只能蓋 ' + cap + ' 座（含待購）' + (typeof capMoreText === 'function' ? capMoreText(type) : '');
   const [w, h] = footprint(type, rot);
   if (x < 0 || y < 0 || x + w > boardW() || y + h > boardH()) return '超出邊界';
   if (!landFits(x, y, w, h)) return '超出城市土地範圍';
@@ -1818,6 +1821,7 @@ function onPointerEnd(e) {
 
 // 瀏覽模式輕點建築:研究院開科研面板;其他只做輕微高亮(不開任何選單)。居民點擊(lifeTap)優先
 function tapObjectAt(sx, sy) {
+  const tagPrev = typeof bldTagTake === 'function' ? bldTagTake() : null;   // 建築名稱標籤(bldtag.js):任何輕點先收起,同一時間只一個
   if (typeof chainVisTap === 'function' && chainVisTap(sx, sy)) return;   // 瓶頸圖示(chainvis.js)
   if (typeof lifeTap === 'function' && lifeTap(sx, sy)) return;
   const c = screenToCell(sx, sy);
@@ -1825,6 +1829,7 @@ function tapObjectAt(sx, sy) {
   const n = world.occ[idx(c.x, c.y)];
   if (!n) return;
   const o = world.objects[n - 1];
+  if (typeof bldTagTap === 'function' && bldTagTap(o, tagPrev)) return;   // 有室內:第一下顯示標籤 +〔進入〕;再點同一棟:收起
   if (typeof interiorPackTap === 'function' && interiorPackTap(o)) return;   // 室內第一批:議事廳 / 研究院 / 工坊 / 客棧 / 縣衙(不可用時退回下面原行為)
   if (typeof interiorPack2Tap === 'function' && interiorPack2Tap(o)) return;   // 室內第二批:學宮 / 倉廩 / 醫署藥肆 / 市集 / 驛站 / 觀星臺(不可用時退回下面原行為)
   if (typeof lordhallTap === 'function' && lordhallTap(o)) return;
@@ -2270,7 +2275,18 @@ function mfAct() {
   else if (want === 'browse') setTool(uiLastPlaced);
   syncModeFloat();
 }
+// 放置中(經營板選了工具,或有草稿虛影 —— 含移動已蓋建築):body.ui-placing,CSS 收起與放置無關的側欄項與浮動卡片
+// (推薦卡非教學時隱藏、教學時縮成一行;縣丞氣泡、加到主畫面提示隱藏;縣丞小臉保留)。不改任何狀態,離開放置即還原
+function uiPlacingNow() {
+  if (typeof game === 'undefined' || !game || game.mode !== 'estate' || uiIsPhoto()) return false;
+  return !!draft || (ui.tool !== null && !isCampTool(ui.tool));
+}
+function uiSyncPlacing() {
+  const b = document.body;
+  if (b && b.classList) b.classList.toggle('ui-placing', uiPlacingNow());
+}
 function syncModeFloat() {
+  uiSyncPlacing();
   const btn = document.getElementById('modeFloat');
   if (!btn) return;
   const want = mfWanted();
@@ -2355,7 +2371,7 @@ function updatePendBar() {
 // ── 已蓋建築:按住拿起 → 拖曳 → 放開(合法=落地、不合法=彈回原位 + toast);不拖曳放開 = 編輯狀態 ──
 // 草稿虛影(新建與移動共用)旁的浮動圖示 #draftFloat:新建 ↻ ✓ ✕;編輯已蓋建築 ↻ 🗑 ✓ ✕
 const HOLD_MS = 450, HOLD_MOVE_PX = 10, BOUNCE_MS = 250;
-const FLOAT_CELL = 42;   // 每顆圖示鈕 42px(含透明 padding 的點擊範圍),2×2 排列
+const FLOAT_CELL = 44;   // 每顆圖示鈕 44px(含透明 padding 的點擊範圍,觸控 ≥ 44px),2×2 排列
 function holdEligible() {
   return (game.mode === 'estate' || game.mode === 'battleDesign') && ui.tool === null && !hide.on && !uiIsPhoto() &&
     (!game.backup || !!game.backup.draft);
@@ -2795,6 +2811,7 @@ function draftFloatPlace(el) {
 }
 // 每個 draw 後呼叫(render.js)與草稿狀態改變時呼叫;位置沒變就不重算
 function draftFloatSync() {
+  if (typeof bldTagSync === 'function') bldTagSync();   // 建築名稱標籤跟著建築移動(bldtag.js)
   const el = document.getElementById('draftFloat');
   if (!el) return;
   if (!draftFloatVisible()) {
