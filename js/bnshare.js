@@ -8,7 +8,7 @@
 // 全域:BNS bnsOpen bnsClose bnsIsOpen bnsBack bnsBarBtn bnsDo bnsRender bnsOnResult bnsEncode bnsDecode bnsMyTeam bnsPackTeam bnsSpecs bnsDuelRec bnsFight bnsReplay bnsReportData bnsDataVer bnsPref bnsCheckHash
 
 // LDB2(2026-11-06):單位陣列第 18 欄 = 研兵等級(兵書 / 傳授學到的戰法照舊在學習戰法欄);內層 v:2。
-// 2026-11-09 決議(回合上限 50):不保留舊碼。格式版本(LDB?)或資料 / 規則版本(dv)與目前不同 → 一律拒絕,不再嘗試重打。
+// 2026-11-09 決議(回合上限 50 → 10、新增機率閃避):不保留舊碼。格式版本(LDB?)或資料 / 規則版本(dv)與目前不同 → 一律拒絕,不再嘗試重打。
 var BNS = {
   magic: 'LDB2', oldMsg: '這是舊版規則的碼,已不能使用,請對方用新版重新產生', drillPer: 0.02, drillMax: 5, eng: 1, maxIn: 8000, maxRaw: 32768, maxTeam: 3000, maxRep: 6000, stdGr: 3, prefKey: 'lorddomain.bnshare.pref',
   el: null, tab: 'share', inp: { chal: '', rep: '' }, msg: '', msgBad: false, busy: false, my: null, myCode: '', chk: null, last: null, rcode: '', duel: null, rep: null, dv: '', pref: null, n: 0, inv: null, invEl: null, invTry: 0
@@ -171,7 +171,7 @@ function bnsNormUnit(a, warn) {
     else warn.push('「' + nm + '」有不認識的戰法,已略過');
   });
   if (bad) warn.push('「' + nm + '」有 ' + bad + ' 項不認識的職業或詞條,已略過');
-  U.troop = (typeof a[13] === 'string' && BN_DATA.troops[a[13]]) ? a[13] : '';
+  U.troop = bnTroopNorm(a[13]);
   return U;
 }
 function bnsNormTeam(o, warn) {

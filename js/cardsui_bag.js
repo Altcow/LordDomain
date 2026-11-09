@@ -104,7 +104,7 @@ function cuBagHtml(cs) {
   h += '<div class="cusub">抽到的卡直接加入名冊;名冊滿了才放卡包,名冊有空位會自動補進。<b>卡片熔爐</b>:放入不要的卡 → 預覽可得碎片 → 熔鍊。碎片可到名冊詳情強化武將(升星)、在下方兌換指名券,也用於學院進修。</div>';
   if (cu.omsg) h += '<div class="cuovn">' + cuEsc(cu.omsg) + '</div>';
   h += cuOverHtml(cs);
-  if (!cardsBagCanOpen(cs)) h += '<div class="cuwarn">名冊、卡包與溢出區空位合計不足 ' + CARD_BAG.batchNeed + ' 張,新批暫存不開;請先遣散或熔鍊幾張。</div>';
+  if (!cardsBagCanOpen(cs)) h += '<div class="cuwarn">名冊、卡包與溢出區空位合計不足 ' + CARD_BAG.batchNeed + ' 張,先不能抽卡(次數不會扣);請先遣散或熔鍊幾張。</div>';
   else if (cardsBagRoom(cs) < CARD_BAG.batchNeed) h += '<div class="cusub">卡包空位不足 ' + CARD_BAG.batchNeed + ' 張:多出的卡會進溢出區(24 小時內沒空位納入就熔成碎片)。</div>';
   if (typeof furnaceUiOpen === 'function') h += '<button class="cub" data-a="tofurnace">🔥 前往卡片熔爐</button>';   // 熔爐面板(furnaceui.js)
   left = cardsExchangeLeft(cs, cuNow());

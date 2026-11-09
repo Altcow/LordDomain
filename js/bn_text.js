@@ -21,7 +21,7 @@ var BNT_TRIG = {
 var BNT_ST = {
   burn: '燃燒', poison: '中毒', bleed: '流血', stun: '暈眩', sleep: '睡眠', paralyze: '麻痺', bind: '定身', silence: '沉默', fear: '威懾', taunt: '嘲諷', mark: '標記', timid: '怯戰', confuse: '擾亂',
   atk_down: '攻擊下降', def_down: '防禦下降', spd_down: '速度下降', rate_down: '發動率下降', rate_up: '發動率提升', debuff_hit: '命中下降', wx_mark: '五行印', invert: '陰陽互換',
-  atk_up: '攻擊提升', def_up: '防禦提升', spd_up: '速度提升', crit_up: '暴擊提升', stealth: '隱匿', evade: '規避', shield: '護盾', ward: '抵禦', undying: '不倒', guard: '援護', counter: '反擊', heal_block: '禁療', heal_reduce: '治療降低', reorder: '插隊', swap: '換位', control: '控制類狀態', debuff: '減益類狀態', dot: '持續傷害類狀態', any: '任何負面狀態'
+  atk_up: '攻擊提升', def_up: '防禦提升', spd_up: '速度提升', crit_up: '暴擊提升', stealth: '隱匿', evade: '規避', dodge_rate: '閃避', shield: '護盾', ward: '抵禦', undying: '不倒', guard: '援護', counter: '反擊', heal_block: '禁療', heal_reduce: '治療降低', reorder: '插隊', swap: '換位', control: '控制類狀態', debuff: '減益類狀態', dot: '持續傷害類狀態', any: '任何負面狀態'
 };
 var BNT_FLAW = {
   no_inspire: '不受友方鼓舞類增益', forced_taunt_target: '被嘲諷時必定攻擊嘲諷者', act_last: '總是最後出手', late_dmg_taken: '戰鬥後期受傷增加', friendly_fire: '偶爾誤傷友軍',
@@ -183,6 +183,7 @@ function bntClause(kind, target, power, P, d, isExtra) {
     case 'reorder': return target === 'self' || !target ? '自身下一次行動插隊最先出手(速度 +' + Math.round(bntKT('reorder_spd', pw)) + ')' : '令' + bntTg(target, 'ally_one') + '立即插隊出手';
     case 'swap': return target === 'enemy_front' ? '使敵方前排一人與後排一人互換站位' : (target === 'ally_lowest' ? '與兵力最低的友軍交換站位,替其頂上火線' : '與我方一名後排交換站位');
     case 'evade': return bntTg(target, 'self') + '規避接下來 ' + bntS(P.charges, bntKT(kind, pw)) + ' 次攻擊(完全不受傷)' + (typeof P.dur === 'number' ? ',限 ' + P.dur + ' 回合內' : '');
+    case 'dodge_rate': return bntTg(target, 'self') + '獲得閃避:被攻擊時有 ' + bntPct(typeof P.val === 'number' ? P.val : bntKT(kind, pw)) + ' 機率閃開(持續傷害與反擊除外;沉睡中無效;「無視規避」與揭穿可破解)' + (typeof P.dur === 'number' ? ',持續 ' + P.dur + ' 回合' : dur);
     case 'stealth': return bntTg(target, 'self') + '進入隱匿' + (P.dur === 'battle' ? '(全程)' : ' ' + bntS(P.dur, bntKT('stealth_dur', pw)) + ' 回合') + ':不會被敵方' + (P.vs === 'single' ? '單體' : (Array.isArray(P.vs) ? '狙擊' : '單體')) + '技能選為目標(範圍技仍會命中)';
     case 'immune': s = bntList(P.types); return bntTg(target, 'self') + '免疫' + (s || '指定狀態') + (P.firstOnly ? '(僅首次)' : '');
     case 'resist': return '獲得 ' + bntS(P.layers, 1) + ' 層抵禦(可擋下下一次' + (P.guard ? bntStName(P.guard) : '負面效果') + '),持續 ' + bntS(P.dur, BN_DATA.ward.dur) + ' 回合';
@@ -445,7 +446,7 @@ var BNT_TS = { self: '自身', ally_one: '我單體', ally_all: '我全隊', all
   enemy_all: '敵全隊', enemy_lowest: '敵最弱', enemy_highest_atk: '敵最強', enemy_cross: '敵十字', enemy_col: '敵縱列', members: '夥伴' };
 var BNT_KS = {
   heal_single: '回復兵力', heal_all: '回復兵力', heal_hot: '持續回復', shield_single: '加護盾', shield_all: '加護盾', cleanse: '解除負面', revive: '復活', dispel: '驅散增益', counter: '反擊', guard: '承傷', reorder: '插隊出手',
-  swap: '換位', rate_up: '發動率提升', rate_down: '發動率下降', buff_steal: '偷取增益', debuff_hit: '命中下降', invert: '陰陽互換', wx_mark: '五行印', evade: '規避攻擊', stealth: '隱匿', immune: '免疫控制', resist: '獲得抵禦', heal_reduce: '治療降低', cd_reduce: '縮短冷卻', cd_reset: '冷卻歸零', extra_turn: '額外行動', self_sacrifice: '自損換資源',
+  swap: '換位', rate_up: '發動率提升', rate_down: '發動率下降', buff_steal: '偷取增益', debuff_hit: '命中下降', invert: '陰陽互換', wx_mark: '五行印', evade: '規避攻擊', dodge_rate: '機率閃避', stealth: '隱匿', immune: '免疫控制', resist: '獲得抵禦', heal_reduce: '治療降低', cd_reduce: '縮短冷卻', cd_reset: '冷卻歸零', extra_turn: '額外行動', self_sacrifice: '自損換資源',
   summon: '召喚援兵', trap: '布下伏兵', stack_charge: '累積層數', undying: '死戰不倒', stat_mod: '微調能力', execute_chain: '擊倒連動', stun: '暈眩', sleep: '沉睡', paralyze: '麻痺', silence: '沉默', timid: '怯戰', bind: '定身', confuse: '擾亂',
   taunt: '嘲諷', fear: '威懾', mark: '標記易傷', dot_burn: '燃燒', dot_poison: '中毒', dot_bleed: '流血', dot_spread: '火勢蔓延'
 };
@@ -512,5 +513,39 @@ var BN_TEXT_CSS = '#cardsPanel .bnsec{margin-top:6px;font-size:13px}#cardsPanel 
   '#cardsPanel .bnrole{font-style:normal;font-size:10px;opacity:.7}#cardsPanel .bnskm{font-size:12px;opacity:.8;overflow-wrap:anywhere}' +
   '#cardsPanel .cutd{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px}#cardsPanel .cutx{font-size:11.5px;opacity:.85;overflow-wrap:anywhere;flex:1 1 140px;min-width:0}';
 
+// ───────── 兵種克制(資料取自 BN_DATA.prey;戰前布陣 / 圖鑑 / 戰報共用)─────────
+// a 打 d 的關係:1 = a 克制 d(a 傷害 ×prey>1)、−1 = a 被 d 克制(a 傷害 ×prey<1,或 d 克制 a)、0 = 無。未知兵種 = 0
+function bnPreyRel(a, d) {
+  var P = BN_DATA.prey, x = P[a] && P[a][d], y = P[d] && P[d][a];
+  if (x > 1) return 1;
+  if (x < 1 || y > 1) return -1;
+  return 0;
+}
+// troop 對一串兵種(敵方單位的兵種陣列)的克制數:{up: 克制幾個, down: 被幾個克制}
+function bnPreyCounts(troop, others) {
+  var o = { up: 0, down: 0 };
+  (others || []).forEach(function (t) { var r = bnPreyRel(troop, t); if (r > 0) o.up++; else if (r < 0) o.down++; });
+  return o;
+}
+// 克制關係白話:『槍克騎、騎克盾、騎克謀、盾克弓、弓克槍』(順序依 troopList)
+function bnPreyText() {
+  var P = BN_DATA.prey, out = [];
+  BN_DATA.troopList.forEach(function (a) { BN_DATA.troopList.forEach(function (d) { if (P[a] && P[a][d] > 1) out.push(a + '克' + d); }); });
+  return out.join('、');
+}
+// 倍率說明:『克制方物理傷害 +25%、被克制方 −20%;謀略(法術)傷害不吃兵種克制』
+function bnPreyRule() {
+  var P = BN_DATA.prey, hi = 1, lo = 1;
+  Object.keys(P).forEach(function (a) { Object.keys(P[a]).forEach(function (d) { if (P[a][d] > hi) hi = P[a][d]; if (P[a][d] < lo) lo = P[a][d]; }); });
+  return '克制方的物理傷害 +' + Math.round((hi - 1) * 100) + '%、被克制方 −' + Math.round((1 - lo) * 100) + '%;謀略(法術)傷害不吃兵種克制';
+}
+// 各兵種的克制表:[{t, beats:[克制哪些兵種], beaten:[被哪些兵種克制]}](順序依 troopList)
+function bnPreyRows() {
+  return BN_DATA.troopList.map(function (t) {
+    var b = [], c = [];
+    BN_DATA.troopList.forEach(function (d) { var r = bnPreyRel(t, d); if (r > 0) b.push(d); else if (r < 0) c.push(d); });
+    return { t: t, beats: b, beaten: c };
+  });
+}
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { bnSkillText: bnSkillText, bnTraitText: bnTraitText };
+if (typeof module !== 'undefined' && module.exports) module.exports = { bnSkillText: bnSkillText, bnTraitText: bnTraitText, bnPreyRel: bnPreyRel, bnPreyText: bnPreyText, bnPreyRows: bnPreyRows, bnPreyRule: bnPreyRule, bnPreyCounts: bnPreyCounts };

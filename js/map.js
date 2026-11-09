@@ -1277,14 +1277,20 @@ function pendClear() {
   pendRebuild();
 }
 
-// 一次購買全部待購。成功 { ok:true, n, cost }；資源不足 { ok:false, why:'res' }；
-// 某件已無法放置 { ok:false, why:'place', i }（兩種失敗都不扣款、不改 world、待購保留）
+// 一次購買全部待購。成功 { ok:true, n, cost, mat }；資源不足 { ok:false, why:'res' }；庫房材料不足(bmc.js) { ok:false, why:'mat', short }；
+// 某件已無法放置 { ok:false, why:'place', i }（失敗都不扣款、不改 world、待購保留）
 function pendCommit() {
   const total = pendTotal();
   if (!canAfford(total)) return { ok: false, why: 'res' };
   for (let i = 0; i < pend.list.length; i++) {
     const o = pend.list[i];
     if (!canPlace(o.type, o.x, o.y, o.rot)) return { ok: false, why: 'place', i: i };
+  }
+  const mat = typeof bmcPendTotal === 'function' && typeof cityGoodsReq === 'function' ? bmcPendTotal() : null;   // 建築材料成本(bmc.js):整批庫房貨品,不足 = 全部不放(全有或全無)
+  if (mat && Object.keys(mat).length) {
+    const chk = cityGoodsReq(mat);
+    if (!chk.ok) return { ok: false, why: 'mat', short: chk.short };
+    cityGoodsSpend(mat);
   }
   spend(total);
   const n = pend.list.length;
@@ -1295,7 +1301,7 @@ function pendCommit() {
   });
   rebuildOcc();
   pendClear();
-  return { ok: true, n: n, cost: total };
+  return { ok: true, n: n, cost: total, mat: mat && Object.keys(mat).length ? mat : null };
 }
 
 // 隱藏建築（PLAN 12.17）：不存檔。bad = 位置不合法的已建物件索引；badCell = 其佔格（渲染標紅用）

@@ -15,7 +15,7 @@ var CA_FRAME = [
 ];
 var CA_BG_KEYS = ['wei', 'shu', 'wu', 'yellow', 'neutral'];    // CARD_FAC 索引 → bg_<key>.webp
 var CA_FAC_KEYS = ['wei', 'shu', 'wu', 'yellow', 'neutral'];   // CARD_FAC 索引 → fac_<key>.webp
-var CA_TROOP_ICON = { '盾': 'shield', '步': 'inf', '騎': 'cav', '弓': 'arc', '謀': 'str' };   // 兵種 → job_<key>.webp(其餘 gen)
+var CA_TROOP_ICON = { '盾': 'shield', '槍': 'inf', '騎': 'cav', '弓': 'arc', '謀': 'str' };   // 兵種 → job_<key>.webp(其餘 gen)
 var CA_BG_FIG_ONLY = true;   // true:名人用陣營背景、路人用 bg_generic;false:路人也用陣營背景
 var caImgs = {};             // src → { st: 0 載入中 / 1 成功 / -1 失敗, im: Image }
 var caCbs = [];

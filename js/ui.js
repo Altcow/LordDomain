@@ -208,6 +208,7 @@ const UI_SIDE_ITEMS = [
   { key: 'sandbox', icon: '⚔', label: '沙盤', title: '沙盤推演', top: true, scope: 'camp', target: 'btnSandbox' },
   { key: 'shop', icon: '🏪', label: '商店', title: '商店', scope: 'estate', target: 'btnShop', gate: 'shop' },
   { key: 'tech', icon: '📜', label: '科技', title: '科技樹與研發序列', scope: 'estate', special: 'tech' },
+  { key: 'cards', icon: '🃏', label: '卡包', title: '卡包:抽卡、名冊、卡包與指名(次數隨時間累積)', scope: 'estate', special: 'cards' },
   { key: 'goods', icon: '📦', label: '庫房', title: '庫房(貨品與工坊狀態)', scope: 'estate', target: 'btnGoods' },
   { key: 'caravan', icon: '🛻', label: '走鏢', title: '走鏢(鏢師、馬車與高階貨品)', scope: 'estate', target: 'btnCaravan', gate: 'caravan' },
   { key: 'bn', icon: '⚔', label: '戰鬥', title: '戰鬥(5v5 回合制練習戰)', scope: 'estate', special: 'bn', gate: 'battleA', showLocked: true },
@@ -295,6 +296,7 @@ function uiSideAct(key) {
   else if (it.special === 'edit') editSideAct();
   else if (it.special === 'slots') { if (typeof slotPopToggle === 'function') slotPopToggle(); }
   else if (it.special === 'tech') { if (typeof techPanelToggle === 'function') techPanelToggle(); }
+  else if (it.special === 'cards') { if (typeof cardsUiToggle === 'function') cardsUiToggle('O'); }
   else if (it.special === 'search') { if (typeof srToggle === 'function') srToggle(); }
   else if (it.special === 'photo') uiSetMode('photo');
   else if (it.special === 'bn') { if (!isUnlocked('feature', it.gate)) uiBattleLockToast(); else if (typeof bnUiOpen === 'function') bnUiOpen(); }
@@ -339,11 +341,11 @@ function syncSideBar() {
     b.style.opacity = locked ? '.45' : '';
     b.setAttribute('aria-disabled', locked ? 'true' : 'false');
     const slotsOn = it.special === 'slots' && typeof slotPopIsOpen === 'function' && slotPopIsOpen();
-    b.classList.toggle('on', it.special === 'edit' ? !!ui.editing : (it.special === 'slots' ? slotsOn : !!(orig && orig.classList.contains('on'))));
+    b.classList.toggle('on', it.special === 'edit' ? !!ui.editing : (it.special === 'slots' ? slotsOn : (it.special === 'cards' ? (typeof cu !== 'undefined' && !!cu.open) : !!(orig && orig.classList.contains('on')))));
     b.querySelector('.ic').textContent = icon;
     b.querySelector('.lb').textContent = label;
   });
-  // 正常模式第一層最多 UI_SIDE_NORMAL_MAX 顆:拍照一律收進展開列;超量再依序捨棄 季節 → 存檔(戰鬥鈕不捨棄,未達條件時灰掉);精簡模式的展開列都還在;頂列項目與另一畫面的項目不算
+  // 正常模式第一層最多 UI_SIDE_NORMAL_MAX 顆:拍照一律收進展開列;超量再依序捨棄 季節 → 存檔 → 精簡(收進展開列;戰鬥鈕、卡包鈕不捨棄,未達條件時灰掉);精簡模式的展開列都還在;頂列項目與另一畫面的項目不算
   if (!uiIsCompact()) {
     const camp = game.mode === 'battleDesign';
     const vis = key => {
@@ -355,7 +357,7 @@ function syncSideBar() {
     const overflow = hasPhoto || count() > UI_SIDE_NORMAL_MAX;
     if (!uiSideExpanded) {
       if (hasPhoto) vis('photo').hidden = true;
-      ['season', 'save'].forEach(k => { if (count() > UI_SIDE_NORMAL_MAX && vis(k)) vis(k).hidden = true; });
+      ['season', 'save', 'mode'].forEach(k => { if (count() > UI_SIDE_NORMAL_MAX && vis(k)) vis(k).hidden = true; });
     }
     const ex = document.getElementById('sideExpand');
     if (ex) { ex.hidden = !overflow; ex.textContent = uiSideExpanded ? '▴ 收合' : '▾ 全部'; ex.title = uiSideExpanded ? '收合側欄' : '展開全部功能'; side.classList.toggle('expanded', uiSideExpanded && overflow); }
@@ -1125,8 +1127,9 @@ function addToolButton(bar, id, icon, name, def) {
     title += ' 每格 ' + costText(TERRAIN_COST[id]);
   }
   if (def) {
-    html += '<span class="cost">' + costText(objCost(id)) + '</span>';
+    html += '<span class="cost">' + (costText(objCost(id)) || (typeof bmcMenuText === 'function' ? bmcMenuText(id) : '')) + '</span>';
     title += ' ' + costText(objCost(id));
+    if (typeof bmcCostText === 'function' && bmcCostText(id)) title += ' 材料:' + bmcCostText(id, true) + '(需要/庫存見建造預覽)';
     if (def.prod) title += ' 產出 ' + prodText(def.prod);
     if (def.max) title += ' (上限 ' + def.max + ' 座)';
     if (def.unit && CAMP_POP[def.unit]) title += ' 出征容量 +' + CAMP_POP[def.unit];
@@ -1238,7 +1241,7 @@ function previewOk(t, x, y) {
   if (uiIsCombo(t)) return true;
   const i = idx(x, y);
   if (hide.on) return previewOkHidden(t, x, y, i);
-  if (OBJECTS[t]) return canPlacePending(t, x, y, ui.rot, -1) && canAfford(addCost(pendTotal(), objCost(t)));
+  if (OBJECTS[t]) return canPlacePending(t, x, y, ui.rot, -1) && canAfford(addCost(pendTotal(), objCost(t))) && !(typeof bmcShortFor === 'function' && bmcShortFor(t));
   if (t === 'raise') return !world.occ[i] && !pend.occ[i] && world.height[i] < MAX_H;
   if (t === 'lower') return !world.occ[i] && !pend.occ[i] && world.height[i] > 0;
   if (t === 'erase') return !!world.occ[i] || !!pend.occ[i] || (isPavedTerrain(world.terrain[i]) || isLiveTerrain(world.terrain[i]));
@@ -1543,6 +1546,11 @@ function applyOne(x, y) {
       denyCost(need);
       return false;
     }
+    const ms = typeof bmcShortFor === 'function' ? bmcShortFor(t) : null;
+    if (ms) {
+      if (!(gs.op && gs.op.poor)) { if (gs.op) gs.op.poor = true; bmcDeny(ms, t); }
+      return false;
+    }
     pendAdd(t, x, y, ui.rot, uiSkinPref(t));
     uiNotePlaced(t);
     if (progFreeBuild() && !commitPending()) pendClear();
@@ -1597,7 +1605,7 @@ function applyOne(x, y) {
     removeObjectAt(x, y, true);
     if (typeof auPlay === 'function') auPlay('remove');
     if (o.type === LAB_TYPE && world.tech.cur) showToast('已拆除 研究院，退還 ' + refundText(refund) + '；研發暫停，重建後繼續');
-    else showToast('已拆除 ' + OBJECTS[o.type].name + '，退還 ' + refundText(refund));
+    else showToast('已拆除 ' + OBJECTS[o.type].name + '，退還 ' + refundText(refund) + (typeof bmcDemolishNote === 'function' && bmcDemolishNote(o.type) ? '（不退還材料）' : ''));
     return true;
   }
   if ((isPavedTerrain(world.terrain[i]) || isLiveTerrain(world.terrain[i]))) {
@@ -1885,7 +1893,7 @@ function updateResBar() {
   const base = pendTotal();
   document.querySelectorAll('#toolbar button[data-tool]').forEach(b => {
     const d = OBJECTS[b.getAttribute('data-tool')];
-    if (d) b.classList.toggle('poor', !canAfford(addCost(base, objCost(b.getAttribute('data-tool')))));
+    if (d) b.classList.toggle('poor', !canAfford(addCost(base, objCost(b.getAttribute('data-tool')))) || (typeof bmcPoor === 'function' && bmcPoor(b.getAttribute('data-tool'))));
   });
   if (ui.shopOpen) updateShop();
   if (ui.techOpen) updateTechPanel();
@@ -2438,7 +2446,8 @@ function draftCheck(d) {
 function draftSync() {
   if (!draft) return;
   draft.reason = draftCheck(draft);
-  draft.ok = !draft.reason;
+  draft.mat = !draft.orig && !draft.combo && typeof bmcShortFor === 'function' ? bmcShortFor(draft.type) : null;   // 缺料另算,不進 draftCheck(旋轉才不會誤報空間不足)
+  draft.ok = !draft.reason && !draft.mat;
   updatePendBar();
 }
 // 草稿占格(組合 = 整組外框;單件 = footprint)
@@ -2571,6 +2580,11 @@ function draftConfirm() {
     objPost();
     showToast(moved ? '已移動 ' + OBJECTS[o.type].name : '已更換外觀' + (nSkin > 1 ? '(' + nSkin + ' 件)' : ''));
   } else {
+    const ms = typeof bmcShortFor === 'function' ? bmcShortFor(d.type) : null;
+    if (ms) {
+      bmcDeny(ms, d.type);
+      return;
+    }
     draft = null;
     pendAdd(d.type, d.x, d.y, d.rot, d.skin);
     uiNotePlaced(d.type);
@@ -2648,7 +2662,7 @@ function draftDemolish() {
   const refund = refundOf(o.type);
   const labBusy = o.type === LAB_TYPE && world.tech.cur;
   const msg = (costText(refund) ? '退還 ' + costText(refund) + '（依拆除規則，約為造價的一半）。' : '免費建造，不退款。') +
-    (labBusy ? '研究院研發將暫停，重建後繼續。' : '');
+    (labBusy ? '研究院研發將暫停，重建後繼續。' : '') + (typeof bmcDemolishNote === 'function' ? bmcDemolishNote(o.type) : '');
   const doIt = function () {
     if (draft && draft.orig === o) draftDiscard();
     if (world.objects.indexOf(o) < 0) return;
@@ -2701,6 +2715,7 @@ function onFloatClick(e) {
 function updateDraftBar() {
   const bar = document.getElementById('draftBar');
   if (!bar) return;
+  if (typeof bmcGapSync === 'function') bmcGapSync();
   if (!draft) {
     const li = uiIsCombo(ui.tool) && typeof comboLastInfo === 'function' ? comboLastInfo() : null;
     if (li) {
@@ -2739,10 +2754,16 @@ function updateDraftBar() {
   const d = OBJECTS[draft.type];
   const mv = !!draft.orig;
   const hint = mv ? (draft.edit ? '編輯中：↻ 旋轉　🗑 拆除　✓ 完成　✕ 取消' : '拖到想要的位置，放開即放下') : '拖到想要的位置，按 ✓ 放下';
-  const msg = draft.reason ? '✕ ' + draft.reason : hint;
-  const cost = mv ? '' : '　' + (costText(objCost(draft.type)) || '免費');
+  if (!mv && typeof bmcShortFor === 'function') {   // 庫房貨品會變動,草稿列更新時重算缺料
+    draft.mat = bmcShortFor(draft.type);
+    draft.ok = !draft.reason && !draft.mat;
+  }
+  const matShort = !mv && !draft.reason && draft.mat ? draft.mat : null;
+  const msg = draft.reason ? '✕ ' + draft.reason : (matShort ? '✕ 缺 ' + bmcShortText(matShort) : hint);
+  const bmcRow = !mv && typeof bmcCostHtml === 'function' && bmcCostHtml(draft.type) ? '<div class="drow mat">材料　' + bmcCostHtml(draft.type, true) + '</div>' : '';
+  const cost = mv ? '' : '　' + (costText(objCost(draft.type)) || (bmcRow ? '' : '免費'));
   const html = '<div class="drow top"><span class="dname">' + d.icon + ' ' + d.name + (mv ? '（移動）' : cost) + '</span>' +
-    '<small class="dmsg' + (draft.reason ? ' bad' : '') + '">' + msg + '</small></div>';
+    '<small class="dmsg' + (draft.reason || matShort ? ' bad' : '') + '">' + msg + '</small></div>' + bmcRow;
   if (html !== lastDraftHtml) {
     lastDraftHtml = html;
     bar.innerHTML = html;
@@ -2870,11 +2891,13 @@ function commitPending() {
   if (r.ok) {
     saveWorld();
     if (typeof auPlay === 'function') auPlay('place');
-    showToast('已建造 ' + r.n + ' 件，花費 ' + feeText(r.cost));
+    showToast('已建造 ' + r.n + ' 件，花費 ' + feeText(r.cost) + (r.mat ? '，用掉 ' + bmcSpentText(r.mat) : ''));
     if (!hadLab && labBuilt()) showToast('研究院落成！切到 ✋ 瀏覽，點一下研究院即可研發');
   } else if (r.why === 'res') {
     beep();
     showToast('資源不足：缺 ' + costText(missingOf(total)));
+  } else if (r.why === 'mat') {
+    bmcDeny(r.short, pend.list.length === 1 ? pend.list[0].type : '');
   } else {
     pend.sel = r.i;
     pend.moving = false;

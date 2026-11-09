@@ -101,7 +101,8 @@ function bpvRender() {
   d = OBJECTS[bpv.id];
   txt = el.querySelector('.bpv-txt');
   bpv.info = { name: d.name, foot: bpvFoot(bpv.id, bpv.rot), effect: bpvEffectText(bpv.id), cost: typeof feeText === 'function' && typeof objCost === 'function' ? feeText(objCost(bpv.id)) : '' };
-  html = '<b>' + bpvEsc(bpv.info.name) + '</b><span>佔地 ' + bpv.info.foot + '</span><span>' + bpvEsc(bpv.info.effect) + '</span><span>成本 ' + bpvEsc(bpv.info.cost) + '</span>';
+  if (typeof bmcCostText === 'function' && bmcCostText(bpv.id)) bpv.info.cost = bmcCostText(bpv.id);   // 建築材料成本(bmc.js):需要的木 / 石 / 貨品
+  html = '<b>' + bpvEsc(bpv.info.name) + '</b><span>佔地 ' + bpv.info.foot + '</span><span>' + bpvEsc(bpv.info.effect) + '</span><span>' + (typeof bmcCostHtml === 'function' && bmcCostHtml(bpv.id) ? '材料 ' + bmcCostHtml(bpv.id) + '(庫存/需要)' : '成本 ' + bpvEsc(bpv.info.cost)) + '</span>';
   if (txt) txt.innerHTML = html;
   ctl = el.querySelector('.bpv-ctl');
   if (ctl) {

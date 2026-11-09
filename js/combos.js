@@ -253,6 +253,7 @@ function comboPlace(id, x, y, rot, skip) {
   const added = [];
   good.forEach(it => {
     pendAdd(it.type, it.x, it.y, it.rot, it.skin);
+    pend.list[pend.list.length - 1].bmcFree = true;   // 組合不收建築材料成本(bmc.js;設計 §4-4)
     added.push(pend.list[pend.list.length - 1]);
   });
   let objs = added;

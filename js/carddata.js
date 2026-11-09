@@ -87,7 +87,7 @@ var CARD_POST_GROUP = { '農': '工', '工': '工', '商': '商', '文': '文', 
 // 2026-11-09 起酒館 / 縣試的節奏與每批張數改由 CARD_DRAW 決定(periodMs / cap / unit 只留給舊資料參考;batch = 一批最多張數)
 var CARD_VENUE_ORDER = ['T', 'E', 'G'];
 var CARD_VENUES = {
-  T: { id: 'T', name: '酒館', alias: '招賢酒肆', periodMs: 3600000, cap: 48, batch: 7, gr: [65, 30, 5, 0, 0], floor: 1, upper: { gr: 2, zhuan: 0 }, gate: 'tavern', org: 'bu', orgName: '布衣', bFig: 0, aFig: 0, theme: 'wind', unit: '1 歲' },
+  T: { id: 'T', name: '酒館', alias: '招賢酒肆', periodMs: 3600000, cap: 48, batch: 7, gr: [65, 30, 5, 0, 0], floor: 1, upper: { gr: 2, zhuan: 0 }, gate: 'cardpack', org: 'bu', orgName: '布衣', bFig: 0, aFig: 0, theme: 'wind', unit: '1 歲' },
   E: { id: 'E', name: '縣試', alias: '九品中正考課', periodMs: 14400000, cap: 12, batch: 7, gr: [30, 40, 24, 6, 0], floor: 2, upper: { gr: 3, zhuan: 0 }, gate: 'exam', org: 'pin', orgName: '縣試', bFig: 0.16, aFig: 0, theme: 'subject', unit: '4 歲',
        starGr: { 2: [24.6, 40, 27.6, 7.8, 0], 3: [19.2, 40, 31.2, 9.6, 0] } },
   G: { id: 'G', name: '殿試', alias: '天子親策', periodMs: 86400000, cap: 2, batch: 7, gr: [6, 30, 38, 20, 6], floor: 3, upper: { gr: 3, zhuan: 1 }, gate: 'dianshi', org: 'dian', orgName: '徵辟', bFig: 0.16, aFig: 1, theme: 'faction', unit: '1 日' }
@@ -112,20 +112,24 @@ var CARD_COST = { zongBonus: 4 };
 //   舊存檔遷移(cs.v < 2,一次性):酒令 1 → 碎片 wineShard;里程碑原 +10 令 → +mileShard 碎;請回流浪名人原 10 令 → recallShard 碎;遣散路人碎片 = cost × relRate(與舊規則同值)
 //   階梯節點選在簡化科技樹(citysimple.js,預設開)裡仍各自獨立的文教節點:書肆(第 2 時代)→ 東觀校書(第 3)→ 鴻都門學(第 4);
 //   (舉孝廉在簡化樹併入了開酒館 / 考場的節點、月旦評 / 察舉考課 / 太學都併入鴻都門學,所以不用)。完整科技樹同樣有這三個節點。
+//   2026-11-09 改『抽卡次數制』(使用者決議):不再分批。全域一個次數錢包 cs.pl.n(酒館池 T、縣試池 E 共用),每 gap 小時 +size.n 抽(離線依時間補算),累積上限 cap(100;新手禮與關卡贈抽不受上限截斷);
+//   每抽 1 次出 1 張,單抽或連抽(一次最多 maxOne 張走同一段開卡特效)。pity = 連續幾『張』沒出上等,下一張必出(原 5 批 × 4 張 ≈ 20 張);floorMin = 連抽張數 ≥ 此值才套用『批內底線 / 學院生徒』。stock 只留給舊存檔遷移(舊批數 × 當階張數 → 次數)
 var CARD_DRAW = {
-  stock: 2,
+  stock: 2, cap: 100, maxOne: 10, floorMin: 7,
   size: [{ n: 4 }, { n: 5, tech: 'wr_shusi' }, { n: 6, tech: 'e_wuzhu' }, { n: 7, tech: 'ed_hongdu' }],
   gap: [{ h: 24 }, { h: 18, tech: 'wr_shusi' }, { h: 12, tech: 'e_wuzhu' }, { h: 8, tech: 'ed_hongdu' }],
-  pity: 5,
+  pity: 20,
   wineShard: 5, mileShard: 50, recallShard: 50, relRate: 1
 };
+// 首次通關各章頭目關(bn_stages.js 第 6 關)送抽卡次數(寫進任務清單;cs.boss 記錄防重領)
+var CARD_BOSS = { pulls: 10 };
 // 新手禮包(使用者回饋「前期抽卡太小氣」;數值皆 PLACEHOLDER)。新世界第一次開招賢面板時一次性領取,存 cs.starter(cards.js cardsStarter*;舊存檔已有卡片或已畢業教學 = 不適用、不補發)。
 //   pulls 張,分 batches 批開(沿用開批 → 抽卡特效 → 入卡包,不自動熔爐);gr = 禮包每張的基本品階機率(白青藍紫金 %),再套保底:至少 goldGuarantee 張金(名人;魔幻世界優先本族英雄)、另至少 purpleGuarantee 張紫
 //   namedTokens 指名券(指名池還沒研發也能用這幾張);禮包的卡與抽卡一樣直接進名冊(名冊滿了先放卡包)
 //   新手期:領取後的前 nbCards 張(酒館 / 縣試開批的卡)改用 nbGr 品階機率,並有逐張保底:連續 nbPurple − 1 張沒有紫以上 → 下一張必紫;連續 nbGold − 1 張沒有金 → 下一張必金(名人)
 //   (每日一抽後每批 4 張:nbPurple 10 → 8、nbGold 50 → 30,讓前一兩週仍有紫金進帳)
 var CARD_STARTER = {
-  pulls: 20, batches: 3, gr: [20, 40, 30, 10, 0], goldGuarantee: 1, purpleGuarantee: 2, namedTokens: 3,
+  pulls: 36, legacyPulls: 20, batches: 3, gr: [20, 40, 30, 10, 0], goldGuarantee: 1, purpleGuarantee: 2, namedTokens: 3,
   nbCards: 100, nbGr: { T: [52, 30, 10, 6, 2], E: [26, 38, 26, 8, 2] }, nbPurple: 8, nbGold: 30
 };
 var CARD_CFG = {

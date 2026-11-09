@@ -123,7 +123,7 @@ function bnUseful(S, u, inst) {
   if (P.onlyVs && d.vs && !bnEnemies(S, u).some(function (x) { return bnVsMatch(S, d.vs, x); })) return false;   // 只對特定對象才發動(潘鳳遇布)
   return true;
 }
-var BN_BUFFS = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'counter', 'ward', 'amp_atk'];
+var BN_BUFFS = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'dodge_rate', 'counter', 'ward', 'amp_atk'];
 function bnHasBuff(x) { for (var i = 0; i < BN_BUFFS.length; i++) if (x.st[BN_BUFFS[i]] && !(x.st[BN_BUFFS[i]].left >= 900 && BN_BUFFS[i] !== 'ward')) return true; return !!x.st.shield; }
 function bnHasNeg(x) { var k; for (k in x.st) if (BN_NEG[k]) return true; return false; }
 
@@ -412,6 +412,10 @@ function bnApplyEffect2(S, u, eff, res, o) {
     case 'evade':
       for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'evade', { charges: P.charges || bnKT('evade', pw), left: bnDurOf(eff, o, 2) }, { });
       break;
+    case 'dodge_rate':   // 機率閃避:持有者被攻擊時以 val 機率閃開(val = P.val 或依檔位);持續 dur 回合(預設 4);force 以便被『取強者』規則外的刷新也覆蓋
+      v = typeof P.val === 'number' ? P.val : bnKT('dodge_rate', pw);
+      for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'dodge_rate', { val: v, left: bnDurOf(eff, o, 4) }, {});
+      break;
     case 'stealth':
       for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'stealth', { vs: P.vs === undefined ? 'single' : P.vs, left: P.dur === 'battle' ? 999 : bnDurOf(eff, o, bnKT('stealth_dur', pw)), force: true }, { });
       break;
@@ -511,7 +515,7 @@ function bnCleanse(S, t, n, src) {
   return c;
 }
 function bnDispel(S, u, t, n, prefer, stripShield) {
-  var buffs = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'counter', 'ward', 'taunt', 'amp_atk'], i, c = 0, id;
+  var buffs = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'dodge_rate', 'counter', 'ward', 'taunt', 'amp_atk'], i, c = 0, id;
   if (prefer === 'buff_atk' && t.st.atk_up && c < n) { bnStatusRemove(S, t, 'atk_up', 'dispel'); c++; }
   for (i = 0; i < buffs.length && c < n; i++) {
     id = buffs[i];
@@ -1132,7 +1136,7 @@ function bnVsStrip(S, u, vs, targets) {
   for (i = 0; i < targets.length; i++) {
     if (targets[i].side === u.side) continue;
     if (vs.status.indexOf('stealth') >= 0) bnStatusRemove(S, targets[i], 'stealth', 'expose');
-    if (vs.status.indexOf('evade') >= 0) bnStatusRemove(S, targets[i], 'evade', 'expose');
+    if (vs.status.indexOf('evade') >= 0) { bnStatusRemove(S, targets[i], 'evade', 'expose'); bnStatusRemove(S, targets[i], 'dodge_rate', 'expose'); }
   }
 }
 // 連擊段數:hits = 數字或 '2-4';scaleBy 'spd' = 看攻速(速度每高 20 多 1 段,不超過上限)
@@ -1182,7 +1186,7 @@ function bnInvert(S, u, t, n, dir) {
     bnStatusApply(S, u, t, map[k], { val: val, left: left, noRes: true, force: true }, { noExtend: true });
     c++;
   }
-  if (c < n && dir === 'enemy_buff_to_debuff') ['crit_up', 'evade', 'counter'].forEach(function (id) { if (c < n && t.st[id] && !(t.st[id].left >= 900)) { bnStatusRemove(S, t, id, 'invert'); c++; } });
+  if (c < n && dir === 'enemy_buff_to_debuff') ['crit_up', 'evade', 'dodge_rate', 'counter'].forEach(function (id) { if (c < n && t.st[id] && !(t.st[id].left >= 900)) { bnStatusRemove(S, t, id, 'invert'); c++; } });
   if (c < n && dir !== 'enemy_buff_to_debuff') c += bnCleanse(S, t, n - c, null);
   if (c > 0) { bnEv(S, 'react', { id: 'rx_invert', name: '陰陽互換', tgt: t.id }); S.stats.reactions++; }
   return c;

@@ -219,7 +219,7 @@ function cxFigDetailHtml(id) {
   h = '<div class="cx-det"><div class="cx-dh">' + cxAvatar(id, !!ow, it.gr, false) + '<div class="cx-mn"><b class="cx-big">' + cxEsc(it.name) + (it.zi ? '<small>(' + cxEsc(it.zi) + ')</small>' : '') + '</b>' +
     '<small>' + cxEsc(cxGrName(it.gr) + '階・' + cxFacName(it.fac) + (it.f.home ? '・' + it.f.home : '') + (it.f.birth ? '・' + it.f.birth : '')) + '</small>' +
     '<small>擅長:' + cxEsc(it.troop) + '兵・預設' + CX_ROW[it.row] + '</small></div></div>';
-  if (apt) h += '<div class="cx-l">兵種適性:' + (typeof BN_DATA !== 'undefined' ? BN_DATA.troopList : ['盾', '步', '騎', '弓', '謀']).map(function (t) { return '<span class="cx-apt a' + cxEsc(apt[t]) + '">' + cxEsc(t) + ' ' + cxEsc(apt[t]) + '</span>'; }).join('') + '<small>(S 最好,C 最差)</small></div>';
+  if (apt) h += '<div class="cx-l">兵種適性:' + (typeof BN_DATA !== 'undefined' ? BN_DATA.troopList : ['槍', '騎', '盾', '弓', '謀']).map(function (t) { return '<span class="cx-apt a' + cxEsc(apt[t]) + '">' + cxEsc(t) + ' ' + cxEsc(apt[t]) + '</span>'; }).join('') + '<small>(S 最好,C 最差)</small></div>';
   h += ow ? '<div class="cx-l cx-ok">已擁有(' + ({ roster: '在名冊', wait: '在待定席', wander: '流浪中', bag: '在卡包' }[ow.list] || '') + ')<button type="button" data-cx="roster" data-k="' + cxEsc(id) + '">到名冊查看</button></div>' : '<div class="cx-l cx-dim">尚未獲得:可在酒館、指名抽到。下面的戰法與詞條先看好,方便規劃。</div>';
   rows = cxSkillRows(id);
   h += '<div class="cx-sec">戰法(點名稱看完整說明)</div>';
@@ -344,11 +344,11 @@ function cxSkillsOfEntry(e, troop) {
 function cxIsSupport(rows) {
   return rows.some(function (r) { var d = BN_SKILLS[r.id], ex = ((d.params || {}).extra || []).map(function (x) { return x.kind; }); return /^(heal_|revive|cleanse|shield_)/.test(d.kind) || ex.some(function (k) { return /^(heal_|shield_)/.test(k); }); });
 }
-// 依目前名冊挑 5 人:前排盾 / 步 2 人、1 位治療或護盾輔助、後排弓 / 謀 2 人;同陣營(3 人以上有加成)與羈絆優先。回 {picks:[{e,troop,row,col,why}], fac, reasons, slots}
+// 依目前名冊挑 5 人:前排盾 / 槍 2 人、1 位治療或護盾輔助、後排弓 / 謀 2 人;同陣營(3 人以上有加成)與羈絆優先。回 {picks:[{e,troop,row,col,why}], fac, reasons, slots}
 function cxRecommend() {
   var cs = (typeof cardsGet === 'function') ? cardsGet() : null, list, facSum = {}, best = -1, bestV = 0, picks = [], used = {}, reasons = [], specs, bondNames = [];
   list = ((cs && cs.roster) || []).map(function (e) {
-    var tr = (typeof bnDefaultTroop === 'function') ? bnDefaultTroop(e) : '步', sp = null, pw = 0, rows;
+    var tr = (typeof bnDefaultTroop === 'function') ? bnDefaultTroop(e) : '槍', sp = null, pw = 0, rows;
     try { sp = bnUnitSpec(e, { troop: tr }); pw = bnPower(sp); } catch (er) { sp = null; }
     rows = cxSkillsOfEntry(e, tr);
     return { e: e, troop: tr, sp: sp, pw: pw, sup: cxIsSupport(rows) };
@@ -367,8 +367,8 @@ function cxRecommend() {
     used[c.e.id] = 1; picks.push({ e: c.e, troop: c.troop, sp: c.sp, why: why });
     return true;
   }
-  take(function (x) { return x.troop === '盾' || x.troop === '步'; }, '前排擋傷害(' + '盾 / 步兵)');
-  take(function (x) { return x.troop === '盾' || x.troop === '步'; }, '前排擋傷害(盾 / 步兵)');
+  take(function (x) { return x.troop === '盾' || x.troop === '槍'; }, '前排擋傷害(' + '盾 / 槍兵)');
+  take(function (x) { return x.troop === '盾' || x.troop === '槍'; }, '前排擋傷害(盾 / 槍兵)');
   take(function (x) { return x.sup; }, '帶治療或護盾,讓隊伍撐得久');
   take(function (x) { return x.troop === '弓' || x.troop === '謀'; }, '後排輸出(弓 / 謀)');
   take(function (x) { return x.troop === '弓' || x.troop === '謀'; }, '後排輸出(弓 / 謀)');
@@ -415,15 +415,16 @@ function cxRxTxt(x) {
   return '用' + (who.join('或') || '特定戰法') + '打中帶「' + st + '」的' + (q.on === 'self' ? '自己' : '敵人') + ' → ' + x.name;
 }
 function cxRulesHtml() {
-  var D = (typeof BN_DATA !== 'undefined') ? BN_DATA : null, B = (typeof BN_BONDS !== 'undefined') ? BN_BONDS : null, h = '', prey = [], fac = [], tag = [];
+  var D = (typeof BN_DATA !== 'undefined') ? BN_DATA : null, B = (typeof BN_BONDS !== 'undefined') ? BN_BONDS : null, h = '', prey = [], preyRows = '', fac = [], tag = [];
   var sp;
   if (!D || !B) return '<div class="cx-hint">戰鬥資料尚未載入。</div>';
-  Object.keys(D.prey).forEach(function (a) { Object.keys(D.prey[a]).forEach(function (b) { var v = D.prey[a][b]; prey.push(a + '兵打' + b + '兵:傷害 ' + (v >= 1 ? '+' : '−') + cxPct(Math.abs(v - 1))); }); });
+  if (typeof bnPreyText === 'function') prey = [bnPreyText() + '(' + bnPreyRule() + ')'];
+  if (typeof bnPreyRows === 'function') preyRows = bnPreyRows().map(function (r) { return '<b class="cx-k">' + cxEsc(r.t) + '兵</b>克 ' + (cxEsc(r.beats.join('、')) || '—') + ',被 ' + (cxEsc(r.beaten.join('、')) || '—') + ' 克'; }).join('<br>');
   Object.keys(B.fac).forEach(function (n) { fac.push(n + ' 人:' + cxFacBonusTxt(+n)); });
   Object.keys(B.tag).forEach(function (t) { tag.push(t); });
   h += '<details class="cx-rules" open><summary>基本原則(先看這裡)</summary>';
-  h += '<div class="cx-l"><b class="cx-k">站位</b>前排(盾、步)最先被打,要放兵力高、防禦好的人;中排適合騎兵,速度快能先出手;後排(弓、謀)打得遠但不耐打,放輸出與治療。弓兵站後排時受到近戰普攻傷害 −' + cxPct(1 - D.archerBackTaken) + '。</div>';
-  h += '<div class="cx-l"><b class="cx-k">兵種相剋</b>' + prey.join(';') + '。騎兵每場第一次普攻 ×' + D.cavCharge + ';謀士主動戰法發動率 +' + cxPct(D.mageRateBonus) + '。</div>';
+  h += '<div class="cx-l"><b class="cx-k">站位</b>前排(盾、槍)最先被打,要放兵力高、防禦好的人;中排適合騎兵,速度快能先出手;後排(弓、謀)打得遠但不耐打,放輸出與治療。弓兵站後排時受到近戰普攻傷害 −' + cxPct(1 - D.archerBackTaken) + '。</div>';
+  h += '<div class="cx-l"><b class="cx-k">兵種相剋</b>' + prey.join(';') + '。' + (preyRows ? '<br>' + preyRows + '<br>' : '') + '騎兵每場第一次普攻 ×' + D.cavCharge + ';謀士主動戰法發動率 +' + cxPct(D.mageRateBonus) + '。</div>';
   h += '<div class="cx-l"><b class="cx-k">治療與禁療</b>單次治療最多回復兵力上限的 ' + cxPct(D.healCap.single) + ';敵人的「禁療」會讓治療變少。第 ' + D.fatigue.start + ' 回合起雙方疲兵:每回合受到傷害 +' + cxPct(D.fatigue.dmg) + '、受到治療 −' + cxPct(D.fatigue.heal) + ',所以隊伍至少帶 1 位治療或護盾。</div>';
   h += '<div class="cx-l"><b class="cx-k">陣營加成</b>同一陣營上陣 ' + fac.join(';') + '(取人數最多的陣營;中立不計,加成上限 攻擊 ' + cxPct((B.cap || D.bondCap).atk) + '、兵力 ' + cxPct((B.cap || D.bondCap).hp) + ')。</div>';
   h += '<div class="cx-l"><b class="cx-k">職業羈絆</b>主職業同標籤 2 人生效:' + tag.join('、') + '(例如 2 位醫者 → 治療 +' + cxPct((B.tag['醫者'] || {}).heal || 0) + ')。</div>';
@@ -522,7 +523,7 @@ function cxFacOpts() {
   return [['-1', '全部陣營']].concat(list.map(function (f) { return [String(f), cxFacName(f)]; }));
 }
 function cxToolHtml() {
-  var tl = (typeof BN_DATA !== 'undefined') ? BN_DATA.troopList : ['盾', '步', '騎', '弓', '謀'];
+  var tl = (typeof BN_DATA !== 'undefined') ? BN_DATA.troopList : ['槍', '騎', '盾', '弓', '謀'];
   var ex = cxWorld() === 'han' ? '曹操、孔明' : cxIndex().figs.slice(0, 2).map(function (it) { return it.name; }).join('、');
   if (cx.tab === 'fig') return '<input type="search" data-cxin="q" placeholder="搜尋姓名,例如 ' + cxEsc(ex) + '" aria-label="搜尋武將" autocomplete="off" enterkeyhint="search" value="' + cxEsc(cx.q) + '">' +
     '<div class="cx-fs">' + cxSel('fac', cx.fac, cxFacOpts()) + cxSel('troop', cx.troop, [['', '全部兵種']].concat(tl.map(function (t) { return [t, t + '兵']; }))) +

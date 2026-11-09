@@ -26,7 +26,7 @@ function bnFormula(f, T, W, Z, P) { return f[0] + f[1] * T + f[2] * W + f[3] * Z
 // 適性分(§2.2)
 function bnAptScores(S5, ja) {
   var T = S5[0], W = S5[1], Z = S5[2], P = S5[3];
-  var sc = { '盾': 0.7 * T + 0.3 * W, '步': 0.6 * W + 0.4 * T, '騎': 0.6 * W + 0.2 * T + 0.2 * Z, '弓': 0.5 * W + 0.3 * Z + 0.2 * T, '謀': 0.8 * Z + 0.2 * P };
+  var sc = { '盾': 0.7 * T + 0.3 * W, '槍': 0.6 * W + 0.4 * T, '騎': 0.6 * W + 0.2 * T + 0.2 * Z, '弓': 0.5 * W + 0.3 * Z + 0.2 * T, '謀': 0.8 * Z + 0.2 * P };
   Object.keys(ja || {}).forEach(function (jid) {
     var pr = BN_JOB_PRESET[jid];
     if (!pr) return;
@@ -58,7 +58,7 @@ function bnDefaultTroop(card) {
 function bnRowOf(card, troop) {
   var fg = card.fig ? BN_FIG_SKILLS[card.fig] : null;
   if (fg) return fg.row === '前' ? 0 : fg.row === '中' ? 1 : 2;
-  return (troop === '盾' || troop === '步') ? 0 : (troop === '騎' ? 1 : 2);
+  return (troop === '盾' || troop === '槍') ? 0 : (troop === '騎' ? 1 : 2);
 }
 function bnPower(spec) {   // 戰力(§5.2,僅顯示)
   var s = spec.stats;
@@ -145,13 +145,13 @@ function bnUltFor(card, troop) {
     row = j ? j.row : '';
     if (row === '醫') k = '謀醫'; else if (row === '政') k = '謀政'; else if (row === '商') k = '謀商';
   }
-  return BN_ULT_BY[k] || BN_ULT_BY['步'];
+  return BN_ULT_BY[k] || BN_ULT_BY['槍'];
 }
 
 // 單位規格。card = 名冊 entry(或 cardGen 結果)。o = {troop, row, col, learned:[id], scene, drill(研兵比例,可省略)}
 function bnUnitSpec(card, o) {
   o = o || {};
-  var S5 = bnCardStats(card), apt = bnAptOf(card), troop = o.troop || bnDefaultTroop(card), c = BN_DATA.troops[troop], g = BN_DATA.grade[card.gr] || 1;
+  var S5 = bnCardStats(card), apt = bnAptOf(card), troop = bnTroopNorm(o.troop) || bnDefaultTroop(card), c = BN_DATA.troops[troop], g = BN_DATA.grade[card.gr] || 1;
   if (o.apt) Object.assign(apt.apt, o.apt);   // 測試 / 手動指定適性
   var tf = bnTraitFold(card, troop), a = BN_DATA.apt[apt.apt[troop]] || 1;
   var T = S5[0] + tf.st.stT, W = S5[1] + tf.st.stW, Z = S5[2] + tf.st.stZ, P = S5[3], M = S5[4], F = BN_DATA.f;

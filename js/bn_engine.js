@@ -19,9 +19,9 @@
 //   roll   {u, id, p, ok}                                                   戰法發動判定(p = 發動率 %,ok 1 成功 / 0 未發動)
 //   skill  {u, id, name, kind, cat, rc, as, th}                            戰法發動(rc = 第 n 次再放;as = 補刀者;th = 文化主題)
 //   prep   {u, id}                                                         進入準備
-//   dmg    {src, tgt, v, abs, ty, crit, hp, via, dot, ctr, basic, rx}      傷害(v = 實際扣血、abs = 護盾吸收、ty phys|strat|dot、via = 援護者 id、ctr = 反擊、rx = 反應 id)
-//   evade  {src, tgt, miss}(miss = 命中下降落空)   heal {src, tgt, v, nom, hp, blk}   shield {src, tgt, v, tot}   revive {tgt, hp}
-//   status {src, tgt, id, left, val}   unstatus {tgt, id, why}   resist {tgt, id, layers}(被抵禦擋下)   immune {tgt, id}(被免疫擋下)   ccimm {tgt, id}
+//   dmg    {src, tgt, v, abs, ty, crit, hp, via, dot, ctr, basic, rx, pv}      傷害(pv = 兵種克制:1 克制 / −1 被克,省略 = 無;v = 實際扣血、abs = 護盾吸收、ty phys|strat|dot、via = 援護者 id、ctr = 反擊、rx = 反應 id)
+//   evade  {src, tgt, miss, dr}(miss = 命中下降落空;dr = 機率閃避 dodge_rate 閃開)   heal {src, tgt, v, nom, hp, blk}   shield {src, tgt, v, tot}   revive {tgt, hp}
+//   status {src, tgt, id, left, val, ice?}(ice=1:寒冰類技能施加的 stun / spd_down = 寒凍,只供表現 / 戰報,不影響結果)   unstatus {tgt, id, why}   resist {tgt, id, layers}(被抵禦擋下)   immune {tgt, id}(被免疫擋下)   ccimm {tgt, id}
 //          睡眠 / 麻痺(2026-11-09):status id 'sleep' / 'paralyze';unstatus sleep 的 why = wake(受擊驚醒)/ expire(睡醒)/ cleanse;醒後免疫睡眠時 immune {id:'sleep'};
 //          雷電麻痺傳導 = react {id:'rx_pz_conduct', name:'麻痺傳導', tgt}(接著對該目標一個 status paralyze)
 //   kill {src, tgt}    move {u, row, col}    cd {u, id, cd}
@@ -129,6 +129,9 @@ function bnSpd(S, u) {
   return Math.max(BN_DATA.spdMin, v);
 }
 function bnCrit(S, u) { return bnClamp(u.base.crit + (u.st.crit_up ? u.st.crit_up.val : 0) + (u.sc.crit || 0) * BN_DATA.kinds.stat_charge[0], 0, 0.95); }
+// 回合節奏單一入口:phase = 'early'(≤ earlyTo)/ 'mid' / 'late'(≥ lateFrom);bnRoundIn = 第 from~to 回合(to 省略 = 到上限)
+function bnRoundPhase(r) { var p = BN_DATA.roundPhase; return r <= p.earlyTo ? 'early' : (r >= p.lateFrom ? 'late' : 'mid'); }
+function bnRoundIn(r, from, to) { return r >= from && r <= (to === undefined ? BN_DATA.maxRound : to); }
 function bnFatigue(S) { return S.round >= BN_DATA.fatigue.start ? S.round - BN_DATA.fatigue.start + 1 : 0; }
 
 // ───────── 目標選擇(§2.4) ─────────
@@ -244,7 +247,7 @@ function bnStatusApply(S, src, t, id, data, o) {
   if (fromHb) { S.stats.hbApplied++; S.stats.hbTurnsSum += data.left || 0; }
   if ((id === 'stun' || id === 'spd_down') && S.curEff && S.curEff.sk && S.curEff.sk.tags && S.curEff.sk.tags.indexOf('ice') >= 0) data.ice = 1;   // 寒凍(冰裂 / 感電反應用)
   if (id === 'ward') { S.stats.wardGiven += data.layers || 0; }
-  bnEv(S, 'status', { src: src ? src.id : -1, tgt: t.id, id: id, left: data.left, val: data.val === undefined ? undefined : Math.round(data.val * 1000) / 1000 });
+  bnEv(S, 'status', { src: src ? src.id : -1, tgt: t.id, id: id, left: data.left, val: data.val === undefined ? undefined : Math.round(data.val * 1000) / 1000, ice: data.ice ? 1 : undefined });
   return true;
 }
 function bnStatusRemove(S, t, id, why) {
@@ -321,6 +324,12 @@ function bnHit(S, a, t, h) {
     S.stats.evaded++;
     return { dmg: 0, evaded: true, t: t };
   }
+  // 機率閃避(dodge_rate,2026-11-09):被攻擊(非持續傷害、非反擊)時以機率 val 閃開;只有持有此狀態才抽亂數;沉睡中不能閃;無視規避(ignoreEvade)可破
+  if (t.st.dodge_rate && !h.dot && !h.counter && !t.st.sleep && !(h.rx && h.rx.ignoreEvade) && S.rng() < t.st.dodge_rate.val) {
+    bnEv(S, 'evade', { src: a ? a.id : -1, tgt: t.id, dr: 1 });
+    S.stats.evaded++; S.stats.dodged = (S.stats.dodged || 0) + 1;
+    return { dmg: 0, evaded: true, t: t };
+  }
   if (h.dot) {
     dmg = h.fixed;
     if (h.dot === 'burn') dmg *= (tm.burnTaken || 1) * ((tm.weakness && tm.weakness.burn) || 1);
@@ -330,7 +339,8 @@ function bnHit(S, a, t, h) {
     r1 = S.rng(); r2 = S.rng();   // 固定順序:先暴擊、再浮動
     if (ty === 'strat') base = bnMag(S, a) * (mo.magMul || 1); else base = bnAtk(S, a);
     defv = h.ignoreDef ? 0 : (ty === 'strat' ? bnSres(S, t) : bnDef(S, t));
-    if (ty === 'phys' && BN_DATA.prey[a.troop] && BN_DATA.prey[a.troop][t.troop]) prey = BN_DATA.prey[a.troop][t.troop];
+    h.pv = 0;   // 兵種克制旗標(事件 dmg.pv:1 克制 / −1 被克;僅物理傷害)
+    if (ty === 'phys' && BN_DATA.prey[a.troop] && BN_DATA.prey[a.troop][t.troop]) { prey = BN_DATA.prey[a.troop][t.troop]; h.pv = prey > 1 ? 1 : (prey < 1 ? -1 : 0); }
     // 輸出端加成
     if (S.round === 1 && mo.r1Dmg) outM *= 1 + mo.r1Dmg;
     if (mo.firstHit && !a.firstHitDone && (h.basic || h.sk)) { outM *= 1 + mo.firstHit; a.firstHitDone = true; }
@@ -427,7 +437,7 @@ function bnApplyDmg(S, a, t, dmg, h, crit, viaOf) {
   } else { S.stats.dmgTaken[t.side] += hpLost; }
   t.dmgRound += hpLost;
   t.dmgTakenTotal = (t.dmgTakenTotal || 0) + hpLost;
-  bnEv(S, 'dmg', { src: a ? a.id : -1, tgt: t.id, v: hpLost, abs: absorbed, ty: h.dot ? 'dot' : h.ty, crit: crit ? 1 : 0, hp: t.hp, via: viaOf >= 0 ? viaOf : undefined, dot: h.dot || undefined, ctr: h.counter ? 1 : undefined, basic: h.basic ? 1 : undefined, rx: h.rx ? h.rx.id : undefined });
+  bnEv(S, 'dmg', { src: a ? a.id : -1, tgt: t.id, v: hpLost, abs: absorbed, ty: h.dot ? 'dot' : h.ty, crit: crit ? 1 : 0, hp: t.hp, via: viaOf >= 0 ? viaOf : undefined, dot: h.dot || undefined, ctr: h.counter ? 1 : undefined, basic: h.basic ? 1 : undefined, rx: h.rx ? h.rx.id : undefined, pv: (h.pv && h.ty === 'phys' && !h.dot) ? h.pv : undefined });
   if (S.chain) S.chain.hits++;
   var killed = false;
   if (t.hp <= 0) {
@@ -475,7 +485,7 @@ function bnFinish(S, reason) {
   var ca = bnAlive(S, 'A').length, cb = bnAlive(S, 'B').length, w, ha = bnTeamHpPct(S, 'A'), hb = bnTeamHpPct(S, 'B');
   if (S.over) return;
   if (reason === 'wipe') w = ca > 0 ? 'A' : (cb > 0 ? 'B' : 'draw');
-  else w = (ha - hb >= BN_DATA.drawLead) ? 'A' : ((hb - ha >= BN_DATA.drawLead) ? 'B' : 'draw');
+  else { ha = Math.round(ha * 1000) / 1000; hb = Math.round(hb * 1000) / 1000; w = (ha - hb >= BN_DATA.drawLead) ? 'A' : ((hb - ha >= BN_DATA.drawLead) ? 'B' : 'draw'); }   // 回合上限:剩餘兵力比例較高者勝,完全相等才平手(平手不算過關,等同守方勝)
   S.over = true;
   S.result = { winner: w, reason: reason, rounds: S.round, hp: { A: Math.round(ha * 1000) / 1000, B: Math.round(hb * 1000) / 1000 }, deadA: S.teams.A.units.length - ca, deadB: S.teams.B.units.length - cb };
   bnEv(S, 'end', Object.assign({}, S.result));

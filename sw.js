@@ -1,4 +1,4 @@
-const VERSION = 'v53';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v54';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -26,6 +26,9 @@ const PRECACHE = [
   './js/goodsdata.js',
   './js/fx_goods_data.js',
   './js/goods.js',
+  './js/bmcdata.js',
+  './js/bmc.js',
+  './js/mktbuy.js',
   './js/techtree_data.js',
   './js/nolevel_data.js',
   './js/techtree_simple_data.js',

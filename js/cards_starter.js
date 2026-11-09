@@ -31,12 +31,13 @@ function cardsStarterState(cs) {
   if (s.old) { delete s.old; if (cardsStarterLegacyNa(cs)) s.na = 1; }
   return s.na ? 'na' : 'ready';
 }
-// 領取:發指名券、記錄時間、開始新手期;卡片分批開(cardsStarterStage,抽到的直接進名冊)。回 {ok, reason?, named, pulls}
+// 領取:發指名券與抽卡次數(S.pulls)、記錄時間、開始新手期;抽到的直接進名冊。回 {ok, reason?, named, pulls}
 function cardsStarterClaim(cs, now) {
   var S = CARD_STARTER, st = cardsStarterState(cs);
   if (st !== 'ready') return { ok: false, reason: st };
-  cs.starter = { done: 1, at: (typeof now === 'number' && isFinite(now)) ? now : 0, left: S.batches, nt: S.namedTokens, nb: { n: 0, p: 0, g: 0 } };
+  cs.starter = { done: 1, at: (typeof now === 'number' && isFinite(now)) ? now : 0, nt: S.namedTokens, nb: { n: 0, p: 0, g: 0 } };   // 2026-11-09 起禮包直接送『抽卡次數』(S.pulls 抽,進 cs.pl.n,不受累積上限截斷);舊存檔留下的 left 批次仍可由 cardsStarterStage 開完
   cardsAddNameTokens(cs, S.namedTokens);
+  cardsPullGrant(cs, S.pulls);
   return { ok: true, named: S.namedTokens, pulls: S.pulls };
 }
 // 金階名人:魔幻世界優先本族英雄;避開已擁有與禮包內已出現者(都沒有就退回整池)
@@ -50,7 +51,7 @@ function cardsStarterFig(cs, r, venue, slot, seen) {
 }
 // 禮包全部卡片(確定性):回批次陣列 [[卡…], …]。先依 CARD_STARTER.gr 擲品階,再補保底:金放第 1 批、紫放第 2 批起
 function cardsStarterCards(cs) {
-  var S = CARD_STARTER, n = S.pulls, per = Math.ceil(n / S.batches), gr = [], i, j, r, x, acc, g, b, lo, hi, k, need, out = [], seen = {}, c;
+  var S = CARD_STARTER, n = S.legacyPulls, per = Math.ceil(n / S.batches), gr = [], i, j, r, x, acc, g, b, lo, hi, k, need, out = [], seen = {}, c;
   for (i = 0; i < n; i++) {
     r = cardRng(cardHash(cs.seed, 'starter', i, 'gr')); x = r() * 100; acc = 0; g = 0;
     for (k = 0; k < 5; k++) { acc += S.gr[k]; if (x < acc) { g = k; break; } }
@@ -100,7 +101,7 @@ function cardsStarterStage(cs) {
 function cardsStarterHint() {
   var cs = (typeof cardsGet === 'function') ? cardsGet() : null;
   if (!cs || cardsStarterState(cs) !== 'ready') return false;
-  if (typeof showToast === 'function') showToast('新手禮包已備好:點城主府按「招賢」(或招賢館掌櫃)就能領(' + CARD_STARTER.pulls + ' 抽,保底 1 張金卡)');
+  if (typeof showToast === 'function') showToast('新手禮包已備好:打開側欄〈卡包〉就能領(' + CARD_STARTER.pulls + ' 抽,保底 1 張金卡)');
   return true;
 }
 

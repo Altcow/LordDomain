@@ -269,13 +269,32 @@ function nsSimpleCands(s, adv, mem) {
   return out;
 }
 
+// ───────── 卡包任務 / 提醒(2026-11-09 卡片為主體):有可抽次數、下一個頭目首通贈抽。排在建築建議之後 ─────────
+function nsCardCands(mem) {
+  var out = [], cs, n, i, st;
+  if (typeof cardsGet !== 'function' || typeof cardsPulls !== 'function') return out;
+  cs = cardsGet();
+  if (!cs) return out;
+  n = cardsPulls(cs);
+  if (n >= 10 && !mem.dismissed.card_pulls) out.push({ id: 'card_pulls', src: 'chain', tier: 'C', icon: '🃏', text: '卡包有 ' + n + ' 抽可用,不妨抽一輪。', why: '抽到的人直接進名冊;次數存滿 ' + CARD_DRAW.cap + ' 就不再累積。', go: { kind: 'cards', tab: 'T' } });
+  if (typeof BN_STAGES !== 'undefined' && typeof CARD_BOSS !== 'undefined') {
+    for (i = 0; i < BN_STAGES.length; i++) {
+      st = BN_STAGES[i];
+      if (!st.boss || (cs.boss && cs.boss[st.id])) continue;
+      if (!mem.dismissed['card_boss_' + st.id]) out.push({ id: 'card_boss_' + st.id, src: 'chain', tier: 'C', icon: '⚔', text: '任務:首次通關第 ' + st.ch + ' 章頭目〈' + st.name + '〉,送 ' + CARD_BOSS.pulls + ' 抽。', why: '每章頭目首通一次,領過不重複。', go: { kind: 'bn' } });
+      break;
+    }
+  }
+  return out;
+}
+
 // ───────── 核心:候選清單(純函式)─────────
 // adv = advCompute 的結果(或 null);回傳 { cands:[{id,src,tier,icon,text,why,go,item}], top }
 function nsCompute(s, adv, mem, api) {
   var reds = [], rest = [], chain, cands = [], items = (adv && adv.items) || [], i, tc;
   tc = (typeof tutCompute === 'function') ? tutCompute(s, mem) : null;   // 新手教學期間:只回傳教學卡(一次一步、不輪播、不能 ✕)
   if (tc) return { cands: [tc], top: tc };
-  if (typeof citySimpleOn === 'function' && citySimpleOn() && typeof csTreeOn === 'function' && csTreeOn()) { cands = nsSimpleCands(s, adv, mem); return { cands: cands, top: cands[0] || null }; }
+  if (typeof citySimpleOn === 'function' && citySimpleOn() && typeof csTreeOn === 'function' && csTreeOn()) { cands = nsSimpleCands(s, adv, mem).concat(nsCardCands(mem)); return { cands: cands, top: cands[0] || null }; }
   items.forEach(function (it) {
     var h, c;
     if (it.core || mem.dismissed['adv:' + it.id] || nsTutHoldLock(it)) return;
@@ -290,6 +309,7 @@ function nsCompute(s, adv, mem, api) {
   }
   if (chain) cands.push(chain);
   rest.forEach(function (c) { cands.push(c); });
+  nsCardCands(mem).forEach(function (c) { cands.push(c); });
   return { cands: cands, top: cands[0] || null };
 }
 
@@ -330,6 +350,8 @@ function nsNext() { nsRt.rot++; }
 function nsGo(cand) {
   if (!cand || !cand.go) return false;
   if (cand.go.kind === 'tut') { if (typeof tutAct === 'function') tutAct(cand.go.id); nsRt.last = -1e15; return true; }
+  if (cand.go.kind === 'cards') { if (typeof cardsUiOpen === 'function') cardsUiOpen(cand.go.tab || 'O'); nsRt.last = -1e15; return true; }   // 卡包面板(側欄〈卡包〉同一個)
+  if (cand.go.kind === 'bn') { if (typeof uiSideAct === 'function') uiSideAct('bn'); nsRt.last = -1e15; return true; }   // 側欄〈戰鬥〉(未開放時由其 toast 說明缺什麼)
   if (cand.src === 'tut' && cand.go.kind === 'build' && typeof tutGoBuild === 'function') { tutGoBuild(cand.go.type); nsRt.last = -1e15; return true; }   // 教學蓋建築:自動找位置 + 高亮
   if (cand.go.kind === 'bars') {
     if (typeof advUiOpenDock === 'function') advUiOpenDock('bars');

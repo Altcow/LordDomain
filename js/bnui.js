@@ -11,8 +11,8 @@ var BNUI = {
   foeBase: ['bandit_chief', 'bandit_blade', 'bandit_hunter', 'bandit_blade', 'bandit_hunter'], foePos: [[0, 1], [0, 0], [2, 1], [0, 2], [2, 0]]
 };
 var BNUI_FOE = {
-  bandit_chief: { name: '寨主', troop: '步', hpK: 1.25, atkK: 1.12, skills: ['g_chongfeng'], ult: 'u_inf' },
-  bandit_blade: { name: '刀匪', troop: '步', hpK: 1, atkK: 1, skills: ['g_zhan'], ult: 'u_inf' },
+  bandit_chief: { name: '寨主', troop: '槍', hpK: 1.25, atkK: 1.12, skills: ['g_chongfeng'], ult: 'u_inf' },
+  bandit_blade: { name: '刀匪', troop: '槍', hpK: 1, atkK: 1, skills: ['g_zhan'], ult: 'u_inf' },
   bandit_hunter: { name: '獵戶', troop: '弓', hpK: 1, atkK: 1, skills: ['g_lianshe'], ult: 'u_arc' }
 };
 var bnu = {
@@ -48,7 +48,7 @@ function bnUiNormForm(f, ids) {
     if (!s || typeof s.id !== 'string' || seen[s.id] || (ids && !ids[s.id])) continue;
     if (!(s.row >= 0 && s.row <= 2 && s.col >= 0 && s.col <= 2) || used[s.row + ':' + s.col]) continue;
     seen[s.id] = 1; used[s.row + ':' + s.col] = 1;
-    out.slots.push({ id: s.id, row: s.row | 0, col: s.col | 0, troop: BN_DATA.troops[s.troop] ? s.troop : '' });
+    out.slots.push({ id: s.id, row: s.row | 0, col: s.col | 0, troop: bnTroopNorm(s.troop) });
   }
   return out;
 }
@@ -316,6 +316,9 @@ function bnUiCss() {
     '.bnf-chips{display:flex;gap:4px;flex-wrap:wrap;margin:2px 0 4px}.bnf-chips button{min-height:34px;min-width:44px;border:none;border-radius:8px;background:rgba(255,255,255,.12);color:#f4ead2;font-size:12px}.bnf-chips button.on{background:#c9892f;color:#1b1308}.bnf-chips button.bad{color:#ff9a8a}' +
     '.bnf-foot{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.bnf-go{flex:1 1 140px;min-height:50px;border:none;border-radius:10px;background:#c9892f;color:#1b1308;font-size:18px;font-weight:bold}.bnf-go[disabled]{opacity:.4}' +
     '.bnf-msg{color:#ff9a8a;font-size:13px;margin:4px 0}' +
+    '.py{font-style:normal;font-size:10px;font-weight:bold;margin-left:3px;padding:0 3px;border-radius:5px;white-space:nowrap}.py.u{background:#3f7d38;color:#eaffdc}.py.d{background:#9a4638;color:#ffe3dc}' +
+    '.bnf-prey{font-size:12px;line-height:1.5;margin:0 0 6px;padding:4px 8px;border-radius:8px;background:rgba(255,255,255,.07)}.bnf-prey summary{min-height:30px;display:flex;align-items:center;gap:2px;cursor:pointer}.bnf-prey .pt{margin:2px 0 4px;opacity:.92}' +
+    '.bnf-prey table{border-collapse:collapse;width:100%;margin-bottom:2px}.bnf-prey th{width:2em;text-align:center;color:#ffd25a}.bnf-prey td{padding:1px 4px}.bnf-prey td.u{color:#a6e58f}.bnf-prey td.d{color:#ffa595}' +
     '@media (orientation:landscape) and (min-width:700px){#bnForm{display:none}#bnLayer.ph-form #bnForm{display:grid;grid-template-columns:minmax(300px,1fr) minmax(300px,1.2fr);column-gap:14px;align-content:start}#bnForm .c1{grid-column:1}#bnForm .c2{grid-column:2}.bnf-roster{flex-wrap:wrap;overflow-x:visible}}' +
     '#bnMap{position:relative;z-index:2;flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:8px calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));display:none}#bnLayer.ph-map #bnMap{display:block}' +
     '.bnm-head{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;margin:0 0 6px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.07)}.bnm-head b{color:#ffd25a}' +
@@ -403,14 +406,25 @@ function bnUiSetPhase(ph) {
 var BNUI_GR = ['白', '青', '藍', '紫', '金'];
 function bnUiAptTxt(e, tr) { var a = bnAptOf(e).apt[tr] || 'C'; return a; }
 // 戰前準備:敵方陣容對照(依站位;只顯示頭像字、名稱、兵種、兵力 / 戰力,不顯示戰法 — 戰法開打後才看得到)
-function bnUiFoeGridHtml(foes) {
+// 兵種克制徽章:▲ = 克制幾名(綠)、▼ = 被幾名克制(紅);0 不顯示
+function bnUiPreyChips(c) { return (c.up ? '<em class="py u">▲' + c.up + '</em>' : '') + (c.down ? '<em class="py d">▼' + c.down + '</em>' : ''); }
+// 敵方格從『我方』角度看:▲ = 我方克制它的人數(對我有利)、▼ = 它克制我方的人數;bnPreyCounts 是從該兵種自己的角度算,這裡對調
+function bnUiPreySwap(c) { return { up: c.down, down: c.up }; }
+function bnUiTroopsOf(list) { return (list || []).map(function (x) { return x.troop; }); }
+function bnUiFoeGridHtml(foes, mine) {
   var h = '<div class="bnf-egrid"><div class="bnf-gh">敵 ◀ 前排</div><div class="bnf-gh">中排</div><div class="bnf-gh">後排</div>', r, c, x, i;
   for (c = 0; c < 3; c++) for (r = 0; r < 3; r++) {
     x = null;
     for (i = 0; i < foes.specs.length; i++) if (foes.specs[i].row === r && (foes.specs[i].col | 0) === c) x = foes.specs[i];
-    h += x ? '<div class="bnf-cell foe"><span class="av">' + bnUiEsc(Array.from(String(x.name))[0] || '?') + '</span><b>' + bnUiEsc(x.name) + '</b><small>' + bnUiEsc(x.troop) + ' · 兵力 ' + x.stats.hp + ' · 戰力 ' + bnPower(x) + '</small></div>' : '<div class="bnf-cell foe empty"></div>';
+    h += x ? '<div class="bnf-cell foe"><span class="av">' + bnUiEsc(Array.from(String(x.name))[0] || '?') + '</span><b>' + bnUiEsc(x.name) + '</b><small>' + bnUiEsc(x.troop) + bnUiPreyChips(typeof bnPreyCounts === 'function' ? bnUiPreySwap(bnPreyCounts(x.troop, bnUiTroopsOf(mine))) : { up: 0, down: 0 }) + ' · 兵力 ' + x.stats.hp + ' · 戰力 ' + bnPower(x) + '</small></div>' : '<div class="bnf-cell foe empty"></div>';
   }
   return h + '</div>';
+}
+// 兵種相剋說明(點開;文字 + 小表格)
+function bnUiPreyHelpHtml() {
+  if (typeof bnPreyText !== 'function') return '';
+  return '<details class="bnf-prey"><summary>兵種相剋 <em class="py u">▲</em>克制 <em class="py d">▼</em>被克(點開說明)</summary><div class="pt">' + bnUiEsc(bnPreyText()) + '。<br>' + bnUiEsc(bnPreyRule()) + '。<br>下方格子的 ▲n = 這名武將克制 n 名敵人、▼n = 被 n 名敵人克制;敵方格的 ▲n = 我方有 n 人克制它、▼n = 它克制我方 n 人。戰鬥中傷害數字旁的「克制↑ / 被克↓」= 這一擊因兵種克制變強 / 變弱。</div><table>' +
+    bnPreyRows().map(function (r) { return '<tr><th>' + bnUiEsc(r.t) + '</th><td class="u">克 ' + (bnUiEsc(r.beats.join('、')) || '—') + '</td><td class="d">被克 ' + (bnUiEsc(r.beaten.join('、')) || '—') + '</td></tr>'; }).join('') + '</table></details>';
 }
 function bnUiRenderForm() {
   var el = bnu.formEl, h = '', roster = bnUiRosterList(), build = bnUiBuild(), bonds = bnUiBonds(), foes, foeP = 0, mineP = 0, rows = [2, 1, 0], r, c, s, e, tr, list, i, sel = bnu.sel, selE = sel ? bnUiEntry(sel) : null, sc, msg = bnUiCheck(), keepL = 0, ro;
@@ -422,17 +436,18 @@ function bnUiRenderForm() {
   h += '<div class="c1"><div class="bnf-foe">' + (foes.kind === 'practice' ? '敵將:山賊(練兵)' : '敵將:' + bnUiEsc(foes.label)) + ' · 建議戰力 <b>' + foes.power + '</b> · 我方 <b>' + mineP + '</b><br>' +
     foes.specs.map(function (x) { return '<i>' + (x.title ? bnUiEsc(x.title) + ' ' : '') + bnUiEsc(x.name) + ' ' + bnUiEsc(x.troop) + '</i>'; }).join('') + '</div>';
   h += '<div class="bnf-bonds">羈絆:' + (bonds.on.length ? bonds.on.map(function (x) { return '<i>' + bnUiEsc(x) + '</i>'; }).join('') : '<u>尚未成立</u>') + bonds.hint.map(function (x) { return '<u>' + bnUiEsc(x) + '</u>'; }).join('') + '</div>';
+  h += bnUiPreyHelpHtml();
   h += '<div class="bnf-grid"><div class="bnf-gh">後排</div><div class="bnf-gh">中排</div><div class="bnf-gh">前排 ▶ 敵</div>';
   for (c = 0; c < 3; c++) {
     for (i = 0; i < 3; i++) {
       r = rows[i]; s = bnUiSlotAt(r, c); e = s ? bnUiEntry(s.id) : null;
       if (e) {
         tr = s.troop || bnUiTroopOf(e);
-        h += '<button class="bnf-cell occ' + (sel === e.id ? ' sel' : '') + '" data-a="cell" data-r="' + r + '" data-c="' + c + '"><b>' + bnUiEsc(e.name) + '</b><small>' + tr + ' ' + bnUiAptTxt(e, tr) + '</small></button>';
+        h += '<button class="bnf-cell occ' + (sel === e.id ? ' sel' : '') + '" data-a="cell" data-r="' + r + '" data-c="' + c + '"><b>' + bnUiEsc(e.name) + '</b><small>' + tr + ' ' + bnUiAptTxt(e, tr) + (typeof bnPreyCounts === 'function' ? bnUiPreyChips(bnPreyCounts(tr, bnUiTroopsOf(foes.specs))) : '') + '</small></button>';
       } else h += '<button class="bnf-cell" data-a="cell" data-r="' + r + '" data-c="' + c + '" aria-label="空格">＋</button>';
     }
   }
-  h += '</div>' + bnUiFoeGridHtml(foes) + (typeof bnTeamStripHtml === 'function' ? bnTeamStripHtml() : '') + '</div><div class="c2">';
+  h += '</div>' + bnUiFoeGridHtml(foes, build.team.units) + (typeof bnTeamStripHtml === 'function' ? bnTeamStripHtml() : '') + '</div><div class="c2">';
   if (selE) {
     tr = bnUiTroopOf(selE); sc = bnUiSpec(selE, { troop: tr });
     h += '<div class="bnf-sel"><b>' + bnUiEsc(selE.name) + '</b>(' + BNUI_GR[selE.gr] + '階)戰力 ' + bnPower(sc) + ' · 建議站 ' + ['前', '中', '後'][bnRowOf(selE, tr)] + '排<br>' +
@@ -684,7 +699,7 @@ function bnUiShowResult() {
   w = d.winner === 'A' ? '勝利' : (d.winner === 'B' ? '敗北' : '平手');
   h = '<div class="bnbox"><h2 style="color:' + (d.winner === 'A' ? '#ffd25a' : (d.winner === 'B' ? '#ff9a8a' : '#cfd6e0')) + '">' + w + '</h2>' +
     '<p style="font-size:26px;color:#ffd25a;letter-spacing:6px">' + (d.winner === 'A' ? '★'.repeat(d.stars) + '☆'.repeat(3 - d.stars) : '') + '</p>' +
-    '<p>' + (d.reason === 'retreat' ? '撤退(算敗北,不計通關、不給獎勵)' : (d.reason === 'limit' ? '回合上限判定' : '全滅決勝')) + ' · 共 ' + d.rounds + ' 回合 · 我方存活 ' + d.alive + '/' + d.total + '</p>' +
+    '<p>' + (d.reason === 'retreat' ? '撤退(算敗北,不計通關、不給獎勵)' : (d.reason === 'limit' ? '回合上限,以剩餘兵力判定' : '全滅決勝')) + ' · 共 ' + d.rounds + ' 回合 · 我方存活 ' + d.alive + '/' + d.total + '</p>' +
     (d.mvp ? '<p>本場 MVP:<b>' + bnUiEsc(d.mvp.name) + '</b><br>傷害 ' + d.mvp.dmg + ' · 治療 ' + d.mvp.heal + ' · 承傷 ' + d.mvp.taken + ' · 擊倒 ' + d.mvp.kills + '</p>' : '') +
     '@RW@' +
     '@LOG@' + (typeof bnTeamStripHtml === 'function' ? bnTeamStripHtml({ mini: true, title: '我方戰後', S: S }) : '') + '</div>';

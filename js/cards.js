@@ -1,5 +1,6 @@
 // js/cards.js — 卡牌與酒館引擎 第一階段(PLAN_CARDS.md v3:§2.2~2.6 三場所/招募歲鐘/品階機率與保底/名額、§3A 品階與升階、§4.13 職業詞條、§7A 名額與遣散;第四批決議:名人加權抽取)。
 // 2026-11-09 使用者決議:移除酒令與『任用』—— 抽到的卡直接進名冊(名冊滿了先放卡包 cs.bag,有空位自動補進);酒館 / 縣試改『每日一抽』(CARD_DRAW:每批 4~7 張、每 24~8 小時一批,離線最多 2 批)。舊存檔一次性遷移見 cardsNormSave(cs.v 2)。
+// 2026-11-09 再改『抽卡次數制』:全域次數錢包 cs.pl = {n 可抽次數, t 下次補充時間戳, tot 累計抽數}(酒館 / 縣試池共用),依 CARD_DRAW 階梯每 8~24 小時 +4~7 抽(離線補算),累積上限 CARD_DRAW.cap;單抽 / 連抽走 cardsPullStage;頭目首通贈抽 cardsBossGive(cs.boss 防重領);cs.v 3。
 // 純資料邏輯,不寫 DOM;時間一律由呼叫端傳入 now(毫秒),模擬層不讀 Date.now()。資料表在 js/carddata.js,介面在 js/cardsui.js。
 // 存檔:world.city.cards(goods.js goodsNormCity 帶過 cardsNormSave);名冊 roster 即派工用的 world.city.talents(同一批物件,不可列舉,不重複存檔)。
 // 第一階段刻意未做:名冊人物/小兵卡/人物圈、取捨詞條 §4.4A、戰場技能內容(只記數量 skn)、記名簿、快速模式、文鬥小遊戲(星數固定 1)、結義。
@@ -46,7 +47,7 @@ function cardWPick(r, items, wf) {
 function cardsStateNew(seed) {
   var s = (typeof seed === 'number' && isFinite(seed)) ? (seed >>> 0) : ((Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0);
   return {
-    v: 2, seed: s, seq: 0, nameTokens: 0, namedCount: 0, shards: 0, dr: {},
+    v: 3, pl: { n: 0, t: 0, tot: 0 }, boss: {}, seed: s, seq: 0, nameTokens: 0, namedCount: 0, shards: 0, dr: {},
     clock: { maxSeen: 0 }, tokenGiven: {}, last: { T: -1, E: -1, G: -1 }, acc: { T: [], E: [], G: [] }, cur: { T: null, E: null, G: null },
     pity: { T: 0, E: 0, G: 0 }, fame: { G: 0, E: 0 }, stars: { E: 1 }, roster: [], wait: [], wander: [], bag: [], lastRel: null, starter: { done: 0 }
   };
@@ -82,7 +83,7 @@ function cardsOnTechDone(id, big) {
   return n;
 }
 
-// ───────── 抽卡節奏『每日一抽』(CARD_DRAW) ─────────
+// ───────── 抽卡節奏『抽卡次數制』(CARD_DRAW) ─────────
 function cardsDrawStep(list) {   // 已研成的最高一階(第 0 階無科技)
   var k = 0, i;
   for (i = 1; i < list.length; i++) if (list[i].tech && typeof techDone === 'function' && techDone(list[i].tech)) k = i;
@@ -97,8 +98,8 @@ function cardsDrawSize() { return cardsDrawTier().n; }
 // 某科技對應的節奏升級說明(不是階梯科技回 '')
 function cardsDrawUpText(id) {
   var D = CARD_DRAW, out = [];
-  D.size.forEach(function (x) { if (x.tech === id) out.push('招賢每批 ' + x.n + ' 張'); });
-  D.gap.forEach(function (x) { if (x.tech === id) out.push('每 ' + x.h + ' 小時一批'); });
+  D.size.forEach(function (x) { if (x.tech === id) out.push('每次補充 ' + x.n + ' 抽'); });
+  D.gap.forEach(function (x) { if (x.tech === id) out.push('每 ' + x.h + ' 小時補充一次'); });
   return out.join('、');
 }
 // 舊存檔遷移提示(cardsNormSave 寫 cs.migNote):取走並清除;回提示字或 ''
@@ -106,7 +107,7 @@ function cardsMigNoteTake(cs) {
   var m = cs && cs.migNote;
   if (!m) return '';
   delete cs.migNote;
-  return '招賢改版:抽到的卡直接進名冊' + (m.sh ? ';酒令已換成碎片 ' + m.sh : '') + '。';
+  return '卡包改版:改為抽卡次數制,依時間累積(上限 ' + CARD_DRAW.cap + ' 抽)' + (m.pl ? ';原有待抽批次已換成 ' + m.pl + ' 抽' : '') + (m.sh ? ';酒令已換成碎片 ' + m.sh : '') + '。';
 }
 
 // ───────── 招募歲鐘(§2.4) ─────────
@@ -119,41 +120,56 @@ function cardsVenueOpen(venue) {
   if (g && typeof nlFeatureOpen === 'function') { r = nlFeatureOpen(g); if (r !== null && r !== undefined) return !!r; }
   return true;
 }
-// 累積批次(每日一抽):回 {frozen, added}。isOpen(venue) 可選;未開放的場所不產生。
-// 各池 cs.dr[v] = {n 已發批號, t 下一批到的時間戳}:第一次(新存檔 / 剛開放)立刻給 1 批;之後每 cardsDrawTier().ms 一批,待開批數最多 CARD_DRAW.stock(滿了時間照走、多的不累積)。
-// 時鐘回撥:沿用 maxSeen − paceMin 凍結;科技縮短間隔或小幅回撥時,下一批最多再等一個間隔。舊存檔 acc 裡的舊期鍵(數字很大)照舊可開,不受 stock 截斷。
+// 次數累積(抽卡次數制):回 {frozen, added}。cs.pl = {n 可抽次數, t 下一次補充時間戳, tot 累計抽數};第一次呼叫只設定下次補充時間(新手禮另給)。
+// 每到 t 補 cardsDrawTier().n 抽(離線期間依經過的間隔數一次補算),n 已達 CARD_DRAW.cap 時時間照走、不再增加(新手禮 / 贈抽可使 n 超過 cap,不被截斷)。
+// 時鐘回撥:沿用 maxSeen − paceMin 凍結;科技縮短間隔或小幅回撥時,下一次補充最多再等一個間隔。isOpen 參數保留相容(次數與卡池開放無關)。
 function cardsSync(cs, now, isOpen) {
-  var floor = cs.clock.maxSeen - CARD_CFG.paceMin * 60000, added = 0, res = { frozen: false, added: 0 }, T;
+  var floor = cs.clock.maxSeen - CARD_CFG.paceMin * 60000, res = { frozen: false, added: 0 }, T, pl, k, room;
   if (cs.clock.maxSeen > 0 && now < floor) { res.frozen = true; return res; }
   if (now > cs.clock.maxSeen) cs.clock.maxSeen = now;
-  if (!cs.dr) cs.dr = {};
+  pl = cs.pl || (cs.pl = { n: 0, t: 0, tot: 0 });
   T = cardsDrawTier();
-  CARD_VENUE_ORDER.forEach(function (v) {
-    var d, k, room, i;
-    if (isOpen && !isOpen(v)) return;
-    if (v === 'G') return;   // 殿試池已改為『指定池』(不靠計時,見 cardsNamedDraw):不再累積新批次;舊存檔既有 acc.G / cur.G / last.G 保留不動、不報錯
-    d = cs.dr[v];
-    if (!d) {
-      d = cs.dr[v] = { n: 0, t: now + T.ms };
-      if (cs.acc[v].length < CARD_DRAW.stock) { cs.acc[v].push(cardsKey(v, d.n++)); added++; }
-      return;
-    }
-    if (d.t - now > T.ms) d.t = now + T.ms;
-    if (now < d.t) return;
-    k = Math.floor((now - d.t) / T.ms) + 1;
-    room = Math.max(0, CARD_DRAW.stock - cs.acc[v].length);
-    for (i = 0; i < Math.min(k, room); i++) { cs.acc[v].push(cardsKey(v, d.n++)); added++; }
-    d.t += k * T.ms;
-  });
-  res.added = added;
+  if (!(pl.t > 0)) { pl.t = now + T.ms; return res; }
+  if (pl.t - now > T.ms) pl.t = now + T.ms;
+  if (now < pl.t) return res;
+  k = Math.floor((now - pl.t) / T.ms) + 1;
+  room = Math.max(0, CARD_DRAW.cap - pl.n);
+  res.added = Math.min(room, k * T.n);
+  pl.n += res.added;
+  pl.t += k * T.ms;
   return res;
 }
-// 距下一批毫秒;待開已滿(stock)回 null(UI 不顯示倒數)
+// 距下次補充毫秒;次數已滿(≥ cap)回 null(UI 不顯示倒數)。venue 參數保留相容(全池共用)
 function cardsNextIn(cs, venue, now) {
-  var d = cs.dr && cs.dr[venue];
-  if (cs.acc[venue].length >= CARD_DRAW.stock) return null;
-  if (!d) return 0;
-  return Math.max(0, Math.min(d.t - now, cardsDrawTier().ms));
+  var pl = cs.pl;
+  if (!pl || pl.n >= CARD_DRAW.cap) return null;
+  if (!(pl.t > 0)) return 0;
+  return Math.max(0, Math.min(pl.t - now, cardsDrawTier().ms));
+}
+function cardsPulls(cs) { return (cs && cs.pl) ? Math.max(0, cs.pl.n | 0) : 0; }
+// 贈抽(新手禮 / 頭目首通 / 任務):直接加次數,不受累積上限截斷。回加了多少
+function cardsPullGrant(cs, n) {
+  n = Math.max(0, n | 0);
+  if (!cs.pl) cs.pl = { n: 0, t: 0, tot: 0 };
+  cs.pl.n = Math.min(1e6, (cs.pl.n | 0) + n);
+  return n;
+}
+// 舊存檔補領:討伐存檔 clearMap({關卡id: 星數})中已通關的頭目關,尚未記在 cs.boss 的補發一次。回補發抽數
+function cardsBossRetro(cs, clearMap) {
+  var n = 0;
+  if (!cs || !clearMap || typeof BN_STAGES === 'undefined') return 0;
+  BN_STAGES.forEach(function (st) { if (st.boss && (clearMap[st.id] | 0) >= 1 && !(cs.boss && cs.boss[st.id])) n += cardsBossGive(cs, st.id); });
+  return n;
+}
+// 頭目首通贈抽:id = 關卡 id('1-6'…);cs.boss[id] 記錄,同一關只發一次。回發放抽數(已領過 / 參數錯 = 0)
+function cardsBossGive(cs, id, n) {
+  var key = String(id || '');
+  if (!cs || !key || key.length > 12) return 0;
+  if (!cs.boss) cs.boss = {};
+  if (cs.boss[key]) return 0;
+  n = (n === undefined) ? CARD_BOSS.pulls : Math.max(0, n | 0);
+  cs.boss[key] = 1;
+  return cardsPullGrant(cs, n);
 }
 // 本期主題(顯示用):酒館酒客風向、縣試科目、殿試本日陣營
 function cardsVenueTheme(venue, no) {
@@ -349,36 +365,50 @@ function cardRollGr(cs, venue, key, slot, star) {
   for (i = 0; i < 5; i++) { acc += p[i]; if (x < acc) return i; }
   return p[4] > 0 ? 4 : 0;
 }
-// 生成一批(酒館 / 縣試 = cardsDrawSize() 張,舊殿試 = V.batch;含批內保底與連續保底);不改 cs,只讀 cs.pity/fame/seed。回 {key, venue, cands, hasUpper, pityHit}
-function cardsGenBatch(cs, venue, key) {
-  var V = CARD_VENUES[venue], cands = [], i, star = cs.stars[venue] || 1, pityHit = false, best, hi, has, rep = [], size = venue === 'G' ? V.batch : Math.min(V.batch, cardsDrawSize()), pityN = venue === 'G' ? CARD_CFG.pityBatches : CARD_DRAW.pity;
+// 生成一次抽卡結果(酒館 / 縣試池 = size 張,size 預設一階的次數;含逐張保底與連抽底線);不改 cs,只讀 cs.pity/fame/seed。回 {key, venue, cands, hasUpper, pityHit, pityEnd}
+// 逐張保底:cs.pity[v] = 連續沒出上等(V.upper)的張數,達 CARD_DRAW.pity 後下一張必出上等;連抽 ≥ floorMin 張才套用批內底線(V.floor)與縣試學院生徒。舊殿試池(G)沿用整批規則
+function cardsGenBatch(cs, venue, key, size) {
+  var V = CARD_VENUES[venue], cands = [], i, star = cs.stars[venue] || 1, pityHit = false, best, rep = [], p, pityN, nb = (typeof cardsNbOn === 'function' && cardsNbOn(cs, venue)), c;
   function highest() { var b = 0, k; for (k = 1; k < cands.length; k++) if (cands[k].tai > cands[b].tai) b = k; return b; }
+  if (venue === 'G') {
+    for (i = 0; i < V.batch; i++) cands.push(cardGen(cs, venue, key, i, cardRollGr(cs, venue, key, i, star)));
+    if (!cands.some(function (x) { return cardIsUpper(x, V); }) && cs.pity[venue] >= CARD_CFG.pityBatches) {
+      best = highest(); cands[best] = cardGen(cs, venue, key, best, V.upper.gr, 'pity', { zhuan: !!V.upper.zhuan }); pityHit = true; rep.push(best);
+    }
+    if (!cands.some(function (x) { return x.gr >= V.floor; })) { best = highest(); cands[best] = cardGen(cs, venue, key, best, V.floor, 'floor'); rep.push(best); }
+    return { key: key, venue: venue, cands: cands, hasUpper: cands.some(function (x) { return cardIsUpper(x, V); }), pityHit: pityHit, pityEnd: 0 };
+  }
+  size = Math.max(1, Math.min((size | 0) || cardsDrawSize(), CARD_DRAW.maxOne));
+  pityN = CARD_DRAW.pity;
   for (i = 0; i < size; i++) cands.push(cardGen(cs, venue, key, i, cardRollGr(cs, venue, key, i, star)));
-  if (typeof cardsNbOn === 'function' && cardsNbOn(cs, venue)) cardsNbPity(cs, venue, key, cands);   // 新手期逐張保底(紫 / 金)
-  has = cands.some(function (c) { return cardIsUpper(c, V); });
-  if (!has && cs.pity[venue] >= pityN) {
-    best = highest();
-    cands[best] = cardGen(cs, venue, key, best, V.upper.gr, 'pity', { zhuan: !!V.upper.zhuan });
-    pityHit = true; rep.push(best);
+  if (nb) cardsNbPity(cs, venue, key, cands);   // 新手期逐張保底(紫 / 金)
+  p = cs.pity[venue] | 0;
+  for (i = 0; i < cands.length; i++) {   // 連續保底(逐張)
+    if (p >= pityN && !cardIsUpper(cands[i], V)) { cands[i] = cardGen(cs, venue, key, i, V.upper.gr, 'pity', { zhuan: !!V.upper.zhuan }); pityHit = true; rep.push(i); }
+    p = cardIsUpper(cands[i], V) ? 0 : p + 1;
   }
-  if (!cands.some(function (c) { return c.gr >= V.floor; })) {
-    best = highest();
-    cands[best] = cardGen(cs, venue, key, best, V.floor, 'floor'); rep.push(best);
+  if (size >= CARD_DRAW.floorMin) {
+    if (!cands.some(function (x) { return x.gr >= V.floor; })) { best = highest(); cands[best] = cardGen(cs, venue, key, best, V.floor, 'floor'); rep.push(best); }
+    if (venue === 'E' && typeof academyPupilBatch === 'function') academyPupilBatch(cs, key, cands, rep);   // 學院院級 ≥ 2:最後一位換成本院生徒(academy.js)
   }
-  if (venue === 'E' && typeof academyPupilBatch === 'function') academyPupilBatch(cs, key, cands, rep);   // 學院院級 ≥ 2:最後一位換成本院生徒(academy.js)
-  return { key: key, venue: venue, cands: cands, hasUpper: cands.some(function (c) { return cardIsUpper(c, V); }), pityHit: pityHit, nb: (typeof cardsNbOn === 'function' && cardsNbOn(cs, venue)) ? cardsNbCount(cs, cands) : undefined };
+  p = cs.pity[venue] | 0;
+  cands.forEach(function (x) { p = cardIsUpper(x, V) ? 0 : p + 1; });
+  return { key: key, venue: venue, cands: cands, hasUpper: cands.some(function (x) { return cardIsUpper(x, V); }), pityHit: pityHit, pityEnd: p, nb: nb ? cardsNbCount(cs, cands) : undefined };
 }
-// 開下一批:已有待入包的當批就回它;否則由 acc 取最舊期鍵生成、更新保底計數、成為 cs.cur(= 『待入包批次』,隨後由 cardsBagCommit 放進名冊 / 卡包;存檔時 cardsNormSave 會把殘留的轉入)
-function cardsOpenBatch(cs, venue) {
+// 抽 n 次:扣次數、依 cs.pl.tot 起算期鍵生成結果、更新保底計數、成為 cs.cur[v](= 『待入包批次』,隨後由 cardsBagCommit 放進名冊 / 卡包)。已有待入包批次就回它(不扣)
+function cardsOpenBatch(cs, venue, n) {
   var b, key, V = CARD_VENUES[venue];
   if (cs.cur[venue]) return cs.cur[venue];
-  if (!cs.acc[venue].length) return null;
-  key = cs.acc[venue].shift();
-  b = cardsGenBatch(cs, venue, key);
-  cs.pity[venue] = b.hasUpper ? 0 : cs.pity[venue] + 1;
-  if (venue === 'G') cs.fame.G = b.cands.some(function (c) { return c.gr === 4; }) ? 0 : cs.fame.G + 1;
+  if (venue === 'G') return null;
+  n = Math.max(1, Math.min(n | 0 || 1, CARD_DRAW.maxOne, cardsPulls(cs)));
+  if (cardsPulls(cs) < 1) return null;
+  key = cardsKey(venue, cs.pl.tot | 0);
+  b = cardsGenBatch(cs, venue, key, n);
+  cs.pl.n -= b.cands.length; cs.pl.tot = (cs.pl.tot | 0) + b.cands.length;
+  cs.pity[venue] = b.pityEnd | 0;
   if (venue === 'E') cs.fame.E = b.cands.some(function (c) { return !!c.fig; }) ? 0 : cs.fame.E + 1;
   if (b.nb) { cs.starter.nb = b.nb; delete b.nb; }   // 新手期計數(張數 / 距上次紫以上 / 距上次金)
+  delete b.pityEnd;
   b.taken = b.cands.map(function () { return 0; });
   cs.cur[venue] = b;
   return b;
@@ -589,7 +619,7 @@ function cardsAnyFind(cs, bid) {
 function cardsOverNow(cs, now) { return Math.max((typeof now === 'number' && isFinite(now)) ? now : Date.now(), (cs.clock && cs.clock.maxSeen) || 0); }
 function cardsOverList(cs) { return (cs.bagOver || []).slice().sort(function (a, b) { return a.exp - b.exp; }); }
 function cardsOverRoom(cs) { return Math.max(0, cardsBagCap() - (cs.bagOver ? cs.bagOver.length : 0)); }
-function cardsBagCanOpen(cs) { return cardsRosterRoom(cs) + cardsBagRoom(cs) + cardsOverRoom(cs) >= CARD_BAG.batchNeed; }   // 開一批需名冊 + 卡包 + 溢出區空位合計 >= batchNeed
+function cardsBagCanOpen(cs, n) { return cardsRosterRoom(cs) + cardsBagRoom(cs) + cardsOverRoom(cs) >= Math.max(1, n | 0 || CARD_BAG.batchNeed); }   // 抽 n 張需名冊 + 卡包 + 溢出區空位合計 >= n(指名等整批省略 n = batchNeed 7)
 function cardsRosterRoom(cs) { return Math.max(0, cardsCap() - cs.roster.length); }
 // 名冊有空位就把卡包的卡補進名冊(名人優先,再依品階、才、先來後到);回補進幾位
 function cardsRosterFill(cs) {
@@ -653,13 +683,17 @@ function cardsBagPut(cs, c, pool, key, expAt) {
   else cs.bag.push(o);
   return o;
 }
-// 開批但先不入包(給抽卡特效用):reason none 無待開批次 busy 上一批尚未入包 bagfull 名冊 + 卡包 + 溢出區空位合計不足 7 張(該批暫存在 acc,不開)
-function cardsBagStage(cs, venue) {
+// 抽卡但先不入包(給抽卡特效用):n = 抽幾次(預設 1)。reason none 次數不足 busy 上一批尚未入包 bagfull 名冊 + 卡包 + 溢出區空位不足(不扣次數) closed 卡池未開放 bad 參數錯
+function cardsBagStage(cs, venue, n) {
   var b;
+  if (venue !== 'T' && venue !== 'E') return { ok: false, reason: 'bad' };
+  if (!cardsVenueOpen(venue)) return { ok: false, reason: 'closed' };
   if (cs.cur[venue]) return { ok: false, reason: 'busy' };
-  if (!cs.acc[venue] || !cs.acc[venue].length) return { ok: false, reason: 'none' };
-  if (!cardsBagCanOpen(cs)) return { ok: false, reason: 'bagfull' };
-  b = cardsOpenBatch(cs, venue);
+  n = Math.max(1, Math.min(n | 0 || 1, CARD_DRAW.maxOne));
+  if (cardsPulls(cs) < 1) return { ok: false, reason: 'none' };
+  n = Math.min(n, cardsPulls(cs));
+  if (!cardsBagCanOpen(cs, n)) return { ok: false, reason: 'bagfull' };
+  b = cardsOpenBatch(cs, venue, n);
   return { ok: true, batch: b, cards: b.cands };
 }
 // 把待入包批次放進名冊 / 卡包。o {now, noAuto, noRoster(讀檔正規化:先全放卡包,之後由 cardsRosterFill 補進名冊)}。
@@ -704,7 +738,7 @@ function cardsBagCommit(cs, venue, o) {
   return res;
 }
 function cardsBagOpen(cs, venue, o) {
-  var r = cardsBagStage(cs, venue);
+  var r = cardsBagStage(cs, venue, (o && o.n) || 1);
   return r.ok ? cardsBagCommit(cs, venue, o) : r;
 }
 // 殘留的待入包批次(中斷 / 舊存檔 / 無特效)全部入包;回處理的批數
@@ -976,7 +1010,7 @@ function cardNormCard(c, isEntry, isBag) {
   return o;
 }
 function cardsNormSave(v, now) {
-  var n, k, V, seenB = {}, tNow = (typeof now === 'number' && isFinite(now)) ? now : Date.now();
+  var n, k, V, seenB = {}, legacyPl, tierN, tmin, dn, tNow = (typeof now === 'number' && isFinite(now)) ? now : Date.now();
   if (!v || typeof v !== 'object') return null;
   n = cardsStateNew(typeof v.seed === 'number' ? v.seed : undefined);
   n.seq = cardNum(v.seq, 0, 1e9, 0) | 0; n.nameTokens = cardNum(v.nameTokens, 0, 1e6, 0) | 0; n.namedCount = cardNum(v.namedCount, 0, 1e9, 0) | 0; n.shards = cardNum(v.shards, 0, 1e7, 0) | 0;
@@ -985,10 +1019,23 @@ function cardsNormSave(v, now) {
     n.shards = Math.min(1e7, n.shards + k);
     n.migNote = { sh: k };
   } else if (v.migNote && typeof v.migNote === 'object') n.migNote = { sh: cardNum(v.migNote.sh, 0, 1e7, 0) | 0 };   // 還沒提示過就存檔
-  if (v.dr && typeof v.dr === 'object') ['T', 'E'].forEach(function (x) {   // 每日一抽的計時(cardsSync)
-    var d = v.dr[x];
-    if (d && typeof d === 'object' && typeof d.t === 'number' && isFinite(d.t)) n.dr[x] = { n: cardNum(d.n, 0, 1e9, 0) | 0, t: cardNum(d.t, 0, 1e15, 0) };
-  });
+  if (n.migNote === undefined && v.migNote && typeof v.migNote === 'object') n.migNote = { sh: cardNum(v.migNote.sh, 0, 1e7, 0) | 0 };
+  if (n.migNote && v.migNote && typeof v.migNote === 'object' && (cardNum(v.migNote.pl, 0, 1e6, 0) | 0) > 0) n.migNote.pl = cardNum(v.migNote.pl, 0, 1e6, 0) | 0;
+  // 次數錢包 cs.pl:cs.v ≥ 3 直接讀;舊存檔(每日一抽,v ≤ 2)一次性遷移 —— 待開批數(acc,T / E / 舊殿試)× 當階每批張數 → 次數、計時取 T / E 兩池較早的下次時間、保底批數 × 當階張數(上限 pity)→ 張數;遷移後 acc / dr 清空(重複載入已是 v 3,不再轉)
+  legacyPl = (cardNum(v.v, 0, 99, 1) | 0) < 3;
+  if (!legacyPl && v.pl && typeof v.pl === 'object') n.pl = { n: cardNum(v.pl.n, 0, 1e6, 0) | 0, t: cardNum(v.pl.t, 0, 1e15, 0), tot: cardNum(v.pl.tot, 0, 1e9, 0) | 0 };
+  else if (legacyPl) {
+    try { tierN = cardsDrawTier().n; } catch (e0) { tierN = CARD_DRAW.size[0].n; }
+    k = 0; tmin = 0; dn = 0;
+    ['T', 'E', 'G'].forEach(function (x) { if (v.acc && Array.isArray(v.acc[x])) k += v.acc[x].filter(function (s) { return typeof s === 'string' && s.indexOf(x + ':') === 0 && isFinite(cardsKeyNo(s)); }).length; });
+    ['T', 'E'].forEach(function (x) {
+      var d = v.dr && v.dr[x];
+      if (d && typeof d === 'object' && typeof d.t === 'number' && isFinite(d.t)) { if (!tmin || d.t < tmin) tmin = d.t; dn += cardNum(d.n, 0, 1e9, 0) | 0; }
+    });
+    n.pl = { n: Math.min(1e6, k * tierN), t: cardNum(tmin, 0, 1e15, 0), tot: Math.min(1e9, dn) };
+    if (k > 0) n.migNote = { sh: n.migNote ? n.migNote.sh : 0, pl: n.pl.n };
+  }
+  if (v.boss && typeof v.boss === 'object') Object.keys(v.boss).slice(0, 200).forEach(function (id) { if (v.boss[id] && id.length <= 12) n.boss[id] = 1; });
   if (v.exWk && typeof v.exWk === 'object' && (cardNum(v.exWk.n, 0, 1e6, 0) | 0) > 0) n.exWk = { w: cardNum(v.exWk.w, -1, 1e9, -1) | 0, n: cardNum(v.exWk.n, 0, CARD_FURNACE.exchange.weekMax, 0) | 0 };   // 碎片兌換券的本週計數(有值才寫);舊存檔的 shardWk(遣散週上限)已廢,讀檔時丟棄
   if (v.clock) n.clock.maxSeen = cardNum(v.clock.maxSeen, 0, 1e15, 0);
   if (v.tokenGiven && typeof v.tokenGiven === 'object') Object.keys(v.tokenGiven).slice(0, 600).forEach(function (k) {
@@ -1005,9 +1052,10 @@ function cardsNormSave(v, now) {
   CARD_VENUE_ORDER.forEach(function (x) {
     V = CARD_VENUES[x];
     n.last[x] = (v.last && typeof v.last[x] === 'number') ? (v.last[x] | 0) : -1;
-    n.acc[x] = (v.acc && Array.isArray(v.acc[x])) ? v.acc[x].filter(function (s) { return typeof s === 'string' && s.indexOf(x + ':') === 0 && isFinite(cardsKeyNo(s)); }).slice(0, V.cap) : [];
+    n.acc[x] = [];   // 舊『待開批次』已在上面轉成次數
     n.pity[x] = (v.pity && typeof v.pity[x] === 'number') ? Math.max(0, v.pity[x] | 0) : 0;
-    if (v.cur && v.cur[x] && Array.isArray(v.cur[x].cands) && v.cur[x].cands.length >= 1 && v.cur[x].cands.length <= V.batch) {   // 新手禮包最後一批可少於 7 張   // 舊存檔(或特效播放中途存檔)的未處理批次:遷入卡包(未被任用者),已任用的不動
+    if (legacyPl && x !== 'G') n.pity[x] = Math.min(CARD_DRAW.pity, n.pity[x] * (tierN || CARD_DRAW.size[0].n));   // 舊保底以『批』計 → 換成『張』
+    if (v.cur && v.cur[x] && Array.isArray(v.cur[x].cands) && v.cur[x].cands.length >= 1 && v.cur[x].cands.length <= Math.max(V.batch, CARD_DRAW.maxOne)) {   // 新手禮包最後一批可少於 7 張   // 舊存檔(或特效播放中途存檔)的未處理批次:遷入卡包(未被任用者),已任用的不動
       var cands = v.cur[x].cands.map(function (c) { return cardNormCard(c, false); });
       if (cands.every(function (c) { return !!c; })) {
         n.cur[x] = { key: String(v.cur[x].key), venue: x, cands: cands, hasUpper: !!v.cur[x].hasUpper, pityHit: !!v.cur[x].pityHit,

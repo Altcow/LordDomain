@@ -16,7 +16,7 @@ var BNLOG_CODE = { round: 'R', act: 'A', skill: 'K', ult: 'U', dmg: 'D', evade: 
 var BNLOG_GR = ['白', '青', '藍', '紫', '金'];
 var BNLOG_WHY = {
   hit: '受擊', kill: '擊倒', skill: '戰法', allydown: '友軍倒下', act: '行動', idle: '待命', ult: '施放大招', aura: '光環', chain: '連鎖', bond: '羈絆', rx: '反應', down: '被削', steal: '被奪', killskill: '戰法擊倒', antidote: '解毒',
-  expire: '到期', used: '已生效', cleanse: '被淨化', dispel: '被驅散', stun: '暈眩', fear: '威懾', trap: '中伏', sleep: '沉睡中', paralyze: '麻痺中', wake: '受擊驚醒', pursuit: '追擊', wipe: '全滅決勝', limit: '回合上限判定', retreat: '撤退(算敗北)'
+  expire: '到期', used: '已生效', cleanse: '被淨化', dispel: '被驅散', stun: '暈眩', fear: '威懾', trap: '中伏', sleep: '沉睡中', paralyze: '麻痺中', wake: '受擊驚醒', pursuit: '追擊', wipe: '全滅決勝', limit: '回合上限,以剩餘兵力判定', retreat: '撤退(算敗北)'
 };
 var BNLOG_TY = { phys: '攻擊', strat: '謀略', dot: '持續', self: '自損' };
 var BNLOG_CAT = { command: '指揮', active: '主動', pursuit: '追擊', passive: '被動', ult: '大招', assist: '補刀', bond: '羈絆' };
@@ -43,12 +43,12 @@ function bnLogEncOne(e, K) {
     case 'act': f = [e.u, e.x ? 1 : '']; break;
     case 'skill': f = [e.u, K(e.name || bnLogSkName(e.id)), K(e.cat || ''), n(e.rc), n(e.as)]; break;
     case 'ult': f = [e.u, K(bnLogSkName(e.id))]; break;
-    case 'dmg': f = [n(e.src), e.tgt, e.v | 0, e.abs ? e.abs | 0 : '', (e.crit ? 1 : 0) | (e.basic ? 2 : 0) | (e.ctr ? 4 : 0), e.hp | 0, K(e.ty || ''), n(e.via), e.dot ? K(e.dot) : '', e.rx ? K(e.rx) : '']; break;
-    case 'evade': f = [n(e.src), e.tgt, e.miss ? 1 : '']; break;
+    case 'dmg': f = [n(e.src), e.tgt, e.v | 0, e.abs ? e.abs | 0 : '', (e.crit ? 1 : 0) | (e.basic ? 2 : 0) | (e.ctr ? 4 : 0) | (e.pv > 0 ? 8 : 0) | (e.pv < 0 ? 16 : 0), e.hp | 0, K(e.ty || ''), n(e.via), e.dot ? K(e.dot) : '', e.rx ? K(e.rx) : '']; break;
+    case 'evade': f = [n(e.src), e.tgt, e.miss ? 1 : (e.dr ? 2 : '')]; break;
     case 'heal': f = [n(e.src), e.tgt, e.v | 0, n(e.nom), e.hp | 0, e.blk ? 1 : '']; break;
     case 'shield': f = [n(e.src), e.tgt, e.v | 0]; break;
     case 'revive': f = [e.tgt, e.hp | 0]; break;
-    case 'status': f = [n(e.src), n(e.tgt), K(e.id), n(e.left), n(e.val)]; break;
+    case 'status': f = [n(e.src), n(e.tgt), K(e.id), n(e.left), n(e.val), e.ice ? 1 : '']; break;
     case 'unstatus': f = [e.tgt, K(e.id), K(e.why || '')]; break;
     case 'resist': f = [e.tgt, K(e.id), n(e.layers)]; break;
     case 'immune': case 'ccimm': f = [e.tgt, K(e.id)]; break;
@@ -113,7 +113,7 @@ function bnLogNormRep(r) {
   return r;
 }
 // 戰鬥規則版本:存檔記 rules;載入時與目前不同(含壞檔 / 沒有版本欄位的舊戰報)→ 最近與已儲存整批清掉,提示一次(清完即寫入新版本記號,不會重複提示)
-var BNLOG_RULES = 'r50-sp2-20261109';   // 2026-11-09:回合上限 8 → 50;同日加入睡眠 / 麻痺狀態(sp);再加神醫 / 禁療戰法並移除華佗睡眠戰法(sp2)
+var BNLOG_RULES = 'r11-troop-20261109';   // 2026-11-09:兵種『步』更名『槍』、新增兵種克制循環(槍 > 騎 > 盾 > 弓 > 槍;dmg 事件加 pv 旗標,舊戰報 / 對戰碼整批作廢);先前:2026-11-09:回合上限 50 → 10(逾時依剩餘兵力比例判定)、新增機率閃避 dodge_rate(evade 事件加 dr 旗標);先前:回合上限 8 → 50;同日加入睡眠 / 麻痺狀態(sp);再加神醫 / 禁療戰法並移除華佗睡眠戰法(sp2);status 事件加 ice 旗標,寒冰戰報多一欄(ice)
 function bnLogLoad() {
   var raw = bnLogLsGet(BNLOG.key), o = null, d = { v: 1, recent: [], saved: [] }, had;
   if (raw) { try { o = JSON.parse(raw); } catch (e) { o = null; } }
@@ -198,16 +198,16 @@ function bnLogItems(rep) {
       case 'D':
         x = +f[4] || 0;
         push('dmg', nm(f[0]) + ' → ' + nm(f[1]) + ' ' + (x & 2 ? '普攻' : (BNLOG_TY[D(f[6])] || '')) + (x & 4 ? '反擊' : '') + (f[8] ? '(' + bnLogStName(D(f[8])) + ')' : '') + '傷害 ' + f[2] +
-          (f[3] ? '(護盾吸收 ' + f[3] + ')' : '') + (x & 1 ? ' 暴擊' : '') + (f[7] ? '(' + nm(f[7]) + ' 援護代受)' : '') + (f[9] ? '〔反應:' + D(f[9]) + '〕' : '') + ' · 剩兵力 ' + f[5]);
+          (f[3] ? '(護盾吸收 ' + f[3] + ')' : '') + (x & 1 ? ' 暴擊' : '') + (x & 8 ? ' 〔兵種克制,傷害提高〕' : (x & 16 ? ' 〔兵種被克,傷害降低〕' : '')) + (f[7] ? '(' + nm(f[7]) + ' 援護代受)' : '') + (f[9] ? '〔反應:' + D(f[9]) + '〕' : '') + ' · 剩兵力 ' + f[5]);
         break;
-      case 'E': push('ef', f[2] === '1' ? nm(f[0]) + ' 命中下降,攻擊落空' : nm(f[1]) + ' 閃避了 ' + nm(f[0]) + ' 的攻擊'); break;
+      case 'E': push('ef', f[2] === '1' ? nm(f[0]) + ' 命中下降,攻擊落空' : (f[2] === '2' ? nm(f[1]) + ' 機率閃避,閃開了 ' + nm(f[0]) + ' 的攻擊' : nm(f[1]) + ' 閃避了 ' + nm(f[0]) + ' 的攻擊')); break;
       case 'H': push('heal', nm(f[0]) + ' 治療 ' + nm(f[1]) + ' +' + f[2] + (f[3] && +f[3] !== +f[2] ? '(原 ' + f[3] + (f[5] ? ',禁療減少' : '') + ')' : '') + ' · 剩兵力 ' + f[4]); break;
       case 'S': push('heal', nm(f[0]) + ' 給 ' + nm(f[1]) + ' 護盾 +' + f[2]); break;
       case 'V': push('heal', nm(f[0]) + ' 復活,兵力 ' + f[1]); break;
       case 'T':
         x = D(f[2]);
         if (x === 'sleep' || x === 'paralyze') { push('st', nm(f[1]) + (x === 'sleep' ? ' 沉睡' : ' 麻痺') + (f[3] ? ' ' + f[3] + ' 回合' : '') + (f[0] && f[0] !== '-1' ? '(' + nm(f[0]) + ' 施加)' : '')); break; }   // 睡眠 / 麻痺(2026-11-09)
-        push('st', nm(f[0]) + ' 對 ' + (f[1] === '-1' ? '全場' : nm(f[1])) + ' 施加〔' + bnLogStName(D(f[2])) + '〕' + (f[3] ? ' ' + f[3] + ' 回合' : '') + (f[4] ? ' 值 ' + f[4] : '')); break;
+        push('st', nm(f[0]) + ' 對 ' + (f[1] === '-1' ? '全場' : nm(f[1])) + ' 施加〔' + bnLogStName(D(f[2])) + '〕' + (f[3] ? ' ' + f[3] + ' 回合' : '') + (f[4] ? ' 值 ' + f[4] : '') + (f[5] ? '〔寒凍〕' : '')); break;
       case 'X':
         if (D(f[1]) === 'sleep' && (D(f[2]) === 'wake' || D(f[2]) === 'expire')) { push('st', nm(f[0]) + (D(f[2]) === 'wake' ? ' 受到攻擊,被喚醒' : ' 睡醒了')); break; }
         push('st', nm(f[0]) + ' 的〔' + bnLogStName(D(f[1])) + '〕解除(' + W(D(f[2])) + ')'); break;

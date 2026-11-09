@@ -172,18 +172,10 @@ function lhHtmlOverview() {
   else h += '<div class="lhr"><span>庫房無警示</span></div>';
   var hasMood = (typeof cityAdvisorOpen === 'function') || (typeof cityOverviewOpen === 'function') || (typeof panelOpen === 'function' && typeof cityAdvisorRender === 'function');
   var hasTech = (typeof techPanelOpen === 'function') || (typeof toggleTechPanel === 'function');
-  if (typeof cardsUiOpen === 'function' && typeof cardsGet === 'function' && cardsGet()) {   // 招賢入口(新手禮包 / 每日一抽 / 名冊名額;cardsui_starter.js)
-    var cs = cardsGet(), stOk = typeof cardsStarterState === 'function' && cardsStarterState(cs) === 'ready', cap = (typeof cardsCap === 'function') ? cardsCap() : 0, ready = 0, nx = null, drawTxt = '';
-    ['T', 'E'].forEach(function (v) {
-      var t;
-      if (typeof cardsVenueOpen === 'function' && !cardsVenueOpen(v)) return;
-      t = (typeof cardsNextIn === 'function') ? cardsNextIn(cs, v, Date.now()) : null;
-      if (cs.acc[v].length) ready += cs.acc[v].length;
-      else if (t !== null && t <= 0) ready++;
-      else if (t !== null && (nx === null || t < nx)) nx = t;
-    });
-    drawTxt = ready ? ' · <b>可抽 ' + ready + ' 批</b>' : (nx !== null ? ' · 下一批:' + (nx < 3600000 ? '不到 1 小時' : Math.ceil(nx / 3600000) + ' 小時後') : '');
-    h += '<div class="lhsec">招賢</div><div class="lhr"><span>名冊 ' + cs.roster.length + '/' + cap + (cs.bag.length ? ' · 卡包 ' + cs.bag.length + ' 張' : '') + drawTxt + (stOk ? ' · <b>🎁 新手禮包可領</b>' : '') + '</span><button class="lhb" data-lh="cards">' + (stOk ? '領新手禮包' : '打開招賢') + '</button></div>';
+  if (typeof cardsUiOpen === 'function' && typeof cardsGet === 'function' && cardsGet()) {   // 卡包入口(新手禮包 / 抽卡次數 / 名冊名額;cardsui_starter.js)
+    var cs = cardsGet(), stOk = typeof cardsStarterState === 'function' && cardsStarterState(cs) === 'ready', cap = (typeof cardsCap === 'function') ? cardsCap() : 0, ready = (typeof cardsPulls === 'function') ? cardsPulls(cs) : 0, nx = (typeof cardsNextIn === 'function') ? cardsNextIn(cs, 'T', Date.now()) : null, drawTxt = '';
+    drawTxt = ready ? ' · <b>可抽 ' + ready + ' 次</b>' : (nx !== null ? ' · 下次補充:' + (nx < 3600000 ? '不到 1 小時' : Math.ceil(nx / 3600000) + ' 小時後') : '');
+    h += '<div class="lhsec">卡包</div><div class="lhr"><span>名冊 ' + cs.roster.length + '/' + cap + (cs.bag.length ? ' · 卡包 ' + cs.bag.length + ' 張' : '') + drawTxt + (stOk ? ' · <b>🎁 新手禮包可領</b>' : '') + '</span><button class="lhb" data-lh="cards">' + (stOk ? '領新手禮包' : '打開卡包') + '</button></div>';
     if (cap && cs.roster.length >= cap) h += '<div class="lhr lhwarn"><span>名冊已滿,抽到的卡會先放卡包,可遣散或提升官階</span></div>';
   }
   h += '<div><button class="lhb" data-lh="mood"' + (lhMoodFn() ? '' : ' disabled') + '>開啟民情總覽</button>' +

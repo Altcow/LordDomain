@@ -300,6 +300,7 @@ const NL_FEATURE_GATE = {
   decree: { type: 'open' },
   heatmap: { type: 'node', need: 'wr_shangji' },
   tavern: { type: 'node', need: 'ed_xiangyin', note: '場上有酒肆 / 客棧任一' },
+  cardpack: { type: 'open', note: '卡包(酒館池)一開始就開放;縣試池另需 exam、指名池另需 dianshi 科技' },
   exam: { type: 'node', need: 'ed_xuexiao' },
   dianshi: { type: 'node', need: 'e_dongguan' },
   academy: { type: 'node', need: 'ed_xuexiao' },

@@ -55,6 +55,7 @@ function goodsNormCity(v) {
     if (v.ns && typeof nsNormSave === 'function') c.ns = nsNormSave(v.ns);   // 推薦下一步:已關閉 / 已看過 id(nextstep.js)
     if (v.cards && typeof cardsNormSave === 'function') { var cd = cardsNormSave(v.cards); if (cd) c.cards = cd; }   // 酒館 / 名冊(cards.js)
     if (v.tavern && typeof tavernNormSave === 'function') { var tv = tavernNormSave(v.tavern); if (tv) c.tavern = tv; }
+    if (v.mkt && typeof mktNormSave === 'function') { var mk = mktNormSave(v.mkt); if (mk) c.mkt = mk; }   // 市集收購今日用量(mktbuy.js)
     if (v.tut && typeof tutNormSave === 'function') { var tu = tutNormSave(v.tut); if (tu) c.tut = tu; }   // 新手教學進度(tutorial.js);沒有 = 已畢業   // 酒館室內資料 {lv, rooms, seed}(tavern_scene.js;I1 起才有包間內容)
   }
   return c;
@@ -539,7 +540,7 @@ function goodsBldHealth(t) {
   return best;
 }
 // 第一層缺口:缺 X → 去哪裡。回傳 { id, name, where, act:'build'|'tech'|'go'|'buy'|'refill'|'', arg, label, buy }
-function goodsGapInfo(id, built) {
+function goodsGapInfo(id, built, need) {
   var g = GOODS[id] || {}, mk = goodsMakers(id), out = { id: id, name: goodsName(id), where: '', act: '', arg: '', label: '', buy: goodsBuyable(id) }, m = null, i, h, lk;
   built = built || goodsBuiltTypes();
   for (i = 0; i < mk.length && !m; i++) if (built[mk[i].bld]) m = mk[i];
@@ -560,6 +561,7 @@ function goodsGapInfo(id, built) {
     }
   } else out.where = g.legacy ? '舊材料,目前只能從獎勵取得' : '本城還做不出來';
   if (!out.act && out.buy) { out.act = 'buy'; out.label = '走鏢'; out.where += out.where ? ';走鏢有機會帶回' : '走鏢有機會帶回'; }
+  out.mkt = typeof mktBuyInfo === 'function' ? mktBuyInfo(id, need || 1) : null;   // 市集收購(mktbuy.js 沒載入 = null,不顯示按鈕)
   return out;
 }
 // 白話狀態(四種 + 自動調度關時的「等補料」)
@@ -596,7 +598,7 @@ function goodsNeedList() {
     for (id in rin) {
       var have = cityGoodsHave(id), lack = g.state === 'miss' && (have < rin[id] || !!g.missSet[id]);   // 上游邊產邊用而仍在運轉的不算缺
       g.mats.push({ id: id, name: goodsName(id), icon: goodsIcon(id), n: rin[id], have: have, lack: lack });
-      if (lack) g.gaps.push(gap(id));
+      if (lack) g.gaps.push(Object.assign({}, gap(id), { need: Math.max(1, rin[id] - have) }));
     }
     if (g.ore) {
       var ore = goodsBldUnlocked('ore_iron') && typeof OBJECTS !== 'undefined' && OBJECTS.ore_iron;
@@ -776,7 +778,7 @@ function goodsGapBtn(gp) {
   return '';
 }
 function goodsGapLine(gp) {
-  return '<div class="ggap">缺 ' + goodsEsc(gp.name) + ' → ' + goodsEsc(gp.where) + ' ' + goodsGapBtn(gp) + (gp.buy && gp.act !== 'buy' ? ' <button class="gmini" data-gp="gbuy">走鏢</button>' : '') + '</div>';
+  return '<div class="ggap">缺 ' + goodsEsc(gp.name) + ' → ' + goodsEsc(gp.where) + ' ' + goodsGapBtn(gp) + (gp.mkt && gp.mkt.can > 0 ? ' <button class="gmini" data-gp="mkt" data-v="' + goodsEsc(gp.id) + '" data-n="' + (gp.need || 1) + '">市集收購 🪙' + mktBuyInfo(gp.id, gp.need || 1).total + '</button>' : '') + (gp.buy && gp.act !== 'buy' ? ' <button class="gmini" data-gp="gbuy">走鏢</button>' : '') + '</div>';
 }
 function goodsNeedHtml() {
   var c = goodsCity(), auto = goodsAutoOn(), list = goodsNeedList(), h = '', cnt = { run: 0, miss: 0, full: 0, road: 0, hold: 0 };
@@ -895,6 +897,7 @@ function goodsPanelClick(e) {
   else if (a === 'gbuild') goodsGoBuild(t.getAttribute('data-v'));
   else if (a === 'gtech') goodsGoTech(t.getAttribute('data-v'));
   else if (a === 'gbuy') goodsGoBuy();
+  else if (a === 'mkt') { if (typeof mktBuyUi === 'function') mktBuyUi(t.getAttribute('data-v'), +t.getAttribute('data-n') || 1, function () { goodsPanelRender(); }); }
   else if (a === 'view') { if (typeof chainVisToggle === 'function') chainVisToggle(); goodsPanelRender(); }
   else if (a === 'go') {
     var kk = (t.getAttribute('data-k') || '').split(',');

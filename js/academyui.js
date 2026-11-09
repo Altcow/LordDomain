@@ -64,7 +64,7 @@ function cuAcademyHtml(cs, e) {
   var A = CARD_ACADEMY, I = academyInfo(cs), s = e.study, h = '<div class="cusec">學院進修</div>', now = Date.now(), chk, k, first = null, rows = '', chips = '';
   h += '<div class="cusub" style="opacity:1">' + (I.lv ? '學院:' + cuEsc(I.name) + '(院級 ' + I.lv + ')· 進修席 ' + I.used + '/' + I.seats : '學院尚未開放(研〈郡國學校〉並建學舍)') +
     ' · 已進修 ' + (e.sn | 0) + ' 次 · 升階 ' + (e.up | 0) + '/' + CARD_CFG.upMax + (e.pu ? '<br>出身:' + cuEsc(academyPupilName(e.pu)) + '(學院栽培的人)' : '') + '<br>花費以碎片(卡片熔爐所得)與金幣支付。</div>';
-  if (I.lv >= A.pupil.academy) h += '<div class="cusub" style="opacity:1">生徒:每批縣試的最後一位是本院生徒(至少青' + (I.lv >= A.pupil.blueLv ? ',有機會藍' : '') + ';有教習時常帶教習的職業)。</div>';
+  if (I.lv >= A.pupil.academy) h += '<div class="cusub" style="opacity:1">生徒:縣試池連抽 ' + CARD_DRAW.floorMin + ' 張以上時,最後一張是本院生徒(至少青' + (I.lv >= A.pupil.blueLv ? ',有機會藍' : '') + ';有教習時常帶教習的職業)。</div>';
   h += cuAcXunHtml(cs, I);
   if (e.fig) return h + '<div class="cusub">名人不進修、不升階。</div>';
   h += '<div class="cusub" style="opacity:1">' + (academyTeachSeats(I.lv) ? '教習席 ' + academyTeachFlagged(cs).length + '/' + academyTeachSeats(I.lv) + '(教習:進修花費 −教化階 × ' + Math.round(A.teachPerTier * 100) + ' %;同職業且教習 III 以上,課數 −' + A.teachLessonCut + ';自動選最有利的一位)' : '教習席於院級 2 起開放') + '</div>';

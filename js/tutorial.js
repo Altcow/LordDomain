@@ -7,6 +7,7 @@
 // ES2017;不用 ?. ??。
 
 var TUT_GRANT_KEYS = ['xue1', 'md', 'skip', 'grad', 't9'];
+var TUT_SEEN_KEYS = ['detail', 'team'];   // 卡包教學步驟的『看過』旗標:C3 看過卡詳情、C4 先記著(戰鬥未開放時)
 var TUT_HOLD_MS = 5000;         // T8 三根長條綠色需維持的時間
 var TUT_IDLE_MS = 90000;        // 同一步閒置超過此時間,卡片加註「幫你選好位置」
 var TUT_T9_GUARANTEE_MS = 900000; // T9 起算 15 分鐘仍未排入,補到學識 10(保底)
@@ -20,6 +21,9 @@ function tutActive() { var c = tutCity(); return !!(c && c.tut && c.tut.step !==
 function tutHas() { var c = tutCity(); return !!(c && c.tut); }
 function tutGraduated() { var c = tutCity(); return !!(c && c.tut && c.tut.step === 'END'); }
 function tutProgress(step) { var i = TUT_IDS.indexOf(step); return i < 0 ? '' : i + '/' + TUT_TOTAL; }
+// 卡包教學的『看過』旗標(cardsui.js 點開卡詳情時呼叫 tutSeen('detail');C4 的『先記著』鈕 tutAct('teamok'))
+function tutSeen(k) { var c = tutCity(); if (!c || !c.tut || TUT_SEEN_KEYS.indexOf(k) < 0) return false; if (!c.tut.seen) c.tut.seen = {}; c.tut.seen[k] = 1; return true; }
+function tutHasSeen(k) { var c = tutCity(); return !!(c && c.tut && c.tut.seen && c.tut.seen[k]); }
 function tutToast(m) { if (typeof showToast === 'function') showToast(m); }
 
 function tutStartNew() {
@@ -38,6 +42,7 @@ function tutNormSave(v) {
   if (v.grants && typeof v.grants === 'object') for (k in v.grants) if (TUT_GRANT_KEYS.indexOf(k) >= 0 && v.grants[k]) o.grants[k] = 1;
   if (v.at && typeof v.at === 'object') for (k in v.at) if (TUT_IDS.indexOf(k) >= 0 && typeof v.at[k] === 'number' && isFinite(v.at[k])) o.at[k] = v.at[k];
   if (typeof v.hold === 'number' && isFinite(v.hold)) o.hold = v.hold;
+  if (v.seen && typeof v.seen === 'object') { TUT_SEEN_KEYS.forEach(function (k) { if (v.seen[k]) { if (!o.seen) o.seen = {}; o.seen[k] = 1; } }); }
   if (v.gs) o.gs = 1;
   if (v.gsp) o.gsp = 1;
   if (typeof v.gsn === 'number' && isFinite(v.gsn)) o.gsn = v.gsn;
@@ -137,8 +142,30 @@ function tutFillGo(go) {
   return o;
 }
 
+// 卡包開場步驟(C1~C4,兩種模式共用)的完成條件:C1 領了新手禮包(不適用 / 已領都算)、C2 抽過卡、C3 看過卡詳情、C4 組了隊(討伐陣容有人)或按了『先記著』
+function tutTeamFormed() {
+  var d = null, i;
+  if (typeof bnUiLoad !== 'function') return false;
+  try { d = bnUiLoad(); } catch (e) { return false; }
+  if (!d) return false;
+  if (d.cur && d.cur.slots && d.cur.slots.length >= 3) return true;
+  for (i = 0; i < (d.forms || []).length; i++) if (d.forms[i] && d.forms[i].slots && d.forms[i].slots.length >= 3) return true;
+  return false;
+}
+function tutDoneCards(step) {
+  var cs = (typeof cardsGet === 'function') ? cardsGet() : null;
+  if (!cs) return true;
+  switch (step) {
+    case 'C1': return typeof cardsStarterState !== 'function' || cardsStarterState(cs) !== 'ready';
+    case 'C2': return (cs.pl && (cs.pl.tot | 0) >= 1) || cs.roster.length + cs.bag.length > 0;
+    case 'C3': return tutHasSeen('detail');
+    case 'C4': return tutHasSeen('team') || tutTeamFormed();
+    default: return false;
+  }
+}
 // 步驟完成條件(T0 / T11 只由按鈕推進,這裡不判斷)
 function tutDone(step, s, mem, t, now) {
+  if (step.charAt(0) === 'C') return tutDoneCards(step);
   if (tutSimple()) return tutDoneSimple(step, s);
   switch (step) {
     case 'T1': return s.houses >= 1 && tutWater() >= 80;   // 沒有民房時城市飲水值不具意義
@@ -230,23 +257,25 @@ function tutCompute(s, mem) {
   rp = tutRepair(t.step, s, t);
   if (rp) { text = rp.text; if (rp.why) why = rp.why; go = rp.go || go; alt = rp.alt || null; }
   if (sim && t.step === 'T3' && !alt && !tutStarted(tutS('t1'))) alt = { id: 'expedite', text: '先研〈' + tutTechName(tutS('t1')) + '〉,排到最前' };
+  if (t.step === 'C4' && !alt) alt = { id: 'teamok', text: '先記著,之後再組' };
   if (!sim && t.step === 'T4' && !alt && !tutStarted('md_cesuo')) alt = { id: 'expedite', text: '先研茅廁,排到最前' };
   idle = now - (t.at[t.step] || now) >= TUT_IDLE_MS && go.kind === 'build';
   if (idle) why = (why ? why + ' ' : '') + '點「前往」,我幫你選好位置。';
   return { id: 'tut:' + t.step, src: 'tut', tier: 'T', icon: d.icon, text: text, why: why, go: go, progress: tutProgress(t.step), stepId: t.step, alt: alt };
 }
 
-// 卡片按鈕:T0 開始、T11 好、T4 把茅廁排到最前
+// 卡片按鈕:T0 開始、T11 好、T4 把茅廁排到最前、C4 先記著
 function tutAct(id) {
   if (id === 'start') return tutStart();
   if (id === 'grad') return tutGrad();
   if (id === 'expedite') return tutExpedite();
+  if (id === 'teamok') { var cc = tutCity(); if (cc && cc.tut && cc.tut.step === 'C4') { tutSeen('team'); return true; } return false; }
   return false;
 }
 function tutStart() {
   var c = tutCity();
   if (!c || !c.tut || c.tut.step !== 'T0') return false;
-  tutSetStep(c.tut, 'T1', tutClock());
+  tutSetStep(c.tut, 'C1', tutClock());
   return true;
 }
 function tutGrad() {

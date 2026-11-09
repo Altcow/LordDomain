@@ -41,7 +41,7 @@ var NS_CHAIN = [
     go: { kind: 'build', type: 'house' }, obj: 'house', done: { k: 'houses', n: 6 } },
   { id: 'n_notice', icon: '📜', text: '何不立座告示牌,安定地方?', why: '人多了治安會鬆,告示牌能穩住秩序。',
     go: { kind: 'build', type: 'notice_board' }, obj: 'notice_board', done: { k: 'cnt', t: ['notice_board'], n: 1 } },
-  { id: 'n_tavern', icon: '🍶', text: '不妨蓋座招賢館,招募第一位人物。', why: '招賢館聚四方賢才,是人物入城的門。',
+  { id: 'n_tavern', icon: '🍶', text: '不妨蓋座招賢館,給城裡添個招賢的門面。', why: '抽卡不必靠它,點側欄〈卡包〉就能抽;招賢館是城裡的招牌。',
     go: { kind: 'build', type: 'tavern' }, obj: 'tavern', done: { k: 'cnt', t: ['tavern'], n: 1 } },
   { id: 'n_story', icon: '🎙️', text: '何不蓋座說書台,添些樂子?', why: '有得消遣,民心自然安穩。',
     go: { kind: 'build', type: 'storyteller' }, obj: 'storyteller', done: { k: 'cnt', t: ['storyteller'], n: 1 } },

@@ -5,7 +5,8 @@
 var BN_DATA = {
   v: 1,
   K: 1.0,                      // 傷害總係數(§3.4);B1 調參 1.6 → 1.73;戰鬥改版(多戰法同時發動 + 放完戰法仍普攻 + cdCut)1.73 → 1.0,維持 5~7 回合
-  maxRound: 50,                // 回合上限(2026-11-09 使用者決議 8 → 50:讓疲兵自然分出勝負;到上限仍依剩餘兵力比判定)
+  maxRound: 10,                // 回合上限(單一來源;2026-11-09 使用者決議 50 → 10:讓慢熱 / 爆發型戰法節奏都有空間;到上限依剩餘兵力比例判定,較高者勝)
+  roundPhase: { earlyTo: 3, lateFrom: 7 },   // 節奏分段(前期 1~3、中期 4~6、後期 7~maxRound);之後加『第 N 回合起 / 前 N 回合』效果請走 bnRoundPhase / bnRoundIn
   critMul: 1.5,
   jitter: 0.10,                // 浮動 ±5 %:0.95 + 0.10 × r
   grade: [1.00, 1.04, 1.08, 1.12, 1.16],          // 品階係數 g(§2.1)
@@ -22,15 +23,18 @@ var BN_DATA = {
   resPer: 0.004, resFrom: 40, resMax: 0.25,        // 減益抵抗 RES
   // 兵種(§2.2)
   troops: {
-    '盾': { hp: 1.30, atk: 0.80, def: 1.40, spd: -10, R: 1 },
-    '步': { hp: 1.10, atk: 1.05, def: 1.00, spd: 0, R: 1 },
-    '騎': { hp: 1.00, atk: 1.15, def: 0.85, spd: 20, R: 2 },
-    '弓': { hp: 0.85, atk: 1.05, def: 0.75, spd: 8, R: 3 },
-    '謀': { hp: 0.80, atk: 0.70, def: 0.70, spd: 5, R: 3 }
+    // 2026-11-09 兵種克制改版:原『步』更名『槍』並與其他兵種一起依 tools/bn_troop_matrix.js 矩陣重調(槍 hp / atk / def 上調、騎 atk / spd 下調、盾 hp / def 略降 atk 上調、弓 hp / atk 上調、謀 hp / def 上調)
+    '槍': { hp: 1.15, atk: 1.12, def: 1.05, spd: 0, R: 1 },
+    '騎': { hp: 1.00, atk: 1.08, def: 0.85, spd: 16, R: 2 },
+    '盾': { hp: 1.20, atk: 0.88, def: 1.25, spd: -10, R: 1 },
+    '弓': { hp: 1.00, atk: 1.12, def: 0.75, spd: 8, R: 3 },
+    '謀': { hp: 1.05, atk: 0.70, def: 0.80, spd: 5, R: 3 }
   },
-  troopList: ['盾', '步', '騎', '弓', '謀'],
+  troopList: ['槍', '騎', '盾', '弓', '謀'],   // 順序 = 克制循環 槍 > 騎 > 盾 > 弓 > 槍(謀不在循環內)
+  troopAlias: { '步': '槍' },                    // 舊存檔 / 舊隊伍碼的兵種名正規化(bnTroopNorm)
   normalMag: 0.8,              // 謀兵種普攻 strat 0.8 × MAG
-  prey: { '盾': { '步': 0.8, '騎': 1.25 }, '步': { '盾': 1.25, '弓': 0.8 }, '騎': { '盾': 0.8, '弓': 1.25, '謀': 1.25 }, '弓': { '步': 1.25, '騎': 0.8 } },
+  // 兵種克制(物理傷害 phys;謀略 strat 不吃):prey[攻方][守方] = 傷害倍率。循環 槍 > 騎 > 盾 > 弓 > 槍(克制 ×1.3、被克 ×0.8);騎另克謀 ×1.3
+  prey: { '槍': { '騎': 1.3, '弓': 0.8 }, '騎': { '盾': 1.3, '槍': 0.8, '謀': 1.3 }, '盾': { '弓': 1.3, '騎': 0.8 }, '弓': { '槍': 1.3, '盾': 0.8 } },
   blockPct: 0.15,              // 盾兵格擋 = floor(0.15 × DEF)(每段 phys)
   cavCharge: 1.2,              // 騎兵每場第一次普攻
   archerBackTaken: 0.9,        // 弓站後排受近戰普攻
@@ -62,6 +66,7 @@ var BN_DATA = {
     silence: [1, 1, 2, 2], taunt: [1, 2, 2, 3], taunt_def: [0, 0.10, 0.20, 0.30], fear_skip: [0.20, 0.30, 0.40, 0.50], bind: [1, 1, 1, 2],
     dot_burn: [0.15, 0.20, 0.25, 0.30], dot_poison: [0.03, 0.04, 0.05, 0.06], dot_bleed: [0.15, 0.20, 0.25, 0.30],
     counter: [0.4, 0.5, 0.6, 0.8], reorder_spd: [0, 5, 10, 15], guard: [0.3, 0.5, 0.7, 1.0], lifesteal_pct: [0.2, 0.3, 0.4, 0.5],
+    dodge_rate: [0.20, 0.25, 0.35, 0.45],   // 機率閃避(2026-11-09):被攻擊時閃開的機率;技能 params.val 可覆寫
     evade: [1, 1, 2, 2], confuse: [1, 1, 2, 2], timid: [1, 1, 1, 2], dispel: [1, 2, 99, 99], dispel_shield: [0, 0.5, 1, 1], buff_steal: [1, 1, 2, 3], invert: [1, 1, 2, 3],
     cd_reduce: [1, 1, 2, 2], summon_hp: [0.15, 0.25, 0.35, 0.5], summon_atk: [0.4, 0.55, 0.7, 0.9],
     stat_charge: [0.03, 0.04, 0.05, 0.06],      // stack_charge 每層加成
@@ -81,7 +86,7 @@ var BN_DATA = {
   ward: { maxLayers: 2, dur: 3, rateScale: 5.0 },   // B1 調參 1 → 5(抵禦來源稀少,否則擋下率 < 2%)
   ccImmRounds: 1,              // 強控後抗控
   // 疲兵(§4.11):第 5 回合起 受傷 +10 %/回合、受療 −10 %/回合,累加
-  fatigue: { start: 5, dmg: 0.10, heal: 0.10 },   // 回合上限改 50 後,疲兵累加足以讓戰鬥自然收斂(3000 場平均 6.7 回合、逾時 0%),不需加重
+  fatigue: { start: 5, dmg: 0.10, heal: 0.10 },   // 回合上限 10(2026-11-09):疲兵第 5 回合起累加,至第 10 回合受傷 +60 %、受療 −60 %
   // 連鎖(§3.10、combos partC)
   chain: { stepCap: 8, maxDepth: 3, followUpPerUnit: 1, extraActionPerUnit: 1, extraActionPerTeam: 2, comboHitBonus: 0.05, comboHitCap: 0.25, targetDmgCapPct: 0.60, teamDmgCapPct: 0.40, assistKillRecast: false, ultAssistMul: 0.5, assistBasicMul: 1.0, assistSmallMul: 0.7, recastDefaultMax: 2, recastDefaultDecay: 0.7, ultRecastMax: 2, ultRecastDecay: 0.7 },
   counterPerAttacker: 1,
@@ -106,8 +111,8 @@ var BN_DATA = {
   figTags: { lord: ['caocao', 'liubei', 'sunquan', 'zhangjiao', 'dongzhuo', 'yuanshao', 'yuanshu'], mystic: ['zhangjiao', 'zhangbao', 'yuji', 'zhanglu', 'zuoci', 'nanhua'], sun_clan: ['sunjian', 'sunce', 'sunquan', 'sunshangxiang'], taoyuan: ['liubei', 'guanyu', 'zhangfei'], liu_family: ['ganfuren', 'mifuren', 'sunshangxiang'] },
   // 羈絆累計上限(§2.6)
   bondCap: { atk: 0.20, hp: 0.10 },
-  // 疲兵之外的平手判定(§3.7)
-  drawLead: 0.15,
+  // 逾時判定(2026-11-09):剩餘兵力比例較高者勝;差距不足 drawLead(0.1 個百分點,即四捨五入後完全相等)才算平手
+  drawLead: 0.001,
   // 站位陣型(§2.7):前排 ≥3 鋒矢 / 前2中≥1 圓陣 / 後排≥2 雁行
   formation: { fengshi: 0.08, yuanzhen: 0.08, yanxing: 0.08 },
   // 路人戰法欄(§4.8;PLACEHOLDER):自帶 1(職業預設)+ 學習欄。learnByGr = 各品階(白青藍紫金)的基本學習欄;learnBonus = 通才 / 升階 2 次再加;learnCap = 學習欄上限(總戰法數上限 1 + learnCap = 3)。
@@ -216,7 +221,7 @@ var BN_FIG_TRAIT = {
 // 名人強度校正(B6;tools/bn_fig_tune.js 解出,--apply 只改下面標記之間的一行):名人 id → 兵力 / 攻擊 / 謀略 / 治療 / 護盾量係數(未列 = 1)。
 // 目的:三國 100 位名人(全名人隊隨機對打)勝率落在約 45~58%、新舊兩批平均相近;魔幻 42 位同法校正。卡面五維不變,只影響討伐戰鬥數值。
 // BN_FIG_TUNE-BEGIN
-var BN_FIG_TUNE = { caocao: 0.88, xunyu: 0.8, guojia: 1.25, jiaxu: 1.04, simayi: 1.03, dianwei: 0.94, xiahoudun: 0.93, zhangliao: 0.8, xunyou: 0.91, xuchu: 0.97, caoren: 0.81, xiahouyuan: 0.8, xuhuang: 0.99, zhongyao: 0.98, liubei: 0.93, guanyu: 0.8, zhangfei: 0.8, zhaoyun: 0.89, zhugeliang: 0.8, machao: 0.85, pangtong: 1.05, fazheng: 0.9, weiyan: 0.94, huangzhong: 0.8, mizhu: 1.1, maliang: 1.25, xushu: 1.25, shamoke: 1.25, sunjian: 0.83, sunce: 0.8, zhouyu: 0.92, lusu: 0.8, ganning: 0.8, sunquan: 1.04, luxun: 0.98, lvmeng: 1.11, zhangzhao: 1.25, taishici: 0.83, huanggai: 1.25, zhoutai: 1.05, chengpu: 1.06, shixie: 0.88, zhangjiao: 0.8, zhangbao: 0.8, zhangliang: 0.94, zhangniujiao: 0.94, zhangmancheng: 0.8, mayuanyi: 1.25, guanhai: 0.89, zhanglu: 0.84, guotai: 0.84, boca: 1.1, zhangyan: 1.25, liupi: 0.99, yudu: 1.25, yuji: 0.99, dongzhuo: 0.8, lvbu: 0.8, yuanshao: 0.88, huangfusong: 0.92, luzhi: 1.25, gongsunzan: 0.8, zhujun: 0.8, zhengxuan: 1.25, mateng: 0.8, xurong: 1.25, huatuo: 0.83, caiyong: 1.22, youtu: 1.25, yufuluo: 0.86, zhenji: 1.1, caiyan: 0.96, caozhi: 1.25, yangxiu: 1.25, pangde: 0.85, zhanghe: 0.96, ganfuren: 1.25, mifuren: 1.24, masu: 1.25, huangyueying: 1.25, zhoucang: 1.13, yanyan: 0.94, sunshangxiang: 0.84, lingtong: 1.04, daqiao: 1.25, xiaoqiao: 1.25, kanze: 1.25, nanhua: 0.8, chengyuanzhi: 0.94, dengmao: 1.25, peiyuanshao: 1.25, heyi: 1.1, zhangkai: 0.99, diaochan: 1.25, zuoci: 1.25, panfeng: 1.23, caoxing: 0.91, huaxiong: 0.94, yuanshu: 1.25, elf_changqing: 0.85, elf_qinglan: 0.85, elf_baizhou: 0.85, elf_jiyu: 0.85, elf_tengluo: 1.18, elf_liguo: 1.18, elf_yueyao: 0.85, elf_shuanghua: 0.85, elf_luming: 0.85, elf_chenlu: 0.85, elf_hengzhi: 1.18, elf_xingchen: 0.85, elf_liuying: 1.18, elf_yedi: 1.18, dw_panshan: 0.85, dw_zhongyue: 0.85, dw_zaotian: 0.88, dw_heiyao: 0.85, dw_dengxin: 1.18, dw_qianchui: 0.97, dw_yinxu: 1.01, dw_duanlei: 0.85, dw_maoding: 1.14, dw_jincheng: 1.18, dw_lielu: 0.88, dw_kuangfu: 0.87, dw_rongxin: 0.85, dw_maiya: 1.14, kd_zhaoming: 0.83, kd_lingfeng: 0.83, kd_shoucheng: 0.86, kd_chuanyang: 0.87, kd_chenxing: 1.15, kd_wenyuan: 0.88, kd_xuandeng: 0.92, kd_suxin: 0.83, kd_jinghu: 1.15, kd_yushu: 1.15, kd_fengnian: 0.83, kd_wantong: 1.15, kd_heijing: 0.84, kd_xinghua: 0.93 };
+var BN_FIG_TUNE = { caocao: 0.93, xunyu: 0.7, guojia: 1.2, jiaxu: 0.93, simayi: 1.03, dianwei: 1.09, xiahoudun: 0.84, zhangliao: 0.76, xunyou: 0.88, xuchu: 1.12, caoren: 0.84, xiahouyuan: 0.81, xuhuang: 0.93, zhongyao: 0.89, liubei: 0.94, guanyu: 0.8, zhangfei: 0.86, zhaoyun: 0.94, zhugeliang: 0.7, machao: 0.95, pangtong: 1.05, fazheng: 0.88, weiyan: 0.83, huangzhong: 0.78, mizhu: 0.99, maliang: 1.25, xushu: 1.25, shamoke: 1.21, sunjian: 0.94, sunce: 0.82, zhouyu: 0.84, lusu: 0.7, ganning: 0.75, sunquan: 1.02, lvmeng: 1.01, zhangzhao: 1.25, taishici: 0.78, huanggai: 1.23, zhoutai: 1.2, chengpu: 1.07, shixie: 0.84, zhangjiao: 0.7, zhangbao: 0.9, zhangliang: 0.87, zhangniujiao: 0.91, zhangmancheng: 0.8, mayuanyi: 1.25, guanhai: 0.79, zhanglu: 0.85, guotai: 0.87, boca: 1.07, zhangyan: 1.25, liupi: 1.08, yudu: 1.25, yuji: 0.94, dongzhuo: 0.83, lvbu: 0.83, yuanshao: 0.91, huangfusong: 1.04, luzhi: 1.25, gongsunzan: 0.82, zhujun: 0.8, zhengxuan: 1.25, mateng: 0.89, xurong: 1.2, huatuo: 0.7, caiyong: 1.07, youtu: 1.25, yufuluo: 0.96, zhenji: 1.03, caiyan: 0.91, caozhi: 1.25, yangxiu: 1.25, pangde: 0.98, zhanghe: 0.89, ganfuren: 1.25, mifuren: 1.13, masu: 1.19, huangyueying: 1.17, zhoucang: 1.07, sunshangxiang: 0.8, lingtong: 0.97, daqiao: 1.15, xiaoqiao: 1.25, dingfeng: 0.98, kanze: 1.25, nanhua: 0.83, chengyuanzhi: 1.1, dengmao: 1.2, peiyuanshao: 1.2, heyi: 1.17, zhangkai: 1.22, diaochan: 1.25, zuoci: 1.11, panfeng: 1.15, caoxing: 0.88, huaxiong: 1.12, yuanshu: 1.25, elf_changqing: 0.85, elf_qinglan: 0.85, elf_baizhou: 0.92, elf_jiyu: 0.85, elf_tengluo: 1.15, elf_liguo: 1.15, elf_yueyao: 0.85, elf_shuanghua: 0.85, elf_luming: 0.85, elf_chenlu: 0.85, elf_hengzhi: 1.15, elf_xingchen: 0.85, elf_liuying: 1.15, elf_yedi: 1.15, dw_panshan: 0.85, dw_zhongyue: 0.91, dw_zaotian: 0.85, dw_heiyao: 0.85, dw_dengxin: 1.15, dw_qianchui: 0.93, dw_yinxu: 1.05, dw_duanlei: 0.9, dw_maoding: 1.15, dw_jincheng: 1.15, dw_lielu: 0.89, dw_kuangfu: 0.85, dw_rongxin: 0.85, dw_maiya: 1.1, kd_zhaoming: 0.85, kd_lingfeng: 0.85, kd_shoucheng: 0.89, kd_chuanyang: 0.87, kd_chenxing: 1.15, kd_wenyuan: 0.94, kd_xuandeng: 0.85, kd_suxin: 0.85, kd_jinghu: 1.15, kd_yushu: 1.15, kd_fengnian: 0.85, kd_wantong: 1.15, kd_heijing: 0.84, kd_xinghua: 1.08 };
 // BN_FIG_TUNE-END
 
 // 戰法平衡覆寫(B6):戰法 id → 要覆寫的欄位(rate 發動率 / power 檔位)。載入時由 bn_units.js 套到 BN_SKILLS(戰鬥與卡面文字一致);
@@ -250,4 +255,11 @@ var BN_BONDS = {
   maxSpecial: 3
 };
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { BN_DATA: BN_DATA, BN_TRAIT_MODS: BN_TRAIT_MODS, BN_BONDS: BN_BONDS, BN_FIG_TRAIT: BN_FIG_TRAIT };
+// 兵種名正規化:舊存檔 / 舊隊伍碼的『步』→『槍』;不認得的回空字串(呼叫端改用預設兵種)。永遠不丟例外
+function bnTroopNorm(t) {
+  if (typeof t !== 'string') return '';
+  if (BN_DATA.troopAlias[t]) t = BN_DATA.troopAlias[t];
+  return BN_DATA.troops[t] ? t : '';
+}
+
+if (typeof module !== 'undefined' && module.exports) module.exports = { bnTroopNorm: bnTroopNorm, BN_DATA: BN_DATA, BN_TRAIT_MODS: BN_TRAIT_MODS, BN_BONDS: BN_BONDS, BN_FIG_TRAIT: BN_FIG_TRAIT };

@@ -63,8 +63,10 @@ function srGroupOf(id) {   // 建造選單群組(BUILD_GROUPS);不在任何群�
   return g;
 }
 function srTopOf(id) { return (typeof topOfItem === 'function') ? topOfItem(id) : 'eco'; }
-function srCostObj(d) {
+function srCostObj(d, id) {
   var c = (d && d.cost) || {}, p = [], k;
+  if (typeof PROG_FREE_BUILD !== 'undefined' && PROG_FREE_BUILD) c = {};   // 免費建造模式:舊的金 / 木 / 石價目只是顯示用途,不顯示
+  if (id && typeof bmcCostText === 'function' && bmcCostText(id)) p.push(bmcCostText(id).replace(/、/g, ' '));   // 建築材料成本(bmc.js)
   for (k in c) if (c[k] > 0) p.push(((typeof RESOURCES !== 'undefined' && RESOURCES[k]) ? RESOURCES[k].name : k) + ' ' + c[k]);
   return p.length ? p.join(' ') : '免費';
 }
@@ -283,7 +285,8 @@ function srTechGo(id) {
 function srObjDetail(id) {
   var d = OBJECTS[id], st = srObjStatus(id), top = srTopOf(id), g = srGroupOf(id), nid = srObjNode(id), why, h = '<div class="sr-det">';
   h += '<div class="sr-l">分類:' + srEsc(SR_TOP_NAME[top] || '') + '・' + srEsc(g ? g.name : '其他') + '　尺寸 ' + d.w + '×' + d.h + '</div>';
-  h += '<div class="sr-l">建造成本:' + srEsc(srCostObj(d)) + '</div>';
+  h += '<div class="sr-l">建造成本:' + srEsc(srCostObj(d, id)) + '</div>';
+  if (typeof bmcSrHint === 'function' && bmcSrHint(id)) h += '<div class="sr-l sr-warn">' + srEsc(bmcSrHint(id)) + '</div>';
   if (st === 'unlocked') {
     why = srBuildBlock(id);
     h += '<div class="sr-l sr-ok">已解鎖</div>';
@@ -315,7 +318,7 @@ function srRowHtml(kind, it, st) {
     d = OBJECTS[it.id];
     lock = st === 'locked' ? techObjLockText(it.id) : '';
     sub = it.top && SR_TOP_NAME[it.top] ? SR_TOP_NAME[it.top] + '・' + it.grp : it.grp;
-    cost = srCostObj(d);
+    cost = srCostObj(d, it.id);
     head = d.icon || it.icon;
   } else {
     sub = (typeof techUiBranchName === 'function' ? techUiBranchName(it.branch) : it.branch) + '・第' + it.era + '時代';

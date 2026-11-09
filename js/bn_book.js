@@ -30,7 +30,7 @@ function bnBookLoad() {
       if (L.some(function (x) { return x; })) d.learn[String(k).slice(0, 40)] = L;
     }
     if (o.taught && typeof o.taught === 'object') for (k in o.taught) { var n = o.taught[k] | 0; if (n > 0) d.taught[String(k).slice(0, 80)] = Math.min(99, n); }
-    if (o.drill && typeof o.drill === 'object' && typeof BN_DATA !== 'undefined') BN_DATA.troopList.forEach(function (t) { var v = o.drill[t] | 0; if (v > 0) d.drill[t] = Math.min(BNBOOK.drillMax, v); });
+    if (o.drill && typeof o.drill === 'object' && typeof BN_DATA !== 'undefined') BN_DATA.troopList.forEach(function (t) { var v = (o.drill[t] | 0) || (t === '槍' ? o.drill['步'] | 0 : 0); if (v > 0) d.drill[t] = Math.min(BNBOOK.drillMax, v); });
   }
   bnbk.raw = raw; bnbk.d = d;
   return d;
