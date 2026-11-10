@@ -23,7 +23,6 @@ function fxVenue(v, p) {
 }
 function fxRankName(i, p) { var R = fxTxD('ranks'); p = p || fxTxPack(); return (p && R && R[p] && R[p][i]) || null; }
 function fxObjNow(type) { var t = (typeof fxGoType === 'function') ? fxGoType(type) : type; return (typeof OBJECTS !== 'undefined' && OBJECTS[t]) ? OBJECTS[t].name : null; }
-var FX_ACADEMY_NAMES = [null, '初級學舍', '學舍', '書院', '學院', '大學院'];
 // 殿試台建築名(B-1 未改名的漢式名)
 var FX_OBJ_TXT = { dian_shi_tai: { elf: '世界樹召集台', dwarf: '山王召見廳', kingdom: '御前召見台' }, kao_chang: { elf: '試煉場', dwarf: '試煉場', kingdom: '試煉場' },
   lou_che_fang: { elf: '播種機關坊', dwarf: '播種機關坊', kingdom: '播種機關坊' }, fan_che: { elf: '翻水轉輪', dwarf: '翻水轉輪', kingdom: '翻水轉輪' } };
@@ -43,7 +42,6 @@ function fxTerms(p) {
     ['縣試', E.name], ['殿試', G.name], ['徵辟', G.orgName],
     ['黃巾餘黨', '林道盜匪'], ['黃巾', '盜匪'], ['太平道', '邪教'],
     ['郡國學校', xs], ['縣衙大堂', fxObjNow('xian_ya')], ['縣衙', fxObjNow('xian_ya')], ['郡府', fxObjNow('palace')], ['翻車', fxObjNow('fan_che')],
-    ['縣學', FX_ACADEMY_NAMES[2]], ['郡學', FX_ACADEMY_NAMES[4]], ['太學', FX_ACADEMY_NAMES[5]], ['庠舍', FX_ACADEMY_NAMES[1]],
     ['里正', R[0]], ['亭長', R[1]], ['縣尉', R[2]], ['縣令', R[3]], ['刺史', R[5]], ['太守', P['太守']],
     ['五銖錢', '銅幣'], ['五銖', '銅幣'], ['胡餅', '麵餅'], ['糖餳', '蜜糖'],
     ['名垂青史', '傳說留名'], ['州郡英才', '一方英才'], ['史實依據', '傳說'], ['史實設定', '傳說設定'], ['東漢', '這片土地']
@@ -233,8 +231,6 @@ function fxTextInstall() {
   if (typeof CARD_TRAITS !== 'undefined') CARD_TRAITS.forEach(function (t) { fxTxDefText(t, 'd'); });
   if (typeof BNT_CITY !== 'undefined') Object.keys(BNT_CITY).forEach(function (k) { fxTxDefText(BNT_CITY, k); });
   if (typeof CARD_GRADE !== 'undefined') CARD_GRADE.forEach(function (g) { fxTxDefText(g, 'line'); });
-  if (typeof CARD_UPGRADE !== 'undefined') CARD_UPGRADE.forEach(function (u) { fxTxDefText(u, 'route'); });
-  if (typeof CARD_ACADEMY !== 'undefined' && CARD_ACADEMY.levels) CARD_ACADEMY.levels.forEach(function (l, i) { if (l) fxTxDef(l, 'name', function () { return FX_ACADEMY_NAMES[i]; }); });
   // 魔幻英雄專屬詞條說明(魔幻專用資料,直接改字):太守職 → 城主府總管職
   // 魔幻科技說明裡殘留的「(殿試)」(fx_tech_data.js,魔幻專用資料):換成本族召見場所名
   if (typeof FX_TECH_DATA !== 'undefined' && FX_TECH_DATA.nodes) Object.keys(FX_TECH_DATA.nodes).forEach(function (p) {
@@ -266,7 +262,7 @@ function fxTextInstall() {
 }
 
 // ───────── 包住回傳字串的面板函式(魔幻世界過一次 fxText;歷史世界原樣)─────────
-var FX_TXT_WRAP = ['cuRosterHtml', 'cuOverviewHtml', 'cuNamedHtml', 'cuBagHtml', 'cuVenueHtml', 'cuLastHtml', 'cardsUiInfoHtml', 'cuAcademyHtml', 'cuNpcDetailHtml',
+var FX_TXT_WRAP = ['cuRosterHtml', 'cuDrawTabHtml', 'cuDrawPoolHtml', 'cuDrawNamedHtml', 'cuRosterPageHtml', 'cuVenueHtml', 'cuLastHtml', 'cardsUiInfoHtml', 'cuNpcDetailHtml', 'cuRosterTabHtml',
   'lhHtmlOverview', 'lhHtmlJobs', 'lhHtmlPosts', 'bnMapRewardHtml', 'nextStepHtml', 'cuArtCard', 'tuLabel', 'tuDesc'];
 function fxTxGlobal() { return (typeof window !== 'undefined' && window) ? window : (typeof globalThis !== 'undefined' ? globalThis : null); }
 function fxTxWrap(name, post) {

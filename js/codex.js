@@ -1,19 +1,20 @@
-// js/codex.js — 圖鑑面板:「武將」(當前世界全部名人 / 英雄,含未獲得)、「戰法」(全部戰法反查持有者)、「配隊」(基本原則 + 各陣營建議 + 依名冊推薦,可一鍵套用到布陣)。
-// 入口:卡牌面板標題列「圖鑑」鈕(cardsui.js 一行 typeof 守衛呼叫 codexBtnHtml / codexOpen);全域搜尋(search.js)的武將 / 戰法結果經 codexSearch / codexSrHtml / codexOpenKey 跳轉。
-// 抽卡開獎最終排列加「看戰法」鈕(cardsreveal.js rvFinal 一行呼叫 codexRevealHook)。面板以 panelmgr 登錄為 big('codex';Esc 先關說明浮層 / 回上一頁,再關面板)。
+// js/codex.js — 配隊建議面板(圖鑑):基本原則 + 各陣營 / 羈絆建議隊伍 + 依名冊推薦(可一鍵套用到布陣)。
+// 武將 / 戰法的完整介紹(人物、戰法、兵種卡、隊伍)已移到卡包「大全」分頁(js/cardsui_codex.js);本檔保留索引 cxIndex、名人示意卡 cxCard、戰法列 cxSkillRows 等資料函式供大全使用。
+// 入口:卡包標題列「圖鑑」鈕(cardsui.js 一行 typeof 守衛呼叫 codexBtnHtml / codexOpen);全域搜尋(search.js)的武將 / 戰法結果經 codexSearch / codexSrHtml / codexOpenKey 開大全詳情。
+// 抽卡開獎最終排列加「看戰法」鈕(cardsreveal.js rvFinal 一行呼叫 codexRevealHook)。面板以 panelmgr 登錄為 big('codex')。
 // 索引 cxIndex 首次開啟時建立並快取;世界切換(fxPack)後失效重建。歷史世界只列 CARD_FIGS,魔幻世界只列 FX_FIGS(fx_cards.js fxFigSrc)。
-// 戰法文字一律取自 bn_text.js(bnCardSkillRows / bnSkillInfo / bnSkillShort / bntVsText / bnTraitText / bnXTraitText);配隊資料 js/codex_teams_data.js(tools/gen_codex_teams.js 產生)。
+// 戰法文字一律取自 bn_text.js(bnCardSkillRows / bnSkillInfo / bnSkillShort);配隊資料 js/codex_teams_data.js(tools/gen_codex_teams.js 產生)。
 // 布陣套用只寫 bnui.js 既有的當前陣容(bnu.data.cur → bnUiSave),不改戰鬥版面。不發聲。外部全域一律 typeof 守衛。ES2017;不用 ?. ??。
 // 全域名稱:CX cx codexOpen codexClose codexToggle codexIsOpen codexBtnHtml codexOpenKey codexSearch codexSrHtml codexGoRoster codexRevealHook codexRevealHtml
-//   cxIndex cxFilterFigs cxFilterSkills cxFigDetailHtml cxSkillDetailHtml cxOwnMap cxTeams cxTeamOwn cxTeamPlan cxApplySlots cxRecommend cxRulesHtml
+//   cxIndex cxCard cxSkillRows cxFullPoolRows cxOwnMap cxTraitList cxBondsOf cxFigLink cxTeams cxTeamOwn cxTeamPlan cxApplySlots cxRecommend cxRulesHtml
 
 var CX = { pageFig: 20, pageSk: 30, srMax: 10, debounce: 150, catOrder: ['command', 'active', 'pursuit', 'passive', 'ult'] };
-var CX_TABS = [['fig', '武將'], ['skill', '戰法'], ['team', '配隊']];
+var CX_TABS = [['team', '配隊']];
 var CX_CAT = { command: '指揮', active: '主動', pursuit: '追擊', passive: '被動', ult: '大招' };
-var CX_SRC = { fig: '名人專屬', teach: '名人戰法・可傳授', generic: '通用・兵書可學', ult: '兵種大招(路人)', bond: '專屬聯動' };
+var CX_SRC = { fig: '名人專屬', teach: '名人戰法・可傳承', generic: '通用戰法', ult: '兵種大招(路人)', bond: '專屬聯動' };
 var CX_ROW = ['前排', '中排', '後排'];
 var CX_RACE = { elf: '精靈', dwarf: '矮人', kingdom: '王國' };
-var cx = { el: null, tool: null, list: null, ov: null, title: null, open: false, tab: 'fig', stack: [], ovId: '', q: '', fac: -1, troop: '', gr: -1, own: '', skq: '', cat: '', src: '', tfac: -1,
+var cx = { el: null, tool: null, list: null, ov: null, title: null, open: false, tab: 'team', stack: [], ovId: '', q: '', fac: -1, troop: '', gr: -1, own: '', skq: '', cat: '', src: '', tfac: -1,
   page: 0, timer: 0, idx: null, key: '', cards: {}, rec: null, msg: '', scroll: {} };
 
 function cxTI(t) { return (typeof bnTroopIconHtml === 'function') ? bnTroopIconHtml(t) : ''; }   // 兵種小圖示(assets/troopicon/)
@@ -70,9 +71,27 @@ function cxCard(id) {   // 名人的示意卡(未獲得也能算戰法 / 適性)
 }
 function cxSkillRows(id) {
   var c = cxCard(id), it = cxIndex().byId[id], rows = [];
+  if (!cxOwnMap()[id]) { rows = cxFullPoolRows(id); if (rows.length) return rows; }   // 未獲得名人:全池(固定 / 被動 / 聯動 / 傳承 / 可拆池)
   if (c && typeof bnCardSkillRows === 'function') { try { rows = bnCardSkillRows(c); } catch (e) { rows = []; } }
   if (!rows.length && it) rows = it.sk.map(function (k, i) { var d = BN_SKILLS[k]; return { id: k, cat: d.cat, name: d.name, role: d.cat === 'ult' ? 'ult' : (i === 0 && d.cat === 'passive' ? 'passive' : 'skill'), head: '', body: d.desc || '' }; });
   return rows;
+}
+// 未獲得名人的全池列表(B2 後名人只顯示固定 / 被動 / 聯動 / 已裝選擇槽;圖鑑武將頁須列出可拆池全部,傳承標示「傳承」)
+function cxFullPoolRows(id) {
+  var K = (typeof BN_KIT_BY !== 'undefined' && BN_KIT_BY.figs) ? BN_KIT_BY.figs[id] : null, out = [];
+  if (!K || typeof BN_SKILLS === 'undefined') return out;
+  function add(sid, role) {
+    var d = BN_SKILLS[sid], p, lg = sid === K.legacy;
+    if (!d || out.some(function (r) { return r.id === sid; })) return;
+    p = bnSkillParts(sid);
+    out.push({ id: sid, role: lg ? 'legacy' : role, cat: d.cat, name: d.name, head: (lg ? '傳承・' : '') + p.head, body: p.body, desc: p.desc, cd: d.cd || 0, rate: d.rate, fig: d.fig || '', flavor: (typeof BN_FLAVOR !== 'undefined' && BN_FLAVOR[sid]) || '' });
+  }
+  if (K.passive) add(K.passive, 'passive');
+  (K.bondFix || []).forEach(function (sid) { add(sid, 'bond'); });
+  if (K.fixed) add(K.fixed, 'ult');
+  (K.pool || []).forEach(function (sid) { add(sid, 'slot'); });
+  if (K.legacy) add(K.legacy, 'legacy');
+  return out;
 }
 // 擁有狀態:{ figId: { e, list:'roster'|'wait'|'wander'|'bag' } }(每次即時算)
 function cxOwnMap() {
@@ -89,39 +108,7 @@ function cxScore(q, nn) {
   return nn === q ? 100 : nn.indexOf(q) === 0 ? 90 : nn.indexOf(q) > 0 ? 70 : 0;
 }
 // o: {q, fac(-1 全部), troop(''), gr(-1), own(''|'y'|'n')} → 名人項目陣列(依品階、陣營、原順序;有關鍵字時依分數)
-function cxFilterFigs(o) {
-  var idx = cxIndex(), q = cxNorm(o && o.q), om = (o && o.own) ? cxOwnMap() : null, out = [];
-  o = o || {};
-  idx.figs.forEach(function (it, i) {
-    var s = 1;
-    if (o.fac >= 0 && o.fac !== undefined && o.fac !== null && it.fac !== +o.fac) return;
-    if (o.troop && it.troop !== o.troop) return;
-    if (o.gr >= 0 && o.gr !== undefined && o.gr !== null && it.gr !== +o.gr) return;
-    if (om && (o.own === 'y') !== !!om[it.id]) return;
-    if (q) { s = Math.max(cxScore(q, it.nn), it.idn.indexOf(q) >= 0 ? 50 : 0); if (s < 40) return; }
-    out.push({ it: it, s: s, i: i });
-  });
-  out.sort(function (a, b) { return (b.s - a.s) || (q ? 0 : (b.it.gr - a.it.gr)) || (a.i - b.i); });
-  return out.map(function (x) { return x.it; });
-}
 // o: {q, cat, src} → 戰法項目陣列(關鍵字比對戰法名;也比對持有者姓名)
-function cxFilterSkills(o) {
-  var idx = cxIndex(), q = cxNorm(o && o.q), out = [];
-  o = o || {};
-  idx.skills.forEach(function (it, i) {
-    var s = 1;
-    if (o.cat && it.cat !== o.cat) return;
-    if (o.src && it.src !== o.src) return;
-    if (q) {
-      s = cxScore(q, it.nn);
-      if (s < 40 && it.owners.some(function (f) { var x = idx.byId[f]; return x && x.nn.indexOf(q) >= 0; })) s = 35;
-      if (s < 35) return;
-    }
-    out.push({ it: it, s: s, i: i });
-  });
-  out.sort(function (a, b) { return (b.s - a.s) || (a.i - b.i); });
-  return out.map(function (x) { return x.it; });
-}
 // 給全域搜尋(search.js srSearch):q 已正規化。回 {figs:[{it,s}], skills:[{it,s}], nF, nS},各最多 CX.srMax 筆
 function codexSearch(q, max) {
   var idx, figs = [], sks = [], m = Math.min(CX.srMax, max || CX.srMax);
@@ -158,12 +145,13 @@ function codexSrHtml(res) {   // 搜尋面板的武將 / 戰法區塊(沿用 sea
 }
 function cxOwnersTxt(it, n) {
   var idx = cxIndex(), names;
-  if (it.src === 'generic') return '通用戰法(路人可用兵書學)';
+  if (it.src === 'generic') return '通用戰法(路人可傳承習得)';
   if (it.src === 'ult') return it.troops.join('、') + '兵路人的大招';
   if (it.src === 'bond') return '專屬聯動(' + it.owners.map(function (f) { return idx.byId[f] ? idx.byId[f].name : f; }).join('、') + ')';
   names = it.owners.map(function (f) { return idx.byId[f] ? idx.byId[f].name : f; });
-  return (names.length > n ? names.slice(0, n).join('、') + ' 等' : names.join('、')) + (it.src === 'teach' ? '(可傳授)' : '');
+  return (names.length > n ? names.slice(0, n).join('、') + ' 等' : names.join('、')) + (it.src === 'teach' ? '(可傳承)' : '');
 }
+// 全域搜尋(search.js)的武將 / 戰法結果:開卡包『大全』詳情(cuCodexOpenKey);查無或大全未載入時退回配隊頁
 function codexOpenKey(k) {
   var p = String(k || '').split(':');
   if (p[0] === 'f') return codexOpen({ fig: p[1] });
@@ -176,18 +164,6 @@ function cxAvatar(id, owned, gr, lazy) {
   var src = (typeof fxFigImg === 'function' && fxFigImg(id)) || 'assets/portraits/' + id + '.webp';
   return '<span class="cx-av g' + (gr | 0) + (owned ? '' : ' un') + '"><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="14" r="7.5"/><path d="M5 40c0-9 6-14.5 15-14.5S35 31 35 40z"/></svg>' +
     '<img alt="" src="' + cxEsc(src) + '"' + (lazy ? ' loading="lazy" decoding="async"' : '') + ' onerror="this.remove()"></span>';
-}
-function cxShort(id) { return (typeof bnSkillShort === 'function') ? bnSkillShort(id) : ''; }
-function cxHead(id) { return (typeof bnSkillHead === 'function') ? bnSkillHead(id) : ''; }
-function cxBody(id) { return (typeof bnSkillBody === 'function') ? bnSkillBody(id) : ((BN_SKILLS[id] && BN_SKILLS[id].desc) || ''); }
-function cxTagHtml(cat) { return '<i class="cx-tag t-' + cxEsc(cat) + '">' + (CX_CAT[cat] || '戰法') + '</i>'; }
-function cxFigRowHtml(it, om) {
-  var ow = om[it.id];
-  return '<div class="cx-row" data-cx="fig" data-k="' + cxEsc(it.id) + '" role="button" tabindex="0">' + cxAvatar(it.id, !!ow, it.gr, true) +
-    '<span class="cx-mn"><b>' + cxEsc(it.name) + (it.zi ? '<small>(' + cxEsc(it.zi) + ')</small>' : '') + '</b>' +
-    '<small>' + cxEsc(cxGrName(it.gr) + '・' + cxFacName(it.fac) + '・') + cxTI(it.troop) + cxEsc(it.troop + '兵・' + CX_ROW[it.row]) + '</small>' +
-    '<small class="cx-sks">' + it.sk.map(function (k) { return cxEsc(BN_SKILLS[k].name); }).join('・') + '</small></span>' +
-    '<span class="cx-own' + (ow ? ' on' : '') + '">' + (ow ? '已擁有' : '未獲得') + '</span></div>';
 }
 function cxTraitList(c, fid) {   // 詞條(同 cardsui.js cuTraitsHtml 的取法):[{n, d, ex}]
   var list = [];
@@ -213,71 +189,6 @@ function cxFigLink(id) {
   var it = cxIndex().byId[id], f = (typeof CARD_FIG_BY_ID !== 'undefined') ? CARD_FIG_BY_ID[id] : null;
   if (it) return '<a class="cx-lk" role="button" data-cx="fig" data-k="' + cxEsc(id) + '">' + cxEsc(it.name) + '</a>';
   return cxEsc(f ? f.name : id);
-}
-function cxSkLink(id) { return '<a class="cx-lk" role="button" data-cx="sk" data-k="' + cxEsc(id) + '">' + cxEsc(BN_SKILLS[id] ? BN_SKILLS[id].name : id) + '</a>'; }
-function cxFigDetailHtml(id) {
-  var idx = cxIndex(), it = idx.byId[id], om = cxOwnMap(), ow, c, apt = null, h, rows, tr, bonds, vs = [], vsBy, lines;
-  if (!it) return '<div class="cx-hint">找不到這位人物(可能不屬於目前的世界)。</div>';
-  ow = om[id]; c = cxCard(id);
-  if (c && typeof bnAptOf === 'function') { try { apt = bnAptOf(c).apt; } catch (e) { apt = null; } }
-  h = '<div class="cx-det"><div class="cx-dh">' + cxAvatar(id, !!ow, it.gr, false) + '<div class="cx-mn"><b class="cx-big">' + cxEsc(it.name) + (it.zi ? '<small>(' + cxEsc(it.zi) + ')</small>' : '') + '</b>' +
-    '<small>' + cxEsc(cxGrName(it.gr) + '階・' + cxFacName(it.fac) + (it.f.home ? '・' + it.f.home : '') + (it.f.birth ? '・' + it.f.birth : '')) + '</small>' +
-    '<small>擅長:' + cxTI(it.troop) + cxEsc(it.troop) + '兵・預設' + CX_ROW[it.row] + '</small></div></div>';
-  if (apt) h += '<div class="cx-l">兵種適性:' + (typeof BN_DATA !== 'undefined' ? BN_DATA.troopList : ['槍', '騎', '盾', '弓', '謀']).map(function (t) { return '<span class="cx-apt a' + cxEsc(apt[t]) + '">' + cxTI(t) + cxEsc(t) + ' ' + cxEsc(apt[t]) + '</span>'; }).join('') + '<small>(S 最好,C 最差)</small></div>';
-  h += ow ? '<div class="cx-l cx-ok">已擁有(' + ({ roster: '在名冊', wait: '在待定席', wander: '流浪中', bag: '在卡包' }[ow.list] || '') + ')<button type="button" data-cx="roster" data-k="' + cxEsc(id) + '">到名冊查看</button></div>' : '<div class="cx-l cx-dim">尚未獲得:可在酒館、指名抽到。下面的戰法與詞條先看好,方便規劃。</div>';
-  rows = cxSkillRows(id);
-  h += '<div class="cx-sec">戰法(點名稱看完整說明)</div>';
-  rows.forEach(function (r) {
-    h += '<div class="cx-sk">' + cxTagHtml(r.cat) + cxSkLink(r.id) + '<small>' + cxEsc(r.head || cxHead(r.id)) + '</small><div class="cx-sb">' + cxEsc(r.body || cxBody(r.id)) + '</div></div>';
-  });
-  tr = cxTraitList(c, id);
-  if (tr.length) {
-    h += '<div class="cx-sec">詞條</div>';
-    tr.forEach(function (t) { h += '<div class="cx-l">' + (t.ex ? '<i class="cx-tag t-ex">專屬</i>' : '') + '<b>' + cxEsc(t.n) + '</b>' + (t.d ? ' ' + cxEsc(t.d) : '') + '</div>'; });
-  }
-  bonds = cxBondsOf(id);
-  if (bonds.length) {
-    h += '<div class="cx-sec">羈絆</div>';
-    bonds.forEach(function (b) { h += '<div class="cx-l"><b>' + cxEsc(b.name) + '</b>:' + b.members.map(cxFigLink).join('、') + (b.txt ? '<br><small>' + cxEsc(b.txt) + '</small>' : '') + '</div>'; });
-  }
-  it.sk.forEach(function (k) { var d = BN_SKILLS[k], t = (d.vs && typeof bntVsText === 'function') ? bntVsText(d) : ''; if (t) vs.push('<div class="cx-l">' + cxSkLink(k) + ':' + cxEsc(t) + '</div>'); });
-  vsBy = (idx.vsBy[id] || []).map(function (x) { var d = BN_SKILLS[x.sk]; return '<div class="cx-l">' + cxFigLink(x.by) + ' 的' + cxSkLink(x.sk) + (d.vs.mode === 'defend' ? '(他被我攻擊時有防備)' : d.vs.mode === 'ally' ? '(同隊時互相影響)' : '(專門剋我)') + '</div>'; });
-  if (vs.length || vsBy.length) {
-    h += '<div class="cx-sec">宿敵與克制</div>' + vs.join('');
-    if (vsBy.length) h += '<div class="cx-l cx-dim">被這些戰法點名:</div>' + vsBy.join('');
-  }
-  lines = (typeof FAMOUS_LINES !== 'undefined' && FAMOUS_LINES[id]) || null;
-  if (it.f.bio || lines) {
-    h += '<div class="cx-sec">故事</div>';
-    if (it.f.bio) h += '<div class="cx-l">' + cxEsc(it.f.bio) + '</div>';
-    if (lines) h += lines.map(function (s) { return '<div class="cx-l cx-q">「' + cxEsc(s) + '」</div>'; }).join('');
-  }
-  return h + '</div>';
-}
-function cxSkInfo(id) {   // 說明浮層與戰法詳情共用:bnSkillInfo 的 {title, tags, lines}
-  var o = (typeof bnSkillInfo === 'function') ? bnSkillInfo(id) : null, d = BN_SKILLS[id];
-  if (!o && d) o = { title: d.name, tags: [CX_CAT[d.cat] || '戰法'], lines: [['效果', d.desc || '']] };
-  return o;
-}
-function cxSkillDetailHtml(id) {
-  var idx = cxIndex(), it = idx.skById[id], o, h;
-  if (!it) return '<div class="cx-hint">找不到這個戰法(可能不屬於目前的世界)。</div>';
-  o = cxSkInfo(id);
-  h = '<div class="cx-det"><div class="cx-l">' + cxTagHtml(it.cat) + '<b class="cx-big">' + cxEsc(it.name) + '</b></div><div class="cx-l"><span class="cx-src">' + cxEsc(CX_SRC[it.src]) + '</span></div>';
-  o.lines.forEach(function (l) { h += '<div class="cx-l"><b class="cx-k">' + cxEsc(l[0]) + '</b> ' + cxEsc(l[1]) + '</div>'; });
-  h += '<div class="cx-sec">誰會</div>';
-  if (it.owners.length) h += '<div class="cx-l">' + it.owners.map(cxFigLink).join('、') + '</div>';
-  if (it.src === 'teach') h += '<div class="cx-l cx-dim">名冊有這位名人時,可在名冊詳情「戰法學習」把這招傳授給路人。</div>';
-  if (it.src === 'generic') h += '<div class="cx-l">路人武將可用兵書學會(名冊詳情 →「戰法學習」);兵書在討伐中掉落。</div>';
-  if (it.src === 'ult') h += '<div class="cx-l">路人武將擔任「' + cxEsc(it.troops.join('、')) + '」兵時自動帶這招大招。</div>';
-  if (it.src === 'bond') h += '<div class="cx-l cx-dim">名人隨身的專屬聯動,不占被動與選擇槽;只在指定武將在場或成為對象時才生效。</div>';
-  return h + '</div>';
-}
-function cxSkillRowHtml(it) {
-  var hd = cxHead(it.id), m = hd.match(/((.*))$/);
-  hd = m ? m[1] : '';
-  return '<div class="cx-row cx-skr" data-cx="skd" data-k="' + cxEsc(it.id) + '" role="button" tabindex="0">' + cxTagHtml(it.cat) +
-    '<span class="cx-mn"><b>' + cxEsc(it.name) + '</b><small>' + cxEsc(cxShort(it.id)) + (hd ? '・' + cxEsc(hd) : '') + '</small><small class="cx-sks">' + cxEsc(cxOwnersTxt(it, 4)) + '</small></span></div>';
 }
 
 // ───────── 配隊:資料 / 擁有度 / 套用 ─────────
@@ -473,19 +384,16 @@ function cxEnsure() {
   if (cx.el) return cx.el;
   if (typeof document === 'undefined' || !document.createElement || !document.body) return null;
   el = document.createElement('div'); el.id = 'codexPanel'; el.hidden = true;
-  el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', '圖鑑');
+  el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', '配隊建議');
   head = document.createElement('div'); head.className = 'cx-head';
-  head.innerHTML = '<b>圖鑑</b><small class="cx-world"></small><button type="button" class="cx-x" data-cx="close" aria-label="關閉圖鑑">✕</button>';
+  head.innerHTML = '<b>配隊建議</b><small class="cx-world"></small><button type="button" class="cx-x" data-cx="close" aria-label="關閉配隊建議">✕</button>';
   tabs = document.createElement('div'); tabs.className = 'cx-tabs';
   cx.tool = document.createElement('div'); cx.tool.className = 'cx-tool';
   cx.list = document.createElement('div'); cx.list.className = 'cx-list';
-  cx.ov = document.createElement('div'); cx.ov.className = 'cx-ov'; cx.ov.hidden = true;
-  el.appendChild(head); el.appendChild(tabs); el.appendChild(cx.tool); el.appendChild(cx.list); el.appendChild(cx.ov);
+  el.appendChild(head); el.appendChild(tabs); el.appendChild(cx.tool); el.appendChild(cx.list);
   el.addEventListener('click', cxOnClick);
-  el.addEventListener('input', cxOnInput);
   el.addEventListener('change', cxOnChange);
   el.addEventListener('keydown', cxOnRowKey);
-  if (typeof window !== 'undefined' && window && typeof window.addEventListener === 'function') window.addEventListener('keydown', cxOnKey, true);   // 只登記一次(Esc 先關浮層 / 回上一頁;比 panelmgr 的 document 捕獲更早)
   document.body.appendChild(el);
   cx.el = el; cx.tabsEl = tabs;
   cx.title = head.querySelector ? head.querySelector('.cx-world') : null;
@@ -493,22 +401,21 @@ function cxEnsure() {
   return el;
 }
 function cxHide() {
-  cx.open = false; cx.ovId = '';
+  cx.open = false;
   if (cx.timer && typeof clearTimeout === 'function') clearTimeout(cx.timer);
   cx.timer = 0;
-  if (cx.ov) cx.ov.hidden = true;
   if (cx.el) cx.el.hidden = true;
 }
 // opt: {tab, fig, skill}
+// opt: {tab, fig, skill}。fig / skill 開卡包『大全』詳情(cardsui_codex.js);其餘開配隊頁
 function codexOpen(opt) {
-  var el = cxEnsure();
+  var el;
   opt = opt || {};
+  if ((opt.fig || opt.skill) && typeof cuCodexOpenKey === 'function' && cuCodexOpenKey(opt.fig ? 'f:' + opt.fig : 's:' + opt.skill)) return true;
+  el = cxEnsure();
   if (!el) return false;
   if (typeof panelOpen === 'function') panelOpen('codex');
-  cx.open = true; el.hidden = false; cx.msg = ''; cx.ovId = '';
-  if (opt.fig) { cx.tab = 'fig'; cx.stack = [{ k: 'f', id: opt.fig }]; }
-  else if (opt.skill) { cx.tab = 'skill'; cx.stack = [{ k: 's', id: opt.skill }]; }
-  else { if (opt.tab) cx.tab = opt.tab; cx.stack = []; }
+  cx.open = true; el.hidden = false; cx.msg = ''; cx.tab = 'team'; cx.stack = [];
   cxRender(true);
   return true;
 }
@@ -521,54 +428,21 @@ function codexIsOpen() { return !!cx.open; }
 function cxSel(name, val, opts) {
   return '<select data-cxf="' + name + '" aria-label="' + cxEsc(opts[0][1]) + '">' + opts.map(function (o) { return '<option value="' + cxEsc(o[0]) + '"' + (String(val) === String(o[0]) ? ' selected' : '') + '>' + cxEsc(o[1]) + '</option>'; }).join('') + '</select>';
 }
-function cxFacOpts() {
-  var idx = cxIndex(), seen = {}, list = [];
-  idx.figs.forEach(function (it) { if (!seen[it.fac]) { seen[it.fac] = 1; list.push(it.fac); } });
-  list.sort(function (a, b) { return a - b; });
-  return [['-1', '全部陣營']].concat(list.map(function (f) { return [String(f), cxFacName(f)]; }));
-}
 function cxToolHtml() {
-  var tl = (typeof BN_DATA !== 'undefined') ? BN_DATA.troopList : ['槍', '騎', '盾', '弓', '謀'];
-  var ex = cxWorld() === 'han' ? '曹操、孔明' : cxIndex().figs.slice(0, 2).map(function (it) { return it.name; }).join('、');
-  if (cx.tab === 'fig') return '<input type="search" data-cxin="q" placeholder="搜尋姓名,例如 ' + cxEsc(ex) + '" aria-label="搜尋武將" autocomplete="off" enterkeyhint="search" value="' + cxEsc(cx.q) + '">' +
-    '<div class="cx-fs">' + cxSel('fac', cx.fac, cxFacOpts()) + cxSel('troop', cx.troop, [['', '全部兵種']].concat(tl.map(function (t) { return [t, t + '兵']; }))) +
-    cxSel('gr', cx.gr, [['-1', '全部品階'], ['4', '金'], ['3', '紫']]) + cxSel('own', cx.own, [['', '全部'], ['y', '已擁有'], ['n', '未獲得']]) + '</div>';
-  if (cx.tab === 'skill') return '<input type="search" data-cxin="skq" placeholder="搜尋戰法或武將姓名,例如 火攻、回復" aria-label="搜尋戰法" autocomplete="off" enterkeyhint="search" value="' + cxEsc(cx.skq) + '">' +
-    '<div class="cx-fs">' + cxSel('cat', cx.cat, [['', '全部類別']].concat(CX.catOrder.map(function (c) { return [c, CX_CAT[c]]; }))) +
-    cxSel('src', cx.src, [['', '全部來源'], ['fig', CX_SRC.fig], ['teach', CX_SRC.teach], ['generic', CX_SRC.generic], ['ult', CX_SRC.ult], ['bond', CX_SRC.bond]]) + '</div>';
   return '<div class="cx-fs">' + cxSel('tfac', cx.tfac, [['-1', '全部陣營']].concat(cxTeamFacs().map(function (f) { return [String(f), cxTeamFacName(f)]; }))) +
     '<button type="button" data-cx="rec">依我的名冊推薦</button></div>';
 }
 function cxTeamFacs() { var s = {}, out = []; cxTeams().forEach(function (t) { var k = cxWorld() === 'han' ? t.fac : t.world; if (!s[k]) { s[k] = 1; out.push(k); } }); return out; }
 function cxTeamFacName(f) { return cxWorld() === 'han' ? cxFacName(+f) : (CX_RACE[f] || f); }
 function cxListHtml() {
-  var top = cx.stack.length ? cx.stack[cx.stack.length - 1] : null, h = '', list, n, om;
-  if (top) return '<button type="button" class="cx-back" data-cx="back">‹ 返回</button>' + (top.k === 'f' ? cxFigDetailHtml(top.id) : cxSkillDetailHtml(top.id));
-  if (cx.tab === 'fig') {
-    list = cxFilterFigs({ q: cx.q, fac: +cx.fac, troop: cx.troop, gr: +cx.gr, own: cx.own });
-    om = cxOwnMap();
-    n = Math.min(list.length, (cx.page + 1) * CX.pageFig);
-    h += '<div class="cx-sum">共 ' + list.length + ' 位' + (cx.own ? '' : ',已擁有 ' + list.filter(function (it) { return !!om[it.id]; }).length + ' 位') + '。未獲得的也能看戰法,方便規劃抽卡。</div>';
-    if (!list.length) h += '<div class="cx-hint">找不到符合的武將,試試別的姓名或放寬篩選。</div>';
-    list.slice(0, n).forEach(function (it) { h += cxFigRowHtml(it, om); });
-    if (n < list.length) h += '<button type="button" class="cx-more" data-cx="more">再顯示 ' + Math.min(CX.pageFig, list.length - n) + ' 位(還有 ' + (list.length - n) + ' 位)</button>';
-    return h;
-  }
-  if (cx.tab === 'skill') {
-    list = cxFilterSkills({ q: cx.skq, cat: cx.cat, src: cx.src });
-    n = Math.min(list.length, (cx.page + 1) * CX.pageSk);
-    h += '<div class="cx-sum">共 ' + list.length + ' 個戰法。點一下看完整說明與誰會。</div>';
-    if (!list.length) h += '<div class="cx-hint">找不到符合的戰法。</div>';
-    list.slice(0, n).forEach(function (it) { h += cxSkillRowHtml(it); });
-    if (n < list.length) h += '<button type="button" class="cx-more" data-cx="more">再顯示 ' + Math.min(CX.pageSk, list.length - n) + ' 個(還有 ' + (list.length - n) + ' 個)</button>';
-    return h;
-  }
+  var h = '', list;
   if (cx.msg) h += '<div class="cx-msg">' + cxEsc(cx.msg) + '</div>';
   h += cxRecHtml() + cxRulesHtml();
   list = cxTeams().filter(function (t) { return +cx.tfac < 0 || String(cxWorld() === 'han' ? t.fac : t.world) === String(cx.tfac); });
   h += '<div class="cx-sec">各陣營配隊建議(' + list.length + ' 組)</div>';
   if (!list.length) h += '<div class="cx-hint">這個世界還沒有配隊建議。</div>';
   list.forEach(function (t) { h += cxTeamHtml(t); });
+  h += '<div class="cx-hint">武將與戰法的完整介紹(人物、戰法、兵種卡、隊伍)在卡包「大全」分頁。</div>';
   return h;
 }
 function cxRender(tool) {
@@ -576,52 +450,23 @@ function cxRender(tool) {
   if (cx.title) cx.title.textContent = cxWorldTxt();
   if (cx.tabsEl) cx.tabsEl.innerHTML = CX_TABS.map(function (t) { return '<button type="button" class="cx-tab' + (cx.tab === t[0] ? ' on' : '') + '" data-cx="tab" data-k="' + t[0] + '">' + t[1] + '</button>'; }).join('');
   if (tool) cx.tool.innerHTML = cxT(cxToolHtml());
-  cx.tool.hidden = cx.stack.length > 0;
+  cx.tool.hidden = false;
   cxPaint();
-  cxRenderOv();
 }
 // 魔幻世界用語替換(fx_text.js fxText;歷史世界原樣)
 function cxT(s) { return (typeof fxText === 'function') ? fxText(s) : s; }
 function cxPaint() { if (cx.list) cx.list.innerHTML = cxT(cxListHtml()); }
-function cxRenderOv() {
-  var o, it, h;
-  if (!cx.ov) return;
-  if (!cx.ovId || !(o = cxSkInfo(cx.ovId))) { cx.ov.hidden = true; cx.ov.innerHTML = ''; return; }
-  it = cxIndex().skById[cx.ovId];
-  h = '<div class="cx-ovb"><h4>' + cxEsc(o.title) + '</h4><div>' + (o.tags || []).map(function (t) { return '<span class="cx-src">' + cxEsc(t) + '</span>'; }).join('') + '</div>' +
-    o.lines.map(function (l) { return '<div class="cx-l"><b class="cx-k">' + cxEsc(l[0]) + '</b> ' + cxEsc(l[1]) + '</div>'; }).join('') +
-    (it && it.owners.length ? '<div class="cx-l"><b class="cx-k">誰會</b>' + it.owners.map(cxFigLink).join('、') + '</div>' : '') +
-    '<div class="cx-l"><button type="button" data-cx="ovx">關閉</button><button type="button" data-cx="skd" data-k="' + cxEsc(cx.ovId) + '">戰法詳情</button></div></div>';
-  cx.ov.innerHTML = cxT(h); cx.ov.hidden = false;
-}
-function cxPush(v) {
-  if (cx.list) cx.scroll[cx.stack.length] = cx.list.scrollTop | 0;
-  cx.stack.push(v); cx.ovId = '';
-  cxRender(false);
-  if (cx.list) cx.list.scrollTop = 0;
-}
-function cxBack() {
-  if (!cx.stack.length) return false;
-  cx.stack.pop(); cx.ovId = '';
-  cxRender(false);
-  if (cx.list && cx.scroll[cx.stack.length] !== undefined) cx.list.scrollTop = cx.scroll[cx.stack.length];
-  return true;
-}
 function cxOnClick(e) {
-  var t = e.target && e.target.closest ? e.target.closest('[data-cx]') : null, a, k, team;
-  if (!t || t.disabled) { if (e.target === cx.ov) { cx.ovId = ''; cxRenderOv(); } return; }
+  var t = e.target && e.target.closest ? e.target.closest('[data-cx]') : null, a, k, team, r;
+  if (!t || t.disabled) return;
   a = t.getAttribute('data-cx'); k = t.getAttribute('data-k') || '';
   if (a === 'close') codexClose();
-  else if (a === 'tab') { if (cx.tab !== k) { cx.tab = k; cx.page = 0; } cx.stack = []; cx.ovId = ''; cx.msg = ''; cxRender(true); }
-  else if (a === 'fig') cxPush({ k: 'f', id: k });
-  else if (a === 'skd') cxPush({ k: 's', id: k });
-  else if (a === 'sk') { cx.ovId = k; cxRenderOv(); }
-  else if (a === 'ovx') { cx.ovId = ''; cxRenderOv(); }
-  else if (a === 'back') cxBack();
-  else if (a === 'more') { cx.page++; cxPaint(); }
+  else if (a === 'tab') { cx.tab = k; cx.msg = ''; cxRender(true); }
+  else if (a === 'fig') codexOpenKey('f:' + k);
+  else if (a === 'skd') codexOpenKey('s:' + k);
   else if (a === 'roster') codexGoRoster(k);
   else if (a === 'rec') { cx.rec = cxRecommend(); cx.msg = ''; cxRender(false); }
-  else if (a === 'applyrec') { if (cx.rec && cx.rec.slots.length) { var r = cxApplySlots(cx.rec.slots); cx.msg = r.ok ? '已套用推薦陣容到布陣(' + r.placed + ' 人),下次出戰時生效。' : '無法套用。'; cxToast(cx.msg); } cxRender(false); }
+  else if (a === 'applyrec') { if (cx.rec && cx.rec.slots.length) { r = cxApplySlots(cx.rec.slots); cx.msg = r.ok ? '已套用推薦陣容到布陣(' + r.placed + ' 人),下次出戰時生效。' : '無法套用。'; cxToast(cx.msg); } cxRender(false); }
   else if (a === 'apply') { team = cxTeams().filter(function (x) { return x.id === k; })[0]; if (team) cxApplyTeam(team); cxRender(false); }
 }
 function cxOnRowKey(e) {
@@ -629,12 +474,6 @@ function cxOnRowKey(e) {
   if (!t || (e.key !== 'Enter' && e.key !== ' ') || !t.getAttribute || t.getAttribute('role') !== 'button' || !t.getAttribute('data-cx') || t.tagName === 'BUTTON') return;
   if (e.preventDefault) e.preventDefault();
   cxOnClick({ target: t });
-}
-function cxOnInput(e) {
-  var t = e.target, f = t && t.getAttribute ? t.getAttribute('data-cxin') : null;
-  if (!f) return;
-  if (cx.timer && typeof clearTimeout === 'function') clearTimeout(cx.timer);
-  cx.timer = setTimeout(function () { cx.timer = 0; cx[f] = String(t.value || '').slice(0, 20); cx.page = 0; cxPaint(); }, CX.debounce);
 }
 function cxOnChange(e) {
   var t = e.target, f = t && t.getAttribute ? t.getAttribute('data-cxf') : null;
@@ -644,13 +483,6 @@ function cxOnChange(e) {
 }
 // 設定篩選 / 關鍵字並重畫(測試與外部用)
 function cxSet(o) { Object.keys(o || {}).forEach(function (k) { cx[k] = o[k]; }); cx.page = 0; if (cx.list) cxPaint(); }
-function cxOnKey(e) {
-  if (!cx.open || !e || (e.key !== 'Escape' && e.key !== 'Esc')) return;
-  if (cx.ovId) { cx.ovId = ''; cxRenderOv(); }
-  else if (!cxBack()) return;
-  if (e.stopPropagation) e.stopPropagation();
-  if (e.preventDefault) e.preventDefault();
-}
 // 跳到名冊 / 卡包詳情(cardsui.js;開卡牌面板時圖鑑由 panelmgr 互斥關閉)
 function codexGoRoster(fig) {
   var om = cxOwnMap()[fig];
@@ -663,7 +495,7 @@ function codexGoRoster(fig) {
 
 // ───────── 抽卡開獎:最終排列加「看戰法」 ─────────
 function codexRevealHtml(list) {
-  return cxT('<div class="cx-rvh">本批戰法(完整說明:卡牌面板 →「圖鑑」)</div>' + (list || []).map(function (c) {
+  return cxT('<div class="cx-rvh">本批戰法(完整說明:卡包 →「大全」)</div>' + (list || []).map(function (c) {
     var rows = [], main;
     if (typeof bnCardSkillRows === 'function') { try { rows = bnCardSkillRows(c); } catch (e) { rows = []; } }
     main = rows.filter(function (r) { return r.cat !== 'passive'; }).concat(rows.filter(function (r) { return r.cat === 'passive'; })).slice(0, 3);

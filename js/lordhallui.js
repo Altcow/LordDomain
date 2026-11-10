@@ -64,7 +64,8 @@ function lordhallJobSites() {
   var out = [], objs = [];
   if (typeof estateObjects === 'function') { try { objs = estateObjects() || []; } catch (e) { objs = []; } }
   else if (typeof world !== 'undefined' && world && world.objects) objs = world.objects;
-  var ts = lordhallTalents();
+  var ts = lordhallTalents(), byAt = {};
+  ts.forEach(function (t) { if (t.at) (byAt[t.at] || (byAt[t.at] = [])).push(t); });   // 一次分組(人才 300 人時不做 建築數 × 人才數 的雙層迴圈)
   var npcOn = (typeof NPC_TYPE_POST !== 'undefined') && (typeof npcSiteInfo === 'function');   // 職司表(npcdata.js)存在時,可派駐建築改讀職司表;否則沿用占位 LH_SLOTS
   objs.forEach(function (o, i) {
     var d = npcOn ? npcSiteInfo(o.type) : LH_SLOTS[o.type], nm, id;
@@ -72,7 +73,7 @@ function lordhallJobSites() {
     id = o.type + '@' + o.x + ',' + o.y;
     nm = npcOn ? ((typeof OBJECTS !== 'undefined' && OBJECTS[o.type] && OBJECTS[o.type].name) || o.type) : d.name;
     out.push({ id: id, type: o.type, name: nm, grp: npcOn ? d.name : d.grp, post: npcOn ? d.post : null, slots: npcOn ? d.per : d.slots, x: o.x, y: o.y,
-      who: ts.filter(function (t) { return t.at === id; }) });
+      who: byAt[id] || [] });
   });
   return out;
 }
@@ -83,7 +84,6 @@ function lordhallAssign(tid, siteId) {
   if (siteId === null || siteId === undefined || siteId === '') { t.at = null; delete t.since; lhStaffDirty(); return true; }
   lordhallJobSites().forEach(function (s) { if (s.id === siteId) site = s; });
   if (!site) return false;
-  if (t.study) return false;   // 進修中(academy.js)不能派駐
   if (site.who.length >= site.slots && site.who.indexOf(t) < 0) return false;
   if (site.post && typeof npcCanAssign === 'function' && t.at !== siteId && !npcCanAssign(t, siteId)) return false;   // 職司席位已滿
   t.at = siteId;
@@ -100,18 +100,27 @@ function lordhallAssignPost(tid, postId) {
 }
 // 全部自動分派:閒置人才優先給職司對口(t.job === site.grp)的建築,其次任何有空位者;有職司表時改以個人人事值最高的職司為先
 function lordhallAutoAssign() {
-  var ts = lordhallTalents(), n = 0;
-  var idle = ts.filter(function (t) { return !t.at && !t.study; });
+  var ts = lordhallTalents(), n = 0, sites = lordhallJobSites(), pOf = {}, used = {};
+  var idle = ts.filter(function (t) { return !t.at; });
   if (!idle.length) return 0;
+  // 職司席位用量一次算好(等同逐人呼叫 npcCanAssign,但不再每人每棟掃一次名冊:300 人時會慢到數百 ms)
+  if (typeof npcPostOfAt === 'function') {
+    ts.forEach(function (x) { var p0 = x.at ? npcPostOfAt(x.at) : null; if (p0) used[p0.id] = (used[p0.id] || 0) + 1; });
+    sites.forEach(function (s) { pOf[s.id] = s.post ? npcPostOfAt(s.id) : null; });
+  }
+  function seatOpen(s) { var p = pOf[s.id]; return !p || typeof npcSeatsOf !== 'function' || (used[p.id] || 0) < npcSeatsOf(p); }
   idle.sort(function (a, b) { return (b.star ? 1 : 0) - (a.star ? 1 : 0); });
   idle.forEach(function (t) {
-    var sites = lordhallJobSites().filter(function (s) { return s.who.length < s.slots && (!s.post || typeof npcCanAssign !== 'function' || npcCanAssign(t, s.id)); });
+    var open = sites.filter(function (s) { return s.who.length < s.slots && seatOpen(s); });
     var pick;
-    if (sites.length && typeof npcFitScore === 'function' && sites[0].post) {
-      sites.sort(function (a, b) { return npcFitScore(t, b.post) - npcFitScore(t, a.post); });
-      pick = sites[0];
-    } else pick = sites.filter(function (s) { return s.grp === t.job; })[0] || sites[0];
-    if (pick) { t.at = pick.id; if (typeof npcDayOf === 'function') t.since = npcDayOf(Date.now()); n++; }
+    if (open.length && typeof npcFitScore === 'function' && open[0].post) {
+      open.sort(function (a, b) { return npcFitScore(t, b.post) - npcFitScore(t, a.post); });
+      pick = open[0];
+    } else pick = open.filter(function (s) { return s.grp === t.job; })[0] || open[0];
+    if (pick) {   // 建築席位與職司用量就地更新(同一輪後續人才看得到)
+      t.at = pick.id; pick.who.push(t); if (typeof npcDayOf === 'function') t.since = npcDayOf(Date.now()); n++;
+      if (pOf[pick.id]) used[pOf[pick.id].id] = (used[pOf[pick.id].id] || 0) + 1;
+    }
   });
   if (n) lhStaffDirty();
   return n;
@@ -175,8 +184,8 @@ function lhHtmlOverview() {
   if (typeof cardsUiOpen === 'function' && typeof cardsGet === 'function' && cardsGet()) {   // 卡包入口(新手禮包 / 抽卡次數 / 名冊名額;cardsui_starter.js)
     var cs = cardsGet(), stOk = typeof cardsStarterState === 'function' && cardsStarterState(cs) === 'ready', cap = (typeof cardsCap === 'function') ? cardsCap() : 0, ready = (typeof cardsPulls === 'function') ? cardsPulls(cs) : 0, nx = (typeof cardsNextIn === 'function') ? cardsNextIn(cs, 'T', Date.now()) : null, drawTxt = '';
     drawTxt = ready ? ' · <b>可抽 ' + ready + ' 次</b>' : (nx !== null ? ' · 下次補充:' + (nx < 3600000 ? '不到 1 小時' : Math.ceil(nx / 3600000) + ' 小時後') : '');
-    h += '<div class="lhsec">卡包</div><div class="lhr"><span>名冊 ' + cs.roster.length + '/' + cap + (cs.bag.length ? ' · 卡包 ' + cs.bag.length + ' 張' : '') + drawTxt + (stOk ? ' · <b>🎁 新手禮包可領</b>' : '') + '</span><button class="lhb" data-lh="cards">' + (stOk ? '領新手禮包' : '打開卡包') + '</button></div>';
-    if (cap && cs.roster.length >= cap) h += '<div class="lhr lhwarn"><span>名冊已滿,抽到的卡會先放卡包,可遣散或提升官階</span></div>';
+    h += '<div class="lhsec">卡包</div><div class="lhr"><span>名冊 ' + cs.roster.length + '/' + cap + drawTxt + (stOk ? ' · <b>🎁 新手禮包可領</b>' : '') + '</span><button class="lhb" data-lh="cards">' + (stOk ? '領新手禮包' : '打開卡包') + '</button></div>';
+    if (cap && cs.roster.length >= cap) h += '<div class="lhr lhwarn"><span>名冊已滿(' + cap + '),停止抽卡;請先熔鍊或遣散</span></div>';
   }
   h += '<div><button class="lhb" data-lh="mood"' + (lhMoodFn() ? '' : ' disabled') + '>開啟民情總覽</button>' +
     '<button class="lhb" data-lh="tech"' + (hasTech ? '' : ' disabled') + '>開啟科技樹</button></div>';
@@ -218,7 +227,7 @@ function lhHtmlJobs() {
   var ts = lordhallTalents(), sites = lordhallJobSites(), h = '';
   if (!ts.length) return '<div class="lhr"><span>尚無人才,招募後可派工</span></div>';
   if (typeof npcStaffInfo === 'function' && typeof NPC_TYPE_POST !== 'undefined') return lhHtmlPosts(ts, sites);
-  var idle = ts.filter(function (t) { return !t.at && !t.study; });
+  var idle = ts.filter(function (t) { return !t.at; });
   h += '<div class="lhr"><span>人才 ' + ts.length + '(閒置 ' + idle.length + ')</span><button class="lhb" data-lh="auto"' + (idle.length && sites.length ? '' : ' disabled') + '>全部自動分派</button></div>';
   if (!sites.length) return h + '<div class="lhr"><span>城中尚無可派駐的建築</span></div>';
   sites.forEach(function (s) {

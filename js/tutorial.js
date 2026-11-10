@@ -157,7 +157,7 @@ function tutDoneCards(step) {
   if (!cs) return true;
   switch (step) {
     case 'C1': return typeof cardsStarterState !== 'function' || cardsStarterState(cs) !== 'ready';
-    case 'C2': return (cs.pl && (cs.pl.tot | 0) >= 1) || cs.roster.length + cs.bag.length > 0;
+    case 'C2': return (cs.pl && (cs.pl.tot | 0) >= 1) || cs.roster.length > 0;
     case 'C3': return tutHasSeen('detail');
     case 'C4': return tutHasSeen('team') || tutTeamFormed();
     default: return false;

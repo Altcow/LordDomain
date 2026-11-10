@@ -5,11 +5,11 @@
 // 存檔:world.city.cards(goods.js goodsNormCity 帶過 cardsNormSave);名冊 roster 即派工用的 world.city.talents(同一批物件,不可列舉,不重複存檔)。
 // 第一階段刻意未做:名冊人物/小兵卡/人物圈、取捨詞條 §4.4A、戰場技能內容(只記數量 skn)、記名簿、快速模式、文鬥小遊戲(星數固定 1)、結義。
 // 全域名稱:cardsSkillList cardHash cardRng cardsStateNew cardsGet cardsNormSave cardsPeriodNo cardsSync cardsNextIn cardsVenueOpen cardsVenueTheme cardsGenBatch cardsOpenBatch
-//          cardsDiscardBatch cardsCost cardsCap cardsRelShards cardsRosterRoom cardsRosterFill cardsDrawTier cardsDrawSize cardsMigNoteTake cardsRelease cardsUndoRelease cardsRecall cardsUpgradeCheck cardsUpgrade cardsStats cardsJobSlots
+//          cardsDiscardBatch cardsCost cardsCap cardsRelShards cardsRosterRoom cardsRosterFill cardsDrawTier cardsDrawSize cardsMigNoteTake cardsRelease cardsUndoRelease cardsRecall cardsStats cardsJobSlots
 //          cardsGenNamed cardsNamedDraw cardsNamedOpen cardsAddNameTokens cardsNamedGive cardsNamedRankCheck cardsNamedTick cardsNamedKeyOk
-//          cardsBagCap cardsBagRoom cardsBagAutoLv cardsBagSetAuto cardsBagStage cardsBagCommit cardsBagOpen cardsBagFlush cardsBagPut cardsBagFind cardsBagList cardsBagPick cardsBagEnlist
-//          cardsBagDissolve cardsBagDissolveValue cardsFurnaceValue cardsFurnaceSum cardsShardGain cardFigWeight
-//          cardsOverList cardsOverRoom cardsOverNow cardsOverLeft cardsOverMin cardsOverFill cardsOverSettle cardsOverNoteTake cardsBagCanOpen cardsAnyFind
+//          cardsBagAutoLv cardsBagSetAuto cardsBagStage cardsBagCommit cardsBagOpen cardsBagFlush cardsRosterFind cardsRosterList cardsBagPick
+//          cardsBagDissolve cardsBagDissolveValue cardsFurnaceValue cardsFurnaceSum cardsShardGain cardFigWeight cardsBagCanOpen
+//          (2026-11-10:卡包 cs.bag / 溢出區 cs.bagOver 已移除;cardsBagCap / cardsBagRoom / cardsBagPut / cardsBagFind / cardsBagEnlist / cardsRosterFill / cardsOver* 刪除)
 //          cardsWeekNo cardsStarLv cardsStarCost cardsStarUp cardsStarBonus cardsExchangeLeft cardsExchange
 //          cardsFind cardsSyncTalents cardsTalents cardsPatrolTalents cardsAccept cardsJobLine cardsOnTechDone cardsRankLv CARD_PIN
 
@@ -47,9 +47,9 @@ function cardWPick(r, items, wf) {
 function cardsStateNew(seed) {
   var s = (typeof seed === 'number' && isFinite(seed)) ? (seed >>> 0) : ((Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0);
   return {
-    v: 3, pl: { n: 0, t: 0, tot: 0 }, boss: {}, seed: s, seq: 0, nameTokens: 0, namedCount: 0, shards: 0, dr: {},
+    v: 5, pl: { n: 0, t: 0, tot: 0 }, boss: {}, seed: s, seq: 0, nameTokens: 0, namedCount: 0, shards: 0, dr: {},
     clock: { maxSeen: 0 }, tokenGiven: {}, last: { T: -1, E: -1, G: -1 }, acc: { T: [], E: [], G: [] }, cur: { T: null, E: null, G: null },
-    pity: { T: 0, E: 0, G: 0 }, fame: { G: 0, E: 0 }, stars: { E: 1 }, roster: [], wait: [], wander: [], bag: [], lastRel: null, starter: { done: 0 }
+    pity: { T: 0, E: 0, G: 0 }, fame: { G: 0, E: 0 }, stars: { E: 1 }, roster: [], wait: [], wander: [], lastRel: null, starter: { done: 0 }
   };
 }
 function cardsGet() {
@@ -70,7 +70,6 @@ function cardsOnTechDone(id, big) {
   node = (typeof techNode === 'function') ? techNode(id) : null;
   big = !!big || String(id).indexOf('mg_') === 0;
   g[id] = 1;
-  if (typeof academyAct === 'function') academyAct(cs, 1, Date.now(), true);   // 研發算 1 次施政動作(學院旬報計課)
   name = (node && ((typeof techLabelOf === 'function') ? techLabelOf(node) : node.name)) || id;
   if (big) {
     n = CARD_DRAW.mileShard;
@@ -366,7 +365,7 @@ function cardRollGr(cs, venue, key, slot, star) {
   return p[4] > 0 ? 4 : 0;
 }
 // 生成一次抽卡結果(酒館 / 縣試池 = size 張,size 預設一階的次數;含逐張保底與連抽底線);不改 cs,只讀 cs.pity/fame/seed。回 {key, venue, cands, hasUpper, pityHit, pityEnd}
-// 逐張保底:cs.pity[v] = 連續沒出上等(V.upper)的張數,達 CARD_DRAW.pity 後下一張必出上等;連抽 ≥ floorMin 張才套用批內底線(V.floor)與縣試學院生徒。舊殿試池(G)沿用整批規則
+// 逐張保底:cs.pity[v] = 連續沒出上等(V.upper)的張數,達 CARD_DRAW.pity 後下一張必出上等;連抽 ≥ floorMin 張才套用批內底線(V.floor)。舊殿試池(G)沿用整批規則
 function cardsGenBatch(cs, venue, key, size) {
   var V = CARD_VENUES[venue], cands = [], i, star = cs.stars[venue] || 1, pityHit = false, best, rep = [], p, pityN, nb = (typeof cardsNbOn === 'function' && cardsNbOn(cs, venue)), c;
   function highest() { var b = 0, k; for (k = 1; k < cands.length; k++) if (cands[k].tai > cands[b].tai) b = k; return b; }
@@ -389,7 +388,6 @@ function cardsGenBatch(cs, venue, key, size) {
   }
   if (size >= CARD_DRAW.floorMin) {
     if (!cands.some(function (x) { return x.gr >= V.floor; })) { best = highest(); cands[best] = cardGen(cs, venue, key, best, V.floor, 'floor'); rep.push(best); }
-    if (venue === 'E' && typeof academyPupilBatch === 'function') academyPupilBatch(cs, key, cands, rep);   // 學院院級 ≥ 2:最後一位換成本院生徒(academy.js)
   }
   p = cs.pity[venue] | 0;
   cands.forEach(function (x) { p = cardIsUpper(x, V) ? 0 : p + 1; });
@@ -486,17 +484,14 @@ function cardsNamedRankCheck(cs) {
 var cardsNamedClock = 0;
 // 主迴圈掛點(main.js frame):每 5 秒檢查一次官階、溢出區與『名冊有空位 → 卡包的卡補進名冊』;舊存檔遷移提示只跳一次。無資料 / 例外一律略過
 function cardsNamedTick(dt) {
-  var cs, r, m;
+  var cs, m;
   cardsNamedClock += dt || 0;
   if (cardsNamedClock < 5) return 0;
   cardsNamedClock = 0;
   try {
-    if (typeof academyTick === 'function') academyTick(5);
     if (typeof npcTick === 'function') npcTick(5);   // npcTick:人物互動(親近年資 / 請託)
     cs = cardsGet();
     if (!cs) return 0;
-    r = cardsOverSettle(cs, Date.now());
-    if (r.roster && typeof cardsSyncTalents === 'function') cardsSyncTalents();
     m = cardsMigNoteTake(cs);
     if (m && typeof showToast === 'function') showToast(m);
     return cardsNamedRankCheck(cs);
@@ -516,18 +511,15 @@ function cardsRankLv() {
   if (typeof LH_RANKS !== 'undefined') for (i = 0; i < LH_RANKS.length; i++) if (LH_RANKS[i].n === r) return i + 1;
   return 0;
 }
-// 名額 = 10 + 官階等級 × 2(上限 40);無官階資料退回 capBase;再加 cardsCapBonus()。官階降低時名額減少但不踢人(roster 超額時新卡先放卡包)
-function cardsCap() {
-  var lv = cardsRankLv(), base = lv > 0 ? Math.min(CARD_CFG.capMax, CARD_CFG.capRank0 + lv * CARD_CFG.capPerRank) : CARD_CFG.capBase;
-  return base + ((typeof cardsCapBonus === 'function') ? (cardsCapBonus() | 0) : 0);
-}
+// 名冊格數固定 CARD_CFG.cap(300),不隨官階(2026-11-10 決議)。滿了停止抽卡,需先熔鍊或遣散。
+function cardsCap() { return CARD_CFG.cap; }
 function cardsFind(cs, id) {
   var lists = ['roster', 'wait', 'wander'], i, j;
   for (i = 0; i < lists.length; i++) for (j = 0; j < cs[lists[i]].length; j++) if (cs[lists[i]][j].id === id) return { e: cs[lists[i]][j], list: lists[i], idx: j };
   return null;
 }
-function cardsFindFig(cs, fig) {   // 含卡包:名人同時只會有一份(重複抽到轉信物 / 碎片)
-  var lists = ['roster', 'wait', 'wander', 'bag'], i, j;
+function cardsFindFig(cs, fig) {   // 名冊 / 待定席 / 流浪:名人同時只會有一份(重複抽到轉信物 / 碎片)
+  var lists = ['roster', 'wait', 'wander'], i, j;
   for (i = 0; i < lists.length; i++) for (j = 0; j < cs[lists[i]].length; j++) if (cs[lists[i]][j].fig === fig) return cs[lists[i]][j];
   return null;
 }
@@ -557,13 +549,8 @@ function cardsJobSlots(e) {
   for (k in e.ja) used += e.ja[k];
   return { used: used, cap: Math.max(used, CARD_GRADE[e.gr].jobSlots[1]) };
 }
-// ───────── 卡包(cs.bag):名冊滿時的暫存區。開批的卡先進名冊(免費);名冊滿了才放卡包,名冊有空位時卡包的卡自動補進(cardsRosterFill) ─────────
-// 流程:cardsBagStage(開批,批次暫放 cs.cur[v])→(可選)抽卡特效→ cardsBagCommit(名冊 / 卡包:重複名人轉信物 / 碎片、名冊滿時白階依設定自動熔爐)。cardsBagOpen = 兩步連做(無特效 / 離線路徑)。
-function cardsBagCap() {   // 容量 = capBase + (官階等級 − 1) × capPerRank,上限 capMax;缺官階資料 = capBase
-  var lv = cardsRankLv(), B = CARD_BAG;
-  return lv > 0 ? Math.min(B.capMax, B.capBase + (lv - 1) * B.capPerRank) : B.capBase;
-}
-function cardsBagRoom(cs) { return Math.max(0, cardsBagCap() - cs.bag.length); }
+// ───────── 抽卡入冊 / 熔鍊 / 自動熔爐(2026-11-10:卡包 cs.bag 與溢出區 cs.bagOver 已移除;抽到的卡直接進名冊,名冊滿 CARD_CFG.cap 停止抽卡) ─────────
+// 流程:cardsBagStage(開批,批次暫放 cs.cur[v];名冊無空位回 bagfull、不扣次數)→(可選)抽卡特效→ cardsBagCommit(進名冊;重複名人轉信物 / 碎片;白階依設定自動熔爐)。cardsBagOpen = 兩步連做。
 function cardsBagAutoLv(cs) {   // 自動熔爐門檻:-1 = 關,0~autoMax = 品階 ≤ 此值的路人自動熔爐(未設定 = autoDefault)
   var a = cs.bagAuto;
   return (typeof a !== 'number' || !isFinite(a)) ? CARD_BAG.autoDefault : Math.max(-1, Math.min(CARD_BAG.autoMax, a | 0));
@@ -583,206 +570,148 @@ function cardsFurnaceValue(c) {
   return v;
 }
 function cardsBagDissolveValue(c) { return cardsFurnaceValue(c); }   // 舊名保留(= cardsFurnaceValue)
-// 熔爐預覽:ids 為卡包 bid;figOk = false 時名人不計入(skippedFig)。回 {n, shards, top, figs, skippedFig}
+// 名冊內找人(熔鍊 / 熔爐的對象只看名冊):回 {c, idx} 或 null
+function cardsRosterFind(cs, id) {
+  var i;
+  for (i = 0; i < cs.roster.length; i++) if (cs.roster[i].id === id) return { c: cs.roster[i], idx: i };
+  return null;
+}
+// 熔爐可熔的人:名冊內、未鎖定(🔒)、未派駐;名人另由 figOk 決定
+function cardsRosterMeltable(c) { return !c.star && !c.at; }
+// 熔爐預覽:ids 為名冊 entry id;figOk = false 時名人不計入(skippedFig);鎖定 / 派駐者不計入(skippedLock)。回 {n, shards, top, figs, skippedFig, skippedLock}
 function cardsFurnaceSum(cs, ids, figOk) {
-  var o = { n: 0, shards: 0, top: 0, figs: 0, skippedFig: 0 }, seen = {};
+  var o = { n: 0, shards: 0, top: 0, figs: 0, skippedFig: 0, skippedLock: 0 }, seen = {};
   (ids || []).forEach(function (id) {
-    var f = cardsAnyFind(cs, id);
+    var f = cardsRosterFind(cs, id);
     if (!f || seen[id]) return;
     seen[id] = 1;
-    if (f.c.fig) { if (!figOk) { o.skippedFig++; return; } o.figs++; }
+    if (f.c.fig && !figOk) { o.skippedFig++; return; }
+    if (!cardsRosterMeltable(f.c)) { o.skippedLock++; return; }
+    if (f.c.fig) o.figs++;
     o.n++; o.shards += cardsFurnaceValue(f.c); if (f.c.gr > o.top) o.top = f.c.gr;
   });
   return o;
 }
-// 碎片入帳:同一碎片池 cs.shards(無週上限,不再自動轉酒令)。回 {shards 實得, tokens 0, lost 0}(後兩欄保留給舊呼叫端)
+// 碎片入帳:同一碎片池 cs.shards(無週上限)。回 {shards 實得, tokens 0, lost 0}(後兩欄保留給舊呼叫端)
 function cardsShardGain(cs, shards) {
   var add = Math.max(0, shards | 0);
   cs.shards += add;
   return { shards: add, tokens: 0, lost: 0 };
 }
-function cardsBagFind(cs, bid) {
-  var i;
-  for (i = 0; i < cs.bag.length; i++) if (cs.bag[i].bid === bid) return { c: cs.bag[i], idx: i };
-  return null;
-}
-// 卡包 + 溢出區一起找:回 {c, idx, over}
-function cardsAnyFind(cs, bid) {
-  var f = cardsBagFind(cs, bid), i;
-  if (f) return { c: f.c, idx: f.idx, over: false };
-  for (i = 0; cs.bagOver && i < cs.bagOver.length; i++) if (cs.bagOver[i].bid === bid) return { c: cs.bagOver[i], idx: i, over: true };
-  return null;
-}
-// ───────── 溢出區(cs.bagOver,有值才寫):卡包滿了新卡不擋抽,進溢出區並以真實時間戳 exp = 進入時間 + CARD_BAG.overMs(24h)倒數,離線也算 ─────────
-// 規則:卡包有空位 → 依 exp 小者先自動納入(停止倒數);倒數歸零還在溢出區 → 熔成碎片(cardsFurnaceValue,記在 cs.overNote 供卡包頁提示);名人不入溢出區;溢出區上限 = 當前卡包上限。
-// 時鐘回撥:計時用 max(now, cs.clock.maxSeen),且每張 exp 夾在 現在 + overMs 以內,回撥不會延長倒數。
-function cardsOverNow(cs, now) { return Math.max((typeof now === 'number' && isFinite(now)) ? now : Date.now(), (cs.clock && cs.clock.maxSeen) || 0); }
-function cardsOverList(cs) { return (cs.bagOver || []).slice().sort(function (a, b) { return a.exp - b.exp; }); }
-function cardsOverRoom(cs) { return Math.max(0, cardsBagCap() - (cs.bagOver ? cs.bagOver.length : 0)); }
-function cardsBagCanOpen(cs, n) { return cardsRosterRoom(cs) + cardsBagRoom(cs) + cardsOverRoom(cs) >= Math.max(1, n | 0 || CARD_BAG.batchNeed); }   // 抽 n 張需名冊 + 卡包 + 溢出區空位合計 >= n(指名等整批省略 n = batchNeed 7)
 function cardsRosterRoom(cs) { return Math.max(0, cardsCap() - cs.roster.length); }
-// 名冊有空位就把卡包的卡補進名冊(名人優先,再依品階、才、先來後到);回補進幾位
-function cardsRosterFill(cs) {
-  var room = cardsRosterRoom(cs), n = 0, list, c, i;
-  if (room <= 0 || !cs.bag.length) return 0;
-  function no(x) { return parseInt(String(x.bid).slice(1), 10) || 0; }
-  list = cs.bag.slice().sort(function (a, b) { return (b.fig ? 1 : 0) - (a.fig ? 1 : 0) || b.gr - a.gr || b.tai - a.tai || no(a) - no(b); });
-  for (i = 0; i < list.length && n < room; i++) {
-    c = list[i];
-    cs.bag.splice(cs.bag.indexOf(c), 1);
-    cs.roster.push(cardsMakeEntry(cs, c, c.pool || 'T', c.key || '', cardsCost(c)));
-    n++;
-  }
-  cs.lastRel = null;
-  return n;
+// 抽 n 張(整數;省略 = batchNeed)需要名冊空位 >= n
+function cardsBagCanOpen(cs, n) { return cardsRosterRoom(cs) >= Math.max(1, n | 0 || CARD_BAG.batchNeed); }
+// 名冊搜尋用的正規化(srNorm 在 search.js;測試環境沒有時退回小寫去空白)
+function cardsRosterQ(s) {
+  var t = String(s || '');
+  return (typeof srNorm === 'function') ? srNorm(t) : t.toLowerCase().replace(/\s+/g, '');
 }
-function cardsOverLeft(cs, c, now) { var t = cardsOverNow(cs, now); return Math.max(0, Math.min(c.exp, t + CARD_BAG.overMs) - t); }
-// 溢出區摘要:{n, ms 最短剩餘毫秒(無則 null), urgent 是否 < overWarnMs}
-function cardsOverMin(cs, now) {
-  var n = cs.bagOver ? cs.bagOver.length : 0, ms = null;
-  (cs.bagOver || []).forEach(function (c) { var l = cardsOverLeft(cs, c, now); if (ms === null || l < ms) ms = l; });
-  return { n: n, ms: ms, urgent: ms !== null && ms < CARD_BAG.overWarnMs };
+// 兵種(bn_units.js bnDefaultTroop 的結果:槍 騎 盾 弓 謀);無 bn 模組時 ''
+function cardsRosterTroop(e) {
+  var t = (typeof bnDefaultTroop === 'function') ? bnDefaultTroop(e) : '';
+  return t || '';
 }
-// 卡包有空位就把溢出區搬進來(exp 小者先);回搬了幾張
-function cardsOverFill(cs) {
-  var n = 0, c;
-  if (!cs.bagOver || !cs.bagOver.length) return 0;
-  cs.bagOver.sort(function (a, b) { return a.exp - b.exp; });
-  while (cs.bagOver.length && cs.bag.length < cardsBagCap()) { c = cs.bagOver.shift(); delete c.exp; cs.bag.push(c); n++; }
-  if (!cs.bagOver.length) delete cs.bagOver;
-  return n;
+function cardsRosterHay(e) {   // 搜尋範圍:名字、字、職業、陣營、兵種
+  return cardsRosterQ([e.name, e.zi, cardsJobLine(e), CARD_FAC[e.fac] || '', cardsRosterTroop(e)].join('|'));
 }
-// 結算:名冊有空位先從卡包補進名冊(noFill = true 時不補:讀檔正規化時官階資料可能還不是這個城的)-> 夾住 exp -> 已到期者熔成碎片 -> 卡包有空位就納入。回 {expired, shards, filled, roster}
-function cardsOverSettle(cs, now, noFill) {
-  var res = { expired: 0, shards: 0, filled: 0, roster: 0 }, t, dead = [], sum = 0, g;
-  if (!noFill) res.roster = cardsRosterFill(cs);
-  if (!cs.bagOver || !cs.bagOver.length) return res;
-  t = cardsOverNow(cs, now);
-  if (cs.clock && t > cs.clock.maxSeen) cs.clock.maxSeen = t;
-  cs.bagOver.forEach(function (c) { if (!(c.exp <= t + CARD_BAG.overMs)) c.exp = t + CARD_BAG.overMs; if (c.exp <= t) dead.push(c); });
-  if (dead.length) {
-    cs.bagOver = cs.bagOver.filter(function (c) { return dead.indexOf(c) < 0; });
-    dead.forEach(function (c) { sum += cardsFurnaceValue(c); });
-    g = cardsShardGain(cs, sum);
-    res.expired = dead.length; res.shards = g.shards;
-    cs.overNote = { n: ((cs.overNote && cs.overNote.n) | 0) + dead.length, shards: ((cs.overNote && cs.overNote.shards) | 0) + g.shards };
-    if (!cs.bagOver.length) delete cs.bagOver;
-  }
-  res.filled = cardsOverFill(cs);
-  return res;
+// 名冊列表:f {q 搜尋字, gr 品階 -1 全部, fac 陣營 -1 全部, troop 兵種字 '' 全部, kind '' / 'fig' 名人 / 'gen' 路人, dep 只看已派駐, sort 'gr' 品階 / 'name' 名字 / 'star' 星數 / 'new' 最新}
+function cardsRosterList(cs, f) {
+  var o = f || {}, q = o.q ? cardsRosterQ(o.q) : '', list;
+  list = cs.roster.filter(function (e) {
+    if (typeof o.gr === 'number' && o.gr >= 0 && e.gr !== o.gr) return false;
+    if (typeof o.fac === 'number' && o.fac >= 0 && e.fac !== o.fac) return false;
+    if (o.troop && cardsRosterTroop(e) !== o.troop) return false;
+    if (o.kind === 'fig' && !e.fig) return false;
+    if (o.kind === 'gen' && e.fig) return false;
+    if (o.dep && !e.at) return false;
+    if (q && cardsRosterHay(e).indexOf(q) < 0) return false;
+    return true;
+  });
+  list.sort(function (a, b) {
+    if (o.sort === 'new') return b.no - a.no;
+    if (o.sort === 'name') return a.name < b.name ? -1 : (a.name > b.name ? 1 : a.no - b.no);
+    if (o.sort === 'star') return (cardsStarLv(b) - cardsStarLv(a)) || (b.gr - a.gr) || (a.no - b.no);
+    return (b.gr - a.gr) || (b.tai - a.tai) || (a.no - b.no);
+  });
+  return list;
 }
-// 取走(並清除)到期熔鍊提示:{n, shards} 或 null
-function cardsOverNoteTake(cs) { var o = cs.overNote || null; delete cs.overNote; return o; }
-// 放一張卡進卡包(複本,不檢查容量 / 重複名人);回卡包卡物件。expAt 為數字時改放溢出區(cs.bagOver)並記到期時間戳 exp
-function cardsBagPut(cs, c, pool, key, expAt) {
-  var o = JSON.parse(JSON.stringify(c));
-  cs.bagSeq = (cs.bagSeq | 0) + 1;
-  o.bid = 'b' + cs.bagSeq; o.pool = pool || 'T'; o.key = String(key || '');
-  delete o.taken;
-  if (typeof expAt === 'number') { o.exp = expAt; (cs.bagOver || (cs.bagOver = [])).push(o); }
-  else cs.bag.push(o);
-  return o;
+// 一鍵熔爐 / 自動候選:名冊內路人、品階 ≤ maxGr、可熔(未鎖定、未派駐);名人永不入選。回 entry id 陣列
+function cardsBagPick(cs, maxGr) {
+  return cs.roster.filter(function (c) { return !c.fig && cardsRosterMeltable(c) && c.gr <= maxGr; }).map(function (c) { return c.id; });
 }
-// 抽卡但先不入包(給抽卡特效用):n = 抽幾次(預設 1)。reason none 次數不足 busy 上一批尚未入包 bagfull 名冊 + 卡包 + 溢出區空位不足(不扣次數) closed 卡池未開放 bad 參數錯
+// 開批(抽卡):n 次(受次數與名冊空位限制;空位不足回 bagfull,不扣次數)。reason none 次數不足 busy 上一批尚未入冊 bagfull 名冊已滿 closed 卡池未開放 bad 參數錯
 function cardsBagStage(cs, venue, n) {
-  var b;
+  var b, room;
   if (venue !== 'T' && venue !== 'E') return { ok: false, reason: 'bad' };
   if (!cardsVenueOpen(venue)) return { ok: false, reason: 'closed' };
   if (cs.cur[venue]) return { ok: false, reason: 'busy' };
   n = Math.max(1, Math.min(n | 0 || 1, CARD_DRAW.maxOne));
   if (cardsPulls(cs) < 1) return { ok: false, reason: 'none' };
   n = Math.min(n, cardsPulls(cs));
-  if (!cardsBagCanOpen(cs, n)) return { ok: false, reason: 'bagfull' };
+  room = cardsRosterRoom(cs);
+  if (room < 1) return { ok: false, reason: 'bagfull' };
+  n = Math.min(n, room);   // 空位不足時只開到名冊剩餘格數(實際張數以 r.cards.length 為準)
   b = cardsOpenBatch(cs, venue, n);
   return { ok: true, batch: b, cards: b.cands };
 }
-// 把待入包批次放進名冊 / 卡包。o {now, noAuto, noRoster(讀檔正規化:先全放卡包,之後由 cardsRosterFill 補進名冊)}。
-// 每張的去向 how:roster 加入名冊 / bag 名冊已滿 → 卡包 / over 卡包也滿 -> 溢出區 / auto 名冊已滿且自動熔爐 / token 名人重複 → 信物 +1 / shard 名人重複且信物已滿 → 碎片 / skip 舊批次已處理
+// 把待入冊批次放進名冊。o {now, noAuto, noSync(讀檔正規化時不同步派工接口)}。
+// 每張的去向 how:roster 入名冊 / auto 白階依設定自動熔爐 / token 名人重複 → 信物 +1 / shard 名人重複且信物已滿 → 碎片 / full 名冊已滿(舊批次極少見)→ 碎片 / skip 舊批次已處理
 function cardsBagCommit(cs, venue, o) {
-  var b = cs.cur[venue], opt = o || {}, auto = (opt.noAuto || (b && b.noAuto)) ? -1 : cardsBagAutoLv(cs), res, raw = 0, figShards = 0, g, expAt;   // b.noAuto:新手禮包批次不自動熔爐
+  var b = cs.cur[venue], opt = o || {}, auto = (opt.noAuto || (b && b.noAuto)) ? -1 : cardsBagAutoLv(cs), res, raw = 0, g;   // b.noAuto:新手禮包批次不自動熔爐
   if (!b) return { ok: false, reason: 'none' };
   cs.cur[venue] = null;
-  res = { ok: true, venue: venue, key: b.key, items: [], roster: 0, added: 0, over: 0, dissolved: 0, tokenN: 0, shardN: 0, shards: 0, tokens: 0, lost: 0 };
+  res = { ok: true, venue: venue, key: b.key, items: [], roster: 0, added: 0, over: 0, full: 0, dissolved: 0, tokenN: 0, shardN: 0, shards: 0, tokens: 0, lost: 0 };
   b.cands.forEach(function (c, i) {
-    var owner, how, put, sh, e;
+    var owner, sh, e;
     if (b.taken && b.taken[i]) { res.items.push({ c: c, how: 'skip' }); return; }
     owner = c.fig ? cardsFindFig(cs, c.fig) : null;
-    if (owner) {
-      if ((owner.tok || 0) < CARD_CFG.tokMax) { owner.tok = (owner.tok || 0) + 1; how = 'token'; res.tokenN++; }
-      else { sh = CARD_BAG.figDupShard[c.gr] || CARD_BAG.figDupShard[4]; figShards += sh; how = 'shard'; res.shardN++; }
-      res.items.push({ c: c, how: how, shards: how === 'shard' ? sh : 0 });
+    if (owner) {   // 名人重複:信物未滿 → 信物 +1;信物已滿 → 碎片
+      if ((owner.tok || 0) < CARD_CFG.tokMax) { owner.tok = (owner.tok || 0) + 1; res.tokenN++; res.items.push({ c: c, how: 'token' }); }
+      else { sh = CARD_BAG.figDupShard[c.gr] || CARD_BAG.figDupShard[4]; raw += sh; res.shardN++; res.items.push({ c: c, how: 'shard', shards: sh }); }
       return;
     }
-    if (!opt.noRoster && cardsRosterRoom(cs) > 0) {   // 抽到就是自己的:名冊有空位直接加入
+    if (!c.fig && auto >= 0 && c.gr <= auto) { sh = cardsFurnaceValue(c); raw += sh; res.dissolved++; res.items.push({ c: c, how: 'auto', shards: sh }); return; }
+    if (cardsRosterRoom(cs) > 0) {   // 抽到就是自己的:名冊有空位直接加入
       e = cardsMakeEntry(cs, c, venue, b.key, cardsCost(c));
       cs.roster.push(e);
       res.roster++;
       res.items.push({ c: c, how: 'roster', id: e.id });
       return;
     }
-    if (!c.fig && auto >= 0 && c.gr <= auto) { sh = cardsFurnaceValue(c); raw += sh; res.dissolved++; res.items.push({ c: c, how: 'auto', shards: sh }); return; }
-    if (!c.fig && cardsBagRoom(cs) < 1 && cardsOverRoom(cs) > 0) {   // 卡包已滿:路人進溢出區(24 小時倒數);名人一律進卡包(可超過上限)
-      if (expAt === undefined) expAt = cardsOverNow(cs, opt.now) + CARD_BAG.overMs;
-      put = cardsBagPut(cs, c, venue, b.key, expAt);
-      res.over++;
-      res.items.push({ c: c, how: 'over', bid: put.bid, exp: expAt });
-      return;
-    }
-    put = cardsBagPut(cs, c, venue, b.key);
-    res.added++;
-    res.items.push({ c: c, how: 'bag', bid: put.bid });
+    sh = cardsFurnaceValue(c); raw += sh; res.full++; res.items.push({ c: c, how: 'full', shards: sh });   // 名冊已滿(舊批次 / 讀檔殘留):轉碎片,不丟失
   });
-  if (raw + figShards > 0) { g = cardsShardGain(cs, raw + figShards); res.shards += g.shards; }
+  if (raw > 0) { g = cardsShardGain(cs, raw); res.shards += g.shards; }
   cs.lastRel = null;
-  if (res.roster && typeof cardsSyncTalents === 'function') { try { cardsSyncTalents(); } catch (err) { /* 無城資料時略過 */ } }
+  if (res.roster && !opt.noSync && typeof cardsSyncTalents === 'function') { try { cardsSyncTalents(); } catch (err) { /* 無城資料時略過 */ } }
   return res;
 }
 function cardsBagOpen(cs, venue, o) {
   var r = cardsBagStage(cs, venue, (o && o.n) || 1);
   return r.ok ? cardsBagCommit(cs, venue, o) : r;
 }
-// 殘留的待入包批次(中斷 / 舊存檔 / 無特效)全部入包;回處理的批數
+// 殘留的待入冊批次(中斷 / 舊存檔 / 無特效)全部入冊;回處理的批數
 function cardsBagFlush(cs, o) {
   var n = 0;
   CARD_VENUE_ORDER.forEach(function (v) { if (cs.cur[v]) { cardsBagCommit(cs, v, o); n++; } });
   return n;
 }
-// 卡包列表:f {gr: -1 全部 / 0~4, row: '' 全部 / 職業分類字, sort: 'gr' 品階 / 'tai' 才 / 'new' 最新}
-function cardsBagList(cs, f) {
-  var o = f || {}, list = cs.bag.filter(function (c) {
-    var j;
-    if (typeof o.gr === 'number' && o.gr >= 0 && c.gr !== o.gr) return false;
-    if (o.row) { j = CARD_JOB_BY_ID[c.main]; if (!j || j.row !== o.row) return false; }
-    return true;
-  });
-  function no(c) { return parseInt(String(c.bid).slice(1), 10) || 0; }
-  list.sort(function (a, b) {
-    if (o.sort === 'new') return no(b) - no(a);
-    if (o.sort === 'tai') return b.tai - a.tai || b.gr - a.gr || no(b) - no(a);
-    return b.gr - a.gr || b.tai - a.tai || no(b) - no(a);
-  });
-  return list;
-}
-// 一鍵熔爐的候選(卡包 + 溢出區):路人且品階 ≤ maxGr(名人永不入選);回 bid 陣列
-function cardsBagPick(cs, maxGr) {
-  return cs.bag.concat(cs.bagOver || []).filter(function (c) { return !c.fig && c.gr <= maxGr; }).map(function (c) { return c.bid; });   // 含溢出區的卡
-}
-// 熔鍊(單張 / 批量;函式名沿用 Dissolve):路人 → 碎片(無週上限)。名人預設不熔(reason fig),o.figOk = true(UI 二次確認後)才熔並給較高碎片。o {figOk}。回 {ok, n, shards, tokens, lost, skippedFig, reason?}
+// 熔鍊(名冊 entry id;函式名沿用 Dissolve):路人 → 碎片。名人預設不熔(reason fig),o.figOk = true(UI 二次確認後)才熔。
+// 鎖定(🔒)或派駐中者略過(reason locked,計入 skippedLock)。成功移出名冊(就地 splice,保留 world.city.talents 同一陣列參照)並通知 bnSkcOnLeave。回 {ok, n, shards, tokens, lost, skippedFig, skippedLock, reason?}
 function cardsBagDissolve(cs, ids, o) {
-  var opt = o || {}, drop = {}, n = 0, raw = 0, skippedFig = 0, g, nOver = 0;
+  var opt = o || {}, drop = {}, n = 0, raw = 0, skippedFig = 0, skippedLock = 0, gone = [], g, i;
   (ids || []).forEach(function (id) {
-    var f = cardsAnyFind(cs, id);
+    var f = cardsRosterFind(cs, id);
     if (!f || drop[id]) return;
     if (f.c.fig && !opt.figOk) { skippedFig++; return; }
-    drop[id] = 1; n++; raw += cardsFurnaceValue(f.c); if (f.over) nOver++;
+    if (!cardsRosterMeltable(f.c)) { skippedLock++; return; }
+    drop[id] = 1; n++; raw += cardsFurnaceValue(f.c);
   });
-  if (!n) return { ok: false, reason: skippedFig ? 'fig' : 'none', n: 0, shards: 0, tokens: 0, lost: 0, skippedFig: skippedFig };
-  cs.bag = cs.bag.filter(function (c) { return !drop[c.bid]; });
-  if (nOver) { cs.bagOver = cs.bagOver.filter(function (c) { return !drop[c.bid]; }); if (!cs.bagOver.length) delete cs.bagOver; }
+  if (!n) return { ok: false, reason: skippedFig ? 'fig' : (skippedLock ? 'locked' : 'none'), n: 0, shards: 0, tokens: 0, lost: 0, skippedFig: skippedFig, skippedLock: skippedLock };
+  for (i = cs.roster.length - 1; i >= 0; i--) if (drop[cs.roster[i].id]) { gone.push(cs.roster[i].id); cs.roster.splice(i, 1); }
+  gone.forEach(function (id) { if (typeof bnSkcOnLeave === 'function') bnSkcOnLeave(id); });
   g = cardsShardGain(cs, raw);
   cs.lastRel = null;
-  cardsOverSettle(cs, opt.now);   // 騰出空位:溢出區依剩餘時間短者先自動納入
-  return { ok: true, n: n, shards: g.shards, tokens: 0, lost: 0, skippedFig: skippedFig, over: nOver };
+  return { ok: true, n: n, shards: g.shards, tokens: 0, lost: 0, skippedFig: skippedFig, skippedLock: skippedLock };
 }
 // 名冊項目:由卡包卡建立(id 依 cs.seq 遞增)
 function cardsMakeEntry(cs, c, pool, key, cost) {
@@ -793,20 +722,8 @@ function cardsMakeEntry(cs, c, pool, key, cost) {
   };
   if (c.sex) e.sex = c.sex;
   if (c.tok) e.tok = c.tok | 0;
-  if (c.pu) e.pu = c.pu | 0;   // 本院生徒(academy.js;記收錄時的院級)
   cardsRefreshEntry(e);
   return e;
-}
-// 卡包 → 名冊(免費;平常由 cardsRosterFill 自動補,這裡給指定某張用)。回 {ok, reason?, entry?}。reason:none 卡包無此卡 over 在溢出區 full 名冊已滿(須先遣散或提升官階)
-function cardsBagEnlist(cs, bid, o) {   // 只能移卡包內的卡;溢出區的卡需先被納入(reason over)
-  var f = cardsBagFind(cs, bid), c, e;
-  if (!f) return { ok: false, reason: (cs.bagOver && cs.bagOver.some(function (x) { return x.bid === bid; })) ? 'over' : 'none' };
-  c = f.c;
-  if (cs.roster.length >= cardsCap()) return { ok: false, reason: 'full' };
-  e = cardsMakeEntry(cs, c, c.pool || 'T', c.key || '', cardsCost(c));
-  cs.bag.splice(f.idx, 1); cs.roster.push(e); cs.lastRel = null;
-  cardsOverSettle(cs, (o || {}).now);
-  return { ok: true, entry: e };
 }
 // 待定席 → 名冊(需有名額)
 function cardsAccept(cs, id) {
@@ -822,10 +739,10 @@ function cardsRelease(cs, id, opts) {
   if (!f || f.list === 'wander') return { ok: false, reason: 'none' };
   e = f.e;
   if (e.star) return { ok: false, reason: 'locked' };
-  if (e.study) return { ok: false, reason: 'study' };   // 進修中(academy.js)不可遣散
   if (e.at && !o.unassign) return { ok: false, reason: 'busy' };
   cs[f.list].splice(f.idx, 1);
   e.at = null;
+  if (f.list === 'roster' && typeof bnSkcOnLeave === 'function') bnSkcOnLeave(e.id);   // 離開名冊:清掉其戰法裝備(bn_skcard.js)
   if (e.fig) { cs.wander.push(e); cs.lastRel = { e: e, list: f.list, idx: f.idx, wander: true }; return { ok: true, shards: 0, tokens: 0 }; }
   snapS = cs.shards;
   shards = cardsRelShards(e);
@@ -855,38 +772,6 @@ function cardsRecall(cs, id) {
   return { ok: true, entry: f.e };
 }
 
-// ───────── 升階(只做資料邏輯與條件檢查,§3A.5) ─────────
-function cardsUpgradeCheck(e, ctx) {
-  var why = [], rule = null, i, mx = 0, k, c = ctx || {};
-  for (i = 0; i < CARD_UPGRADE.length; i++) if (CARD_UPGRADE[i].from === e.gr) rule = CARD_UPGRADE[i];
-  if (e.fig) why.push('名人不可升階');
-  if (!rule) why.push('已是最高品階');
-  if (e.up >= CARD_CFG.upMax) why.push('升階次數已用完');
-  if (!rule) return { ok: false, reasons: why, rule: null };
-  for (k in e.ja) mx = Math.max(mx, e.ja[k]);
-  if (c.academy === undefined) why.push('學院尚未開放');
-  else if (c.academy < rule.academy) why.push('學院院級需 ' + rule.academy);
-  if (rule.lv && (c.lv || 0) < rule.lv) why.push('人物等級需 ' + rule.lv);
-  if (rule.cityLv && (c.cityLv || 0) < rule.cityLv) why.push('城級需 ' + rule.cityLv);
-  if (mx < rule.jobMin) why.push('任一職業需達 ' + ['', 'I', 'II', 'III', 'IV'][rule.jobMin] + ' 階');
-  if ((c.xue || 0) < rule.xue) why.push('學識需 ' + rule.xue);
-  if ((c.coin || 0) < rule.coin) why.push('金幣需 ' + rule.coin);
-  if (rule.lessons && (c.lessons || 0) < rule.lessons) why.push('需完成 ' + rule.lessons + ' 課');
-  if (rule.flag && !c.flag) why.push('需先達成「' + rule.route + '」');
-  return { ok: why.length === 0, reasons: why, rule: rule, cost: { xue: rule.xue, coin: rule.coin, lessons: rule.lessons } };
-}
-// 套用升階(不扣資源,資源由呼叫端依 cost 扣)。屬性:最高兩項 +4、其餘 +2(夾 privStCap)
-function cardsUpgrade(e, ctx) {
-  var chk = cardsUpgradeCheck(e, ctx), ord, i;
-  if (!chk.ok) return chk;
-  ord = [0, 1, 2, 3, 4].sort(function (a, b) { return e.st[b] - e.st[a] || a - b; });
-  for (i = 0; i < 5; i++) e.st[ord[i]] = Math.min(CARD_CFG.privStCap, e.st[ord[i]] + (i < 2 ? 4 : 2));
-  e.tai = e.st.reduce(function (a, b) { return a + b; }, 0);
-  e.gr += 1; e.up += 1;
-  e.skn = Math.max(e.skn || 0, CARD_GRADE[e.gr].skn);
-  cardsRefreshEntry(e);
-  return chk;
-}
 
 // ───────── 卡片熔爐:強化武將(升星)與碎片兌換指名券(數值在 carddata.js CARD_FURNACE,PLACEHOLDER) ─────────
 // 星等欄位 = entry.starLv(0~5,有值才寫);注意 entry.star 是『鎖定防誤遣散』旗標(PLAN_BATTLE_A §2),兩者無關、不可混用。
@@ -965,6 +850,24 @@ function cardsPatrolTalents() {
 }
 
 // ───────── 存讀檔(goods.js goodsNormCity 呼叫) ─────────
+// 舊卡包併入名冊(讀檔用,cs.v ≤ 4 遷移):list 為正規化後的卡包卡;依名人 > 品階 > 才排序;名人重複 → 信物 / 碎片;名冊滿 → 碎片(不丟失)
+function cardsLegacyBagMerge(n, list) {
+  var ord = list.slice().sort(function (a, b) { return (b.fig ? 1 : 0) - (a.fig ? 1 : 0) || b.gr - a.gr || b.tai - a.tai || (a.bid < b.bid ? -1 : 1); }), shards = 0, owner;
+  ord.forEach(function (c) {
+    if (c.fig) {
+      owner = cardsFindFig(n, c.fig);
+      if (owner) {
+        if ((owner.tok || 0) < CARD_CFG.tokMax) owner.tok = (owner.tok || 0) + 1;
+        else shards += CARD_BAG.figDupShard[c.gr] || CARD_BAG.figDupShard[4];
+        return;
+      }
+    }
+    if (cardsRosterRoom(n) > 0) { n.roster.push(cardsMakeEntry(n, c, c.pool || 'T', c.key || '', cardsCost(c))); return; }
+    shards += cardsFurnaceValue(c);
+  });
+  if (shards > 0) cardsShardGain(n, shards);
+  return n;
+}
 function cardNum(v, lo, hi, d) { return (typeof v === 'number' && isFinite(v)) ? Math.max(lo, Math.min(hi, v)) : d; }
 function cardNormCard(c, isEntry, isBag) {
   var o, k, j;
@@ -978,21 +881,10 @@ function cardNormCard(c, isEntry, isBag) {
   if (Array.isArray(c.tr)) o.tr = c.tr.filter(function (id) { return CARD_TRAIT_BY_ID[id]; }).slice(0, 8);
   if (Array.isArray(c.trn)) o.trn = c.trn.slice(0, 8).map(function (t) { return [String(t[0] || '').slice(0, 12), t[1] ? 1 : 0, String(t[2] || '').slice(0, 60)]; });
   if (c.org && typeof c.org === 'object') { o.org.k = String(c.org.k || 'bu').slice(0, 8); if (typeof c.org.v === 'number') o.org.v = c.org.v | 0; }
-  if (!o.fig && (cardNum(c.pu, 0, 5, 0) | 0)) o.pu = cardNum(c.pu, 0, 5, 0) | 0;   // 本院生徒(academy.js,有值才寫)
   if (isEntry) {
     o.id = String(c.id || ''); if (!o.id) return null;
     o.no = cardNum(c.no, 0, 1e9, 0) | 0; o.pool = (c.pool === 'T' || c.pool === 'E' || c.pool === 'G') ? c.pool : 'T'; o.key = String(c.key || '').slice(0, 20);
     o.at = (typeof c.at === 'string' && c.at) ? c.at.slice(0, 40) : null; o.star = c.star ? 1 : 0; if (cardNum(c.starLv, 0, CARD_FURNACE.starMax, 0) | 0) o.starLv = cardNum(c.starLv, 0, CARD_FURNACE.starMax, 0) | 0; o.tok = cardNum(c.tok, 0, CARD_CFG.tokMax, 0) | 0;
-    if (cardNum(c.sn, 0, 9999, 0) | 0) o.sn = cardNum(c.sn, 0, 9999, 0) | 0;   // 學院進修次數(有值才寫)
-    if (!o.fig && c.study && typeof c.study === 'object' && (c.study.k === 'up' || c.study.k === 'learn' || c.study.k === 'adv' || c.study.k === 'swap') && (c.study.k === 'up' || CARD_JOB_BY_ID[c.study.j]) && (c.study.k !== 'swap' || CARD_JOB_BY_ID[c.study.f])) {   // 進修中(academy.js):k 類別 j 職業(轉職 = 新職業、f = 舊職業)n 課數 l 已完成 p 舊版課內秒數(旬報計課後恆 0)cs/cc 已付碎片 / 金幣
-      o.study = { k: c.study.k, n: cardNum(c.study.n, 1, 9, 1) | 0, l: 0, p: Math.round(cardNum(c.study.p, 0, 1e5, 0)), cs: cardNum(c.study.cs, 0, 1e6, 0) | 0, cc: cardNum(c.study.cc, 0, 1e9, 0) | 0 };
-      o.study.l = Math.min(o.study.n - 1, cardNum(c.study.l, 0, 9, 0) | 0);
-      if (c.study.k !== 'up') o.study.j = c.study.j;
-      if (c.study.k === 'swap') o.study.f = c.study.f;
-      if (typeof c.study.t === 'string' && c.study.t) o.study.t = c.study.t.slice(0, 12);   // 教習 id(academy.js)
-      o.at = null;
-    }
-    if (c.tch && !o.study) o.tch = 1;   // 教習(academy.js,有值才寫;在學者不當教習)
     o.up = cardNum(c.up, 0, CARD_CFG.upMax, 0) | 0; o.cost = cardNum(c.cost, 0, 99, CARD_GRADE[o.gr].cost) | 0;
     if (cardNum(c.fav, 0, 5, 0) | 0) o.fav = cardNum(c.fav, 0, 5, 0) | 0; if (c.gift) o.gift = 1; if (typeof c.favDay === 'number' && isFinite(c.favDay)) o.favDay = c.favDay | 0; if (typeof c.since === 'number' && isFinite(c.since)) o.since = c.since | 0;   // 人物互動(npcinteract.js):親近 / 小禮旗標 / 最近加親近日 / 派駐起始日
     cardsRefreshEntry(o);
@@ -1070,39 +962,24 @@ function cardsNormSave(v, now) {
     var seen = {};
     n[l] = Array.isArray(v[l]) ? v[l].map(function (c) { return cardNormCard(c, true); }).filter(function (c) { if (!c || seen[c.id]) return false; seen[c.id] = 1; return true; }) : [];
   });
-  // 卡包:正規化現有 cs.bag,再把殘留的 cur.*(舊候選批次)轉入(不自動熔爐;重複名人依信物規則)
-  if (Array.isArray(v.bag)) {
-    n.bag = v.bag.slice(0, 600).map(function (c) { return cardNormCard(c, false, true); }).filter(function (c) { if (!c || seenB[c.bid]) return false; seenB[c.bid] = 1; return true; });
+  // 舊存檔(cs.v ≤ 4)的卡包 cs.bag / 溢出區 cs.bagOver(2026-11-10 移除):一次性併入名冊(名人 > 品階 > 才),名冊滿 CARD_CFG.cap 為止,其餘熔成碎片(安靜處理,不提示)
+  if (Array.isArray(v.bag) || Array.isArray(v.bagOver)) {
+    var oldBag = [];
+    if (Array.isArray(v.bag)) v.bag.slice(0, 600).forEach(function (c) { var o = cardNormCard(c, false, true); if (o) oldBag.push(o); });
+    if (Array.isArray(v.bagOver)) v.bagOver.slice(0, 600).forEach(function (c) { var o = cardNormCard(c, false, true); if (o) oldBag.push(o); });
+    cardsLegacyBagMerge(n, oldBag);
   }
-  if (Array.isArray(v.bagOver)) {   // 溢出區:每項 = 卡包卡 + exp(到期時間戳;壞值 / 過遠夾回 現在 + overMs);名人不該在這裡,若有則改進卡包
-    var eff = Math.max(tNow, n.clock.maxSeen), ov = [];
-    v.bagOver.slice(0, 600).forEach(function (c) {
-      var o = cardNormCard(c, false, true);
-      if (!o || seenB[o.bid]) return;
-      seenB[o.bid] = 1;
-      if (o.fig) { n.bag.push(o); return; }
-      o.exp = cardNum(c.exp, 0, eff + CARD_BAG.overMs, eff + CARD_BAG.overMs);
-      ov.push(o);
-    });
-    if (ov.length) n.bagOver = ov;
-  }
-  if (v.overNote && typeof v.overNote === 'object' && (cardNum(v.overNote.n, 0, 1e6, 0) | 0) > 0) n.overNote = { n: cardNum(v.overNote.n, 0, 1e6, 0) | 0, shards: cardNum(v.overNote.shards, 0, 1e7, 0) | 0 };
-  k = cardNum(v.bagSeq, 0, 1e9, 0) | 0;
-  n.bag.concat(n.bagOver || []).forEach(function (c) { var m2 = /^b(\d+)$/.exec(c.bid); if (m2 && +m2[1] > k) k = +m2[1]; });
-  if (k > 0) n.bagSeq = k;
   if (typeof v.bagAuto === 'number' && isFinite(v.bagAuto)) cardsBagSetAuto(n, v.bagAuto);
-  CARD_VENUE_ORDER.forEach(function (x) {
+  CARD_VENUE_ORDER.forEach(function (x) {   // 殘留的待入冊批次(舊 cur.*)入冊;派工接口待遊戲中再同步
     if (!n.cur[x]) return;
-    cardsBagCommit(n, x, { noAuto: true, noRoster: true, now: tNow });
+    cardsBagCommit(n, x, { noAuto: true, noSync: true, now: tNow });
   });
-  cardsOverSettle(n, tNow, true);   // 載入時先結算:到期者熔碎片、有空位就納入卡包(補進名冊等遊戲中官階資料就緒後再做)
-  if (Array.isArray(v.errand)) n.errand = v.errand.slice(0, 4).filter(function (q) { return q && typeof q.id === 'string' && typeof q.eid === 'string' && (q.kind === 'goods' || q.kind === 'build' || q.kind === 'study'); }).map(function (q) {   // 人物請託(npcinteract.js)
+  if (Array.isArray(v.errand)) n.errand = v.errand.slice(0, 4).filter(function (q) { return q && typeof q.id === 'string' && typeof q.eid === 'string' && (q.kind === 'goods' || q.kind === 'build'); }).map(function (q) {   // 人物請託(npcinteract.js)
     return { id: q.id.slice(0, 12), eid: q.eid.slice(0, 12), kind: q.kind, text: String(q.text || '').slice(0, 60), day: cardNum(q.day, 0, 1e9, 0) | 0, goods: q.goods ? String(q.goods).slice(0, 24) : undefined, n: cardNum(q.n, 0, 999, 0) | 0, type: q.type ? String(q.type).slice(0, 32) : undefined, base: cardNum(q.base, 0, 9999, 0) | 0 };
   });
   if (cardNum(v.errDay, -1, 1e9, -1) > -1) n.errDay = cardNum(v.errDay, -1, 1e9, -1) | 0;
   if (cardNum(v.errSeq, 0, 1e9, 0) > 0) n.errSeq = cardNum(v.errSeq, 0, 1e9, 0) | 0;
   if (typeof cardsStarterNorm === 'function') n.starter = cardsStarterNorm(v.starter);   // 新手禮包(js/cards_starter.js;舊存檔沒有此欄 = 待判定)
-  if (typeof academyNormSave === 'function') academyNormSave(n, v);   // 學院旬報計課 / 名師講學(cs.acad,academy.js;有值才寫)
   for (k = 0; k < n.roster.length; k++) { var m =/^r(\d+)$/.exec(n.roster[k].id); if (m && +m[1] > n.seq) n.seq = +m[1]; }
   return n;
 }

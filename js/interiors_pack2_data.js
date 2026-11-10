@@ -1,7 +1,6 @@
 // js/interiors_pack2_data.js — 室內空間第二批資料(PLAN_INTERIORS §5.1 第 2、6、8、9、10、14 項):學宮 / 倉廩 / 醫署藥肆 / 市集大堂 / 驛站 / 觀星臺,共 6 個場景。純資料,不碰 DOM / world。
 // 格式沿用第一批 IP_SCENES(interiors_pack1_data.js,須先載入;用到 ipP / ipSlot / ipDeskRows / IP_LINES_PERSON);本檔場景另帶 p2:true。
 //   act 新增:{t:'panel', id:'roster'|'caravan'}(開名冊 / 走鏢面板)、{t:'info2', fn:'stock'|'hour'}(庫存摘要 / 此刻時辰)
-//   cfg.pm:'academy' = 人物以『學官 + 進修中的名冊人物』組成(邏輯在 interiors_pack2.js)
 // 全域名稱:IP2_SCENES IP2_BLD IP2_IDS
 // 風格色票沿用 tavern_data.js 的 TAVERN_PALS + IP_EXTRA(缺則退回內建最小色票)。
 
@@ -26,7 +25,7 @@ if (typeof IP_LINES_PERSON !== 'undefined') {
 if (IP2_OK) (function () {
   var rows = ipDeskRows('a');
   IP2_SCENES.academy = {
-    id: 'academy', name: '學宮', title: '學宮', bld: ['xue_she', 'xue_gong'], subKind: 'academy', p2: true, pm: 'academy',
+    id: 'academy', name: '學宮', title: '學宮', bld: ['xue_she', 'xue_gong'], subKind: 'academy', p2: true,
     floors: [{ id: '1F', label: '講堂', grid: [8, 6] }, { id: '2F', label: '書房', grid: [8, 4] }],
     pal: { wall: '#e6dcc0', floorA: '#b8a98a', floorB: '#ac9d7e', floorEdge: '#76694f', beam: '#5a3f2c', beamDk: '#35241a', cloth: '#2f5a7a' },
     props: rows.props.concat([
@@ -48,7 +47,7 @@ if (IP2_OK) (function () {
       ipSlot('2F', [2, 0], 0, 'v', { sit: true }), ipSlot('2F', [3, 0], 0, 'v', { sit: true }), ipSlot('2F', [4, 3], 0, 'v')
     ],
     keeper: { name: '祭酒', floor: '1F', at: [3, 2], look: { job: 'scholar', key: 17, head: 'hat', headCol: '#2f4a6a', tunic: '#3f5f8f', trim: '#e3b95c' }, act: { t: 'panel', id: 'roster' },
-      lines: ['有教無類,因材施教。', '想送誰進修?名冊裡挑人便是。', '升階、精進、習藝,各有課程。', '學成之後,辦起事來自然得心應手。'] },
+      lines: ['有教無類,因材施教。', '想送誰進修?名冊裡挑人便是。', '名冊人物都在這裡,想看誰?', '學成之後,辦起事來自然得心應手。'] },
     hotspots: [{ id: 'lectern', floor: '1F', at: [3, 1], act: { t: 'panel', id: 'roster' }, label: '講席' }, { id: 'desk2', floor: '2F', at: [2, 1], act: { t: 'talk', line: '典籍按經史子集,分門別類。' }, label: '書案' }],
     people: { kind: 'workshop', max: 2, opts: { posts: ['study'] } }, visitors: { n: [1, 3], jobs: ['scholar', 'elder', 'official', 'farmer'] },
     lines: ['聽說學宮收學生了?', '家裡孩子若能讀書就好了。', '讀書人的聲音,聽著舒服。'],

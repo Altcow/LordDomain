@@ -2,6 +2,8 @@
 // 純邏輯、無 DOM。與 js/bn_engine.js 共用全域(bn 前綴)。簡化處與未實作的長尾 params 見 tools/bn_balance_report.md「與 PLAN 不一致」。
 var BN_ATTACK = { atk_single: 1, atk_front: 1, atk_back: 1, atk_all: 1, atk_pierce: 1, atk_cross: 1, atk_multi: 1, atk_snipe: 1, atk_exec: 1, execute_chain: 1, lifesteal: 1, dot_spread: 1 };
 var BN_TEAM_KINDS = { heal_hot: 1, heal_all: 1, buff_all: 1, rate_up: 1, shield_all: 1, cleanse: 1, resist: 1, cd_reduce: 0 };
+// debuff_multi(S0)params.list 的狀態 → 既有 kind(elec 屬 B9,未收)
+var BN_MULTI_KIND = { atk_down: 'debuff_atk', def_down: 'debuff_def', spd_down: 'debuff_spd', mark: 'mark', silence: 'silence', timid: 'timid', rate_down: 'rate_down', heal_reduce: 'heal_reduce', burn: 'dot_burn', poison: 'dot_poison', bleed: 'dot_bleed' };
 
 function bnIsAttack(eff, o) {
   if (!BN_ATTACK[eff.kind]) return false;
@@ -51,13 +53,33 @@ function bnPrimaryFor(S, u, eff, o) {
   if (tg === 'enemy_highest_atk') return bnPickEnemy(S, u, 'atk', eff.kind);
   if (tg === 'enemy_back' || eff.kind === 'atk_back') return bnPickEnemy(S, u, 'back', eff.kind);
   if (tg === 'enemy_front') return bnPickEnemy(S, u, 'front', eff.kind);
-  return bnPickEnemy(S, u, 'one', eff.kind);
+  if (BN_PICK_TG[tg]) return bnPickEnemy(S, u, BN_PICK_TG[tg], eff.kind, bnOptOf(eff));
+  return bnPickEnemy(S, u, 'one', eff.kind, bnOptOf(eff));
+}
+// 隨機 N 名敵人(S0,target enemy_rand、params.n 2~4):不放回抽取、依抽出順序;嘲諷存在時第 1 名必為嘲諷者。同一次施放內快取(bnCast 與結算取同一組)
+function bnRandEnemies(S, u, eff, res) {
+  var P = eff.params || {}, n = P.n || 2, cache = res && res.rand, pool, tau, out = [], first, i;
+  if (cache && cache.eff === eff) return cache.list;
+  pool = bnEnemies(S, u);
+  var vis = pool.filter(function (x) { return bnVisOk(x, eff.kind); });
+  if (vis.length) pool = vis;
+  tau = pool.filter(function (x) { return x.st.taunt; });
+  if (tau.length && !u.st.confuse) { first = tau[Math.floor(S.rng() * tau.length)]; out.push(first); pool.splice(pool.indexOf(first), 1); }
+  for (i = out.length; i < n && pool.length; i++) out.push(pool.splice(Math.floor(S.rng() * pool.length), 1)[0]);
+  if (res) res.rand = { eff: eff, list: out };
+  return out;
+}
+// 彈射(S0):隨機一名存活敵人(只在 params.bounce 的第 2 段起呼叫,抽 1 次亂數)
+function bnRandAlive(S, u) {
+  var en = bnEnemies(S, u);
+  return en.length ? en[Math.floor(S.rng() * en.length)] : null;
 }
 // 解析目標集合(攻擊型依 kind 決定範圍)
 function bnTargetsFor(S, u, eff, res, o) {
   var tg = eff.target, k = eff.kind, P = eff.params || {}, list, p, rk;
   if (tg === 'same') return res && res.main ? res.main : [];
   if (tg === 'primary') return res && res.main && res.main.length ? [res.main[0]] : [];
+  if (tg === 'enemy_rand') return bnRandEnemies(S, u, eff, res);
   if (bnIsAttack(eff, o)) {
     if (k === 'atk_all' || k === 'dot_spread') return bnEnemies(S, u);
     if (k === 'atk_front') {
@@ -78,7 +100,9 @@ function bnTargetsFor(S, u, eff, res, o) {
     case 'ally_back': rk = bnRankMax(S, u.side); list = bnAllies(S, u, true).filter(function (x) { return bnRank(S, x) === rk; }); break;
     case 'ally_lowest': list = bnAllies(S, u, k !== 'guard' && k !== 'swap'); p = bnLowestHp(list); return p ? [p] : [];
     case 'ally_row': list = bnAllies(S, u, true).filter(function (x) { return x.row === u.row; }); break;
-    case 'enemy_one': p = bnPickEnemy(S, u, 'one', k); return p ? [p] : [];
+    case 'enemy_one': p = bnPickEnemy(S, u, 'one', k, bnOptOf(eff)); return p ? [p] : [];
+    case 'enemy_hpmax': case 'enemy_fastest': case 'enemy_prey': case 'enemy_troop': p = bnPickEnemy(S, u, BN_PICK_TG[tg], k, bnOptOf(eff)); return p ? [p] : [];
+    case 'enemy_row': p = bnPickEnemy(S, u, 'one', k, bnOptOf(eff)); if (!p) return []; rk = bnRank(S, p); list = bnEnemies(S, u).filter(function (x) { return bnRank(S, x) === rk; }); break;
     case 'enemy_front': list = bnEnemies(S, u).filter(function (x) { return bnRank(S, x) === 1; }); break;
     case 'enemy_back': rk = bnRankMax(S, bnOpp(u.side)); list = bnEnemies(S, u).filter(function (x) { return bnRank(S, x) === rk; }); break;
     case 'enemy_all': list = bnEnemies(S, u); break;
@@ -89,12 +113,17 @@ function bnTargetsFor(S, u, eff, res, o) {
     case 'members': return [];
     default: return [];
   }
+  if (P.needStatus) list = list.filter(function (x) { return bnHas(x, P.needStatus); });   // S0:只選帶該狀態的敵人
   return bnFilterSet(list, eff.filter || P.filter);
 }
 
 // ───────── 是否值得發動(不抽亂數) ─────────
 function bnUseful(S, u, inst) {
   var d = inst.def, P = d.params || {}, k = d.kind, al, i;
+  // S0 節奏 / 條件閘(不擲骰):phase = 第 from~to 回合才可發動;selfHpBelow = 自身兵力低於比例才可發動;needStatus = 有目標帶該狀態
+  if (P.phase && !bnRoundIn(S.round, P.phase.from || 1, P.phase.to)) return false;
+  if (P.selfHpBelow && bnHpPct(u) >= P.selfHpBelow) return false;
+  if (P.needStatus && !bnEnemies(S, u).some(function (x) { return bnHas(x, P.needStatus); })) return false;
   if (P.cond === 'ally_below70') { if (!bnAllies(S, u, true).some(function (x) { return x.hp < x.maxHp * 0.7; })) return false; }
   if (P.cond === 'has_debuff') { if (!bnAllies(S, u, true).some(bnHasNeg)) return false; }
   if (k === 'heal_single' || k === 'heal_all' || k === 'heal_hot') {
@@ -123,7 +152,7 @@ function bnUseful(S, u, inst) {
   if (P.onlyVs && d.vs && !bnEnemies(S, u).some(function (x) { return bnVsMatch(S, d.vs, x); })) return false;   // 只對特定對象才發動(潘鳳遇布)
   return true;
 }
-var BN_BUFFS = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'dodge_rate', 'counter', 'ward', 'amp_atk'];
+var BN_BUFFS = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'dodge_rate', 'counter', 'ward', 'amp_atk', 'critdmg_up'];
 function bnHasBuff(x) { for (var i = 0; i < BN_BUFFS.length; i++) if (x.st[BN_BUFFS[i]] && !(x.st[BN_BUFFS[i]].left >= 900 && BN_BUFFS[i] !== 'ward')) return true; return !!x.st.shield; }
 function bnHasNeg(x) { var k; for (k in x.st) if (BN_NEG[k]) return true; return false; }
 
@@ -155,14 +184,17 @@ function bnCast(S, u, inst, o) {
   }
   if (u.mods.skillPlus && (d.cat === 'active' || d.cat === 'pursuit' || d.cat === 'ult')) o = Object.assign({}, o, { scale: (o.scale || 1) * (1 + u.mods.skillPlus) });
   if (inst.vsScale) o = Object.assign({}, o, { scale: (o.scale || 1) * inst.vsScale });
+  if (inst.otherMul) o = Object.assign({}, o, { scale: (o.scale || 1) * inst.otherMul });   // 他人效果倍率(BN_SKILL_OTHER.mul,B2;原主 / 無此欄不動)
   if (inst.vsCrit) o = Object.assign({}, o, { vsCrit: inst.vsCrit });
   if (u.randPow && (d.cat === 'active' || d.cat === 'pursuit' || d.cat === 'ult')) o = Object.assign({}, o, { scale: (o.scale || 1) * (u.randPow[0] + S.rng() * (u.randPow[1] - u.randPow[0])) });   // 對象條件(特定友軍在我方時)效果提升
   if (P.onlyVs && d.vs && !o.forced) o = Object.assign({}, o, { forced: bnEnemies(S, u).filter(function (x) { return bnVsMatch(S, d.vs, x); })[0] });
   mt = bnTargetsFor(S, u, eff, res, o);
+  if (inst.tgtCut && mt.length > 1) mt = mt.slice(0, Math.max(1, mt.length - inst.tgtCut));   // 他人效果:少 N 個目標(BN_SKILL_OTHER.tgtCut,至少留 1)
   if (!mt.length && eff.kind !== 'revive' && eff.kind !== 'summon' && eff.kind !== 'trap' && eff.kind !== 'extra_turn') return false;
   res.main = mt;
   S.stats.skillUse[d.id] = (S.stats.skillUse[d.id] || 0) + 1;
   bnEv(S, 'skill', { u: u.id, id: d.id, name: d.name, kind: d.kind, cat: d.cat, rc: o.recastN || undefined, as: o.assistBy, th: d.theme || undefined });
+  if (P.list) res.skillEv = S.log ? S.events[S.events.length - 1] : null;   // S0 debuff_multi:事後補寫 mx(命中數)
   if (P.hpCost && d.kind !== 'self_sacrifice') {
     loss = Math.min(u.hp - 1, Math.round(u.maxHp * P.hpCost));
     if (loss > 0) { u.hp -= loss; bnEv(S, 'dmg', { src: u.id, tgt: u.id, v: loss, abs: 0, ty: 'self', hp: u.hp }); }
@@ -177,6 +209,7 @@ function bnCast(S, u, inst, o) {
       bnApplyEffect(S, u, e2, res, o);
     }
   }
+  if (P.leech && res.dmg > 0 && u.alive && !S.over) bnHeal(S, u, u, res.dmg * P.leech, {});   // 嗜血(S0):本戰法造成傷害的比例回復自身
   if (!S.over) bnAttachParams(S, u, eff, res, o);
   if (!o.noCd) {
     inst.cd = bnCdOf(inst);
@@ -247,11 +280,15 @@ function bnApplyEffect2(S, u, eff, res, o) {
     for (i = 0; i < targets.length && !S.over; i++) {
       t = targets[i];
       for (j = 0; j < hits; j++) {
-        if (!t.alive || S.over) break;
-        mul = bnAtkMul(S, u, eff, sc, t);
+        var tb = (P.bounce && j > 0) ? bnRandAlive(S, u) : t;   // 彈射(S0):第 2 段起改打隨機存活敵人(bounce 無則沿用原目標)
+        if (!tb || !tb.alive || S.over) break;
+        mul = bnAtkMul(S, u, eff, sc, tb);
         hh = { ty: ty, mul: mul, kind: kind, sk: eff.sk, pierce: kind === 'atk_pierce', cat: eff.sk ? eff.sk.cat : '', wx: wx, vsSk: eff.isExtra ? null : (sk && sk.vs) || null, vsCrit: o.vsCrit || 0 };
-        r = bnHitWithRx(S, u, t, hh);
-        if (r) { res.hits++; res.dmg += r.dmg || 0; if (r.killed) res.kills.push(t); }
+        if (P.critAdd) hh.critAdd = P.critAdd;   // S0 暴擊欄位:會心 / 重擊 / 必殺(只有新戰法帶這些欄位)
+        if (P.critDmg) hh.critDmg = P.critDmg;
+        if (P.forceCrit) hh.forceCrit = true;
+        r = bnHitWithRx(S, u, tb, hh);
+        if (r) { res.hits++; res.dmg += r.dmg || 0; if (r.killed) res.kills.push(tb); }
       }
       // 附帶:stun 類在傷害之後
       if (wx && t.alive && !t.st.wx_mark) bnStatusApply(S, u, t, 'wx_mark', { el: wx, left: BN_DATA.wx.markRounds, noRes: true }, {});   // 五行印
@@ -291,7 +328,7 @@ function bnApplyEffect2(S, u, eff, res, o) {
       break;
     case 'cleanse':
       cnt = bnKT('cleanse', pw);
-      for (i = 0; i < targets.length; i++) bnCleanse(S, targets[i], cnt, u);
+      for (i = 0; i < targets.length; i++) { var cc = bnCleanse(S, targets[i], cnt, u); if (P.perShield && cc > 0) bnShield(S, u, targets[i], u.base.sh * P.perShield * cc, {}); }   // perShield(S0):每清 1 個負面 → 小護盾
       if (pw === 'XL') for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'ccimm', { left: 1 + BN_DATA.ccImmRounds, force: true }, { noExtend: true });
       break;
     case 'revive':
@@ -473,6 +510,37 @@ function bnApplyEffect2(S, u, eff, res, o) {
       S.teams[bnOpp(u.side)].trap = { effect: P.effect || { kind: 'stun', dur: 1 }, left: P.dur || 2, src: u.id };
       bnEv(S, 'status', { src: u.id, tgt: -1, id: 'trap', left: P.dur || 2 });
       break;
+    case 'debuff_multi': {   // 亂心(S0):params.list ≤4 項;每目標 × 每項各自判定 S.rng() < chance×(1−RES);硬控(silence / timid)每目標最多 1 項;沒中不出事件
+      var ML = P.list || [], hitN = [], j2, it, hardOn, hard;
+      for (j2 = 0; j2 < ML.length; j2++) hitN.push(0);
+      for (i = 0; i < targets.length; i++) {
+        t = targets[i]; hardOn = false;
+        for (j2 = 0; j2 < ML.length && t.alive; j2++) {
+          it = ML[j2]; hard = it.st === 'silence' || it.st === 'timid';
+          if (hard && hardOn) continue;
+          if (S.rng() >= (it.chance || 0) * (1 - (t.base.res || 0))) continue;
+          if (hard) hardOn = true;
+          hitN[j2]++;
+          bnApplyEffect(S, u, { kind: BN_MULTI_KIND[it.st], power: it.power || pw, params: { dur: it.dur, ratio: it.ratio, turns: it.turns }, target: 'same', sk: eff.sk, isExtra: true }, { main: [t], kills: [] }, o);
+        }
+      }
+      if (res.skillEv) res.skillEv.mx = hitN;
+      break;
+    }
+    case 'reflect':   // 荊棘(S0):受到傷害時反彈(狀態 thorns,bnApplyDmg 結算)
+      for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'thorns', { val: bnPct(kind, eff, sc), ty: P.ty || 'any', left: bnDurOf(eff, o) }, {});
+      break;
+    case 'buff_critdmg':   // 鋒芒(S0):我方暴擊傷害提升(狀態 critdmg_up,列入 BN_BUFFS)
+      for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'critdmg_up', { val: bnPct(kind, eff, sc), left: bnDurOf(eff, o) }, {});
+      break;
+    case 'delay_burst': {   // 伏火(S0):施放時快照攻(策略傷害取謀)× 檔位係數 × sc,P.after 回合後於回合開始結算(bnFuseFire)
+      var dbAfter = P.after || 2, dbBase = (eff.dmg || (u.troop === '謀' ? 'strat' : 'phys')) === 'strat' ? bnMag(S, u) : bnAtk(S, u);
+      for (i = 0; i < targets.length; i++) if (targets[i].alive) bnStatusApply(S, u, targets[i], 'fuse', { val: dbBase * bnKT(kind, pw) * sc, at: S.round + dbAfter, pw: pw, left: dbAfter + 1 }, {});
+      break;
+    }
+    case 'delay_act':   // 遲滯(S0):目標本回合排到最後行動(狀態 lag,bnNext);已行動者延到下回合;命中機率走 params.chance
+      for (i = 0; i < targets.length; i++) if (targets[i].alive && bnChance(S, P, targets[i], u)) bnStatusApply(S, u, targets[i], 'lag', { left: 1 }, {});
+      break;
     case 'stack_charge': break;   // 被動註冊(bnSetupBattle)
     case 'stat_mod': break;
     default:
@@ -503,7 +571,7 @@ function bnPzConduct(S, u, t) {
   return bnStatusApply(S, u, z, 'paralyze', { left: BN_DATA.paralyze.conductLeft, val: BN_DATA.paralyze.spd }, {});
 }
 function bnCleanse(S, t, n, src) {
-  var order = ['heal_reduce', 'stun', 'sleep', 'paralyze', 'fear', 'confuse', 'timid', 'silence', 'ult_lock', 'burn', 'poison', 'bleed', 'debuff_hit', 'atk_down', 'def_down', 'spd_down', 'rate_down', 'mark', 'wx_mark'], i, c = 0, hadPoison;
+  var order = ['heal_reduce', 'stun', 'sleep', 'paralyze', 'fear', 'confuse', 'timid', 'silence', 'ult_lock', 'burn', 'poison', 'bleed', 'debuff_hit', 'atk_down', 'def_down', 'spd_down', 'rate_down', 'mark', 'wx_mark', 'fuse'], i, c = 0, hadPoison;
   for (i = 0; i < order.length && c < n; i++) {
     if (t.st[order[i]]) {
       hadPoison = order[i] === 'poison' || order[i] === 'bleed';
@@ -515,7 +583,7 @@ function bnCleanse(S, t, n, src) {
   return c;
 }
 function bnDispel(S, u, t, n, prefer, stripShield) {
-  var buffs = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'dodge_rate', 'counter', 'ward', 'taunt', 'amp_atk'], i, c = 0, id;
+  var buffs = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'dodge_rate', 'counter', 'ward', 'taunt', 'amp_atk', 'critdmg_up'], i, c = 0, id;
   if (prefer === 'buff_atk' && t.st.atk_up && c < n) { bnStatusRemove(S, t, 'atk_up', 'dispel'); c++; }
   for (i = 0; i < buffs.length && c < n; i++) {
     id = buffs[i];
@@ -742,11 +810,11 @@ function bnRxPost(S, a, t, h, pre, res) {
 
 // ───────── 事件掛點 ─────────
 function bnOnHit(S, a, t, h, hpLost) {
-  var ct, cm, rate;
-  // 反擊
-  if (t.st.counter && !t.st.sleep && a && a.alive && !h.counter && h.ty === 'phys' && BN_DATA.troops[a.troop].R <= 2 && !t.counterHit[a.id] && t.side !== a.side) {
+  var ct, cm, rate, lgc = t.st.counter ? 0 : bnLgVal(S, t, 'counterAdd');
+  // 反擊(兵種卡 counterAdd:無反擊狀態者,以該百分點機率反擊一次;有狀態者不變)
+  if ((t.st.counter || lgc > 0) && !t.st.sleep && a && a.alive && !h.counter && h.ty === 'phys' && BN_DATA.troops[a.troop].R <= 2 && !t.counterHit[a.id] && t.side !== a.side && (!lgc || S.rng() < Math.min(1, lgc))) {
     t.counterHit[a.id] = 1;
-    cm = t.st.counter.val * (1 + (t.sc.nin || 0) * 0.1);
+    cm = t.st.counter ? t.st.counter.val * (1 + (t.sc.nin || 0) * 0.1) : 1;
     if (t.st.taunt) { cm *= 1.3; S.stats.reactions++; bnEv(S, 'react', { id: 'rx_taunt_counter', name: '嘲諷反擊', tgt: a.id }); }
     bnHit(S, t, a, { ty: 'phys', mul: cm, counter: true, kind: 'counter', sk: null });
   }

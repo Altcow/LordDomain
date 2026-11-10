@@ -17,7 +17,7 @@ function cardsStarterNorm(v) {
 }
 // 舊存檔是否不適用:已有卡片(名冊 / 待定 / 流浪 / 卡包 / 溢出區,或曾收入名冊 / 指名過)或已畢業教學(沒有教學資料也算已畢業)
 function cardsStarterLegacyNa(cs) {
-  var has = cs.roster.length || cs.wait.length || cs.wander.length || cs.bag.length || (cs.bagOver && cs.bagOver.length) || (cs.seq | 0) > 0 || (cs.namedCount | 0) > 0 || (cs.bagSeq | 0) > 0;
+  var has = cs.roster.length || cs.wait.length || cs.wander.length || (cs.seq | 0) > 0 || (cs.namedCount | 0) > 0 || (cs.bagSeq | 0) > 0;
   if (has) return true;
   if (typeof tutHas === 'function' && (!tutHas() || (typeof tutGraduated === 'function' && tutGraduated()))) return true;
   return false;

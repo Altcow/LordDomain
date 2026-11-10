@@ -2,7 +2,7 @@
 // 依賴(載入順序):carddata.js(CARD_GRADE CARD_JOBS CARD_FIGS CARD_FIG_BY_ID)、bn_data.js、bn_skills_data.js。隨機名冊卡(模擬器用)另需 cards.js。
 // 產物 = 「單位規格 spec」(純 JSON),engine 的 rec.teamA/teamB 直接吃 spec。
 // spec = {name, fig, fac, gr, troop, row, col, apt:{兵種:'S'|'A'|'B'|'C'}, stats:{hp,atk,mag,def,sres,spd,heal,sh,crit,res}, mods:{...}, skills:[戰法 id], ult:id, tags:[...], jobs:[...], traits:[...]}
-// B4 / B6:名人專屬詞條(BN_FIG_TRAIT)併入 mods;名人強度校正(BN_FIG_TUNE);兵書 / 傳授學習欄(bnBookLearnOf → bnLearnMerge)與研兵(bnBookDrillOf)以 typeof 守衛讀 bn_book.js。
+// B4 / B6:名人專屬詞條(BN_FIG_TRAIT)併入 mods;名人強度校正(BN_FIG_TUNE);戰法傳承裝備(bnSkcLearnOf → bnLearnMerge)以 typeof 守衛讀 bn_skcard.js;研兵(bnBookDrillOf)以 typeof 守衛讀 bn_book.js。
 // 全域:bnEff bnCardStats bnAptOf bnDefaultTroop bnUnitSpec bnSpecRaw bnBuildTeam bnRandomCard bnRandomLearned bnRowOf bnPower bnLearnMerge
 
 // B6 戰法平衡覆寫(bn_data.js BN_SKILL_TUNE):載入時套到 BN_SKILLS(只改記憶體,不改資料檔)
@@ -148,7 +148,155 @@ function bnUltFor(card, troop) {
   return BN_ULT_BY[k] || BN_ULT_BY['槍'];
 }
 
-// 單位規格。card = 名冊 entry(或 cardGen 結果)。o = {troop, row, col, learned:[id], scene, drill(研兵比例,可省略)}
+// ───────── 戰法欄位新制(B2)helper:選擇槽來源 / 他人效果 / 本命 ─────────
+// 名冊內名人或路人的裝備槽(bnskc.eq);不在名冊 / 無裝備 = null。名人與路人走同一份 eq(路人另由 bnSkcLearnOf 讀)
+function bnKitEq(card) {
+  var r, eq;
+  if (!card || !card.id || typeof bnSkcEntry !== 'function' || typeof bnSkcLoad !== 'function') return null;
+  r = bnSkcEntry(null, card.id);
+  if (!r || r.name !== card.name) return null;
+  eq = bnSkcLoad().eq[card.id];
+  return eq ? eq.slice() : null;
+}
+// 選擇槽數(BN_KIT_CFG.selSlots 依品階;bn_skcard.js 未載入 = 0,名人僅剩固定 + 被動 + 聯動)
+function bnKitN(card) { return typeof bnSkcSlots === 'function' ? bnSkcSlots(card) : 0; }
+// 選擇槽內容:o.slots(模擬 / 測試明確指定)優先,否則讀裝備;最多 sl 個,空槽略過(不自動配)
+function bnKitSlotIds(card, o, sl) {
+  if (o && Array.isArray(o.slots)) return o.slots.filter(function (x) { return !!x; });   // 明確指定(敵將本命池 / 模擬)不截斷
+  return (bnKitEq(card) || []).filter(function (x) { return !!x; }).slice(0, sl);
+}
+// 單一選擇槽戰法的實例參數:原主 = 本命 homeRate;他人 = BN_SKILL_OTHER(bnSkcOtherOf)的 mul / tgtCut / ratePP。通用 / 兵種卡 / 無專屬者回 null
+function bnKitInst(card, id) {
+  var d = BN_SKILLS[id], out = {}, ot;
+  if (!d || !d.fig) return null;
+  if (d.fig === card.fig) { out.home = BN_KIT_CFG.homeRate || 0; return out; }
+  ot = typeof bnSkcOtherOf === 'function' ? bnSkcOtherOf(id, card) : { mul: BN_KIT_CFG.otherDefaultMul };
+  if (!ot) return null;
+  if (ot.mul !== undefined) out.mul = ot.mul;
+  if (ot.tgtCut) out.tgtCut = ot.tgtCut;
+  if (ot.ratePP) out.ratePP = ot.ratePP;
+  return out;
+}
+// 整隊登記:{戰法 id: 實例參數};沒有任何需登記者回 null(spec 不帶 kitInst,路人 / generic 規格不變)
+function bnKitMap(card, ids) {
+  var out = {}, any = false;
+  (ids || []).forEach(function (id) { var k = bnKitInst(card, id); if (k) { out[id] = k; any = true; } });
+  return any ? out : null;
+}
+// 模擬用名人選擇槽:自身專屬池(非被動)以雜湊排序取前 N 個(確定性、不消耗 rng,既有路人亂數順序不變)
+function bnSimFigSlots(card) {
+  var kf = (typeof BN_KIT_BY !== 'undefined' && BN_KIT_BY.figs && BN_KIT_BY.figs[card.fig]) || null, pool, n = bnKitN(card);
+  if (!kf || !kf.pool) return [];
+  pool = kf.pool.filter(function (id) { return BN_SKILLS[id] && BN_SKILLS[id].cat !== 'passive'; });
+  return pool.map(function (id) { return [bnHash(card.fig, id), id]; }).sort(function (a, b) { return a[0] - b[0]; }).slice(0, n).map(function (x) { return x[1]; });
+}
+
+// ───────── B3 兵種卡(精銳軍團)組裝 ─────────
+// 選擇槽裝了兵種卡(lg_*)且其兵種 = 單位基礎兵種 → spec.legion(每人最多一張;不符者不生效,組裝端保險)。
+// bnLgApply(bnBuildTeam 內)把卡面優點 / 弱點展開成 mods.lg 條目 {k, v, tr?, thr?, mul?, every?, g?, car?, when?},由 bn_engine.js 的 bnLgVal / bnLgOn 逐回合判定。
+// 規則:本人 ×1.0;同基礎兵種隊友 ×0.5(優點與弱點皆同比例);每張卡全隊只算第一位裝備者;一名隊友最多受一張分享;裝兵種卡者不受分享。
+// 無兵種卡的單位不寫任何 lg 欄(舊戰鬥逐位不變)。
+function bnLgIs(id) { return !!(typeof BN_LEGION !== 'undefined' && BN_LEGION.cards && BN_LEGION.cards[id]); }
+function bnLgPick(ids, troop) {
+  var i;
+  for (i = 0; ids && i < ids.length; i++) if (bnLgIs(ids[i]) && BN_LEGION.cards[ids[i]].troop === troop) return ids[i];
+  return null;
+}
+function bnLgLord(fig) { return !!fig && !!BN_DATA.figTags && BN_DATA.figTags.lord.indexOf(fig) >= 0; }
+// 卡面條目 → lg 條目。m = 倍率(本人 1、隊友 0.5);x = 接收單位;car = 來源在隊內的 index;when / thr = 分享停擺條件
+function bnLgEntries(e, m, x, car, when, thr) {
+  var k = e.k, v = e.v, out = [], g = e.gate ? { f: e.gate.from || 1, t: e.gate.to || BN_DATA.maxRound } : null;
+  function put(o) {
+    var r = { k: o.k || k, v: o.v };
+    ['tr', 'mul', 'every', 'thr'].forEach(function (p) { if (o[p] !== undefined) r[p] = o[p]; });
+    if (g) r.g = g;
+    if (car !== undefined) { r.car = car; r.when = when || 'carAlive'; if (thr !== undefined && when === 'carHpGe') r.thr = thr; }
+    else if (when) r.when = when;
+    out.push(r);
+  }
+  switch (k) {
+    case 'takenVsTroop': case 'vsTroop': Object.keys(v).forEach(function (t) { put({ tr: t, v: v[t] * m }); }); break;
+    case 'vsTag': if (v.lord !== undefined) put({ k: 'vsLord', v: v.lord * m }); break;
+    case 'vsLowHp': case 'lowHpAtk': put({ thr: v[0], v: v[1] * m }); break;
+    case 'extraBasic': put({ v: 0, mul: v.mul * m, every: v.every || 1 }); break;
+    case 'chargeMul': put({ v: BN_DATA.cavCharge + (v - BN_DATA.cavCharge) * m }); break;
+    case 'fatigueMul': put({ v: 1 + (v - 1) * m }); break;
+    case 'lordTaken': if (bnLgLord(x.fig)) put({ k: 'takenPct', v: v * m }); break;
+    // 本人限定:白毦兵替主公承受(戰鬥中由 bn_engine.js bnLgGuardOf 判定)
+    case 'lordGuard': if (car === undefined) put({ v: 1 }); break;
+    // 結構型(由 bnLgApply 另處理;noStack 由 bnLgApply 寫 mods.lgCardSpd、bnBuildTeam 的騎速羈絆取高)不展開
+    case 'shareCap': case 'shareOffBelow': case 'noLordHalf': case 'noStack': case 'needFigElse': case 'onSrcDown': case 'onLordDown': case 'mateAtkNonTroop': case 'hpPerAlly': break;
+    default: put({ v: v * m });
+  }
+  return out;
+}
+function bnLgPush(u, list) { if (list.length) u.mods.lg = (u.mods.lg || []).concat(list); }
+// 黃巾 = fac 3;hpPerAlly.who:'黃巾' = 黃巾陣營隊友;'同兵種或黃巾' = 同兵種或黃巾陣營隊友(不含自己)。static:寫入 hp
+function bnLgHpAlly(units, i, e, m) {
+  var x = units[i], w = e.v.who, v = e.v.v * m, mx = e.v.max * m, cnt = 0, j;
+  for (j = 0; j < units.length; j++) {
+    if (j === i) continue;
+    if (w === '黃巾' ? units[j].fac === 3 : (units[j].troop === x.troop || units[j].fac === 3)) cnt++;
+  }
+  x.stats.hp = bnRound(x.stats.hp * (1 + Math.min(mx, v * cnt)));
+}
+// 寫入兵種卡效果到 units(bnBuildTeam 傳入的深拷貝);不改動 spec 的其他欄位
+function bnLgApply(units) {
+  var n = units.length, self = [], held = [], owner = {}, cnt = [], lordIn = false, hasFig = {}, i, j, x, c;
+  function capOf(j2) { var s = BN_LEGION.cards[self[j2]].cons.filter(function (e) { return e.k === 'shareCap'; })[0]; return s ? Math.min(BN_LEGION_CFG.shareMax, s.v) : BN_LEGION_CFG.shareMax; }
+  function hasCon(card, k) { return card.cons.some(function (e) { return e.k === k; }); }
+  units.forEach(function (u) { if (u.fig) hasFig[u.fig] = true; if (bnLgLord(u.fig)) lordIn = true; });
+  for (i = 0; i < n; i++) {
+    x = units[i];
+    held[i] = !!bnLgPick([x.legion], x.troop);
+    if (!held[i] || owner[x.legion]) continue;
+    owner[x.legion] = 1; self[i] = x.legion;   // 同一張卡全隊只算第一位
+  }
+  // 本人:優點 / 弱點 ×1.0;無主公則優點減半(白毦兵等,整張卡的優點)
+  for (i = 0; i < n; i++) {
+    if (!self[i]) continue;
+    c = BN_LEGION.cards[self[i]];
+    var halfP = !lordIn && hasCon(c, 'noLordHalf') ? 0.5 : 1;
+    x = units[i];
+    c.pros.forEach(function (e) { if (e.k === 'hpPerAlly') bnLgHpAlly(units, i, e, halfP); else bnLgPush(x, bnLgEntries(e, halfP, x)); });
+    if (c.noStack) x.mods.lgCardSpd = c.pros.filter(function (e) { return e.k === 'spd'; }).reduce(function (s, e) { return s + e.v * halfP; }, 0);   // 騎速同類加成取高(見 bnBuildTeam)
+    c.cons.forEach(function (e) {
+      if (e.k === 'onLordDown') { if (lordIn) { if (e.v.atkPct) bnLgPush(x, [{ k: 'atkPct', v: e.v.atkPct, when: 'lordDead' }]); if (e.v.defPct) bnLgPush(x, [{ k: 'defPct', v: e.v.defPct, when: 'lordDead' }]); } return; }
+      if (e.k === 'shareOffBelow' || e.k === 'shareCap' || e.k === 'onSrcDown' || e.k === 'needFigElse' || e.k === 'mateAtkNonTroop') return;   // 分享型,見下
+      bnLgPush(x, bnLgEntries(e, 1, x));
+    });
+  }
+  // 隊友:每人最多受一張分享(同兵種、卡未重複、裝卡者不受分享);分享上限 shareCap
+  function mate(i2, j2) {
+    var cc = BN_LEGION.cards[self[j2]], xx = units[i2], halfP = !lordIn && hasCon(cc, 'noLordHalf') ? 0.5 : 1, sb = cc.cons.filter(function (e) { return e.k === 'shareOffBelow'; })[0];
+    var wh = sb ? 'carHpGe' : undefined, th = sb ? sb.v : undefined;
+    cc.pros.forEach(function (e) { if (e.k === 'hpPerAlly') bnLgHpAlly(units, i2, e, 0.5 * halfP); else bnLgPush(xx, bnLgEntries(e, 0.5 * halfP, xx, j2, wh, th)); });
+    if (cc.noStack) xx.mods.lgCardSpd = cc.pros.filter(function (e) { return e.k === 'spd'; }).reduce(function (s, e) { return s + e.v * 0.5 * halfP; }, 0);
+    cc.cons.forEach(function (e) {
+      if (e.k === 'onSrcDown') { bnLgPush(xx, [{ k: 'atkPct', v: e.v.mateAtk * 0.5, car: j2, when: 'carDead' }]); return; }
+      if (e.k === 'needFigElse') { if (!hasFig[e.v.fig]) bnLgPush(xx, [{ k: 'spd', v: e.v.mateSpd * 0.5, car: j2, when: 'carAlive' }]); return; }
+      if (e.k === 'shareOffBelow' || e.k === 'shareCap' || e.k === 'noLordHalf' || e.k === 'mateAtkNonTroop' || e.k === 'onLordDown') return;
+      bnLgPush(xx, bnLgEntries(e, 0.5, xx, j2, wh, th));
+    });
+  }
+  for (i = 0; i < n; i++) {
+    if (self[i] || held[i]) continue;
+    for (j = 0; j < n; j++) {
+      if (!self[j] || j === i || units[j].troop !== units[i].troop || (cnt[j] || 0) >= capOf(j)) continue;
+      cnt[j] = (cnt[j] || 0) + 1;
+      mate(i, j);
+      break;
+    }
+  }
+  // 侵暴為患(東州兵):我方非同兵種者攻擊 −(全額,不分享)
+  for (j = 0; j < n; j++) {
+    if (!self[j] || !hasCon(BN_LEGION.cards[self[j]], 'mateAtkNonTroop')) continue;
+    var mc = BN_LEGION.cards[self[j]].cons.filter(function (e) { return e.k === 'mateAtkNonTroop'; })[0];
+    for (i = 0; i < n; i++) if (i !== j && units[i].troop !== units[j].troop) bnLgPush(units[i], [{ k: 'atkPct', v: mc.v, car: j, when: 'carAlive' }]);
+  }
+}
+
+// 單位規格。card = 名冊 entry(或 cardGen 結果)。o = {troop, row, col, learned:[id], slots:[id](名人選擇槽,省略則讀裝備), scene, drill(研兵比例,可省略)}
 function bnUnitSpec(card, o) {
   o = o || {};
   var S5 = bnCardStats(card), apt = bnAptOf(card), troop = bnTroopNorm(o.troop) || bnDefaultTroop(card), c = BN_DATA.troops[troop], g = BN_DATA.grade[card.gr] || 1;
@@ -174,23 +322,34 @@ function bnUnitSpec(card, o) {
     },
     mods: tf.mods
   };
+  var kitIds = [], km, kit2 = !!fg, lgSrc = null, lgId;   // kit2:名人或有選擇槽裝備者(發動率護欄只套在 kit2;無裝備路人 / generic 維持舊公式);lgSrc:選擇槽內容(找兵種卡用)
   if (fg) {
     if (fg.passive) skills.push(fg.passive);
     var kfb = (typeof BN_KIT_BY !== 'undefined' && BN_KIT_BY.figs && BN_KIT_BY.figs[card.fig]) || null;   // 專屬聯動(bondFix):不占被動 / 選擇槽,隨名人自帶;vs 條件不成立時該技能自行略過
     if (kfb && kfb.bondFix) for (i = 0; i < kfb.bondFix.length; i++) skills.push(kfb.bondFix[i]);
     spec.el = fg.el || '';
-    for (i = 0; i < fg.skills.length; i++) skills.push(fg.skills[i]);
-    spec.ult = fg.ult;
+    // 戰法欄位新制(B2):名人 = 固定戰法(kit 的 fixed 欄,大招;無大招者 = 第一個主動)+ 被動 + 聯動 + 選擇槽(只認裝備;空槽不自動配、不再帶舊 skills 欄)
+    sl = bnKitN(card);
+    learned = bnKitSlotIds(card, o, sl);
+    lgSrc = learned;
+    for (i = 0; i < learned.length; i++) if (BN_SKILLS[learned[i]] && skills.indexOf(learned[i]) < 0) { skills.push(learned[i]); kitIds.push(learned[i]); }
+    spec.ult = (kfb && kfb.fixed) ? kfb.fixed : fg.ult;
   } else {
     skills = bnNativeSkills(card, troop);
     learned = o.learned || card.bnLearn;
     sl = bnSlotCount(card);
-    if (!learned && typeof bnBookLearnOf === 'function') { var bl = bnBookLearnOf(card); if (bl) learned = bnLearnMerge(card, troop, skills, sl, bl); }   // 兵書 / 傳授學到的戰法(bn_book.js;名冊卡才有)
+    if (!learned && typeof bnSkcLearnOf === 'function') { var bl = bnSkcLearnOf(card); if (bl) { lgSrc = bl; sl = bnSkcSlots(card); learned = bnLearnMerge(card, troop, skills, sl - (bnLgPick(bl, troop) ? 1 : 0), bl.filter(function (x) { return x && !bnLgIs(x); })); kit2 = true; } }   // 戰法傳承裝備的戰法(bn_skcard.js;名冊路人才有;選擇槽白 1、青以上 2);兵種卡占一槽、不進學習欄
+    if (!lgSrc) lgSrc = learned || null;
     if (!learned) learned = BN_DATA.slots.autoLearn ? bnAutoLearn(card, troop, skills, sl) : [];
-    for (i = 0; i < learned.length && i < sl; i++) if (BN_SKILLS[learned[i]] && skills.indexOf(learned[i]) < 0) skills.push(learned[i]);
+    for (i = 0; i < learned.length && i < sl; i++) if (BN_SKILLS[learned[i]] && skills.indexOf(learned[i]) < 0) { skills.push(learned[i]); kitIds.push(learned[i]); }
     spec.ult = bnUltFor(card, troop);
   }
+  km = bnKitMap(card, kitIds);
+  if (km) spec.kitInst = km;
+  if (kit2) spec.kit2 = 1;
   spec.skills = skills;
+  lgId = lgSrc ? bnLgPick(lgSrc, troop) : null;
+  if (lgId) spec.legion = lgId;   // B3:只在裝了有效兵種卡時才寫入,無兵種卡的 spec 不變
   // 名人強度校正(B6,bn_data.js BN_FIG_TUNE):兵力 / 攻擊 / 謀略 / 治療 / 護盾量同乘一個係數,讓新舊名人勝率落在相近範圍
   var tn = (card.fig && typeof BN_FIG_TUNE !== 'undefined') ? BN_FIG_TUNE[card.fig] : 0;
   if (tn && tn !== 1) {
@@ -240,6 +399,7 @@ function bnBuildTeam(specs, o) {
   for (i = 0; i < units.length; i++) { cnt[units[i].row]++; if ((units[i].fac >= 0 && units[i].fac <= 3) || (units[i].fac >= 5 && units[i].fac <= 13)) facCnt[units[i].fac]++; }   // 魏蜀吳黃巾 + 魔幻 9 陣營(5~13);中立不計
   function eachU(fn) { for (var k = 0; k < units.length; k++) fn(units[k]); }
   function mulStat(u, key, m) { u.stats[key] = bnRound(u.stats[key] * m); }
+  bnLgApply(units);   // B3 兵種卡:寫入 mods.lg(無兵種卡者不動)
   // 陣營羈絆
   var bestN = 0; facCnt.forEach(function (c) { if (c > bestN) bestN = c; });
   if (bestN >= 3) { var fb = BN_BONDS.fac[Math.min(5, bestN)]; atkB += fb.atk || 0; hpB += fb.hp || 0; bonds.push('陣營 ×' + bestN); }
@@ -275,7 +435,7 @@ function bnBuildTeam(specs, o) {
       if (b.strat) u.mods.stratPct = (u.mods.stratPct || 0) + b.strat;
       if (b.cdMinus) u.mods.cdMinus = Math.max(u.mods.cdMinus || 0, b.cdMinus);
     });
-    if (b.cavSpd) eachU(function (u) { if (u.troop === '騎') u.stats.spd += b.cavSpd; });
+    if (b.cavSpd) eachU(function (u) { if (u.troop === '騎') u.stats.spd += Math.max(0, b.cavSpd - (u.mods.lgCardSpd || 0)); });   // 兵種卡騎速與羈絆取高不疊加(noStack;無兵種卡 = 原值)
   });
   atkB = Math.min(atkB, BN_BONDS_CAP().atk); hpB = Math.min(hpB, BN_BONDS_CAP().hp);
   // 陣型
@@ -335,7 +495,7 @@ function bnRandomTeam(rng, size, grSpec, figs, opt) {
     }
     troop = opt.troops && opt.troops[i] ? opt.troops[i] : bnDefaultTroop(card);
     learned = card.fig ? null : bnRandomLearned(rng, card, troop);
-    spec = bnUnitSpec(card, { troop: troop, learned: learned });
+    spec = bnUnitSpec(card, { troop: troop, learned: learned, slots: card.fig ? bnSimFigSlots(card) : undefined });   // 模擬名人:自身專屬池確定性裝滿選擇槽(B2)
     specs.push(spec);
   }
   bnAutoLayout(specs, rng);

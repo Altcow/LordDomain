@@ -135,7 +135,7 @@ function npcTapBuilding(o) {
 
 // ───────── 名冊詳情區塊(cardsui.js cuDetailHtml 掛點) ─────────
 function cuNpcDetailHtml(cs, e, f) {
-  var h = '', loc, q, st, chk, now = Date.now(), ten;
+  var h = '', loc, q, st, now = Date.now(), ten;
   if (f && f.list !== 'roster') return '';
   ten = npcTenureDays(e, now);
   h += '<div class="cusec">親近與年資</div><div class="cusub" style="opacity:1">' + npcFavLabel(e.fav) + ' ' + (e.fav | 0) + '/' + NPC_CFG.favMax +
@@ -152,13 +152,10 @@ function cuNpcDetailHtml(cs, e, f) {
     h += '<div class="cusec">請託</div><div class="cusub" style="opacity:1">' + npcEsc(q.text) + (q.kind === 'goods' ? '(' + st.have + '/' + st.need + ')' : '') +
       '<br><button class="cub" data-a="npcerr" data-id="' + e.id + '" data-q="' + npcEsc(q.id) + '"' + (st.ok ? '' : ' disabled') + '>' + (q.kind === 'goods' ? '交付' : '確認完成') + '</button></div>';
   }
-  chk = (typeof cardsUpgradeCheck === 'function' && typeof cardsUiCtx === 'function') ? cardsUpgradeCheck(e, cardsUiCtx()) : null;
-  if (chk && chk.ok && typeof academyStart !== 'function') h += '<div class="cusec">升階</div><button class="cub" data-a="npcup" data-id="' + e.id + '">執行升階(學識 ' + chk.cost.xue + '、金幣 ' + chk.cost.coin + ')</button>';
   return h;
 }
 function cuNpcClick(a, b, cs) {
-  var id = b.getAttribute('data-id'), f = id ? cardsFind(cs, id) : null, d, chk, res, ctx;
-  if (typeof cuAcademyClick === 'function' && cuAcademyClick(a, b, cs, f)) return true;   // 學院進修 / 升階(academyui.js)
+  var id = b.getAttribute('data-id'), f = id ? cardsFind(cs, id) : null, d;
   if (a === 'npcgoto') {
     if (f && npcGoto(f.e)) { if (typeof cardsUiClose === 'function') cardsUiClose(); } else if (typeof cu !== 'undefined') cu.msg = '找不到目標';
     return true;
@@ -167,19 +164,6 @@ function cuNpcClick(a, b, cs) {
     d = npcErrandDone(cs, b.getAttribute('data-q'), Date.now());
     if (d.ok) { npcToast('完成請託,得金幣 ' + d.reward + (d.fav ? ',' + npcFavMsg({ gain: 1, unlock: d.fav === NPC_CFG.favPrivate, gift: d.gift }, d.name) : '')); npcSave(); }
     else if (typeof cu !== 'undefined') cu.msg = '條件還沒達成';
-    return true;
-  }
-  if (a === 'npcup') {
-    if (!f) return true;
-    ctx = cardsUiCtx();
-    chk = cardsUpgradeCheck(f.e, ctx);
-    if (!chk.ok) { if (typeof cu !== 'undefined') cu.msg = '條件未達'; return true; }
-    res = (typeof world !== 'undefined' && world && world.res) ? world.res : null;
-    if (!res || (res.coin || 0) < chk.cost.coin || (res.xue || 0) < chk.cost.xue) { if (typeof cu !== 'undefined') cu.msg = '資源不足'; return true; }
-    res.coin -= chk.cost.coin; res.xue -= chk.cost.xue;
-    cardsUpgrade(f.e, ctx);
-    if (typeof npcStaffDirty === 'function') npcStaffDirty();
-    npcSave();
     return true;
   }
   return false;

@@ -71,7 +71,9 @@ var BN_DATA = {
     cd_reduce: [1, 1, 2, 2], summon_hp: [0.15, 0.25, 0.35, 0.5], summon_atk: [0.4, 0.55, 0.7, 0.9],
     stat_charge: [0.03, 0.04, 0.05, 0.06],      // stack_charge 每層加成
     execute_chain_stack: [0.05, 0.08, 0.10, 0.15], undying_dur: [1, 2, 2, 3], stealth_dur: [1, 1, 2, 2], immune_dur: [2, 2, 3, 3],
-    sleep: [2, 2, 3, 3], paralyze: [1, 1, 2, 2]   // 睡眠 / 麻痺持續回合(2026-11-09 新增)
+    sleep: [2, 2, 3, 3], paralyze: [1, 1, 2, 2],   // 睡眠 / 麻痺持續回合(2026-11-09 新增)
+    // S0 新原語(2026-11-10):鋒芒 暴擊傷害提升 / 荊棘 反傷比例 / 伏火 延遲爆發係數(× 攻或謀)/ 延遲爆發單次上限(占最大兵力)
+    buff_critdmg: [0.15, 0.25, 0.35, 0.5], reflect: [0.10, 0.15, 0.20, 0.30], delay_burst: [0.8, 1.1, 1.4, 1.8], burst_cap: [0.12, 0.16, 0.22, 0.30]
   },
   // 睡眠(sleep):期間無法行動、不會閃避;受攻擊傷害(不含持續傷害)時 wake 機率被喚醒;醒來(到期 / 驚醒 / 淨化)後 immRounds 回合內免疫睡眠
   sleep: { wake: 0.45, immRounds: 2 },
@@ -221,7 +223,7 @@ var BN_FIG_TRAIT = {
 // 名人強度校正(B6;tools/bn_fig_tune.js 解出,--apply 只改下面標記之間的一行):名人 id → 兵力 / 攻擊 / 謀略 / 治療 / 護盾量係數(未列 = 1)。
 // 目的:三國 100 位名人(全名人隊隨機對打)勝率落在約 45~58%、新舊兩批平均相近;魔幻 42 位同法校正。卡面五維不變,只影響討伐戰鬥數值。
 // BN_FIG_TUNE-BEGIN
-var BN_FIG_TUNE = { caocao: 0.93, xunyu: 0.7, guojia: 1.2, jiaxu: 0.93, simayi: 1.03, dianwei: 1.09, xiahoudun: 0.84, zhangliao: 0.76, xunyou: 0.88, xuchu: 1.03, caoren: 0.84, xiahouyuan: 0.81, xuhuang: 0.8, zhongyao: 0.89, liubei: 0.94, guanyu: 0.8, zhangfei: 0.86, zhaoyun: 0.94, zhugeliang: 0.7, machao: 0.95, pangtong: 1.05, fazheng: 0.88, weiyan: 0.83, huangzhong: 0.8, mizhu: 0.85, maliang: 1.25, xushu: 1.25, shamoke: 1.21, sunjian: 0.94, sunce: 0.82, zhouyu: 0.84, lusu: 0.7, ganning: 0.75, sunquan: 1.02, lvmeng: 1.01, zhangzhao: 1.25, taishici: 0.78, huanggai: 1.23, zhoutai: 1.2, chengpu: 1.07, shixie: 0.84, zhangjiao: 0.7, zhangbao: 0.9, zhangliang: 0.87, zhangniujiao: 0.91, zhangmancheng: 0.8, mayuanyi: 1.25, guanhai: 0.79, zhanglu: 0.85, guotai: 0.87, boca: 1.04, zhangyan: 1.25, liupi: 1.08, yudu: 1.31, yuji: 0.94, dongzhuo: 0.83, lvbu: 0.83, yuanshao: 0.91, huangfusong: 1.04, luzhi: 1.25, gongsunzan: 0.82, zhujun: 0.8, zhengxuan: 1.25, mateng: 0.89, xurong: 1.2, huatuo: 0.7, caiyong: 1.07, youtu: 1.25, yufuluo: 0.96, zhenji: 1.03, caiyan: 0.91, caozhi: 1.35, yangxiu: 1.25, pangde: 0.98, zhanghe: 0.89, ganfuren: 1.25, mifuren: 1.13, masu: 1.19, huangyueying: 1.17, zhoucang: 1.07, sunshangxiang: 0.8, lingtong: 0.97, daqiao: 1.15, xiaoqiao: 1.25, dingfeng: 0.98, kanze: 1.25, nanhua: 0.83, chengyuanzhi: 1.1, dengmao: 1.2, peiyuanshao: 1.2, heyi: 1.17, zhangkai: 1.22, diaochan: 1.25, zuoci: 1.11, panfeng: 1.15, caoxing: 0.88, huaxiong: 1.12, yuanshu: 1.25, elf_changqing: 0.85, elf_qinglan: 0.85, elf_baizhou: 0.92, elf_jiyu: 0.85, elf_tengluo: 1.15, elf_liguo: 1.15, elf_yueyao: 0.85, elf_shuanghua: 0.85, elf_luming: 0.85, elf_chenlu: 0.85, elf_hengzhi: 1.15, elf_xingchen: 0.85, elf_liuying: 1.15, elf_yedi: 1.15, dw_panshan: 0.85, dw_zhongyue: 0.91, dw_zaotian: 0.85, dw_heiyao: 0.85, dw_dengxin: 1.15, dw_qianchui: 0.93, dw_yinxu: 1.05, dw_duanlei: 0.9, dw_maoding: 1.15, dw_jincheng: 1.15, dw_lielu: 0.89, dw_kuangfu: 0.85, dw_rongxin: 0.85, dw_maiya: 1.1, kd_zhaoming: 0.85, kd_lingfeng: 0.85, kd_shoucheng: 0.89, kd_chuanyang: 0.87, kd_chenxing: 1.15, kd_wenyuan: 0.94, kd_xuandeng: 0.85, kd_suxin: 0.85, kd_jinghu: 1.15, kd_yushu: 1.15, kd_fengnian: 0.85, kd_wantong: 1.15, kd_heijing: 0.84, kd_xinghua: 1.08 };
+var BN_FIG_TUNE = { caocao: 0.96, xunyu: 0.7, guojia: 1.16, jiaxu: 1.02, simayi: 1.03, dianwei: 1.09, xiahoudun: 0.89, zhangliao: 0.88, xunyou: 0.88, xuchu: 1.03, caoren: 0.8, xiahouyuan: 0.8, xuhuang: 0.8, zhongyao: 0.92, liubei: 0.94, guanyu: 0.8, zhangfei: 0.89, zhaoyun: 1.01, zhugeliang: 0.7, machao: 0.86, pangtong: 1.25, fazheng: 0.8, weiyan: 1.01, huangzhong: 0.8, mizhu: 0.82, maliang: 1.35, xushu: 1.25, shamoke: 1.16, sunjian: 1.02, sunce: 0.9, zhouyu: 0.89, lusu: 0.85, ganning: 0.91, sunquan: 0.99, lvmeng: 1.01, zhangzhao: 1.25, taishici: 0.8, huanggai: 1.14, zhoutai: 1.14, chengpu: 1.07, shixie: 0.84, zhangjiao: 0.8, zhangbao: 0.95, zhangliang: 0.93, zhangniujiao: 0.87, zhangmancheng: 0.8, mayuanyi: 1.25, guanhai: 0.85, zhanglu: 0.97, guotai: 0.98, boca: 1.01, zhangyan: 1.25, yudu: 1.22, yuji: 0.87, dongzhuo: 0.81, lvbu: 0.83, yuanshao: 1.01, huangfusong: 1.04, luzhi: 1.25, gongsunzan: 0.82, zhujun: 0.8, zhengxuan: 1.25, mateng: 0.89, xurong: 1.16, huatuo: 0.7, caiyong: 1.03, youtu: 1.18, yufuluo: 0.89, caiyan: 0.8, caozhi: 1.3, yangxiu: 1.35, pangde: 0.95, zhanghe: 0.8, ganfuren: 1.25, mifuren: 1.06, masu: 1.25, huangyueying: 1.12, zhoucang: 1.02, sunshangxiang: 0.8, lingtong: 0.91, daqiao: 1.11, xiaoqiao: 1.19, dingfeng: 0.85, kanze: 1.29, nanhua: 0.83, chengyuanzhi: 1.1, dengmao: 1.06, peiyuanshao: 1.08, heyi: 1.17, zhangkai: 1.02, diaochan: 1.25, zuoci: 1.19, panfeng: 1.11, caoxing: 0.8, huaxiong: 1.01, yuanshu: 1.25, elf_changqing: 0.85, elf_qinglan: 0.85, elf_baizhou: 0.98, elf_jiyu: 0.85, elf_tengluo: 1.25, elf_liguo: 1.35, elf_yueyao: 0.85, elf_shuanghua: 0.85, elf_luming: 0.81, elf_chenlu: 0.8, elf_hengzhi: 1.35, elf_xingchen: 0.8, elf_liuying: 1.23, elf_yedi: 1.06, dw_panshan: 0.85, dw_zhongyue: 0.94, dw_zaotian: 0.8, dw_heiyao: 0.81, dw_dengxin: 1.35, dw_qianchui: 0.88, dw_yinxu: 0.91, dw_duanlei: 0.9, dw_maoding: 1.15, dw_jincheng: 1.35, dw_lielu: 0.89, dw_kuangfu: 0.85, dw_rongxin: 0.8, dw_maiya: 1.11, kd_zhaoming: 0.85, kd_lingfeng: 0.85, kd_shoucheng: 0.92, kd_chuanyang: 0.88, kd_chenxing: 1.34, kd_wenyuan: 0.94, kd_xuandeng: 0.84, kd_suxin: 0.8, kd_jinghu: 1.33, kd_yushu: 1.35, kd_fengnian: 0.81, kd_wantong: 1.15, kd_heijing: 0.84, kd_xinghua: 1.05, liuzhang: 1.35, wangping: 1.12, yanyan: 0.93 };
 // BN_FIG_TUNE-END
 
 // 戰法平衡覆寫(B6):戰法 id → 要覆寫的欄位(rate 發動率 / power 檔位)。載入時由 bn_units.js 套到 BN_SKILLS(戰鬥與卡面文字一致);
@@ -230,7 +232,7 @@ var BN_SKILL_TUNE = {
   p_zhangjiao: { power: 'S' }, s_zhangjiao_1: { rate: 0.2 }, s_zhangjiao_vs1: { rate: 0.16 }, u_zhangjiao: { rate: 0.08 }, s_zhangjiao_2: { rate: 0.28 }, s_zhangjiao_3: { rate: 0.22 }, s_zhugeliang_2: { rate: 0.25 }, s_zhugeliang_3: { rate: 0.3 },   // 張角:三個全隊治療太穩
   s_guanyu_1: { rate: 0.3 }, s_guanyu_vs1: { rate: 0.25 },
   p_lusu: { power: 'S' }, s_lusu_1: { rate: 0.3 }, p_zhangmancheng: { power: 'S' },
-  s_lvbu_1: { rate: 0.38 }, s_zhangliao_2: { rate: 0.3 }, s_zhangliao_3: { rate: 0.3 },
+  s_lvbu_1: { rate: 0.38 }, s_zhangliao_2: { rate: 0.3 }, s_zhangliao_3: { rate: 0.45 },
   s_peiyuanshao_1: { rate: 0.5 }, s_yuanshu_2: { rate: 0.45 }, s_zhengxuan_2: { rate: 0.45 }, s_zhengxuan_3: { rate: 0.4 },
   s_kanze_3: { rate: 0.45 }, s_caozhi_1: { rate: 0.5 }, u_caozhi: { rate: 0.2 }, s_zhangzhao_3: { rate: 0.4 }, s_maliang_2: { rate: 0.5 },
   s_dw_jincheng_1: { rate: 0.5 }, s_elf_liguo_1: { rate: 0.5 }, s_elf_liguo_2: { rate: 0.4 },
@@ -264,28 +266,27 @@ var BN_KIT_CFG = {
   otherDefaultMul: 0.8,             // 名人專屬戰法裝給他人:效果預設 = 原主 ×0.8(戰法 params.other 或 BN_SKILL_OTHER 另有寫者以其為準)
   homeRate: 0.05,                   // 『本命』:原主本人裝備自己的專屬戰法,發動率 +5pp
   taughtRetired: true,              // 名人傳授退場旗標(B1 只留旗標,不刪 bn_book.js 的程式)
-  autoFill: true                    // 空的選擇槽沿用 autoLearn 從通用池補(B2 接)
+  autoFill: false                   // 名人空槽不自動配(B2 決定);路人空槽仍由 bnLearnMerge / autoLearn 補。本旗標目前未被讀取
 };
 // 發動率護欄(B1 只放資料,B2 接 bnRateOf):永久來源(羈絆 / 信物 / 被動 command / 本命 / 校正連動)合計 +15pp;永久 + rate_up 狀態合計 +25pp;rate_up 對大招只算一半
 var BN_RATE_CAP = {
   permCap: 0.15, totalCap: 0.25, ultRateUpMul: 0.5,
   activeCap: 0.70, ultCap: 0.45,    // 主動 / 追擊上限、大招上限(與 BN_DATA.rate.cap / ultCap 一致)
   castsPerActMax: 1.6, perSkillMax: 5,   // 驗收:10 回合內平均每次行動施放數、單一戰法場均施放次數
-  wired: false                      // 引擎尚未接上(B2)
+  wired: true                       // B2:已接 bnRateOf(bn_engine.js)
 };
-// 拆卡取技:拆卡 100% 消耗該卡;紫以上才拆得出戰法;拆出戰法為機率(名人較高),連續 N 次沒出 → 第 N+1 次必出(計數分名人 / 紫路人兩條)
+// 戰法傳承(card_ui_redesign §2.3 / R1~R13):傳承 = 拆卡確定解鎖該卡全部可傳承戰法(無機率、無保底、無庫存)。階級:金名人 S、紫名人 A(tierByGr);通用戰法封頂 B;S/A 獨占(uniqueTiers)
 var BN_SKC = {
-  v: 1,
+  v: 2,
   consume: 1,
-  minGr: 3,                         // 品階索引 3 = 紫(白0 青1 藍2 紫3 金4);名人最低即紫
-  chance: { figPurple: 0.60, figGold: 0.75, purple: 0.35, purpleMaster: 0.45 },   // 單次拆出機率:紫名人 / 金名人 / 紫路人 / 紫宗師路人
-  pity: { fig: 3, purple: 5 },      // 保底:名人連續 3 次、紫路人連續 5 次沒出 → 下一次必出
-  frag: { purple: 8, purpleMaster: 12, figPurple: 10, figGold: 20 },   // 拆卡必得碎片(不論拆出與否):紫路人 16 → 8(宗師 +4)、名人本體紫 20 → 10、金 40 → 20
-  invCap: 5,                        // 每種戰法卡庫存上限
-  overflowFrag: { generic: 4, fig: 8, legion: 12 },   // 超出上限轉碎片:通用 / 名人專屬 / 兵種卡
-  legionExtra: 1,                   // 兵種卡來源名人的可拆池額外含幾張兵種卡
-  figPick: 1,                       // 名人重複拆技:自選張數(本體手動拆 = 2,見 figBodyPick)
-  figBodyPick: 2
+  minGr: 3,                         // 品階索引 3 = 紫(白0 青1 藍2 紫3 金4);傳承門檻紫以上
+  tierByGr: { 4: 'S', 3: 'A' },     // 名人來源品階 → 傳承階級
+  genericMaxTier: 'B',              // 通用戰法傳承階級封頂
+  exclusive: { S: 1, A: 1 },        // S / A 同時只能裝在 1 人身上
+  uniqueTiers: ['S', 'A'],          // 唯一階(同 exclusive 的鍵)
+  frag: { purple: 8, purpleMaster: 12, figPurple: 10, figGold: 20 },   // 傳承另得碎片:紫路人 8、宗師 12、紫名人 10、金名人 20
+  dupFrag: 4,                       // 兵書 / 通用戰法已擁有 → 轉碎片
+  legionExtra: 1                    // 兵種卡(與名人綁定)每人 1 張
 };
 // 兵種卡共通規則(數值上限 / 分享;B3 接原語)。LP 記帳:優勢點數 − 弱點點數 ≈ 一張 M 級戰法(netTarget),弱點至少 conMin 點真代價
 var BN_LEGION_CFG = {
@@ -301,7 +302,22 @@ var BN_TIER_CFG = {
   K: { '物理攻擊': 1.0, '謀略攻擊': 1.0, '弓系': 1.0, '控場': 1.2, '治療': 1.1, '防護': 0.9, '增益': 1.0, '減益': 0.9, '普攻強化': 0.8, '兵種卡': 1.0 },
   rateRef: 0.40, extra: 0.3, recast: 0.3, vs: -0.2,
   acq: { fig: 0.3, gold: 0.2, legion: 0.5 },
-  cuts: [0.10, 0.35, 0.75]          // 前 10% S、10~35% A、35~75% B、其餘 C
+  cuts: [0.10, 0.35, 0.75],         // 前 10% S、10~35% A、35~75% B、其餘 C(舊制;大招與兵種卡仍用)
+  // 2026-11-10 紫金點數:mode 'pts' 時非大招戰法階級改由 ptsOf 點數帶決定(gold→S、A、B、C、灰區→A / 總點>8 記 S);大招與兵種卡維持舊制
+  mode: 'pts',
+  pts: {
+    P: { S: 1, M: 2, L: 3 }, xMax: 2,
+    hardKinds: ['stun', 'sleep', 'silence', 'confuse', 'fear', 'paralyze', 'delay_act'],
+    weakKinds: ['stat_mod', 'stack_charge', 'reorder', 'cd_reduce', 'evade', 'stealth', 'taunt'],
+    rgSingle: ['self', 'ally_one', 'ally_lowest', 'enemy_one', 'enemy_lowest', 'enemy_highest_atk', 'enemy_hpmax', 'enemy_fastest', 'enemy_prey', 'enemy_troop'],
+    rgRow: ['ally_front', 'ally_back', 'ally_row', 'enemy_front', 'enemy_back', 'enemy_row', 'enemy_cross', 'enemy_col'],
+    rgAll: ['ally_all', 'enemy_all'],
+    rg: { single: 0, row: 1, all: 2 }, randN: { 2: 0, 3: 1, 4: 2 },
+    rateSteps: [0.20, 0.30, 0.40], passiveRa: 2, cdBonus: 1, raMax: 3,
+    strong: { E: 3, Rg: 2, Ra: 3 },
+    gold: { min: 6, max: 8, str: 2 }, purpleB: 4, purpleA: 5, purpleStrMax: 1,
+    multiLowChance: 0.30
+  }
 };
 
 // 兵種名正規化:舊存檔 / 舊隊伍碼的『步』→『槍』;不認得的回空字串(呼叫端改用預設兵種)。永遠不丟例外

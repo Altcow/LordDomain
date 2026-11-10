@@ -30,10 +30,10 @@ var BN_NUM_DMG = '#ff3b30', BN_NUM_HEAL = '#3ee05a', BN_NUM_MIN = 15;   // 浮�
 var BN_ST_ICON = { atk_up: 1, atk_down: 1, def_up: 1, def_down: 1, spd_up: 1, stun: 1, burn: 1, poison: 1, bleed: 1, shield: 1, silence: 1, taunt: 1, timid: 1, confuse: 1, heal_reduce: 'heal_block', ward: 1, rate_up: 'stc_rate_up', debuff_hit: 'stc_ink_blind', wx_mark: 'stc_wx_mark', sleep: 'stn_sleep', paralyze: 'stn_paralyze', evade: 'stn_evade', dodge_rate: 'stn_evade' };   // stn_* = assets/statusicon/(2026-11-09 GPT 圖;只補原本沒圖示的狀態,burn / poison 維持 bnfx/st_*)
 var BN_ST_NAME = {
   stun: '暈眩', fear: '威懾', confuse: '擾亂', timid: '怯戰', silence: '計窮', ult_lock: '封大', atk_down: '攻↓', def_down: '防↓', spd_down: '速↓', mark: '標記',
-  burn: '燃燒', poison: '中毒', bleed: '流血', heal_reduce: '禁療', atk_up: '攻↑', def_up: '防↑', spd_up: '速↑', crit_up: '暴↑', taunt: '嘲諷', guard: '援護', evade: '規避',
+  critdmg_up: '暴傷↑', thorns: '荊棘', fuse: '引信', lag: '遲滯', burn: '燃燒', poison: '中毒', bleed: '流血', heal_reduce: '禁療', atk_up: '攻↑', def_up: '防↑', spd_up: '速↑', crit_up: '暴↑', taunt: '嘲諷', guard: '援護', evade: '規避',
   ward: '抵禦', ccimm: '抗控', shield: '護盾', heal_hot: '回春', rate_up: '率↑', rate_down: '率↓', debuff_hit: '盲', wx_mark: '五行印', stealth: '隱匿', undying: '不倒', sleep: '睡眠', paralyze: '麻痺', dodge_rate: '閃避'
 };
-var BN_ST_GOOD = { atk_up: 1, def_up: 1, spd_up: 1, crit_up: 1, taunt: 1, guard: 1, evade: 1, dodge_rate: 1, ward: 1, ccimm: 1, shield: 1, heal_hot: 1, amp_atk: 1, rate_up: 1, stealth: 1, undying: 1 };
+var BN_ST_GOOD = { atk_up: 1, def_up: 1, spd_up: 1, crit_up: 1, taunt: 1, guard: 1, evade: 1, dodge_rate: 1, ward: 1, ccimm: 1, shield: 1, heal_hot: 1, amp_atk: 1, rate_up: 1, stealth: 1, undying: 1, critdmg_up: 1, thorns: 1 };
 // 文化主題特效(new_heroes_draft §六):cast = 施放者身上、hit = 每個目標、area = 多目標時在目標群中央。缺圖時 alt = 原 fx_* 特效
 var BN_FX_THEME = {
   herb: { cast: 'fxc_herb_mortar', hit: 'fxc_herb_leaves', area: 'fxc_herb_smoke', alt: 'heal_motes' },
@@ -1001,6 +1001,7 @@ function bnDrSkillBar(ctx, P, v, L, y) {
 // 粒子:每幀總數 ≤ BN_ST_BUDGET(40;低階機 20),每單位最多 2 種;省電全關;死亡 / 倒下 / 淡出中不畫(狀態表本身於 unstatus / kill 清除)。
 // 缺對映的 id 直接略過。寒凍(chill)= status 事件帶 ice 旗標的 stun / spd_down(bnPlStatus 另掛 v.st.chill;對應的 stun / spd_down 解除或冰裂時一併移除)。
 var BN_ST_VIS = {
+  thorns: { fx: 'rope', col: '#9a7a3a' }, fuse: { fx: 'flame', col: '#ffd27a' }, lag: { fx: 'sweat', col: '#9ad0ff' },   // S0:荊棘 / 引信 / 遲滯(復用既有 fx)
   poison: { fx: 'bubble', col: '#b6f57a', tint: '#7fd04a' },   // 中毒:身體偏綠 + 冒綠泡
   burn: { fx: 'flame', col: '#ff8a3a' },                        // 燃燒:身上掛火苗
   chill: { fx: 'ice', col: '#dff4ff', tint: '#8fc8ff' },        // 寒凍:偏藍 + 冰晶(ice 旗標)
@@ -1015,7 +1016,7 @@ var BN_ST_VIS = {
   timid: { fx: 'rope', col: '#c8b890' },                        // 怯戰 / 定身(bind 別名):腳下束縛圈
 };
 (function () {   // 增益 / 減益圈(金色上升 / 紫色下落)
-  var g = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'ward', 'guard', 'taunt', 'heal_hot', 'undying', 'stealth', 'amp_atk'], b = ['atk_down', 'def_down', 'spd_down', 'rate_down', 'debuff_hit', 'mark', 'wx_mark', 'heal_reduce'], i;
+  var g = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'ward', 'guard', 'taunt', 'heal_hot', 'undying', 'stealth', 'amp_atk', 'critdmg_up'], b = ['atk_down', 'def_down', 'spd_down', 'rate_down', 'debuff_hit', 'mark', 'wx_mark', 'heal_reduce'], i;
   for (i = 0; i < g.length; i++) BN_ST_VIS[g[i]] = { fx: 'buff', col: '#ffd75a' };
   for (i = 0; i < b.length; i++) BN_ST_VIS[b[i]] = { fx: 'debuff', col: '#c890ff' };
 })();

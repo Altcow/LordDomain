@@ -146,21 +146,6 @@ if (ip2Ready) {
       oOnEnter(S);
       if (S.cfg && S.cfg.p2) S.stockLv = ip2Stock().lv;
     };
-    // 學宮:學官 + 進修中的名冊人物(post = 'student')
-    ipPeople = function (cfg) {
-      var out = oPeople(cfg), cs = null, ro, n = 0;
-      if (cfg && cfg.pm === 'academy') {
-        try { cs = (typeof cardsGet === 'function') ? cardsGet() : null; } catch (e) { cs = null; }
-        ro = (cs && cs.roster) ? cs.roster : [];
-        out = out.slice();
-        ro.forEach(function (e) {
-          if (!e || !e.study || n >= 6) return;
-          n++;
-          out.push({ id: e.id, name: e.name || '學生', gr: e.gr | 0, fav: e.fav | 0, job: 'scholar', mainJob: e.main, post: 'student', spec: null });
-        });
-      }
-      return out;
-    };
     ipOpenPanel = function (act) {
       try {
         if (act.id === 'roster') {
@@ -195,16 +180,13 @@ if (ip2Ready) {
       oRun(S, act, ent);
     };
     ipSub = function (S) {
-      var k = S.cfg.subKind, now = ipNow(), cs, I, st, n, left;
+      var k = S.cfg.subKind, now = ipNow(), st, n, left;
       if (!S.cfg.p2) return oSub(S);
       if (S.subAt && now - S.subAt < 2) return S.subTxt;
       S.subAt = now; S.subTxt = '';
       try {
-        if (k === 'academy') {
-          cs = (typeof cardsGet === 'function') ? cardsGet() : null;
-          I = (cs && typeof academyInfo === 'function') ? academyInfo(cs) : null;
-          S.subTxt = I ? (I.lv ? '院級 ' + I.lv + ' · 進修 ' + I.used + '/' + I.seats : '學院尚未開放') : '學官 ' + S.people.length + ' 人';
-        } else if (k === 'granary') {
+        if (k === 'academy') S.subTxt = '學官 ' + S.people.length + ' 人';
+        else if (k === 'granary') {
           st = ip2Stock(); S.subTxt = '庫存 ' + st.kinds + ' 種 · 約 ' + Math.round(st.ratio * 100) + '%';
         } else if (k === 'clinic') S.subTxt = '醫署 ' + S.people.length + ' 人在診';
         else if (k === 'bazaar') { n = S.items.filter(function (i) { return i.visitor; }).length; S.subTxt = '市令 ' + S.people.length + ' 人 · 逛市 ' + n + ' 位'; }

@@ -425,7 +425,7 @@ function srOnClick(e) {
   else if (a === 'chip') srSetQ(k);
   else if (a === 'build') srGoBuild(k);
   else if (a === 'tech') srTechGo(k);
-  else if (a === 'cx' && typeof codexOpenKey === 'function') codexOpenKey(k);   // 開圖鑑(panelmgr 互斥關閉搜尋)
+  else if (a === 'cx' && typeof codexOpenKey === 'function') codexOpenKey(k);   // 開卡包『大全』詳情(codexOpenKey → cuCodexOpenKey;panelmgr 互斥關閉搜尋)
 }
 function srOnKey(e) {
   var t = e.target;

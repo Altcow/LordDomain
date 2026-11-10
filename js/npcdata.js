@@ -119,5 +119,3 @@ var NPC_ERRANDS = {
   '政': [{ kind: 'goods', id: 'g_nongju', n: 1, text: '鄉里想要一件農具作示範,能撥一件嗎?' }, { kind: 'build', type: 'notice_board', text: '政令貼不出去,想立一塊告示牌。' }],
   '武': [{ kind: 'goods', id: 'mat_tieding', n: 2, text: '兵器該修了,能給 2 錠鐵嗎?' }, { kind: 'build', type: 'deco_weaponrack', text: '想添一座兵器架,讓大夥兒有地方擱傢伙。' }]
 };
-// 「送學院進修」請託(academy.js 啟用且該人可進修時,有機會取代抽到的請託);完成條件 = 該人開始一次進修(entry.sn 超過請託建立時的值)
-var NPC_ERRAND_STUDY = { kind: 'study', text: '聽說學院能把手藝練得更精,可否送我去進修一回?' };

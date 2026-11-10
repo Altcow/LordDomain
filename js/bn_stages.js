@@ -183,7 +183,7 @@ function bnStgMakeFoe(ent, v, ch, pos, st, sk) {
     gr = BN_STG.grOf[ch.n] | 0, boss = !!(st && st.boss && pos === 0), vk = ent.vk || (boss ? 1.05 : 1), card, spec, apt = {}, ov, more = !!(st && st.idx >= BN_STG.extraFrom);
   card = { id: 'foe', name: fig ? fig.name : ent[1], fig: fig ? ent.fig : '', fac: fig ? fig.fac : 4, gr: gr, st: p.map(function (x) { return Math.max(1, Math.round(v * vk * x)); }), tok: 0, up: 0, ja: {}, tr: [], main: '', learn: 0, sex: '' };
   if (!fig) apt[troop] = 'A';
-  spec = bnUnitSpec(card, { troop: troop, apt: fig ? undefined : apt, learned: [] });   // learned: [] = 敵將不走名冊 autoLearn
+  spec = bnUnitSpec(card, { troop: troop, apt: fig ? undefined : apt, learned: [], slots: fig && BN_KIT_BY.figs[ent.fig] ? (BN_KIT_BY.figs[ent.fig].pool || []).filter(function (id) { return BN_SKILLS[id] && id !== BN_KIT_BY.figs[ent.fig].passive; }) : undefined });   // learned: [] = 敵將不走名冊 autoLearn;名人敵將選擇槽 = 本命池(敵方不受拆卡限制)
   sk = sk || (st ? st.id : 'x');
   ov = (st && BN_STG_SKILL_OVR[st.id] && BN_STG_SKILL_OVR[st.id][pos]) || (!Array.isArray(ent) && ent.skills);
   if (ov) spec.skills = ov.filter(function (id) { return !!BN_SKILLS[id]; });
@@ -365,7 +365,11 @@ function bnStgGrant(d, env, want, rep) {
   var g = Math.max(0, want.gold || 0), s = Math.max(0, want.shards || 0), b = Math.max(0, want.books || 0);
   if (g > 0) env.coin(g);
   if (s > 0) env.shards(s);
-  if (b > 0 && want.bookId) { d.books[want.bookId] = (d.books[want.bookId] | 0) + b; rep.bookId = want.bookId; }
+  if (b > 0 && want.bookId) {   // 兵書 = 解鎖該通用戰法(R12);已擁有 → 轉碎片(bn_skcard.js bnSkcGrant)
+    var bk = (typeof bnSkcGrant === 'function') ? bnSkcGrant(want.bookId) : { unlocked: false, dup: 0 };
+    if (bk.dup > 0) { env.shards(bk.dup); s += bk.dup; }
+    rep.bookId = want.bookId; rep.bookUnlock = !!bk.unlocked;
+  }
   (want.goods || []).forEach(function (x) { if (x[1] > 0) { env.goods(x[0], x[1]); rep.goods.push({ id: x[0], n: x[1] }); } });
   if (want.token > 0) { env.tokens(want.token); rep.token = want.token; }
   if (want.pulls > 0) { rep.pulls = env.pulls(want.pulls, rep.id) | 0; }

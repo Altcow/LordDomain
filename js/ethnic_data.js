@@ -125,7 +125,9 @@ const ETHNIC_BY_FIG = {
   zhoucang: ['han', 'han'], yanyan: ['han', 'han'], sunshangxiang: ['han', 'han'], lingtong: ['han', 'han'], daqiao: ['han', 'han'],
   xiaoqiao: ['han', 'han'], dingfeng: ['han', 'han'], kanze: ['han', 'scholar'], nanhua: ['han', 'daoist'], chengyuanzhi: ['han', 'han'],
   dengmao: ['han', 'han'], peiyuanshao: ['han', 'han'], heyi: ['han', 'han'], zhangkai: ['han', 'han'], diaochan: ['han', 'han'],
-  zuoci: ['han', 'daoist'], panfeng: ['han', 'han'], caoxing: ['han', 'han'], huaxiong: ['han', 'liang'], yuanshu: ['han', 'han']
+  zuoci: ['han', 'daoist'], panfeng: ['han', 'han'], caoxing: ['han', 'han'], huaxiong: ['han', 'liang'], yuanshu: ['han', 'han'],
+  // 2026-11-10 新名人 7 位
+  taoqian: ['han', 'han'], wangping: ['han', 'han'], gaoshun: ['han', 'han'], caochun: ['han', 'han'], chendao: ['han', 'han'], quyi: ['han', 'liang'], liuzhang: ['han', 'han']
 
 };
 const ETHNIC_DRESS = ['han', 'liang', 'bei', 'south', 'daoist', 'scholar', 'nanman', 'shanyue', 'xiongnu'];

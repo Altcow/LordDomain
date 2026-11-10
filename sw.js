@@ -1,4 +1,4 @@
-const VERSION = 'v56';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v57';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -135,7 +135,12 @@ const PRECACHE = [
   './js/cardsui.js',
   './js/cardsui_named.js',
   './js/cardsui_bag.js',
+  './js/cardsui_roster.js',
   './js/cardsui_starter.js',
+  './js/cardsui_draw.js',
+  './js/cardsui_card.js',
+  './js/cardsui_skills.js',
+  './js/cardsui_codex.js',
   './js/furnaceui.js',
   './js/cardsreveal.js',
   './js/npcdata.js',
@@ -144,8 +149,6 @@ const PRECACHE = [
   './js/fx_cards.js',
   './js/npcinteract.js',
   './js/npcui.js',
-  './js/academy.js',
-  './js/academyui.js',
   './js/npcvisit.js',
   './js/cityscoreui.js',
   './js/cityadvisorui.js',
@@ -176,6 +179,7 @@ const PRECACHE = [
   './js/bn_engine.js',
   './js/bn_effects.js',
   './js/bn_book.js',
+  './js/bn_skcard.js',
   './js/bndraw.js',
   './js/bnsfx.js',
   './js/bnui.js',

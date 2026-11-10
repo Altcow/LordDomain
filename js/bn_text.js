@@ -12,7 +12,8 @@ var BNT_PWD = { S: '小幅', M: '中幅', L: '大幅', XL: '極大幅' };
 var BNT_TG = {
   self: '自身', ally_one: '我方單體', ally_all: '我方全隊', ally_front: '我方前排', ally_back: '我方後排', ally_lowest: '兵力最低的友軍', ally_row: '我方同排友軍',
   enemy_one: '敵方單體', enemy_front: '敵方前排', enemy_back: '敵方後排', enemy_all: '敵方全隊', enemy_lowest: '兵力最低的敵人', enemy_highest_atk: '攻擊最高的敵人',
-  enemy_cross: '敵方十字範圍', enemy_col: '敵方同一縱列', members: '羈絆夥伴'
+  enemy_cross: '敵方十字範圍', enemy_col: '敵方同一縱列', members: '羈絆夥伴',
+  enemy_hpmax: '兵力最多的敵人', enemy_fastest: '速度最快的敵人', enemy_prey: '剋制我方兵種的敵人', enemy_troop: '指定兵種的敵人', enemy_row: '敵方同排', enemy_rand: '隨機敵人'
 };
 var BNT_TRIG = {
   hp_below_30: '自身兵力低於 30% 時', battle_start: '開戰時', turn_start: '每回合開始時', turn_end: '每回合結束時', on_attack: '普通攻擊後', on_hit: '受到攻擊時', on_kill: '擊倒敵人時',
@@ -23,6 +24,7 @@ var BNT_ST = {
   atk_down: '攻擊下降', def_down: '防禦下降', spd_down: '速度下降', rate_down: '發動率下降', rate_up: '發動率提升', debuff_hit: '命中下降', wx_mark: '五行印', invert: '陰陽互換',
   atk_up: '攻擊提升', def_up: '防禦提升', spd_up: '速度提升', crit_up: '暴擊提升', stealth: '隱匿', evade: '規避', dodge_rate: '閃避', shield: '護盾', ward: '抵禦', undying: '不倒', guard: '援護', counter: '反擊', heal_block: '禁療', heal_reduce: '治療降低', reorder: '插隊', swap: '換位', control: '控制類狀態', debuff: '減益類狀態', dot: '持續傷害類狀態', any: '任何負面狀態'
 };
+BNT_ST.critdmg_up = '暴擊傷害提升'; BNT_ST.thorns = '荊棘'; BNT_ST.fuse = '引信'; BNT_ST.lag = '遲滯';
 var BNT_FLAW = {
   no_inspire: '不受友方鼓舞類增益', forced_taunt_target: '被嘲諷時必定攻擊嘲諷者', act_last: '總是最後出手', late_dmg_taken: '戰鬥後期受傷增加', friendly_fire: '偶爾誤傷友軍',
   no_ally_morale: '不易受友軍增益影響', slow_on_ally_down: '友軍倒下時速度下降', timid_vs: '遇到剋星時可能怯戰', weak_vs: '遇到剋星時受傷大增', revoke_book: '張角兵力過低時收回天書',
@@ -197,6 +199,13 @@ function bntClause(kind, target, power, P, d, isExtra) {
     case 'trap': return '布下伏兵:' + bntTg(target, 'enemy_all') + '中下一個行動的敵人遭伏擊,' + (P.effect && P.effect.kind ? bntClause(P.effect.kind, 'enemy_one', pw, P.effect, d, true).replace(/^使敵方單體/, '') : '受到打擊');
     case 'stack_charge': return (P.gainOn && BNT_TRIG[P.gainOn] ? BNT_TRIG[P.gainOn] : '條件達成時') + '累積層數(最多 ' + bntS(P.max, 3) + ' 層),層數越多效果越強(每層約 +' + bntPct(bntKT('stat_charge', pw)) + ')';
     case 'undying': return '兵力不會降到 ' + bntS(P.minHp, 1) + ' 點以下' + (P.once ? '(首次致命傷時觸發,每場一次)' : '(持續 ' + bntS(P.dur, bntKT('undying_dur', pw)) + ' 回合)');
+    case 'debuff_multi':
+      s = []; (P.list || []).forEach(function (it) { s.push(bntStName(it.st) + bntPct(it.chance || 0)); });
+      return '使' + bntTg(target, 'enemy_one') + '各自有機率承受:' + s.join('、') + '(每項獨立判定)';
+    case 'reflect': return bntTg(target, 'self') + '受到傷害時反彈 ' + bntPct(bntKT(kind, pw)) + ' 的傷害給攻擊者(每擊上限 8% 攻擊者兵力)' + dur;
+    case 'buff_critdmg': return bntTg(target, 'self') + '暴擊傷害 +' + bntPct(bntKT(kind, pw, sc)) + dur;
+    case 'delay_burst': return '埋下引信:' + (P.after || 2) + ' 回合後爆發,對' + bntTg(target, 'enemy_one') + '造成 ' + bntPct(bntKT(kind, pw)) + ' 攻擊 / 謀略傷害(單次上限 ' + bntPct(bntKT('burst_cap', pw)) + ' 兵力)';
+    case 'delay_act': return bntTg(target, 'enemy_one') + bntChanceTxt(P) + '本回合排到最後行動(已行動者延到下回合)';
     case 'stat_mod':
       s = []; if (P.mod) Object.keys(P.mod).forEach(function (k) { s.push((BNT_MODKEY[k] || '能力') + ' ' + (P.mod[k] < 0 ? '−' : '+') + Math.abs(P.mod[k]) + '%'); });
       return s.join('、') || '微幅調整自身能力';
@@ -230,6 +239,16 @@ function bntNotes(d, P) {
   if (P.crowd_scale) out.push('我方存活人數越多,傷害越高');
   if (P.weakness && P.weakness.length) out.push('自身對' + bntList(P.weakness, function (w) { return bntStName(w.type); }) + '的傷害承受提高');
   if (P.selfDebuff) out.push('代價:自身' + (P.selfDebuff.stat === 'def' ? '防禦' : '能力') + '下降 ' + bntS(P.selfDebuff.dur, 1) + ' 回合');
+  if (P.leech) out.push('造成傷害的 ' + bntPct(P.leech) + ' 回復自身兵力');
+  if (P.critAdd) out.push('本戰法暴擊率 +' + bntPct(P.critAdd));
+  if (P.critDmg) out.push('本戰法暴擊傷害 +' + bntPct(P.critDmg));
+  if (P.forceCrit) out.push('必定暴擊');
+  if (P.bounce) out.push('第 2 段起改打隨機敵人(彈射)');
+  if (P.n) out.push('隨機選 ' + P.n + ' 名不同的敵人');
+  if (P.phase) out.push('第 ' + (P.phase.from || 1) + (P.phase.to ? '~' + P.phase.to : '') + ' 回合才會發動');
+  if (P.selfHpBelow) out.push('自身兵力低於 ' + bntPct(P.selfHpBelow) + ' 時才會發動');
+  if (P.needStatus) out.push('只會打' + bntStName(P.needStatus) + '的敵人,沒有則不發動');
+  if (P.perShield) out.push('每解除 1 個負面狀態,獲得相當於自身護盾基數 ' + bntPct(P.perShield) + ' 的小護盾');
   if (P.flaw && P.flaw.length) out.push('缺點:' + bntList(P.flaw, bntFlawTxt));
   if (P.onlyVs && d.vs) out.push('只有敵方有' + bntVsWho(d.vs) + '時才會發動,並鎖定其為目標');
   if (d.vs && !bntVsOnly(d) && bntVsText(d)) out.push(bntVsText(d));
@@ -430,7 +449,7 @@ function bnCardSkillIds(card, o) {   // o 可選 {troop}:布陣時依所選兵�
   fg = card.fig && typeof BN_FIG_SKILLS !== 'undefined' ? BN_FIG_SKILLS[card.fig] : null;
   var bf = fg && typeof BN_KIT_BY !== 'undefined' && BN_KIT_BY.figs[card.fig] ? (BN_KIT_BY.figs[card.fig].bondFix || []) : [];   // 專屬聯動:不占被動 / 選擇槽
   for (i = 0; i < spec.skills.length; i++) {
-    out.push({ id: spec.skills[i], role: fg ? (i === 0 && fg.passive ? 'passive' : (bf.indexOf(spec.skills[i]) >= 0 ? 'bond' : 'skill')) : (i === 0 ? 'native' : 'learned') });
+    out.push({ id: spec.skills[i], role: fg ? (i === 0 && fg.passive ? 'passive' : (bf.indexOf(spec.skills[i]) >= 0 ? 'bond' : 'slot')) : (i === 0 ? 'native' : 'learned') });   // 名人:被動 / 聯動 / 選擇槽(固定戰法見下方 ult)
   }
   if (spec.ult) out.push({ id: spec.ult, role: 'ult' });
   return out.filter(function (x) { return !!(typeof BN_SKILLS !== 'undefined' && BN_SKILLS[x.id]); });
@@ -442,7 +461,7 @@ function bnCardSkillRows(card, o) {
   });
 }
 // ---------- 卡面「戰法」區塊:名稱連結 + 類別小標 + 一行短說明;完整說明在彈窗(cardsui 說明浮層 kind=bnskill,bnSkillInfo) ----------
-var BNT_ROLE = { native: '職業預設', learned: '學習', bond: '專屬聯動' };
+var BNT_ROLE = { native: '職業預設', learned: '選擇槽', bond: '專屬聯動', slot: '選擇槽', passive: '被動', ult: '固定' };
 var BNT_TS = { self: '自身', ally_one: '我單體', ally_all: '我全隊', ally_front: '我前排', ally_back: '我後排', ally_lowest: '我最弱', ally_row: '我同排', enemy_one: '敵單體', enemy_front: '敵前排', enemy_back: '敵後排',
   enemy_all: '敵全隊', enemy_lowest: '敵最弱', enemy_highest_atk: '敵最強', enemy_cross: '敵十字', enemy_col: '敵縱列', members: '夥伴' };
 var BNT_KS = {
@@ -548,5 +567,16 @@ function bnPreyRows() {
     return { t: t, beats: b, beaten: c };
   });
 }
+// B3 兵種卡說明:優點 / 弱點白話 + 倍率(本人 ×1.0、同兵種隊友 ×0.5)。來源 BN_LEGION.cards[id](無資料回 null)
+function bnLegionText(id) {
+  var L = (typeof BN_LEGION !== 'undefined' && BN_LEGION.cards && BN_LEGION.cards[id]) || null;
+  if (!L) return null;
+  return {
+    name: L.name, troop: L.troop,
+    pros: L.proText || '', cons: L.conText || '',
+    share: '裝備者本人 ×1.0;同兵種隊友 ×0.5(優點與弱點同比例)',
+    note: L.provisional ? '原型卡,名稱與數值暫定' : ''
+  };
+}
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { bnSkillText: bnSkillText, bnTraitText: bnTraitText, bnPreyRel: bnPreyRel, bnPreyText: bnPreyText, bnPreyRows: bnPreyRows, bnPreyRule: bnPreyRule, bnPreyCounts: bnPreyCounts };
+if (typeof module !== 'undefined' && module.exports) module.exports = { bnSkillText: bnSkillText, bnTraitText: bnTraitText, bnPreyRel: bnPreyRel, bnPreyText: bnPreyText, bnPreyRows: bnPreyRows, bnPreyRule: bnPreyRule, bnPreyCounts: bnPreyCounts, bnLegionText: bnLegionText };

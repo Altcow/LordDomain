@@ -61,7 +61,8 @@ function bnEv(S, t, o) {
 var BN_NEG = {
   stun: 'control', fear: 'control', confuse: 'control', timid: 'control', silence: 'control', ult_lock: 'control', sleep: 'control', paralyze: 'control',
   atk_down: 'debuff', def_down: 'debuff', spd_down: 'debuff', mark: 'debuff', rate_down: 'debuff', debuff_hit: 'debuff', wx_mark: 'debuff',
-  burn: 'dot', poison: 'dot', bleed: 'dot', heal_reduce: 'heal_block'
+  burn: 'dot', poison: 'dot', bleed: 'dot', heal_reduce: 'heal_block',
+  lag: 'control', fuse: 'debuff'   // S0:遲滯(敵方本回合排最後行動)、引信(延遲爆發)
 };
 var BN_STRONG = { stun: 1, fear: 1, confuse: 1, sleep: 1 };
 var BN_ALIAS = { bind: 'timid', heal_block: 'heal_reduce', def_down: 'def_down' };
@@ -98,6 +99,66 @@ function bnWake(S, t, why) {
   return true;
 }
 
+// ───────── B3 兵種卡原語(讀 u.mods.lg,由 bn_units.js bnLgApply 寫入;無 lg 欄 = 全部回 0 / 1,不抽亂數)─────────
+var BN_LG_CC = ['stun', 'sleep', 'confuse', 'fear', 'paralyze', 'silence', 'timid'];   // 受控(vsControlled)
+// 條目是否生效:回合區間(g)、來源存活 / 分享停擺(car + when)、主公陣亡(lordDead)
+function bnLgOn(S, u, e) {
+  var tm, c, lords;
+  if (e.g && (S.round < e.g.f || S.round > e.g.t)) return false;
+  if (e.when === 'lordDead') { tm = S.teams[u.side].units; lords = tm.filter(function (x) { return bnLgLord(x.fig); }); return lords.length > 0 && !lords.some(function (x) { return x.alive; }); }
+  if (e.car === undefined) return true;
+  c = S.teams[u.side].units[e.car];
+  if (!c) return false;
+  if (e.when === 'carDead') return !c.alive;
+  if (e.when === 'carHpGe') return c.alive && c.hp / c.maxHp >= e.thr;
+  return c.alive;
+}
+// 加總(加法型):k = 條目種類;o = 對方單位(takenVsTroop 為攻擊者、vsTroop / vsLowHp / vsLord / vsControlled 為目標)
+function bnLgVal(S, u, k, o) {
+  var L = u && u.mods && u.mods.lg, s = 0, i, e;
+  if (!L) return 0;
+  for (i = 0; i < L.length; i++) {
+    e = L[i];
+    if (e.k !== k) continue;
+    if (k === 'lowHpAtk' && !(u.hp / u.maxHp < e.thr)) continue;
+    if (k === 'vsLowHp' && !(o && o.hp / o.maxHp < e.thr)) continue;
+    if ((k === 'vsTroop' || k === 'takenVsTroop') && !(o && o.troop === e.tr)) continue;
+    if (k === 'vsLord' && !(o && bnLgLord(o.fig))) continue;
+    if (k === 'vsControlled' && !(o && BN_LG_CC.some(function (c) { return !!o.st[c]; }))) continue;
+    if (!bnLgOn(S, u, e)) continue;
+    s += e.v;
+  }
+  return s;
+}
+// 取值型(chargeMul):最後一筆生效者;無則 undefined
+function bnLgSet(S, u, k) {
+  var L = u && u.mods && u.mods.lg, r, i;
+  if (!L) return undefined;
+  for (i = 0; i < L.length; i++) if (L[i].k === k && bnLgOn(S, u, L[i])) r = L[i].v;
+  return r;
+}
+// 乘積型(fatigueMul):各筆相乘
+function bnLgMul(S, u, k) {
+  var L = u && u.mods && u.mods.lg, r = 1, i;
+  if (!L) return 1;
+  for (i = 0; i < L.length; i++) if (L[i].k === k && bnLgOn(S, u, L[i])) r *= L[i].v;
+  return r;
+}
+// 額外一次普攻(吃謀略):每回合至多一次;every 回合才觸發;普攻後呼叫
+function bnLgExtra(S, u) {
+  var L = u.mods && u.mods.lg, i, e, t;
+  if (!L || u.lgxRound === S.round) return;
+  for (i = 0; i < L.length; i++) {
+    e = L[i];
+    if (e.k !== 'extraBasic' || !bnLgOn(S, u, e) || S.round % e.every !== 0) continue;
+    t = bnPickEnemy(S, u, 'one', 'basic');
+    if (!t) return;
+    u.lgxRound = S.round;
+    bnHitWithRx(S, u, t, { ty: 'strat', mul: e.mul, basic: false, lgx: 1 });
+    return;
+  }
+}
+
 // 數值(含增減益)
 function bnAtkMod(S, u) {
   var m = 0, st = u.st, mo = u.mods;
@@ -107,6 +168,7 @@ function bnAtkMod(S, u) {
   if (mo.lowHp && u.hp / u.maxHp < mo.lowHp[0]) m += mo.lowHp[1];
   if (mo.early2 && S.round <= 2) m += mo.early2;
   if (u.st.amp_atk) m += u.st.amp_atk.val;
+  m += bnLgVal(S, u, 'atkPct') + bnLgVal(S, u, 'lowHpAtk');
   return bnClamp(m, BN_DATA.clamp.lo, BN_DATA.clamp.hi);
 }
 function bnAtk(S, u) { return u.base.atk * (1 + bnAtkMod(S, u)); }
@@ -116,6 +178,7 @@ function bnDef(S, u) {
   if (u.st.def_up) m += u.st.def_up.val;
   if (u.st.def_down) m -= u.st.def_down.val;
   if (u.st.taunt && u.st.taunt.def) m += u.st.taunt.def;
+  m += bnLgVal(S, u, 'defPct');
   return u.base.def * (1 + bnClamp(m, BN_DATA.clamp.lo, BN_DATA.clamp.hi));
 }
 function bnSres(S, u) { return u.base.sres; }
@@ -124,11 +187,12 @@ function bnSpd(S, u) {
   if (u.st.spd_up) v += u.st.spd_up.val;
   if (u.st.spd_down) v -= u.st.spd_down.val;
   if (S.round === 1 && u.mods.r1Spd) v += u.mods.r1Spd;
+  v += bnLgVal(S, u, 'spd');
   if (u.vsSpd && typeof bnVsSpd === 'function') v += bnVsSpd(S, u);
   if (u.st.paralyze) v *= 1 - BN_DATA.paralyze.spd;   // 麻痺:速度 −15%
   return Math.max(BN_DATA.spdMin, v);
 }
-function bnCrit(S, u) { return bnClamp(u.base.crit + (u.st.crit_up ? u.st.crit_up.val : 0) + (u.sc.crit || 0) * BN_DATA.kinds.stat_charge[0], 0, 0.95); }
+function bnCrit(S, u) { return bnClamp(u.base.crit + (u.st.crit_up ? u.st.crit_up.val : 0) + (u.sc.crit || 0) * BN_DATA.kinds.stat_charge[0] + bnLgVal(S, u, 'critAdd'), 0, 0.95); }
 // 回合節奏單一入口:phase = 'early'(≤ earlyTo)/ 'mid' / 'late'(≥ lateFrom);bnRoundIn = 第 from~to 回合(to 省略 = 到上限)
 function bnRoundPhase(r) { var p = BN_DATA.roundPhase; return r <= p.earlyTo ? 'early' : (r >= p.lateFrom ? 'late' : 'mid'); }
 function bnRoundIn(r, from, to) { return r >= from && r <= (to === undefined ? BN_DATA.maxRound : to); }
@@ -154,25 +218,55 @@ function bnBestOf(S, a, list) {
   for (i = 0; i < list.length; i++) if (!best || bnBetter(S, a, list[i], best)) best = list[i];
   return best;
 }
+// 隱匿:單一敵人能否被 vsKind 的攻擊選中(bnPickEnemy / bnRandEnemies 共用)
+function bnVisOk(x, vsKind) {
+  var s = x.st.stealth;
+  if (!s) return true;
+  if (s.vs === 'single' || s.vs === undefined) return false;
+  return !(Array.isArray(s.vs) && vsKind && s.vs.indexOf(vsKind) >= 0);
+}
+// 新目標欄位(S0):opt = {troop, need};舊戰法不帶任何新欄位時回傳 undefined,呼叫端行為逐位不變
+function bnOptOf(eff) {
+  var P = eff.params || {};
+  return (P.troop || P.needStatus) ? { troop: P.troop, need: P.needStatus } : undefined;
+}
+var BN_PICK_TG = { enemy_hpmax: 'hpmax', enemy_fastest: 'spd', enemy_prey: 'prey', enemy_troop: 'troop' };
 // mode: one(受 reach、嘲諷)front back lowest(最低 HP%)atk(最高攻)deep(無視 reach 的單體);vs: 'single'|kind 用於隱匿
-function bnPickEnemy(S, a, mode, vsKind) {
-  var en = bnEnemies(S, a), list, i, t, tau, rk;
+// S0 新 mode:hpmax(現兵力最高)、spd(速度最快)— 受 reach;prey(我方兵種剋制者,無視 reach,無則退 one);troop(opt.troop 兵種,無則退 one)
+// opt.need:只選帶該狀態的敵人(無則回 null,不擲骰由 bnUseful 擋)
+function bnPickEnemy(S, a, mode, vsKind, opt) {
+  var en = bnEnemies(S, a), list, i, t, tau, rk, tv, v, list2, pr;
   if (!en.length) return null;
   if (mode === 'one') { rk = bnReach(S, a); list = en.filter(function (x) { return bnRank(S, x) <= rk; }); }
   else if (mode === 'front') list = en.filter(function (x) { return bnRank(S, x) === 1; });
   else if (mode === 'back') { rk = bnRankMax(S, bnOpp(a.side)); list = en.filter(function (x) { return bnRank(S, x) === rk; }); }
+  else if (mode === 'hpmax' || mode === 'spd' || mode === 'troop') { rk = bnReach(S, a); list = en.filter(function (x) { return bnRank(S, x) <= rk; }); }
   else list = en;
+  if (opt && opt.need) list = list.filter(function (x) { return bnHas(x, opt.need); });
   if (!list.length) return null;
   // 隱匿:被排除,但全員隱匿時不排除
-  var vis = list.filter(function (x) {
-    var s = x.st.stealth;
-    if (!s) return true;
-    if (s.vs === 'single' || s.vs === undefined) return false;
-    return !(Array.isArray(s.vs) && vsKind && s.vs.indexOf(vsKind) >= 0);
-  });
+  var vis = list.filter(function (x) { return bnVisOk(x, vsKind); });
   if (vis.length) list = vis;
   tau = list.filter(function (x) { return x.st.taunt; });
   if (tau.length && !a.st.confuse) list = tau;
+  if (mode === 'troop') {
+    list2 = list.filter(function (x) { return opt && x.troop === opt.troop; });
+    if (!list2.length) return bnPickEnemy(S, a, 'one', vsKind, opt);
+    list = list2;
+  } else if (mode === 'prey') {
+    pr = BN_DATA.prey[a.troop] || {};
+    list2 = list.filter(function (x) { return pr[x.troop] > 1; });
+    if (!list2.length) return bnPickEnemy(S, a, 'one', vsKind, opt);
+    list = list2;
+  }
+  if (mode === 'hpmax' || mode === 'spd') {
+    t = null; tv = 0;
+    for (i = 0; i < list.length; i++) {
+      v = mode === 'hpmax' ? list[i].hp : bnSpd(S, list[i]);
+      if (!t || v > tv || (v === tv && bnBetter(S, a, list[i], t))) { t = list[i]; tv = v; }
+    }
+    return t;
+  }
   if (mode === 'lowest') {
     t = null;
     for (i = 0; i < list.length; i++) { if (!t || bnHpPct(list[i]) < bnHpPct(t) || (bnHpPct(list[i]) === bnHpPct(t) && bnBetter(S, a, list[i], t))) t = list[i]; }
@@ -230,6 +324,8 @@ function bnStatusApply(S, src, t, id, data, o) {
     if ((cat === 'debuff' || cat === 'dot') && data.val !== undefined && !data.noRes && !vsForce) data.val *= (1 - t.base.res);
   }
   if (data.left !== undefined && !data.act && t.acted && !o.noExtend && data.left < 900) data.left += 1;   // 本回合已行動者:持續回合 +1,確保真的涵蓋其 N 次行動
+  // 兵種卡 ccTaken:受控制類狀態時,機率(百分數)多 1 回合(只有持有者才抽亂數)
+  if (BN_NEG[id] === 'control' && data.left !== undefined && bnLgVal(S, t, 'ccTaken') > 0 && S.rng() < bnLgVal(S, t, 'ccTaken')) data.left += 1;
   old = t.st[id];
   if (old && !data.force) {
     // 同類不疊加:取強者、刷新持續
@@ -277,7 +373,7 @@ function bnHeal(S, src, t, nominal, o) {
   S.stats.healEvents[t.side]++;
   if (ratio > 0) S.stats.healBlockedEvents[t.side]++;
   fat = bnFatigue(S) * BN_DATA.fatigue.heal;
-  nom0 = nominal * (1 + (t.mods.healTaken || 0) + (src && src.mods.healOut || 0)) * (1 - fat);
+  nom0 = nominal * (1 + (t.mods.healTaken || 0) + (src && src.mods.healOut || 0) + bnLgVal(S, t, 'healIn')) * (1 - fat);
   amt = nom0 * (1 - ratio);
   if (t.st.poison) amt *= BN_DATA.poisonHeal;
   cap = t.maxHp * (xl ? BN_DATA.healCap.xl : BN_DATA.healCap.single);
@@ -299,8 +395,17 @@ function bnHeal(S, src, t, nominal, o) {
 
 // ───────── 傷害(§3.4) ─────────
 // h: {ty:'phys'|'strat', mul, kind, sk, basic, pierce, ignoreDef, dot, counter, forceCrit, noGuard, rx(已選反應)}
+// 白毦兵 lordGuard:主公被單體攻擊時,找出同隊可替主公承受的人(存活、可行動、持 lordGuard);無則 null(不抽亂數)
+function bnLgGuardOf(S, t) {
+  var list = S.teams[t.side].units, i, x;
+  if (!t.alive || !bnLgLord(t.fig)) return null;
+  for (i = 0; i < list.length; i++) { x = list[i]; if (x !== t && x.alive && !bnCantAct(x) && bnLgVal(S, x, 'lordGuard') > 0) return x; }
+  return null;
+}
 function bnHit(S, a, t, h) {
-  var ty = h.ty, base, defv, prey = 1, outM = 1, tk, r1, r2, crit = false, dmg, absorbed = 0, hpLost = 0, shield, viaId, gdmg, sk = h.sk, mo = a ? a.mods : {}, tm = t.mods, derived = S.chain && S.chain.dv > 0, rk, i, cdm;
+  var lgGd = (!h.dot && !h.counter && !(h.sk && /_all$|_row$/.test(h.sk.kind || ''))) ? bnLgGuardOf(S, t) : null;
+  if (lgGd && S.rng() < 0.3) t = lgGd;   // 30%:由本人替主公承受
+  var ty = h.ty, base, defv, prey = 1, outM = 1, tk, r1, r2, crit = false, dmg, absorbed = 0, hpLost = 0, shield, viaId, gdmg, sk = h.sk, mo = a ? a.mods : {}, tm = t.mods, derived = S.chain && S.chain.dv > 0, rk, i, cdm, dl, lgv;
   if (!t.alive) return null;
   // 援護:先算對原目標的傷害,再依比例分給援護者
   var guard = t.st.guard, guardian = null;
@@ -325,7 +430,8 @@ function bnHit(S, a, t, h) {
     return { dmg: 0, evaded: true, t: t };
   }
   // 機率閃避(dodge_rate,2026-11-09):被攻擊(非持續傷害、非反擊)時以機率 val 閃開;只有持有此狀態才抽亂數;沉睡中不能閃;無視規避(ignoreEvade)可破
-  if (t.st.dodge_rate && !h.dot && !h.counter && !t.st.sleep && !(h.rx && h.rx.ignoreEvade) && S.rng() < t.st.dodge_rate.val) {
+  dl = bnLgVal(S, t, 'dodgeAdd');   // 兵種卡閃避加成(無兵種卡 = 0,不改變抽亂數順序)
+  if ((t.st.dodge_rate || dl > 0) && !h.dot && !h.counter && !t.st.sleep && !(h.rx && h.rx.ignoreEvade) && S.rng() < (t.st.dodge_rate ? t.st.dodge_rate.val : 0) + dl) {
     bnEv(S, 'evade', { src: a ? a.id : -1, tgt: t.id, dr: 1 });
     S.stats.evaded++; S.stats.dodged = (S.stats.dodged || 0) + 1;
     return { dmg: 0, evaded: true, t: t };
@@ -335,6 +441,7 @@ function bnHit(S, a, t, h) {
     if (h.dot === 'burn') dmg *= (tm.burnTaken || 1) * ((tm.weakness && tm.weakness.burn) || 1);
     tk = 1 + bnTakenPct(S, a, t, h);
     dmg = Math.max(1, Math.round(dmg * tk));
+    if (h.cap !== undefined) dmg = Math.min(dmg, h.cap);   // 持續傷害上限(S0:荊棘每擊 8% / 延遲爆發 burst cap)
   } else {
     r1 = S.rng(); r2 = S.rng();   // 固定順序:先暴擊、再浮動
     if (ty === 'strat') base = bnMag(S, a) * (mo.magMul || 1); else base = bnAtk(S, a);
@@ -349,10 +456,14 @@ function bnHit(S, a, t, h) {
     if (mo.vsFig && t.fig && mo.vsFig[t.fig]) outM *= 1 + mo.vsFig[t.fig];
     if (mo.vsTroop && mo.vsTroop[t.troop]) outM *= 1 + mo.vsTroop[t.troop];
     if (ty === 'strat' && mo.stratPct) outM *= 1 + mo.stratPct;
+    if (ty === 'strat') { lgv = bnLgVal(S, a, 'stratPct'); if (lgv) outM *= 1 + lgv; }   // 兵種卡(謀略傷害)
+    if (h.basic) { lgv = bnLgVal(S, a, 'basicPct'); if (lgv) outM *= 1 + lgv; }
+    lgv = bnLgVal(S, a, 'vsTroop', t) + bnLgVal(S, a, 'vsLowHp', t) + bnLgVal(S, a, 'vsLord', t) + bnLgVal(S, a, 'vsControlled', t);
+    if (lgv) outM *= 1 + lgv;
     if (h.basic && mo.atkMelee && BN_DATA.troops[a.troop].R <= 2) outM *= 1 + mo.atkMelee;
     if (a.st.amp && h.sk) { for (i = 0; i < a.st.amp.list.length; i++) { cdm = a.st.amp.list[i]; if (cdm.exp && S.round > cdm.exp) continue; if ((cdm.skill && cdm.skill === h.sk.id) || (cdm.tag && h.sk.tags && h.sk.tags.indexOf(cdm.tag) >= 0)) outM *= cdm.mult; } }
     if (S.chain && S.chain.hits > 0 && S.chain.hits < 99 && S.chain.dv > 0) outM *= 1 + Math.min(BN_DATA.chain.comboHitCap, S.chain.hits * BN_DATA.chain.comboHitBonus);
-    if (a.troop === '騎' && h.basic && !a.chargeUsed) { outM *= BN_DATA.cavCharge; a.chargeUsed = true; }
+    if (a.troop === '騎' && h.basic && !a.chargeUsed) { outM *= bnLgSet(S, a, 'chargeMul') || BN_DATA.cavCharge; a.chargeUsed = true; }
     if (h.rx && h.rx.dmgMult) outM *= h.rx.dmgMult;
     var vx = typeof bnVsHit === 'function' ? bnVsHit(S, a, t, h) : null;   // 對象條件(vs)與五行
     if (vx) outM *= vx.out;
@@ -360,8 +471,8 @@ function bnHit(S, a, t, h) {
     if (h.sk && h.sk.tags && h.sk.tags.indexOf('fire') >= 0 && tm.burnTaken) tk *= tm.burnTaken;
     if (t.mods.weakness && h.sk && h.sk.tags && h.sk.tags.indexOf('fire') >= 0 && t.mods.weakness.burn) tk *= t.mods.weakness.burn;
     dmg = base * h.mul * 100 / (100 + defv) * prey * outM * tk * BN_DATA.K;
-    crit = h.forceCrit || r1 < bnCrit(S, a) + (vx ? vx.crit : 0);
-    if (crit) dmg *= BN_DATA.critMul * (1 + (tm.critTaken || 0));
+    crit = h.forceCrit || r1 < bnCrit(S, a) + (vx ? vx.crit : 0) + (h.critAdd || 0);
+    if (crit) dmg *= BN_DATA.critMul * (1 + (tm.critTaken || 0)) * (1 + (h.critDmg || 0) + (a && a.st.critdmg_up ? a.st.critdmg_up.val : 0));
     dmg *= 0.95 + BN_DATA.jitter * r2;
     if (ty === 'phys' && t.troop === '盾' && !h.ignoreBlock) dmg -= Math.floor(BN_DATA.blockPct * bnDef(S, t));
     if (h.basic && t.troop === '弓' && bnRank(S, t) > 1 && BN_DATA.troops[a.troop].R <= 2) dmg *= BN_DATA.archerBackTaken;
@@ -396,10 +507,16 @@ function bnTakenPct(S, a, t, h) {
   if (tm.takenStrat && h && h.ty === 'strat' && !h.dot) x += tm.takenStrat;
   if (tm.lowHpTaken && t.hp / t.maxHp < tm.lowHpTaken[0]) x += tm.lowHpTaken[1];
   if (t.st.taunt_cut) x -= t.st.taunt_cut.val;
+  // 兵種卡(受傷):物理 / 謀略 / 燃燒 / 對兵種 / 百分比(主公受傷在組裝端已寫成 takenPct)
+  if (h && h.ty === 'phys' && !h.dot) x += bnLgVal(S, t, 'takenPhys');
+  if (h && h.ty === 'strat' && !h.dot) x += bnLgVal(S, t, 'takenStrat');
+  if (h && h.dot === 'burn') x += bnLgVal(S, t, 'burnTaken');
+  if (a) x += bnLgVal(S, t, 'takenVsTroop', a);
+  x += bnLgVal(S, t, 'takenPct');
   // 宿衛:同排有前排宿衛者
   list = S.teams[t.side].units;
   for (i = 0; i < list.length; i++) { o = list[i]; if (o.alive && o !== t && o.mods.rowTakenFront && o.row === t.row && bnRank(S, o) === 1) x += o.mods.rowTakenFront; }
-  x += bnFatigue(S) * BN_DATA.fatigue.dmg;
+  x += bnFatigue(S) * BN_DATA.fatigue.dmg * bnLgMul(S, t, 'fatigueMul');
   return Math.max(-0.7, x);
 }
 // 真正扣血(含護盾、不倒、擊殺)
@@ -451,6 +568,10 @@ function bnApplyDmg(S, a, t, dmg, h, crit, viaOf) {
   if (a && a.alive && a.st.lifesteal && hpLost > 0 && !h.dot) {
     bnHeal(S, a, a, hpLost * a.st.lifesteal.val * (h.rx && h.rx.lifestealMult ? h.rx.lifestealMult : 1), {});
   }
+  // 荊棘 / 反傷(S0):受到的非持續、非反擊、非荊棘傷害 → 攻擊者受 hpLost × val(每擊上限 8% 攻擊者最大兵力),走 dot,不暴擊、不觸發反應 / 反擊 / 吸血 / 荊棘
+  if (t.st.thorns && a && a.alive && a !== t && hpLost > 0 && !h.dot && !h.counter && a.side !== t.side && (t.st.thorns.ty !== 'phys' || h.ty === 'phys')) {
+    bnHit(S, t, a, { ty: 'dot', dot: 'thorns', fixed: hpLost * t.st.thorns.val, cap: a.maxHp * 0.08, mul: 1, noGuard: true });
+  }
   return { dmg: hpLost, absorbed: absorbed, crit: crit, killed: killed, t: t };
 }
 // 擊倒處理
@@ -498,15 +619,17 @@ function bnMakeUnit(S, side, spec, idx) {
     maxHp: Math.round(st.hp), hp: Math.round(st.hp), alive: true, el: spec.el || '',
     base: { atk: st.atk, mag: st.mag, def: st.def, sres: st.sres, spd: st.spd, heal: st.heal, sh: st.sh, crit: st.crit, res: st.res },
     mods: JSON.parse(JSON.stringify(spec.mods || {})), st: {}, sc: {}, acted: false, immunes: [], immuneFirstUsed: {},
-    healCnt: 0, healRound: 0, dmgRound: 0, hpAtRoundStart: 0, act: [], pas: [], ult: null, killStack: 0,
+    kit2: !!spec.kit2, healCnt: 0, healRound: 0, dmgRound: 0, hpAtRoundStart: 0, act: [], pas: [], ult: null, killStack: 0,
     counterHit: {}, targetedRound: false, vsRules: null, vsSpd: false
   };
-  var ids = (spec.skills || []).slice(), i, d, inst;
+  var ids = (spec.skills || []).slice(), i, d, inst, ki;
   if (spec.ult) ids.push(spec.ult);
   for (i = 0; i < ids.length; i++) {
     d = BN_SKILLS[ids[i]];
     if (!d) { S.warn.push('未知戰法 ' + ids[i]); continue; }
     inst = { def: d, cd: 0, prepLeft: 0, fires: 0, recastRound: -1, recastN: 0, owner: u };
+    ki = spec.kitInst && spec.kitInst[d.id];   // 戰法欄位新制 B2:選擇槽內名人專屬戰法的『他人效果』(otherMul / tgtCut / ratePP)與『本命』(homeRate);無此欄 = 原樣
+    if (ki) { if (ki.mul !== undefined) inst.otherMul = ki.mul; if (ki.tgtCut) inst.tgtCut = ki.tgtCut; if (ki.ratePP) inst.ratePP = ki.ratePP; if (ki.home) inst.homeRate = ki.home; }
     if (BN_DATA.cd0AllL && d.kind === 'atk_all' && d.cat === 'active' && bnPow(d.power) >= 2) inst.cd = 1;
     if (d.cat === 'ult') { u.ult = inst; u.act.push(inst); }   // 大招也是一般機率戰法(放在主動戰法之後擲骰)
     else if (d.cat === 'passive' || d.cat === 'command') u.pas.push(inst);
@@ -568,6 +691,7 @@ function bnNext(S, side) {
     if (!u.alive || u.acted) continue;
     if (!best) { best = u; continue; }
     if (!!u.reorder !== !!best.reorder) { if (u.reorder) best = u; continue; }
+    if (!!u.st.lag !== !!best.st.lag) { if (!u.st.lag) best = u; continue; }   // 遲滯(S0):有 lag 者排最後
     su = bnSpd(S, u); sb = bnSpd(S, best);
     if (su !== sb) { if (su > sb) best = u; continue; }
     ru = bnRank(S, u); rb = bnRank(S, best);
@@ -602,8 +726,15 @@ function bnStartRound(S) {
     if (x.suspect && bnAllies(S, x, false).some(function (y) { return y.fig === x.suspect.fig; }) && S.rng() < x.suspect.p) bnStatusApply(S, null, x, 'mark', { val: 0.2, left: 1, noRes: true }, { noExtend: true });
   });
   bnFire(S, 'turn_start', {});
+  S.units.forEach(function (x) { if (x.alive && x.st.fuse && x.st.fuse.at === S.round) bnFuseFire(S, x); });   // 延遲爆發(S0):依單位 id 順序結算
   bnBondEvent(S, 'round_start', {});
   S.needStart = false;
+}
+// 延遲爆發結算(S0):引信到期;持續傷害路徑(不閃避、不暴擊、不觸發反應)、套 burst cap(kinds.burst_cap 依檔位 × 最大兵力)
+function bnFuseFire(S, t) {
+  var fz = t.st.fuse, src = S.units[fz.src] || null, cap = t.maxHp * BN_DATA.kinds.burst_cap[bnPow(fz.pw)];
+  bnStatusRemove(S, t, 'fuse', 'burst');
+  bnHit(S, src, t, { ty: 'dot', dot: 'fuse', fixed: fz.val, mul: 1, noGuard: true, cap: cap });
 }
 function bnEndRound(S) {
   var i, u, k, st, ids;
@@ -739,7 +870,7 @@ function bnAct(S, u, o) {
   if (!u.st.timid && !S.over && u.alive) {
     var nrm = bnNormal(S, u);
     if (nrm === 'idle') bnEv(S, 'idle', { u: u.id });
-    else if (nrm && !S.over && u.alive) casts += bnTryPursuit(S, u, nrm);
+    else if (nrm && !S.over && u.alive) { bnLgExtra(S, u); casts += bnTryPursuit(S, u, nrm); }
   }
   S.stats.castsPerAct.push(casts);
   bnActEnd(S, u);
@@ -820,15 +951,26 @@ function bnNormal(S, u) {
   return t;
 }
 
-// 發動率
+// 發動率。護欄(BN_RATE_CAP,B2)只套在 kit2 單位(名人或有選擇槽裝備者;spec.kit2):永久來源(mods.rateBonus + 本命 homeRate)合計夾 permCap;
+// 永久 + rate_up 合計夾 totalCap;rate_up 對大招只算 ultRateUpMul。無 kit2 的路人 / generic 走舊公式(逐位不變)。主動 / 大招上限不變。
 function bnRateOf(S, u, inst) {
-  var d = inst.def, r = d.rate, cat = d.cat === 'pursuit' ? 'pursuit' : (d.cat === 'ult' ? 'ult' : 'active');
+  var d = inst.def, r = d.rate, cat = d.cat === 'pursuit' ? 'pursuit' : (d.cat === 'ult' ? 'ult' : 'active'), RC = BN_RATE_CAP, perm, up;
   if (r === undefined) r = cat === 'ult' ? BN_DATA.rate.ult : BN_DATA.rate[cat][d.power || 'M'];
   if (d.prep) r += BN_DATA.rate.prepBonus;
   if (u.troop === '謀' && cat === 'active') r += BN_DATA.mageRateBonus;
-  r += (u.mods.rateBonus || 0) + (inst.vsRate || 0);
+  perm = (u.mods.rateBonus || 0) + (inst.homeRate || 0);
+  if (u.kit2) perm = Math.min(RC.permCap, perm);
+  r += perm + (inst.vsRate || 0);
+  if (inst.ratePP) r += inst.ratePP;   // 他人效果的發動率增減(BN_SKILL_OTHER.ratePP,不計入永久護欄)
   if (cat === 'active' && /^heal_[sah]/.test(d.kind)) r += BN_DATA.rate.healBoost || 0;
-  if (u.st.rate_up) r += u.st.rate_up.val;
+  if (u.st.rate_up) {
+    up = u.st.rate_up.val;
+    if (u.kit2) {
+      if (cat === 'ult') up *= RC.ultRateUpMul;
+      if (perm + up > RC.totalCap) up = RC.totalCap - perm;
+    }
+    r += up;
+  }
   if (u.st.rate_down) r -= u.st.rate_down.val;
   if (cat === 'ult') return bnClamp(r * (1 + (u.mods.ultPlus || 0)), 0, BN_DATA.rate.ultCap);
   return bnClamp(r, 0, BN_DATA.rate.cap);

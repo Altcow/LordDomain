@@ -3,7 +3,7 @@
 // 驗證:node tools/test_cards.js(含名人表 lint)。不寫 DOM、不讀時間。ES2017;不用 ?. ??。
 // 【占位,待手填】名人的職業欄位(CARD_FIGS 無 ja/main)目前由五維自動推導(cards.js cardFigJobs);之後可逐位寫入 CARD_FIG_JOB_OVERRIDE 覆寫,不必改 CARD_FIGS。
 // 全域名稱:CARD_GRADE CARD_STATS CARD_LEARN CARD_FAC CARD_ROWS CARD_JOB_TIERPCT CARD_JOBS CARD_JOB_BY_ID CARD_JOB_PORTRAIT CARD_POST_GROUP CARD_VENUE_ORDER CARD_VENUES
-//          CARD_EXAM_SUBJECTS CARD_COST CARD_DRAW CARD_STARTER CARD_CFG CARD_BAG CARD_FURNACE CARD_FIG_WEIGHT CARD_UPGRADE CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_SKILLS CARD_SKILL_BY_ID CARD_SKILL_BY_ROW CARD_FIGS CARD_FIG_BY_ID CARD_FIG_JOB_OVERRIDE CARD_VISIT
+//          CARD_EXAM_SUBJECTS CARD_COST CARD_DRAW CARD_STARTER CARD_CFG CARD_BAG CARD_FURNACE CARD_FIG_WEIGHT CARD_NAME_SUR CARD_NAME_GIV CARD_TRAITS CARD_TRAIT_BY_ID CARD_SKILLS CARD_SKILL_BY_ID CARD_SKILL_BY_ROW CARD_FIGS CARD_FIG_BY_ID CARD_FIG_JOB_OVERRIDE CARD_VISIT
 
 // 品階(§3A.1):lo/hi 生成參數;stCap 單項基礎上限;tai 才帶;jobSlots 職業詞條槽;jobMax 職業最高階;learn 學養型分布(通才/偏才/專才/宗師 %);trN 一般詞條數;skn 技能數(第一階段只記數量)
 var CARD_GRADE = [
@@ -38,8 +38,8 @@ var CARD_JOBS = [
   { id: 'jisuan',   row: '商', name: '計算', t: ['算童', '書算', '計吏', '度支'],     eff: '稅收損耗 −', post: '戶曹', tag: '官僚', stage: '錢莊' },
   { id: 'zhouche',  row: '商', name: '舟車', t: ['腳夫', '車把式', '漕長', '轉運'],   eff: '道路暢通、碼頭與驛站商、商隊收益', post: '驛傳', tag: '水軍', stage: '碼頭或驛站 + 石板路' },
   { id: 'ciling',   row: '商', name: '辭令', t: ['跑腿', '說客', '行人', '鴻臚'],     eff: '外交關係變化、掌櫃招募', post: '驛傳(輔)、掌櫃、中正(輔)', tag: '士人', stage: '驛站' },
-  { id: 'wenshu',   row: '文', name: '文書', t: ['書童', '書佐', '主簿', '尚書'],     eff: '學識、政令維持費 −', post: '學官', tag: '士人', stage: '精舍或學院 ≥ 3 級' },
-  { id: 'jiaohua',  row: '文', name: '教化', t: ['塾師', '經師', '博士', '祭酒'],     eff: '教化、學院進修花費 −', post: '學官、學院教習、中正', tag: '士人', stage: '學院 ≥ 4 級' },
+  { id: 'wenshu',   row: '文', name: '文書', t: ['書童', '書佐', '主簿', '尚書'],     eff: '學識、政令維持費 −', post: '學官', tag: '士人', stage: '精舍 ≥ 3 級' },
+  { id: 'jiaohua',  row: '文', name: '教化', t: ['塾師', '經師', '博士', '祭酒'],     eff: '教化相關花費 −', post: '學官、中正', tag: '士人', stage: '—' },
   { id: 'yuewu',    row: '文', name: '樂舞', t: ['樂童', '樂工', '樂師', '協律'],     eff: '樂類建築的民心與文', post: '樂府', tag: '士人', stage: '戲台' },
   { id: 'tianwen',  row: '文', name: '天文', t: ['卜者', '日者', '靈台郎', '太史'],   eff: '天災機率 −、預警 +', post: '靈台', tag: '方士', stage: '祠廟或觀' },
   { id: 'lvfa',     row: '文', name: '律法', t: ['亭卒', '游徼', '賊曹', '廷尉'],     eff: '治安', post: '賊曹', tag: '官僚', stage: '縣衙' },
@@ -113,7 +113,7 @@ var CARD_COST = { zongBonus: 4 };
 //   階梯節點選在簡化科技樹(citysimple.js,預設開)裡仍各自獨立的文教節點:書肆(第 2 時代)→ 東觀校書(第 3)→ 鴻都門學(第 4);
 //   (舉孝廉在簡化樹併入了開酒館 / 考場的節點、月旦評 / 察舉考課 / 太學都併入鴻都門學,所以不用)。完整科技樹同樣有這三個節點。
 //   2026-11-09 改『抽卡次數制』(使用者決議):不再分批。全域一個次數錢包 cs.pl.n(酒館池 T、縣試池 E 共用),每 gap 小時 +size.n 抽(離線依時間補算),累積上限 cap(100;新手禮與關卡贈抽不受上限截斷);
-//   每抽 1 次出 1 張,單抽或連抽(一次最多 maxOne 張走同一段開卡特效)。pity = 連續幾『張』沒出上等,下一張必出(原 5 批 × 4 張 ≈ 20 張);floorMin = 連抽張數 ≥ 此值才套用『批內底線 / 學院生徒』。stock 只留給舊存檔遷移(舊批數 × 當階張數 → 次數)
+//   每抽 1 次出 1 張,單抽或連抽(一次最多 maxOne 張走同一段開卡特效)。pity = 連續幾『張』沒出上等,下一張必出(原 5 批 × 4 張 ≈ 20 張);floorMin = 連抽張數 ≥ 此值才套用『批內底線』。stock 只留給舊存檔遷移(舊批數 × 當階張數 → 次數)
 var CARD_DRAW = {
   stock: 2, cap: 100, maxOne: 10, floorMin: 7,
   size: [{ n: 4 }, { n: 5, tech: 'wr_shusi' }, { n: 6, tech: 'e_wuzhu' }, { n: 7, tech: 'ed_hongdu' }],
@@ -133,54 +133,13 @@ var CARD_STARTER = {
   nbCards: 100, nbGr: { T: [52, 30, 10, 6, 2], E: [26, 38, 26, 8, 2] }, nbPurple: 8, nbGold: 30
 };
 var CARD_CFG = {
-  capBase: 14,             // 名額基數:缺官階模組(lordhallui)時的退路(§7A.1 Lv10 = 14);可由 cardsCapBonus() 追加
-  capRank0: 10, capPerRank: 2, capMax: 40,   // 無等級版名額 = 10 + 官階等級 × 2,上限 40(官階等級 = lordhallui 官階表序號 1~);官階降低不踢人,只是新抽到的卡先放卡包
+  cap: 300,                // 名冊固定格數(2026-11-10 決議,不隨官階);滿了停止抽卡,先熔鍊或遣散。卡包 / 溢出區已移除
   waitSeats: 5,            // 待定席(卡包上線後任用不再進待定席;只保留舊存檔既有的待定席人物)
   tokMax: 5,               // 名人信物上限
   paceMin: 10,             // 時鐘回撥容忍(分鐘)
   fameAfter: 20, fameStep: 0.2, goldMax: 8,   // 殿試名人緣(百分點);goldMax = 金階機率上限(基礎 6 + 最多再加 2,原 2 + 2 = 4 同幅度)
   pityBatches: 9,          // 連續 9 批無上等 → 第 10 批保底
   upMax: 2, privStCap: 92  // 升階次數、路人基礎單項上限
-};
-// 升階條件(§3A.5;PLACEHOLDER)。ctx 欄位:academy 院級、lv 人物等級、cityLv 城級、xue 學識、coin 金幣、lessons 課數、flag 事件旗標
-var CARD_UPGRADE = [
-  { from: 0, to: 1, route: '學院進修', academy: 3, lv: 5,  jobMin: 1, xue: 120,  coin: 1500,  lessons: 2 },
-  { from: 1, to: 2, route: '學院進修', academy: 4, lv: 10, jobMin: 2, xue: 300,  coin: 5000,  lessons: 3 },
-  { from: 2, to: 3, route: '縣試品評', academy: 4, lv: 0,  jobMin: 3, xue: 500,  coin: 12000, lessons: 0, cityLv: 15, flag: 'pinping' },
-  { from: 3, to: 4, route: '立傳',     academy: 0, lv: 20, jobMin: 4, xue: 1500, coin: 30000, lessons: 0, flag: 'lizhuan' }
-];
-// 學院(§7B;數值皆 PLACEHOLDER,集中於此)。院級 = 學舍 / 學宮 / 精舍建築數 + 科技(academyLevel);進修花費以『碎片』與金幣為主
-// (碎片 = 卡片熔爐所得,同一碎片池 cs.shards;碎片不再自動轉酒令,付費直接扣 cs.shards)
-var CARD_ACADEMY = {
-  // 旬報計課(PLAN_CARDS §7B.3、PLAN_CITY §16.2):1 課 = 1 次旬報。旬報觸發:施政動作累計 acts 次(放置 / 拆除 / 研發,5 秒內連續刷算 1 次)、本機換日後第一次開啟、名冊「結束本旬」鈕;每本機日最多 dayMax 次
-  xun: { acts: 12, dayMax: 6 },
-  rushRate: 0.5,       // 速成:剩餘課數立即結業,額外花 原碎片 × 此值
-  quitRefund: 0.5,     // 退學:退還已付碎片 / 金幣的比例
-  seats: [0, 2, 3, 4, 5, 6],   // 進修席(依院級 0~5)
-  teachers: [0, 0, 1, 1, 2, 2],   // 教習席(依院級 0~5;PLAN §7B.2,PLACEHOLDER)
-  teachPerTier: 0.05,             // 教習:進修花費 −(教習教化階 × 此值)(PLAN §7B.3,PLACEHOLDER)
-  teachLessonTier: 3, teachLessonCut: 1,   // 教習與學生同職業且教習 ≥ 此階 → 課數 −cut(最少 1)
-  // 院級條件:tech 科技、school 學舍 + 學宮數、jing 精舍數、gong 學宮數(逐級累積判定,取連續達成的最高級)
-  levels: [null,
-    { name: '庠舍', tech: 'ed_xuexiao', school: 1, jing: 0, gong: 0 },
-    { name: '縣學', tech: 'ed_xuexiao', school: 2, jing: 0, gong: 0 },
-    { name: '書院', tech: 'wr_jingshe', school: 2, jing: 1, gong: 0 },
-    { name: '郡學', tech: 'e_dongguan', school: 3, jing: 1, gong: 0 },
-    { name: '太學', tech: 'ed_taixue',  school: 3, jing: 1, gong: 1 }],
-  learn: { academy: 1, shards: 10, coin: 300, lessons: 1 },   // 習藝:新增一個職業 I 階(需空槽)
-  swap: { academy: 3, shards: 15, coin: 400, lessons: 1 },    // 轉職:一條 I 階職業換成別職業 I 階(PLAN §7B.3 / §4.13;碎片 PLACEHOLDER)
-  // 名師講學(院 5,PLACEHOLDER):教習有宗師(IV 階)職業 → 每本機日 daily 次,同職業的在學者各少 cut 課;花費碎片 / 金幣
-  lecture: { academy: 5, tier: 4, shards: 30, coin: 3000, daily: 1, cut: 1 },
-  // 生徒(PLAN §7B.3,院 2 起):每批縣試的最後一位換成本院生徒(非名人、至少青;院 blueLv 起 blueP 機率至少藍);
-  // 有教習時 biasP 機率帶教習的主職業 I 階;教習為宗師時必帶該宗師職業 I~II 階(PLACEHOLDER)
-  pupil: { academy: 2, minGr: 1, blueLv: 4, blueP: 0.3, biasP: 0.4 },
-  adv: [null,                                                    // 精進:依『目前階』1/2/3 → +1 階;gr = 最低品階,tenure = 派駐年資(天)
-    { academy: 2, gr: 1, shards: 20,  coin: 600,  lessons: 2, tenure: 0 },
-    { academy: 3, gr: 2, shards: 60,  coin: 2000, lessons: 3, tenure: 0 },
-    { academy: 5, gr: 3, shards: 150, coin: 8000, lessons: 4, tenure: 8 }],
-  up: [                                                          // 升階:依目前品階 0(白→青)/ 1(青→藍);院級與職業階條件沿用 CARD_UPGRADE
-    { shards: 40,  coin: 1500, lessons: 2 },
-    { shards: 100, coin: 5000, lessons: 3 }]
 };
 
 // 路人姓名(占位字表,非史實人物)
@@ -387,7 +346,14 @@ var CARD_FIGS = [
   {id:"panfeng",name:"潘鳳",zi:"",fac:4,home:"不詳",st:[60,75,30,30,70],tai:265,tr:[["無雙上將",1,"(演義)"],["輕敵",0]],bio:"演義韓馥部將,號無雙上將,為華雄所斬",fb:"演義",gr:3,birth:"?–191"},
   {id:"caoxing",name:"曹性",zi:"",fac:4,home:"不詳",st:[62,82,48,30,52],tai:274,tr:[["暗箭",1],["神射",0]],bio:"呂布部將;演義射瞎夏侯惇左目",fb:"史(呂布部將)+演義",gr:3,birth:"?–?"},
   {id:"huaxiong",name:"華雄",zi:"",fac:4,home:"關西",st:[78,90,40,30,60],tai:298,tr:[["連勝",1],["膂力",0],["輕敵",0]],bio:"董卓都督,陽人之戰為孫堅所斬(演義為關羽溫酒所斬)",fb:"史(董卓部)",gr:4,birth:"?–191"},
-  {id:"yuanshu",name:"袁術",zi:"公路",fac:4,home:"汝南汝陽",st:[72,60,68,62,85],tai:347,tr:[["僭號仲家",1],["名望",0],["傲上",0]],bio:"袁紹從弟;得傳國璽,僭號稱帝於壽春",fb:"史",gr:4,birth:"?–199"}
+  {id:"yuanshu",name:"袁術",zi:"公路",fac:4,home:"汝南汝陽",st:[72,60,68,62,85],tai:347,tr:[["僭號仲家",1],["名望",0],["傲上",0]],bio:"袁紹從弟;得傳國璽,僭號稱帝於壽春",fb:"史",gr:4,birth:"?–199"},
+  {id:"taoqian",name:"陶謙",zi:"恭祖",fac:4,home:"丹楊",st:[58,42,55,72,70],tai:297,tr:[["仁厚",1,"(史)"],["讓州",0],["老成",0]],bio:"徐州牧,黃巾後治州無方,曹操東征屠戮徐州;晚年三讓徐州於劉備",fb:"史",gr:3,birth:"132–194"},
+  {id:"wangping",name:"王平",zi:"子均",fac:1,home:"巴西宕渠",st:[82,76,62,55,58],tai:333,tr:[["街亭殿後",1,"(史)"],["疑兵",0],["謹慎",0]],bio:"原為曹魏部將後降蜀;街亭之戰收拾散卒、鳴鼓疑敵,魏將不敢進逼",fb:"史",gr:3,birth:"?–249"},
+  {id:"gaoshun",name:"高順",zi:"",fac:4,home:"五原(推想)",st:[78,82,55,40,45],tai:300,tr:[["陷陣",1,"(史)"],["嚴整",0],["寡言",0]],bio:"呂布部將,統陷陣營,軍紀嚴整、寡言有威;呂布敗後為曹操所殺",fb:"史",gr:4,birth:"?–198"},
+  {id:"caochun",name:"曹純",zi:"子和",fac:0,home:"沛國譙",st:[80,76,62,55,62],tai:335,tr:[["虎豹督",1,"(史)"],["驍勇",0],["宗室",0]],bio:"曹氏宗族子弟,督虎豹騎,皆天下驍銳;長坂之役曾率騎追擊劉備",fb:"史",gr:3,birth:"?–?"},
+  {id:"chendao",name:"陳到",zi:"叔至",fac:1,home:"汝南(推想)",st:[78,80,45,40,60],tai:303,tr:[["白毦",1,"(史)"],["忠義",0],["寡言",0]],bio:"先主帳下白毦兵之督,忠誠警覺;諸葛亮書中稱其所督為先帝帳下白毦",fb:"史",gr:3,birth:"?–?"},
+  {id:"quyi",name:"麴義",zi:"",fac:4,home:"涼州(推想)",st:[80,84,52,30,40],tai:286,tr:[["先登",1,"(史)"],["破騎",0],["桀驁",0]],bio:"涼州豪強,習羌戰;界橋之戰以伏楯先登大破白馬義從,後為袁紹所殺",fb:"史",gr:3,birth:"?–191"},
+  {id:"liuzhang",name:"劉璋",zi:"季玉",fac:4,home:"江夏竟陵",st:[50,40,55,60,60],tai:265,tr:[["東州",1,"(史)"],["闇弱",0],["守成",0]],bio:"劉焉之子,繼為益州牧;性闇弱守成,後為劉備所取",fb:"史",gr:3,birth:"?–219"},
 ];
 // 名人職業覆寫表(之後逐位手填;cards.js 的 cardFigJobs 優先讀此表,查無才由五維推導):{ 名人id: { ja: { 職業id: 階(1~4) }, main: '主職業id' } }。目前為空。
 var CARD_FIG_JOB_OVERRIDE = {};
@@ -407,7 +373,9 @@ var CARD_FIG_WEIGHT = {
   boca: 10, zhangyan: 10, liupi: 6, yudu: 6, yuji: 10, xurong: 6, youtu: 6, yufuluo: 6,
   // 戰鬥改版新增 30 位(貂蟬、孫尚香、甄姬較有名 = 3)
   zhenji: 3, caiyan: 6, caozhi: 6, pangde: 6, zhanghe: 10, huangyueying: 10, sunshangxiang: 3, lingtong: 10, nanhua: 10, diaochan: 3, zuoci: 10,
-  yangxiu: 6, ganfuren: 6, mifuren: 6, masu: 6, zhoucang: 6, yanyan: 6, daqiao: 6, xiaoqiao: 6, dingfeng: 6, kanze: 6, chengyuanzhi: 6, dengmao: 6, peiyuanshao: 6, heyi: 6, zhangkai: 6, panfeng: 6, caoxing: 6, huaxiong: 10, yuanshu: 10
+  yangxiu: 6, ganfuren: 6, mifuren: 6, masu: 6, zhoucang: 6, yanyan: 6, daqiao: 6, xiaoqiao: 6, dingfeng: 6, kanze: 6, chengyuanzhi: 6, dengmao: 6, peiyuanshao: 6, heyi: 6, zhangkai: 6, panfeng: 6, caoxing: 6, huaxiong: 10, yuanshu: 10,
+  // 2026-11-10 新名人 7 位(卡池權重:金 10 / 紫 6)
+  taoqian: 6, wangping: 6, gaoshun: 10, caochun: 6, chendao: 6, quyi: 6, liuzhang: 6
 };
 // 在野名人路過(js/npcvisit.js;使用者決議,數值皆 PLACEHOLDER)。名人來源 CARD_FIGS(金 / 紫階),依上面 CARD_FIG_WEIGHT 加權(缺項 金 10 / 紫 6),已在名冊 / 卡包的不來。
 //   countW = 每日 0 / 1 / 2 位的權重;startMin~endMin = 一天中可抵達的時段(分鐘,本機時間,白天);windowMin = 預定抵達後多久內才演(過了不補演);
@@ -417,15 +385,12 @@ var CARD_VISIT = {
   on: true, countW: [30, 45, 25], startMin: 420, endMin: 1110, windowMin: 45, stops: [3, 6], standSec: [6, 10], maxLifeSec: 300,
   cap: 2, capLow: 1, rewardDayMax: 2, reward: { 3: { shards: 5 }, 4: { shards: 8 } }, aura: { 3: '#b48cf0', 4: '#f0c850' }
 };
-// 卡包(PLAN_CARDS 第四批決議;數字多為 PLACEHOLDER)。2026-11-09 起:開批的卡先進名冊,名冊滿了才放卡包 cs.bag(暫存);名冊有空位時卡包的卡自動補進名冊。卡包不佔名冊名額。
+// 名冊熔鍊 / 自動熔爐 / 名人重複(2026-11-10:卡包與溢出區已移除,抽到的卡直接進名冊;名冊滿了停止抽卡)。
 var CARD_BAG = {
-  capBase: 100, capPerRank: 80, capMax: 500,   // 容量 = 100 + (官階等級 − 1) × 80,上限 500(官階表 6 階:100/180/260/340/420/500;缺官階資料 = 100)
-  batchNeed: 7,                // 開一批需要的空位(名冊 + 卡包 + 溢出區合計;空位不足則該批暫存不開)
+  batchNeed: 7,                // 一批連抽需要的名冊空位上限(抽卡時取 min(所需張數, 空位))
   autoDefault: -1,             // 自動熔爐預設:關(-1);0 = 品階 ≤ 白
   autoMax: 2,                  // 自動熔爐最高可設到藍(紫以上不提供自動)
-  figDupShard: { 3: 8, 4: 16 }, // 名人重複且信物已滿(CARD_CFG.tokMax)時轉成的碎片數
-  overMs: 24 * 3600000,        // 溢出區:卡包滿時多出的卡進溢出區(cs.bagOver),真實時間 24 小時倒數;有空位依剩餘時間短者先納入,歸零自動熔成碎片(名人不入溢出區)
-  overWarnMs: 2 * 3600000      // 剩餘不足 2 小時:UI 換提示色
+  figDupShard: { 3: 8, 4: 16 } // 名人重複且信物已滿(CARD_CFG.tokMax)時轉成的碎片數
 };
 // 卡片熔爐(使用者決議;卡包的『分解』整合改名『卡片熔爐』,碎片可 (1)強化武將升星 (2)兌換指名券)。數字皆 PLACEHOLDER。
 //   shard[品階 0~3] = 路人熔鍊碎片(白青藍紫);zongBonus = 宗師型(learn 3)額外;starHalf = 帶星的卡額外 +星數 × 品階基礎 × 此值;fig[品階] = 手動熔名人(二次確認,不入一鍵 / 自動)

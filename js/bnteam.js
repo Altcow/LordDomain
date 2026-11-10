@@ -121,7 +121,7 @@ function bnTeamPresetRename(n, name) {
 var BNTEAM_CARD_KEYS = ['name', 'zi', 'fig', 'fac', 'gr', 'st', 'ja', 'main', 'tr', 'tok', 'learn', 'up', 'sex', 'no', 'starLv', 'bnLearn'];
 function bnTeamJson(x) { try { return JSON.parse(JSON.stringify(x)); } catch (e) { return null; } }
 // [{id, name, fig, gr, starLv, bnLearn, learned, learnSrc, drill, drillLv, row, col, troop, power, hp, skills:[戰法 id], ult, card:{名冊卡屬性}, spec:{單位規格}}],依前排→後排、上→下
-// learned = 路人學習欄實際戰法(自帶以外);learnSrc = 'book' 兵書 / 傳授指定(bn_book.js)、'card' 卡面 bnLearn、'auto' 自動補;drill / drillLv = 研兵加成比例 / 等級(隊伍碼帶出,對方重建戰力一致)
+// learned = 路人學習欄實際戰法(自帶以外);learnSrc = 'skc' 戰法傳承裝備(bn_skcard.js)、'card' 卡面 bnLearn、'auto' 自動補;drill / drillLv = 研兵加成比例 / 等級(隊伍碼帶出,對方重建戰力一致)
 function bnTeamSnapshot() {
   var out = [], per = (typeof BNBOOK !== 'undefined' && BNBOOK.drillPer) || 0.02;
   bnTeamOrder(bnu.slots || []).slice(0, BNUI.maxUnits).forEach(function (s) {
@@ -135,7 +135,7 @@ function bnTeamSnapshot() {
       id: e.id, name: String(e.name), fig: e.fig || '', gr: e.gr | 0, starLv: (typeof cardsStarLv === 'function') ? cardsStarLv(e) : ((e.starLv | 0) || 0),
       bnLearn: Array.isArray(e.bnLearn) ? e.bnLearn.slice() : null, row: s.row, col: s.col, troop: tr,
       learned: e.fig ? [] : sp.skills.filter(function (id) { return nat.indexOf(id) < 0; }),
-      learnSrc: e.fig ? '' : (Array.isArray(e.bnLearn) ? 'card' : ((typeof bnBookLearnOf === 'function' && bnBookLearnOf(e)) ? 'book' : 'auto')),
+      learnSrc: e.fig ? '' : (Array.isArray(e.bnLearn) ? 'card' : ((typeof bnSkcLearnOf === 'function' && bnSkcLearnOf(e)) ? 'skc' : 'auto')),
       drill: sp.drill || 0, drillLv: sp.drill ? Math.round(sp.drill / per) : 0,
       power: bnPower(sp), hp: sp.stats.hp, skills: sp.skills.slice(), ult: sp.ult || '', card: card, spec: bnTeamJson(sp)
     });
