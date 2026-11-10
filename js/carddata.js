@@ -112,11 +112,11 @@ var CARD_COST = { zongBonus: 4 };
 //   舊存檔遷移(cs.v < 2,一次性):酒令 1 → 碎片 wineShard;里程碑原 +10 令 → +mileShard 碎;請回流浪名人原 10 令 → recallShard 碎;遣散路人碎片 = cost × relRate(與舊規則同值)
 //   階梯節點選在簡化科技樹(citysimple.js,預設開)裡仍各自獨立的文教節點:書肆(第 2 時代)→ 東觀校書(第 3)→ 鴻都門學(第 4);
 //   (舉孝廉在簡化樹併入了開酒館 / 考場的節點、月旦評 / 察舉考課 / 太學都併入鴻都門學,所以不用)。完整科技樹同樣有這三個節點。
-//   2026-11-09 改『抽卡次數制』(使用者決議):不再分批。全域一個次數錢包 cs.pl.n(酒館池 T、縣試池 E 共用),每 gap 小時 +size.n 抽(離線依時間補算),累積上限 cap(100;新手禮與關卡贈抽不受上限截斷);
+//   2026-11-09 改『抽卡次數制』(使用者決議):不再分批。全域一個次數錢包 cs.pl.n(酒館池 T、縣試池 E 共用),每 gap 小時 +size.n 抽(離線依時間補算),累積上限 cap(200;新手禮與關卡贈抽不受上限截斷);2026-11-10 起每次補充固定 10 抽(size 只剩一階),間隔仍走 gap 階梯;
 //   每抽 1 次出 1 張,單抽或連抽(一次最多 maxOne 張走同一段開卡特效)。pity = 連續幾『張』沒出上等,下一張必出(原 5 批 × 4 張 ≈ 20 張);floorMin = 連抽張數 ≥ 此值才套用『批內底線』。stock 只留給舊存檔遷移(舊批數 × 當階張數 → 次數)
 var CARD_DRAW = {
-  stock: 2, cap: 100, maxOne: 10, floorMin: 7,
-  size: [{ n: 4 }, { n: 5, tech: 'wr_shusi' }, { n: 6, tech: 'e_wuzhu' }, { n: 7, tech: 'ed_hongdu' }],
+  stock: 2, cap: 200, maxOne: 10, floorMin: 7,
+  size: [{ n: 10 }],
   gap: [{ h: 24 }, { h: 18, tech: 'wr_shusi' }, { h: 12, tech: 'e_wuzhu' }, { h: 8, tech: 'ed_hongdu' }],
   pity: 20,
   wineShard: 5, mileShard: 50, recallShard: 50, relRate: 1
@@ -129,7 +129,7 @@ var CARD_BOSS = { pulls: 10 };
 //   新手期:領取後的前 nbCards 張(酒館 / 縣試開批的卡)改用 nbGr 品階機率,並有逐張保底:連續 nbPurple − 1 張沒有紫以上 → 下一張必紫;連續 nbGold − 1 張沒有金 → 下一張必金(名人)
 //   (每日一抽後每批 4 張:nbPurple 10 → 8、nbGold 50 → 30,讓前一兩週仍有紫金進帳)
 var CARD_STARTER = {
-  pulls: 36, legacyPulls: 20, batches: 3, gr: [20, 40, 30, 10, 0], goldGuarantee: 1, purpleGuarantee: 2, namedTokens: 3,
+  pulls: 200, legacyPulls: 20, batches: 3, gr: [20, 40, 30, 10, 0], goldGuarantee: 1, purpleGuarantee: 2, namedTokens: 3,
   nbCards: 100, nbGr: { T: [52, 30, 10, 6, 2], E: [26, 38, 26, 8, 2] }, nbPurple: 8, nbGold: 30
 };
 var CARD_CFG = {

@@ -1,5 +1,5 @@
 // js/cardsui_starter.js — 新手禮包的資料與點擊邏輯(引擎 js/cards_starter.js、數值 carddata.js CARD_STARTER)、保底與抽卡節奏的說明資料(cardsUiInfo kind pity / draw)。UI 組字在 cardsui_draw.js。
-// 禮包可領時的說明卡與總覽入口(cuStarterPop / cuStarterBanner)、新手期與保底列(cuNbLine / cuPityLine)都在 cardsui_draw.js。掛在 cardsui.js(typeof 守衛呼叫)。不發聲、不推播。ES2017;不用 ?. ??。
+// 禮包可領時的說明卡(cuStarterPop)與卡池說明 pop 內的禮包列(cuStarterInfoHtml)、新手期與保底列(cuNbLine / cuPityLine)都在 cardsui_draw.js。掛在 cardsui.js(typeof 守衛呼叫)。不發聲、不推播。ES2017;不用 ?. ??。
 // 2026-11-09 酒令與『任用』已移除:cuDrawInfo(說明浮層 kind 'draw':抽卡節奏與升級科技,由 CARD_DRAW 即時組出)。
 // 全域名稱:cuStarterOpen cuStarterClick cuStarterPityInfo cuGrName cuGrPct cuPityN cuDrawInfo cuTechName cuGoTech
 
@@ -19,7 +19,7 @@ function cuStarterOpen(cs) {
 function cuStarterClick(a, b, cs) {
   var r;
   if (a === 'stlater') { cu.stLater = true; cu.stShow = false; return true; }
-  if (a === 'stshow') { cu.stShow = true; return true; }
+  if (a === 'stshow') { cu.stShow = true; cu.dpop = null; return true; }
   if (a === 'stclaim') {
     cu.stShow = false;
     r = cardsStarterClaim(cs, cuNow());
@@ -41,7 +41,7 @@ function cuTechName(id) {
 // 說明浮層:抽卡節奏(全由 CARD_DRAW 即時組出)
 function cuDrawInfo() {
   var cs = (typeof cardsGet === 'function') ? cardsGet() : null, D = CARD_DRAW, T = cardsDrawTier(), o = { title: '抽卡次數', tags: [CARD_VENUES.T.name, CARD_VENUES.E.name], lines: [] };
-  o.lines.push(['怎麼抽', '抽卡次數兩個卡池共用:每抽 1 次出 1 張,可單抽,也可連抽 ' + D.maxOne + ' 次;抽到的人直接加入名冊,不用另外花費。次數隨時間累積,離線也照算,最多存 ' + D.cap + ' 次(存滿就不再增加,先抽才會繼續累積)。']);
+  o.lines.push(['怎麼抽', '抽卡次數兩個卡池共用:每抽 1 次出 1 張,可單抽、連抽 ' + D.maxOne + ' 次,或全抽;抽到的人直接加入名冊,不用另外花費。次數隨時間累積,離線也照算,最多存 ' + D.cap + ' 次(存滿就不再增加,先抽才會繼續累積)。']);
   o.lines.push(['現在', '每 ' + T.h + ' 小時補充 ' + T.n + ' 抽。']);
   o.lines.push(['每次補充', D.size.map(function (x) { return x.tech ? '研發〈' + cuTechName(x.tech) + '〉→ ' + x.n + ' 抽' : '一開始 ' + x.n + ' 抽'; }).join(';') + '。']);
   o.lines.push(['間隔', D.gap.map(function (x) { return x.tech ? '研發〈' + cuTechName(x.tech) + '〉→ 每 ' + x.h + ' 小時' : '一開始每 ' + x.h + ' 小時'; }).join(';') + '。']);
@@ -69,7 +69,7 @@ function cuStarterPityInfo() {
     if (typeof cardsNbLeft === 'function' && cardsNbLeft(cs) > 0 && nb) o.lines.push(['你的新手期', '還剩 ' + cardsNbLeft(cs) + ' 張;最多再 ' + Math.max(1, S.nbPurple - (nb.p | 0)) + ' 張必出紫卡以上,最多再 ' + Math.max(1, S.nbGold - (nb.g | 0)) + ' 張必出金卡。']);
     o.lines.push(['保底進度', T.name + ' ' + Math.min(cs.pity.T, PD) + '/' + PD + '、' + E.name + ' ' + Math.min(cs.pity.E, PD) + '/' + PD + '、指名 ' + Math.min(cs.pity.G, P) + '/' + P + '(數字 = 連續沒出保底品階的抽數(指名池為次數),到上限時下一抽必出)。']);
     st = (typeof cardsStarterState === 'function') ? cardsStarterState(cs) : 'na';
-    o.lines.push(['新手禮包', st === 'ready' ? '還沒領取,可在總覽頂端領取 ' + S.pulls + ' 抽。' : st === 'open' ? '已領取,舊版禮包還有 ' + (cs.starter.left | 0) + ' 批沒開(總覽頂端)。' : st === 'done' ? '已領取' + (cs.starter.at ? '(' + new Date(cs.starter.at).toLocaleDateString() + ')' : '') + '。' : '不適用:這個存檔在新手禮包推出前就已開始(已有人才或已畢業教學),不補發。']);
+    o.lines.push(['新手禮包', st === 'ready' ? '還沒領取,可在「卡池說明」領取' + S.pulls + ' 抽。' : st === 'open' ? '已領取,舊版禮包還有 ' + (cs.starter.left | 0) + ' 批沒開(總覽頂端)。' : st === 'done' ? '已領取' + (cs.starter.at ? '(' + new Date(cs.starter.at).toLocaleDateString() + ')' : '') + '。' : '不適用:這個存檔在新手禮包推出前就已開始(已有人才或已畢業教學),不補發。']);
   }
   return o;
 }

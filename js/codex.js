@@ -359,7 +359,7 @@ function cxTeamHtml(t) {
   });
   h += '</div><div class="cx-l">' + cxEsc(t.why) + '</div>';
   if (t.bonds && t.bonds.length) h += '<div class="cx-l"><b class="cx-k">羈絆</b>' + cxEsc(t.bonds.join('、')) + '</div>';
-  h += '<div class="cx-l">' + (o.roster < o.n ? '<small>名冊可上陣 ' + o.roster + ' 人' + (o.alt ? '、另 ' + o.alt + ' 格可用替代人選' : '') + (o.own > o.roster ? ';有人在卡包或待定席,名冊有空位時才能上陣' : '') + '</small>' : '') +
+  h += '<div class="cx-l">' + (o.roster < o.n ? '<small>名冊可上陣 ' + o.roster + ' 人' + (o.alt ? '、另 ' + o.alt + ' 格可用替代人選' : '') + (o.own > o.roster ? ';有人在待定席或流浪中,名冊有空位時才能上陣' : '') + '</small>' : '') +
     '<button type="button" data-cx="apply" data-k="' + cxEsc(t.id) + '"' + (o.roster + o.alt ? '' : ' disabled') + '>一鍵套用到布陣</button></div>';
   return h + '</div>';
 }
@@ -442,7 +442,7 @@ function cxListHtml() {
   h += '<div class="cx-sec">各陣營配隊建議(' + list.length + ' 組)</div>';
   if (!list.length) h += '<div class="cx-hint">這個世界還沒有配隊建議。</div>';
   list.forEach(function (t) { h += cxTeamHtml(t); });
-  h += '<div class="cx-hint">武將與戰法的完整介紹(人物、戰法、兵種卡、隊伍)在卡包「大全」分頁。</div>';
+  h += '<div class="cx-hint">武將與戰法的完整介紹(人物、戰法、兵種卡、隊伍)在卡片「大全」分頁。</div>';
   return h;
 }
 function cxRender(tool) {
@@ -495,7 +495,7 @@ function codexGoRoster(fig) {
 
 // ───────── 抽卡開獎:最終排列加「看戰法」 ─────────
 function codexRevealHtml(list) {
-  return cxT('<div class="cx-rvh">本批戰法(完整說明:卡包 →「大全」)</div>' + (list || []).map(function (c) {
+  return cxT('<div class="cx-rvh">本批戰法(完整說明:卡片 →「大全」)</div>' + (list || []).map(function (c) {
     var rows = [], main;
     if (typeof bnCardSkillRows === 'function') { try { rows = bnCardSkillRows(c); } catch (e) { rows = []; } }
     main = rows.filter(function (r) { return r.cat !== 'passive'; }).concat(rows.filter(function (r) { return r.cat === 'passive'; })).slice(0, 3);

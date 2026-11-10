@@ -1,6 +1,6 @@
 // js/tavern_data.js — 酒館室內場景資料(PLAN_INTERIORS §1;I0):掌櫃台詞庫、五種城市風格色票、房間 / 家具 / 座位 / 燈火點位、客座參數。純資料,不碰 DOM / world。
 // 場景引擎在 interior.js,酒館邏輯在 tavern_scene.js。風格 id 同 theme_skin.js(han 漢 / bei 北方 / xiyu 西域 / nanman 南方 / qiang 羌氐);缺色票退回 han。
-// I1 追加:TAVERN_ECON(包間 / 客座收益、升級、掌櫃加成、事件日上限,全 PLACEHOLDER)、TAVERN_EVENTS(客座小事件文案)、TAVERN_JOB_NAMES、tavernRoomProps(依包間數排二樓門)。
+// I1 追加:TAVERN_ECON(包間 / 客座收益、掌櫃加成、事件日上限,全 PLACEHOLDER;v58-C 起酒館無升級,一開始即最高級 lv 5)、TAVERN_EVENTS(客座小事件文案)、TAVERN_JOB_NAMES、tavernRoomProps(依包間數排二樓門)。
 // 全域名稱:TAVERN_LINES TAVERN_PALS TAVERN_TABLES TAVERN_CFG TAVERN_GUEST_JOBS TAVERN_ECON TAVERN_EVENTS TAVERN_JOB_NAMES tavernRoomProps tavernLayoutBuild
 
 // 掌櫃頭上泡泡台詞(10 句,輪播;每句 ≤ 20 字)
@@ -51,15 +51,6 @@ var TAVERN_ECON = {
   capHour: [50, 100, 160, 230, 320],     // 每遊戲小時基礎收入上限(依酒館 lv,掌櫃加成之前)
   keepCap: 0.3, keepScale: 0.5,          // 掌櫃職司加成:min(keepCap, 人事乘區% /100 × keepScale + 詞條)
   keepTraits: { haojiu: 0.05, mingwang: 0.05, juxian: 0.03 },
-  // 酒館升級(目標 lv 索引 = lv - 1):金 + 貨品 + 官階等級(cardsRankLv 1~6)+ 可選科技閘(nlFeatureOpen 名稱)
-  lvUp: [null,
-    { coin: 1500, rank: 1, goods: { g_muban: 20 } },
-    { coin: 5000, rank: 3, gate: 'exam', goods: { g_muban: 40, mat_mabu: 20 } },
-    { coin: 12000, rank: 4, goods: { g_yifu: 20, mat_tieding: 10 } },
-    { coin: 25000, rank: 5, gate: 'dianshi', goods: { g_qiqi: 10 } }],
-  // 包間升級(目標 lv):金 = roomUpBase × roomUpMul^(lv-2);lv3 起加貨品
-  roomUpBase: 400, roomUpMul: 2.2,
-  roomUpGoods: [null, null, { mat_mabu: 10 }, { g_yifu: 10, g_muban: 20 }, { g_qiqi: 5 }],
   evChance: { day: 0.35, dusk: 0.5, night: 0.45 },   // 每 10 分鐘一批,該批出現小事件的機率
   evDayMax: 3,                                         // 每日(本機日)可處理的小事件上限
   offerMs: 1500                                        // 進場後小事件標記延遲(僅演出)

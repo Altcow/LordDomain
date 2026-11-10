@@ -111,3 +111,7 @@
 .rv.final { background: rgba(8, 10, 18, .96); }
 .rv.final .rv-main { z-index: 5; }
 body.cards-reveal { overscroll-behavior: none; }
+
+.rv.fxl0 { --rc: #e9e4d6; --rg: rgba(233, 228, 214, .55); } .rv.fxl1 { --rc: #3e8a74; --rg: rgba(62, 138, 116, .7); } .rv.fxl2 { --rc: #5f86c9; --rg: rgba(95, 134, 201, .75); }   /* 單抽白青藍的品階光(聚焦時的光圈 / 射線)*/
+.rv-cap.c0 b { color: #f1ead8; }
+.rv-skipall { border-color: #f2c640; background: rgba(122, 90, 16, .92); font-weight: 700; font-size: 15px; }   /* 『全部跳過』:金色描邊、位置在右上,與『略過』分開 */

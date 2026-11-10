@@ -1,12 +1,14 @@
 // js/cardsreveal.js — 抽卡特效(一批卡開獎演出)。樣式在 css/cardsreveal.css。
 // 入口:cardsRevealPlay(cards, onDone) — cards 為本批卡陣列(gr 0白/1青/2藍/3紫/4金);動畫結束(按「收下」)或玩家按「略過」時呼叫 onDone(只一次)。
 // 排程:階段1 白青藍快速翻開(≤0.6s)→ 階段2 紫階逐張(中央放大旋轉+紫光,再飛向格子)→ 階段3 金階逐張(滿版金光+粒子)→ 終局:紫金 ≥4 張時最後 4 張同時開。
+// 三種強度:單抽(1 張)= 聚焦翻開 + 品階光(白青藍也有光);10 抽 = 一包,紫金各自亮相、最後 4 張合開;全抽的第 2 包起 = 同一套演出但加速(0.4×),仍逐步播放,可按『全部跳過』。
 // 無紫金:只做快速翻牌。點一下 = 跳到下一小步並進入加速;略過 = 直接顯示最終排列並呼叫 onDone;結尾停在最終排列頁等「收下」。
 // 全域名稱:cardsRevealPlay cardsRevealPlan cardsRevealActive cardsRevealLog。依賴(皆 typeof 守衛):cardart.js 美術卡(整批邊框 / 背景 / 卡背都已載入才用,root 加 .art;否則原畫法)、cardsui.js 頭像函式、carddata.js 職業、audio.js auPlay、perf.js isPowerSave。ES2017;只用 transform/opacity 動畫。
 var RV_FIN_MAX = 4;                      // 終局合開最多張數
-var RV_MS = { flip: 600, p: 1200, g: 1800, fin: 2000, ps: 0.5, fast: 0.4 };
+var RV_MS = { flip: 600, one: 900, p: 1200, g: 1800, fin: 2000, ps: 0.5, fast: 0.4 };
 var rvS = null;                          // 目前演出狀態(同時只有一場)
 var rvLastLog = [];
+var rvLastMore = false, rvLastMoreAt = 0;   // 上一場是否『還有下一批』(連抽鏈):下一場在同一同步鏈內開始時視為第 2 批起,節奏加速(仍逐步播放)
 
 function rvEsc(s) { return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); }
 function rvPower() {
@@ -26,7 +28,8 @@ function cardsRevealPlan(cards, power) {
   sp.sort(function (a, b) { return (cards[a].gr | 0) - (cards[b].gr | 0) || a - b; });
   fin = sp.length >= RV_FIN_MAX ? sp.slice(sp.length - RV_FIN_MAX) : [];
   indiv = sp.slice(0, sp.length - fin.length);
-  if (normal.length) st.push({ k: 'flip', idx: normal, gr: -1, ms: Math.round(RV_MS.flip * k) });
+  if (normal.length && cards.length === 1) st.push({ k: 'spot', idx: normal, gr: cards[normal[0]].gr | 0, ms: Math.round(RV_MS.one * k) });   // 單抽:一張也聚焦翻開 + 品階光
+  else if (normal.length) st.push({ k: 'flip', idx: normal, gr: -1, ms: Math.round(RV_MS.flip * k) });
   indiv.forEach(function (ix) { st.push({ k: 'spot', idx: [ix], gr: cards[ix].gr | 0, ms: Math.round(((cards[ix].gr | 0) >= 4 ? RV_MS.g : RV_MS.p) * k) }); });
   if (fin.length) st.push({ k: 'fin', idx: fin, gr: 4, ms: Math.round(RV_MS.fin * k) });
   return { normal: normal, indiv: indiv, fin: fin, stages: st };
@@ -90,11 +93,11 @@ function rvDoFlip(idx) {
   if (n) rvSnd('ui_tap');
 }
 function rvShow(idx, kind) {
-  var s = rvS, gr = 3, i, wrap, fin = s.fin;
+  var s = rvS, gr = -1, i, wrap, fin = s.fin;
   idx.forEach(function (ix) { if ((s.list[ix].gr | 0) > gr) gr = s.list[ix].gr | 0; });
   rvLog((kind === 'fin' ? 'fin:' : 'spot:') + idx.join(','));
   s.root.classList.add('dim', 'fxon');
-  s.root.classList.remove('fx3', 'fx4'); s.root.classList.add(gr >= 4 ? 'fx4' : 'fx3');
+  s.root.classList.remove('fx3', 'fx4', 'fxl0', 'fxl1', 'fxl2'); s.root.classList.add(gr >= 4 ? 'fx4' : gr >= 3 ? 'fx3' : 'fxl' + Math.max(0, gr));
   rvRestart(s.ring, 'go');
   if (gr >= 4 && !s.power) { rvRestart(s.flash, 'go'); rvParticles(s.parts); rvRestart(s.parts, 'go'); } else if (gr >= 4) rvRestart(s.flash, 'go');
   fin.innerHTML = ''; fin.className = 'rv-fin ' + (kind === 'fin' ? 'n4' : 'n1') + (s.power ? ' ps' : '');
@@ -105,7 +108,7 @@ function rvShow(idx, kind) {
     card.classList.add('spin'); wrap.appendChild(card);
     s.stg.push({ ix: ix, wrap: wrap, card: card });
   });
-  s.cap.className = 'rv-cap show ' + (gr >= 4 ? 'c4' : 'c3');
+  s.cap.className = 'rv-cap show ' + (gr >= 4 ? 'c4' : gr >= 3 ? 'c3' : 'c0');
   if (kind === 'fin') s.cap.innerHTML = '<b>終局合開</b>';
   else {
     var c = s.list[idx[0]];
@@ -180,11 +183,14 @@ function rvTap() {
   rvNext();
 }
 function rvFire() { rvFireOf(rvS); }
+function rvDrawY() { return (typeof cu !== 'undefined' && cu.open && cu.tab === 'D' && typeof cuDrawScrollY === 'function') ? cuDrawScrollY() : -1; }
+function rvDrawSet(y) { if (y >= 0 && typeof cuDrawScrollSet === 'function') cuDrawScrollSet(y); }
 function rvFireOf(s) {
-  var cbs;
+  var cbs, y;
   if (!s || s.fired) return;
-  s.fired = true; cbs = s.cbs.slice();
+  s.fired = true; cbs = s.cbs.slice(); y = rvDrawY();
   cbs.forEach(function (f) { try { f(); } catch (e) { if (typeof console !== 'undefined') console.error(e); } });
+  rvDrawSet(y);   // 特效結束後分頁重畫:還原抽卡分頁的捲動位置(cardsui_draw.js)
 }
 function rvSkip() {
   var s = rvS;
@@ -200,6 +206,7 @@ function rvClose() {
   if (s.timer) { clearTimeout(s.timer); s.timer = null; }
   if (s.root.parentNode) s.root.parentNode.removeChild(s.root);
   if (document.body && document.body.classList) document.body.classList.remove('cards-reveal');
+  rvLastMore = !!s.more; rvLastMoreAt = Date.now();
   rvS = null;   // 先清狀態再通知:onDone 內可能立刻再開下一場(連開 / 全部開啟),不可被事後的清除蓋掉
   rvFireOf(s);
 }
@@ -208,8 +215,8 @@ function cardsRevealActive() { return !!rvS; }
 function cardsRevealLog() { return rvLastLog.slice(); }
 // opts(選用,向下相容):{more: true 表示還有下一批 → 顯示『全部跳過 ▸▸▸』; onSkipAll: 按下時先呼叫(再自動略過並收下本批)}
 function cardsRevealPlay(cards, onDone, opts) {
-  var s, root, main, grid, top, bot, plan, power, list, st;
-  if (rvS && !rvS.closed && rvS.fired) rvClose();   // 上一場已略過(onDone 已通知)、停在最終排列頁:直接收掉再開新的,否則新批的 onDone 會掛在已結束的場次上永不呼叫
+  var s, root, main, grid, top, bot, plan, power, list, st, chain;
+  if (rvS && !rvS.closed && rvS.fired) rvClose(); chain = rvLastMore && (Date.now() - rvLastMoreAt) < 1500; rvLastMore = false;   // 上一場已略過(onDone 已通知)、停在最終排列頁:直接收掉再開新的,否則新批的 onDone 會掛在已結束的場次上永不呼叫
   if (rvS && !rvS.closed) { if (typeof onDone === 'function') rvS.cbs.push(onDone); return false; }   // 重複呼叫不疊加:只共用這一場,結束時一併通知
   list = Array.isArray(cards) ? cards.filter(function (c) { return c && typeof c === 'object'; }) : [];
   if (!list.length || typeof document === 'undefined' || !document.body) { if (typeof onDone === 'function') { try { onDone(); } catch (e) { /* 呼叫端錯誤不影響 */ } } return false; }
@@ -220,7 +227,7 @@ function cardsRevealPlay(cards, onDone, opts) {
   root = document.createElement('div'); root.className = 'rv' + (power ? ' ps' : '') + (art ? ' art' : '');
   root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', '抽卡結果');
   main = rvDiv('rv-main', root); grid = rvDiv('rv-grid', main);
-  s = rvS = { root: root, list: list, art: art, cards: [], cbs: typeof onDone === 'function' ? [onDone] : [], power: power, fast: false, k: 1, timer: null, pos: 0, steps: null, stg: [], final: false, fired: false, closed: false, log: [] };
+  s = rvS = { root: root, more: !!(opts && opts.more), list: list, art: art, cards: [], cbs: typeof onDone === 'function' ? [onDone] : [], power: power, fast: chain, k: 1, timer: null, pos: 0, steps: null, stg: [], final: false, fired: false, closed: false, log: [] };
   rvLastLog = s.log;
   list.forEach(function (c) {
     var el = rvMkCard(c, false), g = c.gr | 0;
@@ -233,14 +240,14 @@ function cardsRevealPlay(cards, onDone, opts) {
   s.fin = rvDiv('rv-fin', root); s.cap = rvDiv('rv-cap', root);
   top = rvDiv('rv-top', root); bot = rvDiv('rv-bot', root);
   s.skip = document.createElement('button'); s.skip.className = 'rv-skip'; s.skip.textContent = '略過 ▸▸'; top.appendChild(s.skip);
-  s.skipAll = document.createElement('button'); s.skipAll.className = 'rv-skipall'; s.skipAll.textContent = '全部跳過 ▸▸▸'; s.skipAll.hidden = !(opts && opts.more); top.appendChild(s.skipAll);
+  s.skipAll = document.createElement('button'); s.skipAll.className = 'rv-skipall'; s.skipAll.textContent = '全部跳過 ▸▸▸'; s.skipAll.hidden = !((opts && opts.more) || chain);   // 連抽鏈中的每一批(含最後一批)都可按『全部跳過』 top.appendChild(s.skipAll);
   s.hint = rvDiv('rv-hint', bot); s.hint.textContent = '點一下加速';
   s.btn = document.createElement('button'); s.btn.className = 'rv-ok'; s.btn.textContent = '收下'; s.btn.hidden = true; bot.appendChild(s.btn);
   s.skip.addEventListener('click', function (e) { if (e && e.stopPropagation) e.stopPropagation(); rvSkip(); });
   s.skipAll.addEventListener('click', function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
     if (opts && typeof opts.onSkipAll === 'function') { try { opts.onSkipAll(); } catch (err) { /* 旗標失敗不影響略過 */ } }
-    rvSkip(); rvClose();   // 本批立即結束並自動收下;剩餘批次由 onDone 鏈接續(呼叫端已設 quick)
+    rvSkip(); rvClose(); rvLastMore = false;   // 本批立即結束並自動收下;剩餘批次由 onDone 鏈接續(呼叫端已設 quick)
   });
   s.btn.addEventListener('click', function (e) { if (e && e.stopPropagation) e.stopPropagation(); rvClose(); });
   root.addEventListener('click', function () { rvTap(); });

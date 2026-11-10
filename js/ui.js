@@ -197,7 +197,7 @@ function uiSetMode(m) {
 // 右側邊欄與頂列收進來的功能。top:true 的項目在正常模式留在頂列(原按鈕),精簡模式改由邊欄展開。
 // target 為既有按鈕 id,點擊時代為 click(原按鈕與其監聽不變);scope 限定經營(estate)或戰鬥布置(camp)
 let uiSideExpanded = false;
-const UI_SIDE_NORMAL_MAX = 7;   // 正常模式第一層上限(拍照不在第一層,收進展開列)
+const UI_SIDE_NORMAL_MAX = 7;   // 正常模式第一層上限(超過才出現展開鈕;超量時拍照收進展開列)
 const UI_SIDE_ITEMS = [
   { key: 'search', icon: '🔍', label: '搜尋', title: '搜尋建築與科技(未解鎖者可看缺什麼)', scope: 'estate', special: 'search' },
   { key: 'layout', icon: '🏘', label: '版面', title: '我的版面:看 3 格版面、點一格換成那份;底部可開新草稿編輯布置', scope: 'all', special: 'layout' },
@@ -207,7 +207,7 @@ const UI_SIDE_ITEMS = [
   { key: 'sandbox', icon: '⚔', label: '沙盤', title: '沙盤推演', top: true, scope: 'camp', target: 'btnSandbox' },
   { key: 'shop', icon: '🏪', label: '商店', title: '商店', scope: 'estate', target: 'btnShop', gate: 'shop' },
   { key: 'tech', icon: '📜', label: '科技', title: '科技樹與研發序列', scope: 'estate', special: 'tech' },
-  { key: 'cards', icon: '🃏', label: '卡包', title: '卡包:抽卡、名冊、卡包與指名(次數隨時間累積)', scope: 'estate', special: 'cards' },
+  { key: 'cards', icon: '🃏', label: '卡片', title: '卡片:抽卡、名冊、熔爐與指名(次數隨時間累積)', scope: 'estate', special: 'cards' },
   { key: 'goods', icon: '📦', label: '庫房', title: '庫房(貨品與工坊狀態)', scope: 'estate', target: 'btnGoods' },
   { key: 'caravan', icon: '🛻', label: '走鏢', title: '走鏢(鏢師、馬車與高階貨品)', scope: 'estate', target: 'btnCaravan', gate: 'caravan' },
   { key: 'bn', icon: '⚔', label: '戰鬥', title: '戰鬥(5v5 回合制練習戰)', scope: 'estate', special: 'bn', gate: 'battleA', showLocked: true },
@@ -279,13 +279,9 @@ function initSideUI() {
   setInterval(syncSideBar, 300);
 }
 
-// 戰鬥鈕未達條件時的說明(條件與文字沿用 bnui.js bnUiOpen;兩項都缺就都說)
+// 戰鬥鈕未達條件時的說明(v58-C:只看名冊人數 ≥ BNUI.minRoster)
 function uiBattleLockToast() {
-  let lv = 0, why = [];
-  try { lv = typeof cardsRankLv === 'function' ? cardsRankLv() | 0 : 0; } catch (e) { lv = 0; }
-  if (lv < BNUI.minRank) why.push('官階達「亭長」後開放戰鬥');
-  if (bnUiRosterList().length < BNUI.minRoster) why.push('名冊要有 ' + BNUI.minRoster + ' 人以上才能出戰');
-  if (typeof showToast === 'function') showToast(why.join(';') || '尚未開放戰鬥');
+  if (typeof showToast === 'function') showToast('名冊至少 ' + BNUI.minRoster + ' 人才能出戰(目前 ' + bnUiRosterList().length + ' 人)');
 }
 function uiSideAct(key) {
   const it = UI_SIDE_ITEMS.find(x => x.key === key);
@@ -342,7 +338,7 @@ function syncSideBar() {
     b.querySelector('.ic').textContent = icon;
     b.querySelector('.lb').textContent = label;
   });
-  // 正常模式第一層最多 UI_SIDE_NORMAL_MAX 顆:拍照一律收進展開列;超量再依序捨棄 季節 → 精簡 → 搜尋(收進展開列;版面、戰鬥鈕、卡包鈕不捨棄,未達條件時灰掉);精簡模式的展開列都還在;頂列項目與另一畫面的項目不算
+  // 正常模式第一層最多 UI_SIDE_NORMAL_MAX 顆:放不下時(超量)才把拍照收進展開列,仍超量再依序捨棄 季節 → 精簡 → 搜尋(收進展開列;版面、戰鬥鈕、卡包鈕不捨棄,未達條件時灰掉);精簡模式的展開列都還在;頂列項目與另一畫面的項目不算
   if (!uiIsCompact()) {
     const camp = game.mode === 'battleDesign';
     const vis = key => {
@@ -350,10 +346,9 @@ function syncSideBar() {
       return b && !b.hidden ? b : null;
     };
     const count = () => UI_SIDE_ITEMS.filter(it => !it.top && (it.scope === 'all' || (it.scope === 'camp') === camp) && vis(it.key)).length;
-    const hasPhoto = !!vis('photo');
-    const overflow = hasPhoto || count() > UI_SIDE_NORMAL_MAX;
-    if (!uiSideExpanded) {
-      if (hasPhoto) vis('photo').hidden = true;
+    const overflow = count() > UI_SIDE_NORMAL_MAX;   // 第一層放得下就全部直接顯示(含拍照、季節、精簡),不出現展開鈕
+    if (overflow && !uiSideExpanded) {
+      if (vis('photo')) vis('photo').hidden = true;
       ['season', 'mode', 'search'].forEach(k => { if (count() > UI_SIDE_NORMAL_MAX && vis(k)) vis(k).hidden = true; });
     }
     const ex = document.getElementById('sideExpand');

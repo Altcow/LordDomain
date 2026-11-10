@@ -5,7 +5,7 @@
 // 依賴:bnui.js(bnu BNUI bnUiEntry bnUiSpec bnUiTroopOf bnUiEsc bnUiLsGet bnUiLsSet bnUiNormForm bnUiRosterIds bnUiCurSave bnUiRenderForm bnUiToast)、bn_units.js;bn_text.js / cardsui.js 可缺。ES2017;不用 ?. ??。
 // 全域:BNTEAM bnTeamLoad bnTeamSave bnTeamPresetGet bnTeamPresetSave bnTeamPresetApply bnTeamPresetRename bnTeamSnapshot bnTeamSkillRows bnTeamCardHtml bnTeamStripHtml bnTeamRosterHtml bnTeamPresetHtml bnTeamSkillLinksHtml bnTeamDo bnTeamBack bnTeamIsOpen bnTeamInfoOpen bnTeamInfoClose bnTeamCss
 
-var BNTEAM = { key: 'lorddomain.bnteam.v1', n: 3, show: 3, nameMax: 12, qMax: 20, rawMax: 200000, sort: 'pw', q: '', exp: {}, data: null, raw: undefined, info: '', infoEl: null };
+var BNTEAM = { key: 'lorddomain.bnteam.v1', n: 3, show: 3, nameMax: 12, qMax: 20, rawMax: 200000, sort: 'pw', q: '', exp: {}, data: null, raw: undefined, info: '', infoEl: null, per: 40, pg: 0, fac: '', gr: '' };
 var BNTEAM_SORT = [['pw', '戰力'], ['gr', '品階'], ['tr', '兵種']];
 var BNTEAM_GR = ['白', '青', '藍', '紫', '金'];
 var BNTEAM_CAT = { command: '指', active: '主', pursuit: '追', passive: '被', ult: '大' };
@@ -204,7 +204,7 @@ function bnTeamStripHtml(o) {
 // ───────── 名冊:搜尋 / 排序 / 兵種篩選(篩選沿用 bnu.filter)─────────
 function bnTeamRosterList() {
   var q = String(BNTEAM.q || '').trim().toLowerCase(), tl = BN_DATA.troopList, list;
-  list = bnUiRosterList().map(function (x) { var t = bnUiTroopOf(x); return { e: x, t: t, pw: bnPower(bnUiSpec(x, { troop: t })) }; }).filter(function (x) { return !bnu.filter || x.t === bnu.filter; });
+  list = bnUiRosterList().map(function (x) { var t = bnUiTroopOf(x); return { e: x, t: t, pw: bnPower(bnUiSpec(x, { troop: t })) }; }).filter(function (x) { return (!bnu.filter || x.t === bnu.filter) && (BNTEAM.fac === '' || String(x.e.fac) === BNTEAM.fac) && (BNTEAM.gr === '' || String(x.e.gr) === BNTEAM.gr); });
   if (q) list = list.filter(function (x) {
     if ((String(x.e.name) + ' ' + (x.e.zi || '')).toLowerCase().indexOf(q) >= 0) return true;
     return bnTeamSkillRows(x.e, x.t).some(function (r) { return String(r.name).toLowerCase().indexOf(q) >= 0; });
@@ -216,28 +216,59 @@ function bnTeamRosterList() {
   });
   return list;
 }
+// 名冊卡(拖曳來源):縮圖 + 姓名 + 兵種圖示與適性 + 戰力;已上陣者標「上陣」。點一下 = 選取(替代操作),按住拖曳 = 上陣
+function bnTeamRosterCardHtml(x) {
+  var e = x.e, on = !!bnUiSlotOf(e.id), apt = (bnAptOf(e).apt[x.t] || 'C');
+  return '<div class="bntm-rc g' + (e.gr | 0) + (bnu.sel === e.id ? ' sel' : '') + (on ? ' on' : '') + '" role="button" data-drag="r" data-a="card" data-id="' + bnTeamEsc(e.id) + '" aria-label="' + bnTeamEsc(e.name) + '">' +
+    '<span class="bntm-th">' + bnTeamPortrait(e) + '</span>' +
+    '<span class="bntm-rn">' + bnTeamEsc(e.name) + '</span>' +
+    '<span class="bntm-rt">' + (typeof bnTroopIconHtml === 'function' ? bnTroopIconHtml(x.t) : '') + bnTeamEsc(x.t) + ' ' + apt + (on ? ' <em>上陣</em>' : '') + '</span>' +
+    '<span class="bntm-rp">戰力 ' + x.pw + '</span></div>';
+}
+// 每頁 BNTEAM.per 人(300 人分頁);頁數超出時夾回最後一頁
 function bnTeamRosterCards() {
-  var list = bnTeamRosterList();
+  var list = bnTeamRosterList(), np, pg, from;
   if (!list.length) return '<div class="bntm-none">' + (BNTEAM.q ? '找不到「' + bnTeamEsc(BNTEAM.q) + '」' : '沒有符合的人物') + '</div>';
-  return list.map(function (x) { return bnTeamCardHtml(x.e, { troop: x.t, mini: true, act: 'card', sel: bnu.sel === x.e.id, on: !!bnUiSlotOf(x.e.id) }); }).join('');
+  np = Math.max(1, Math.ceil(list.length / BNTEAM.per));
+  pg = Math.max(0, Math.min(np - 1, BNTEAM.pg | 0));
+  BNTEAM.pg = pg;
+  from = pg * BNTEAM.per;
+  return list.slice(from, from + BNTEAM.per).map(bnTeamRosterCardHtml).join('');
+}
+function bnTeamPagerInner() {
+  var n = bnTeamRosterList().length, np = Math.max(1, Math.ceil(n / BNTEAM.per)), pg = Math.max(0, Math.min(np - 1, BNTEAM.pg | 0));
+  BNTEAM.pg = pg;
+  return '<button data-a="bpg" data-t="-1"' + (pg <= 0 ? ' disabled' : '') + '>‹ 上一頁</button><span>第 ' + (pg + 1) + '/' + np + ' 頁 · 共 ' + n + ' 人</span><button data-a="bpg" data-t="1"' + (pg >= np - 1 ? ' disabled' : '') + '>下一頁 ›</button>';
 }
 function bnTeamRosterHtml() {
+  var fac = BNTEAM.fac, gr = BNTEAM.gr, FAC = (typeof CARD_FAC !== 'undefined') ? CARD_FAC : [];
   bnTeamCss(); bnTeamBindForm(bnu.formEl);
   return '<div class="bntm-tool"><input type="search" class="bntm-q" data-in="bq" maxlength="' + BNTEAM.qMax + '" placeholder="搜尋姓名或戰法" aria-label="搜尋名冊" value="' + bnTeamEsc(BNTEAM.q) + '">' +
     BNTEAM_SORT.map(function (s) { return '<button class="' + (BNTEAM.sort === s[0] ? 'on' : '') + '" data-a="bsort" data-t="' + s[0] + '">' + s[1] + '</button>'; }).join('') + '</div>' +
-    '<div class="bnf-roster bntm-ro">' + bnTeamRosterCards() + '</div>';
+    '<div class="bntm-tool"><select class="bntm-sel" data-in="bfac" aria-label="陣營篩選"><option value="">全部陣營</option>' + FAC.map(function (n, k) { return '<option value="' + k + '"' + (fac === String(k) ? ' selected' : '') + '>' + bnTeamEsc(n) + '</option>'; }).join('') + '</select>' +
+    '<select class="bntm-sel" data-in="bgr" aria-label="品階篩選"><option value="">全品階</option>' + BNTEAM_GR.map(function (n, k) { return '<option value="' + k + '"' + (gr === String(k) ? ' selected' : '') + '>' + n + '階</option>'; }).join('') + '</select></div>' +
+    '<div class="bntm-ro" data-drop="roster">' + bnTeamRosterCards() + '</div>' +
+    '<div class="bntm-pgr">' + bnTeamPagerInner() + '</div>';
 }
 function bnTeamOnInput(ev) {
-  var t = ev && ev.target, ro;
-  if (!t || !t.getAttribute || t.getAttribute('data-in') !== 'bq') return;
-  BNTEAM.q = Array.from(String(t.value || '')).slice(0, BNTEAM.qMax).join('');
-  ro = bnu.formEl && bnu.formEl.querySelector ? bnu.formEl.querySelector('.bntm-ro') : null;
+  var t = ev && ev.target, k, ro, pg, f = bnu.formEl;
+  if (!t || !t.getAttribute) return;
+  k = t.getAttribute('data-in');
+  if (k === 'bq') BNTEAM.q = Array.from(String(t.value || '')).slice(0, BNTEAM.qMax).join('');
+  else if (k === 'bfac') BNTEAM.fac = String(t.value || '');
+  else if (k === 'bgr') BNTEAM.gr = String(t.value || '');
+  else return;
+  BNTEAM.pg = 0;
+  ro = f && f.querySelector ? f.querySelector('.bntm-ro') : null;
   if (ro) ro.innerHTML = bnTeamRosterCards();
+  pg = f && f.querySelector ? f.querySelector('.bntm-pgr') : null;
+  if (pg) pg.innerHTML = bnTeamPagerInner();
 }
 function bnTeamBindForm(el) {
   if (!el || el.__bntIn) return;
   el.__bntIn = 1;
   el.addEventListener('input', bnTeamOnInput);
+  el.addEventListener('change', bnTeamOnInput);
 }
 
 // ───────── 隊伍預設列 ─────────
@@ -288,7 +319,8 @@ function bnTeamDo(a, id, r, c, t, i) {
   if (a === 'bskinfo') { bnTeamInfoOpen(String(id || '')); return true; }
   if (a === 'bexp') { if (BNTEAM.exp[id]) delete BNTEAM.exp[id]; else BNTEAM.exp[id] = 1; bnTeamRerender(); return true; }
   if (a === 'tcard') { bnu.sel = (bnu.sel === id) ? null : id; bnUiRenderForm(); return true; }
-  if (a === 'bsort') { BNTEAM.sort = (t === 'gr' || t === 'tr') ? t : 'pw'; bnUiRenderForm(); return true; }
+  if (a === 'bsort') { BNTEAM.sort = (t === 'gr' || t === 'tr') ? t : 'pw'; BNTEAM.pg = 0; bnUiRenderForm(); return true; }
+  if (a === 'bpg') { BNTEAM.pg = Math.max(0, (BNTEAM.pg | 0) + (+t || 0)); bnUiRenderForm(); return true; }
   if (a === 'tsave') {
     if (!bnTeamPresetGet(i + 1)) return true;
     if (!bnTeamPresetGet(i + 1).empty && typeof confirm === 'function') { try { if (!confirm('覆蓋「' + bnTeamPresetGet(i + 1).name + '」?')) return true; } catch (er) { /* 略過 */ } }
@@ -338,7 +370,14 @@ function bnTeamCss() {
     '@media (orientation:landscape) and (min-width:700px){.bntm-ro{flex-wrap:wrap}.bntm-row{grid-template-columns:repeat(5,minmax(0,1fr))}}' +
     '#bnSkInfo{position:absolute;left:0;top:0;right:0;bottom:0;z-index:7;display:flex;align-items:center;justify-content:center;background:rgba(10,8,6,.6)}' +
     '.bnsi-box{width:min(92vw,400px);max-height:86vh;overflow:auto;box-sizing:border-box;border-radius:12px;background:#2a2118;border:2px solid #c9892f;padding:12px 14px;color:#f4ead2}.bnsi-box h4{margin:0 0 6px;font-size:18px}.bnsi-box p{margin:5px 0;font-size:14px;line-height:1.5}.bnsi-box p b{color:#f0b45a}' +
-    '.bnsi-tags span{display:inline-block;margin:0 4px 4px 0;padding:0 6px;border:1px solid rgba(255,255,255,.4);border-radius:4px;font-size:12px}.bnsi-box .bnbtn{display:block;width:100%;margin-top:8px}';
+    '.bnsi-tags span{display:inline-block;margin:0 4px 4px 0;padding:0 6px;border:1px solid rgba(255,255,255,.4);border-radius:4px;font-size:12px}.bnsi-box .bnbtn{display:block;width:100%;margin-top:8px}' +
+    '.bntm-ro{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:5px;margin:4px 0}' +
+    '.bntm-rc{position:relative;min-width:0;box-sizing:border-box;padding:3px;border-radius:8px;border:2px solid #8a8a8a;background:rgba(255,255,255,.07);color:#f4ead2;display:flex;flex-direction:column;gap:2px;font-size:12px;line-height:1.2;text-align:left;cursor:grab;touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}' +
+    '.bntm-rc.g1{border-color:#5fb878}.bntm-rc.g2{border-color:#4f86d6}.bntm-rc.g3{border-color:#a464d8}.bntm-rc.g4{border-color:#e0b030}.bntm-rc.sel{box-shadow:0 0 0 3px #ffd25a}.bntm-rc.on{opacity:.55}' +
+    '.bntm-th{position:relative;display:block;height:44px;border-radius:5px;overflow:hidden;background:rgba(0,0,0,.35)}.bntm-rc img,.bntm-th img{pointer-events:none;-webkit-user-drag:none}' +
+    '.bntm-rn{font-size:13px;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bntm-rt{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bntm-rt em{font-style:normal;color:#ffd25a}.bntm-rp{font-size:11px;opacity:.85}' +
+    '.bntm-pgr{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:4px 0 8px;font-size:13px}.bntm-pgr button{min-height:44px;min-width:84px;border:none;border-radius:8px;background:rgba(255,255,255,.14);color:#f4ead2;font-size:14px}.bntm-pgr button[disabled]{opacity:.35}' +
+    '.bntm-sel{flex:1 1 120px;min-width:0;min-height:44px;box-sizing:border-box;border-radius:8px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.3);color:#f4ead2;font-size:14px;padding:0 6px}.bntm-sel option{background:#2a2118;color:#f4ead2}';
   document.head.appendChild(st);
 }
 

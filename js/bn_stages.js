@@ -1,15 +1,15 @@
-// js/bn_stages.js — 戰鬥 A 模式 B3:討伐關卡資料(6 章 × 6 關)、敵將產生、每日流寇、軍令 / 獎勵 / 上限規則、存檔欄位正規化。PLAN_BATTLE_A §5、§8。
+// js/bn_stages.js — 戰鬥 A 模式 B3:討伐關卡資料(6 章 × 6 關)、敵將產生、每日流寇、獎勵規則、戰場 / 難度資料表、存檔欄位正規化。PLAN_BATTLE_A §5、§8。
+// 2026-11-10 v58-E:取消軍令與每日上限,關卡可無限重打;重複通關只給金幣 / 貨物 / 兵書機率(不給碎片、不給抽卡次數)。
 // 設計原則:戰鬥沒有小兵,每個單位都是一位武將;敵方每關 = 3~5 位『敵將』(各有名字、稱號、外觀鍵 foe:*)。兵種(槍騎盾弓謀)只代表武將的戰鬥類型。
 // 依賴(載入順序):carddata.js、cards.js(可缺)、bn_data.js、bn_skills_data.js、bn_units.js。純邏輯、無 DOM;外部全域(world cardsGet 等)一律 typeof 守衛,測試以 env 注入。
 // 所有數字 PLACEHOLDER(v 陣列由 tools/bn_stage_check.js 解出,見 tools/bn_stage_report.md)。ES2017;不用 ?. ??。
-// 全域:BN_STG BN_STG_ARCH BN_CHAPTERS BN_STAGES BN_STG_BY_ID BN_STG_SKILL_OVR bnStgById bnStgFoes bnStgFoeSkills bnStgSkPoolsbnStgSolveV bnStgBountyDef bnStgEnv bnStgDayNo bnStgWeekNo bnStgNorm bnStgPack bnStgOrders bnStgRepLeft bnStgUnlock bnStgCanStart bnStgRewards bnStgSettle bnStgBountySettle bnStgChapterStars
+// 全域:BN_STG BN_STG_ARCH BN_CHAPTERS BN_STAGES BN_STG_BY_ID BN_STG_SKILL_OVR BN_BATTLEFIELDS BN_DIFFS bnStgById bnStgFoes bnStgFoeSkills bnStgSkPoolsbnStgSolveV bnStgBountyDef bnStgEnv bnStgDayNo bnStgWeekNo bnStgNorm bnStgPack bnStgSk bnStgDiff bnStgDiffK bnStgUnlock bnStgCanStart bnStgRewards bnStgSettle bnStgBountySettle bnStgChapterStars
 
 var BN_STG = {
-  perDay: 5, store: 5,                       // 軍令:每日 +5、最多存 store(=perDay 即每日重置;PLAN 預設存 10 可改此值)
-  repPerDay: 3,                              // 每關每遊戲日前 N 場勝利才有重複獎勵;取消所有數字上限(金幣日上限、碎片 / 兵書週上限),獎勵不截斷
-  gold1: 600, repeatDiv: 5, star3Gold: 200, star3Shards: 2,   // 首通 600 × 章、重複 = 首通 / 5、三星額外
-  shards1: 5, shardsRep: 1, bookRepP: 0.05, matRepP: 0.5,
-  bounty: { gold: 200, shards: 1, goods: 1, lo: 0.95, hi: 1.05, k: 1.06 },   // 敵方戰力 × k = 建議戰力口徑(流寇敵將編制較整齊、無名人;戰鬥改版後實測 k=1.06 使最強隊勝率約 50~60%,原 1.15)
+  // 軍令與每日場數上限已取消(2026-11-10 v58-E):關卡可無限重打,重複通關每場給固定少量金幣 / 貨物 / 兵書機率
+  gold1: 600, repeatDiv: 5, star3Gold: 200, star3Shards: 2,   // 首通 600 × 章、重複金幣 = 首通 / 5、三星額外
+  shards1: 5, bookRepP: 0.05, matRepP: 0.5,                   // 首通碎片 / 兵書;重複通關不給碎片、不給抽卡次數(避免刷關無限抽卡)
+  bounty: { gold: 200, goods: 1, lo: 0.95, hi: 1.05, k: 1.06 },   // 流寇每次討伐都有重複獎勵(金幣 + 主材料,不給碎片);敵方戰力 × k = 建議戰力口徑(流寇敵將編制較整齊、無名人;戰鬥改版後實測 k=1.06 使最強隊勝率約 50~60%,原 1.15)
   // 敵將五維基準 v(逐關,36 個;由 tools/bn_stage_check.js 解出);grOf = 各章敵將品階
   v: [40.6,45.9,32.3,31.4,39.5,37.7,45,47.9,45.5,45,47.6,40.7,45.3,48.1,42.5,54.1,52.1,43.6,56.4,59.5,55,58.6,61.4,58.3,76.8,69.4,65.5,72.1,72.1,86.4,68.5,59.4,60.5,66.8,68.3,71],
   grOf: [0, 0, 1, 1, 2, 2, 3],
@@ -24,6 +24,19 @@ var BN_STG = {
   rkFx: [1,1,1,1,1.03,1,1,1,1.086,1,1,1,1,1,1.055,1,1,0.92,1,1,1,1,1,1.05,1,1,1,1.09,1,1.065,1,0.92,1,1,1,1],
   recK: 1.0                                  // 建議戰力 = 敵將隊戰力 × recK(使『我方戰力 = 建議戰力』約 50% 勝率;由 bn_stage_check --kfit 解出)
 };
+
+// 戰場 / 難度資料表(擴充用):目前只開『三國討伐』『普通』。hard / nightmare 只預留欄位與讀取函式,open:false 不開放(enemyK 敵人強度、rewardK 獎勵倍率,預留為 1)
+var BN_BATTLEFIELDS = [{ id: 'sanguo', name: '三國討伐', open: true }];
+var BN_DIFFS = {
+  normal: { name: '普通', open: true, enemyK: 1, rewardK: 1 },
+  hard: { name: '困難', open: false, enemyK: 1, rewardK: 1 },
+  nightmare: { name: '噩夢', open: false, enemyK: 1, rewardK: 1 }
+};
+function bnStgDiff(diff) { return BN_DIFFS[diff || 'normal'] || BN_DIFFS.normal; }
+// 讀取難度係數 kind = 'enemyK' | 'rewardK';缺值 / 非正數一律 1
+function bnStgDiffK(diff, kind) { var e = bnStgDiff(diff), k = e && e[kind]; return typeof k === 'number' && k > 0 ? k : 1; }
+// 存檔鍵 (戰場, 難度, 關卡 id):三國 / 普通沿用舊存檔的裸關卡 id(如 '1-1'),舊進度即 sanguo/normal,不需遷移;其他組合為 'bf|diff|id'
+function bnStgSk(id, bf, diff) { bf = bf || 'sanguo'; diff = diff || 'normal'; return (bf === 'sanguo' && diff === 'normal') ? id : bf + '|' + diff + '|' + id; }
 
 // 敵將類型(只是戰鬥類型 + 外觀 + 戰法):prof = 五維相對比例 [統 武 智 政 魅];skills = 該類型的招牌戰法(併入抽取池,keep = 一定帶);elite = 精英(抽強戰法)
 var BN_STG_ARCH = {
@@ -126,7 +139,7 @@ var BN_STAGES = [], BN_STG_BY_ID = {};
     ch = BN_CHAPTERS[c];
     for (j = 0; j < 6; j++) {
       df = BN_STG_DEF[c][j];
-      st = { id: ch.n + '-' + (j + 1), ch: ch.n, idx: j + 1, name: df[0], desc: df[1], scene: df[2], boss: j === 5, rank: ch.rank, order: n, foeIdx: df.slice(3), book: ch.books[j % ch.books.length], v: 0 };
+      st = { id: ch.n + '-' + (j + 1), bf: 'sanguo', diff: 'normal', ch: ch.n, idx: j + 1, name: df[0], desc: df[1], scene: df[2], boss: j === 5, rank: ch.rank, order: n, foeIdx: df.slice(3), book: ch.books[j % ch.books.length], v: 0 };
       (function (st, base, m) {
         if (!m) return;
         try {
@@ -275,53 +288,22 @@ function bnStgInt(v, lo, hi) { v = +v; if (!isFinite(v)) return lo; v = Math.flo
 function bnStgNew() { return { got: {}, day: null, bounty: null, rep: null, books: {} }; }
 function bnStgNorm(o, d) {
   var k, v;
-  d.got = {}; d.day = null; d.bounty = null; d.rep = null; d.books = {};
+  d.got = {}; d.books = {}; d.day = null; d.bounty = null; d.rep = null;   // day / bounty / rep 為舊軍令與每日上限欄位,已取消,讀入一律丟棄
   if (!o || typeof o !== 'object') return d;
   if (o.got && typeof o.got === 'object') for (k in o.got) if (BN_STG_BY_ID[k]) { v = bnStgInt(o.got[k], 0, 3); if (v) d.got[k] = v; }
-  if (o.day && typeof o.day === 'object') { d.day = { d: bnStgInt(o.day.d, 0, 1e7), left: bnStgInt(o.day.left, 0, 99) }; if (!d.day.d) d.day = null; }
-  if (o.bounty && typeof o.bounty === 'object') { v = bnStgInt(o.bounty.d, 0, 1e7); if (v && o.bounty.done) d.bounty = { d: v, done: 1 }; }
-  // 舊存檔的 wk / gold(週 / 日上限計數)已不作用,讀取時直接丟棄
-  if (o.rep && typeof o.rep === 'object') {   // rep = {d: 遊戲日號, n: {關卡id: 當日已領重複獎勵次數}}
-    v = bnStgInt(o.rep.d, 0, 1e7);
-    if (v && o.rep.n && typeof o.rep.n === 'object') { d.rep = { d: v, n: {} }; for (k in o.rep.n) if (BN_STG_BY_ID[k]) { v = bnStgInt(o.rep.n[k], 0, BN_STG.repPerDay); if (v) d.rep.n[k] = v; } if (!Object.keys(d.rep.n).length) d.rep = null; }
-  }
+  // 舊存檔的 day / bounty / rep / wk / gold 不再作用,讀取時直接丟棄
   if (o.books && typeof o.books === 'object') for (k in o.books) if (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[k]) { v = bnStgInt(o.books[k], 0, 999); if (v) d.books[k] = v; }
   return d;
 }
-function bnStgHas(d) { return Object.keys(d.got || {}).length || d.day || d.bounty || d.rep || Object.keys(d.books || {}).length; }
-// 要併入存檔 JSON 的欄位(只含有值者)
+function bnStgHas(d) { return Object.keys(d.got || {}).length || Object.keys(d.books || {}).length; }
+// 要併入存檔 JSON 的欄位(只含有值者;軍令 / 每日上限欄位已取消,不再寫出)
 function bnStgPack(d) {
   var o = {};
   if (d.got && Object.keys(d.got).length) o.got = d.got;
-  if (d.day) o.day = d.day;
-  if (d.bounty) o.bounty = d.bounty;
-  if (d.rep) o.rep = d.rep;
   if (d.books && Object.keys(d.books).length) o.books = d.books;
   return o;
 }
 
-// ───────── 軍令 / 上限 ─────────
-function bnStgOrders(d, env) {
-  var today = bnStgDayNo(env.now()), o = d.day, left;
-  if (!o) left = BN_STG.perDay;
-  else if (today > o.d) left = Math.min(BN_STG.store, o.left + BN_STG.perDay);
-  else left = Math.min(BN_STG.store, o.left);
-  return { left: left, max: BN_STG.perDay };
-}
-function bnStgSpendOrder(d, env) {
-  var cur = bnStgOrders(d, env), today = bnStgDayNo(env.now());
-  d.day = { d: Math.max(today, d.day ? d.day.d : 0), left: Math.max(0, cur.left - 1) };
-}
-// 該關今日重複獎勵剩餘場數(以遊戲日重置)
-function bnStgRepLeft(d, id, env) {
-  var today = bnStgDayNo(env.now()), n = (d.rep && d.rep.d >= today && d.rep.n) ? (d.rep.n[id] | 0) : 0;
-  return Math.max(0, BN_STG.repPerDay - n);
-}
-function bnStgRepUse(d, id, env) {
-  var today = bnStgDayNo(env.now()), n = (d.rep && d.rep.d >= today && d.rep.n) ? d.rep.n : {};
-  n[id] = Math.min(BN_STG.repPerDay, (n[id] | 0) + 1);
-  d.rep = { d: Math.max(today, d.rep ? d.rep.d : 0), n: n };
-}
 
 // 解鎖:章 n 需官階第 n 階;章內依序;新章需前章頭目已過。clear = d.clear。回 {ok, why}
 function bnStgUnlock(clear, id, env) {
@@ -333,14 +315,10 @@ function bnStgUnlock(clear, id, env) {
   if (prev && !((clear[prev] | 0) >= 1)) return { ok: false, why: '先通過 ' + prev };
   return { ok: true, why: '' };
 }
-// 能否開打:解鎖 + 軍令(未通關過的首通免軍令)。回 {ok, why, free}
+// 能否開打:只看解鎖條件(軍令與每日上限已取消,可無限重打)。回 {ok, why, free};free 恆為 true(欄位保留給呼叫端)
 function bnStgCanStart(d, id, env) {
-  var u = bnStgUnlock(d.clear || {}, id, env), first;
-  if (!u.ok) return { ok: false, why: u.why, free: false };
-  first = !(((d.got || {})[id] | 0) & 1);
-  if (first) return { ok: true, why: '', free: true };
-  if (bnStgOrders(d, env).left < 1) return { ok: false, why: '今日軍令已用完', free: false };
-  return { ok: true, why: '', free: false };
+  var u = bnStgUnlock(d.clear || {}, id, env);
+  return { ok: u.ok, why: u.why, free: true };
 }
 function bnStgChapterStars(clear, n) {
   var s = 0, j;
@@ -355,7 +333,7 @@ function bnStgRewards(id) {
   ch = bnStgChapter(st.ch); n = st.ch; m = ch.mats; g1 = BN_STG.gold1 * n;
   return {
     first: { gold: g1, goods: [[m[0], 2 + (st.idx >= 5 ? 1 : 0)]].concat(st.boss ? [[m[1], 1]] : []), shards: BN_STG.shards1, book: [st.book, 1], token: st.boss ? 1 : 0, pulls: (st.boss && typeof CARD_BOSS !== 'undefined') ? CARD_BOSS.pulls : 0 },
-    repeat: { gold: Math.round(g1 / BN_STG.repeatDiv), goods: [m[0], 1], goodsP: BN_STG.matRepP, shards: BN_STG.shardsRep, book: st.book, bookP: BN_STG.bookRepP },
+    repeat: { gold: Math.round(g1 / BN_STG.repeatDiv), goods: [m[0], 1], goodsP: BN_STG.matRepP, book: st.book, bookP: BN_STG.bookRepP },   // 重複:無次數上限;不給碎片、不給抽卡次數
     star3: { gold: BN_STG.star3Gold * n, shards: BN_STG.star3Shards }
   };
 }
@@ -367,7 +345,7 @@ function bnStgGrant(d, env, want, rep) {
   if (s > 0) env.shards(s);
   if (b > 0 && want.bookId) {   // 兵書 = 解鎖該通用戰法(R12);已擁有 → 轉碎片(bn_skcard.js bnSkcGrant)
     var bk = (typeof bnSkcGrant === 'function') ? bnSkcGrant(want.bookId) : { unlocked: false, dup: 0 };
-    if (bk.dup > 0) { env.shards(bk.dup); s += bk.dup; }
+    if (bk.dup > 0 && want.dupShards !== false) { env.shards(bk.dup); s += bk.dup; }   // 重複通關的兵書已擁有 → 不轉碎片(v58-E:重複不給碎片)
     rep.bookId = want.bookId; rep.bookUnlock = !!bk.unlocked;
   }
   (want.goods || []).forEach(function (x) { if (x[1] > 0) { env.goods(x[0], x[1]); rep.goods.push({ id: x[0], n: x[1] }); } });
@@ -376,47 +354,41 @@ function bnStgGrant(d, env, want, rep) {
   rep.gold = g; rep.shards = s; rep.books = b;
   return rep;
 }
-// 討伐結算。res = {winner, stars, seed}。d 為 bn 存檔資料(clear、got、day、rep、books 會被改)。回報告 {win, first, star3, order, gold, shards, books, goods, token, repLeft(僅重複場)}
+// 討伐結算。res = {winner, stars, seed}。d 為 bn 存檔資料(clear、got、books 會被改;存檔鍵見 bnStgSk)。回報告 {win, first, repeat, star3, gold, shards, books, goods, token}
+// 首通:完整首通獎勵(只一次);重複通關:每場都有金幣 + 貨物 / 兵書機率(無次數上限,不給碎片與抽卡次數)
 function bnStgSettle(d, id, res, env) {
-  var st = bnStgById(id), rep = { win: false, id: id, first: false, star3: false, order: 0, gold: 0, shards: 0, books: 0, goods: [], token: 0 }, rw, got, first, stars, want, f;
+  var st = bnStgById(id), rep = { win: false, id: id, first: false, repeat: false, star3: false, books: 0, gold: 0, shards: 0, goods: [], token: 0 }, rw, k, got, first, stars, want;
   env = bnStgEnv(env);
   if (!st || !res || res.winner !== 'A') return rep;
   d.clear = d.clear || {}; d.got = d.got || {}; d.books = d.books || {};
-  rw = bnStgRewards(id); stars = bnStgInt(res.stars, 1, 3); got = d.got[id] | 0; first = !(got & 1);
-  rep.win = true; rep.first = first; rep.stars = stars;
+  k = bnStgSk(id, st.bf, st.diff);
+  rw = bnStgRewards(id); stars = bnStgInt(res.stars, 1, 3); got = d.got[k] | 0; first = !(got & 1);
+  rep.win = true; rep.first = first; rep.repeat = !first; rep.stars = stars;
   want = { gold: 0, shards: 0, books: 0, goods: [], token: 0, bookId: st.book };
   if (first) {
     want.gold += rw.first.gold; want.shards += rw.first.shards; want.books += rw.first.book[1]; want.goods = rw.first.goods.map(function (x) { return [x[0], x[1]]; }); want.token = rw.first.token; want.pulls = rw.first.pulls;
     got |= 1;
   } else {
-    bnStgSpendOrder(d, env); rep.order = 1;
-    if (bnStgRepLeft(d, id, env) > 0) {   // 每遊戲日前 N 場勝利才有重複獎勵,之後僅當練習(仍耗軍令)
-      bnStgRepUse(d, id, env); rep.repGot = true;
-      want.gold += rw.repeat.gold; want.shards += rw.repeat.shards;
-      if (bnStgFrac(res.seed, 'm', id) < rw.repeat.goodsP) want.goods.push([rw.repeat.goods[0], rw.repeat.goods[1]]);
-      if (bnStgFrac(res.seed, 'b', id) < rw.repeat.bookP) want.books += 1;
-    }
-    rep.repLeft = bnStgRepLeft(d, id, env);
+    want.dupShards = false;
+    want.gold += rw.repeat.gold;
+    if (bnStgFrac(res.seed, 'm', id) < rw.repeat.goodsP) want.goods.push([rw.repeat.goods[0], rw.repeat.goods[1]]);
+    if (bnStgFrac(res.seed, 'b', id) < rw.repeat.bookP) want.books += 1;
   }
   if (stars >= 3 && !(got & 2)) { want.gold += rw.star3.gold; want.shards += rw.star3.shards; got |= 2; rep.star3 = true; }
   bnStgGrant(d, env, want, rep);
-  d.got[id] = got;
-  d.clear[id] = Math.max(d.clear[id] | 0, stars);
+  d.got[k] = got;
+  d.clear[k] = Math.max(d.clear[k] | 0, stars);
   return rep;
 }
-function bnStgBountyDone(d, env) { return !!(d.bounty && d.bounty.done && d.bounty.d >= bnStgDayNo(env.now())); }
+// 每日流寇:每次勝利都給重複獎勵(金幣 + 主材料;不給碎片、不給抽卡次數、不耗軍令、不限次數)
 function bnStgBountySettle(d, res, env) {
-  var rep = { win: false, id: 'B', first: false, gold: 0, shards: 0, books: 0, goods: [], token: 0 }, today, want, mats;
+  var rep = { win: false, id: 'B', first: false, repeat: true, gold: 0, shards: 0, books: 0, goods: [], token: 0 }, want, mats;
   env = bnStgEnv(env);
   if (!res || res.winner !== 'A') return rep;
   rep.win = true;
-  if (bnStgBountyDone(d, env)) { rep.already = true; return rep; }
-  today = bnStgDayNo(env.now());
   mats = bnStgChapter(Math.max(1, Math.min(6, res.ch | 0 || 1))).mats[0];
-  want = { gold: BN_STG.bounty.gold, shards: BN_STG.bounty.shards, books: 0, goods: [[mats, BN_STG.bounty.goods]], token: 0 };
+  want = { gold: BN_STG.bounty.gold, shards: 0, books: 0, goods: [[mats, BN_STG.bounty.goods]], token: 0 };
   bnStgGrant(d, env, want, rep);
-  d.bounty = { d: Math.max(today, d.bounty ? d.bounty.d : 0), done: 1 };
-  rep.first = true;
   return rep;
 }
 

@@ -1,6 +1,6 @@
 // js/cards.js — 卡牌與酒館引擎 第一階段(PLAN_CARDS.md v3:§2.2~2.6 三場所/招募歲鐘/品階機率與保底/名額、§3A 品階與升階、§4.13 職業詞條、§7A 名額與遣散;第四批決議:名人加權抽取)。
 // 2026-11-09 使用者決議:移除酒令與『任用』—— 抽到的卡直接進名冊(名冊滿了先放卡包 cs.bag,有空位自動補進);酒館 / 縣試改『每日一抽』(CARD_DRAW:每批 4~7 張、每 24~8 小時一批,離線最多 2 批)。舊存檔一次性遷移見 cardsNormSave(cs.v 2)。
-// 2026-11-09 再改『抽卡次數制』:全域次數錢包 cs.pl = {n 可抽次數, t 下次補充時間戳, tot 累計抽數}(酒館 / 縣試池共用),依 CARD_DRAW 階梯每 8~24 小時 +4~7 抽(離線補算),累積上限 CARD_DRAW.cap;單抽 / 連抽走 cardsPullStage;頭目首通贈抽 cardsBossGive(cs.boss 防重領);cs.v 3。
+// 2026-11-09 再改『抽卡次數制』:全域次數錢包 cs.pl = {n 可抽次數, t 下次補充時間戳, tot 累計抽數}(酒館 / 縣試池共用),依 CARD_DRAW 階梯每 8~24 小時 +10 抽(離線補算),累積上限 CARD_DRAW.cap;單抽 / 連抽走 cardsPullStage;頭目首通贈抽 cardsBossGive(cs.boss 防重領);cs.v 3。
 // 純資料邏輯,不寫 DOM;時間一律由呼叫端傳入 now(毫秒),模擬層不讀 Date.now()。資料表在 js/carddata.js,介面在 js/cardsui.js。
 // 存檔:world.city.cards(goods.js goodsNormCity 帶過 cardsNormSave);名冊 roster 即派工用的 world.city.talents(同一批物件,不可列舉,不重複存檔)。
 // 第一階段刻意未做:名冊人物/小兵卡/人物圈、取捨詞條 §4.4A、戰場技能內容(只記數量 skn)、記名簿、快速模式、文鬥小遊戲(星數固定 1)、結義。
@@ -106,7 +106,7 @@ function cardsMigNoteTake(cs) {
   var m = cs && cs.migNote;
   if (!m) return '';
   delete cs.migNote;
-  return '卡包改版:改為抽卡次數制,依時間累積(上限 ' + CARD_DRAW.cap + ' 抽)' + (m.pl ? ';原有待抽批次已換成 ' + m.pl + ' 抽' : '') + (m.sh ? ';酒令已換成碎片 ' + m.sh : '') + '。';
+  return '卡片改版:改為抽卡次數制,依時間累積(上限 ' + CARD_DRAW.cap + ' 抽)' + (m.pl ? ';原有待抽批次已換成 ' + m.pl + ' 抽' : '') + (m.sh ? ';酒令已換成碎片 ' + m.sh : '') + '。';
 }
 
 // ───────── 招募歲鐘(§2.4) ─────────
@@ -420,7 +420,7 @@ function cardsNamedKeyOk(mode, key) {
   if (mode === 'row') return CARD_ROWS.indexOf(key) >= 0;
   return false;
 }
-function cardsNamedOpen(cs) { return cardsVenueOpen('G') || !!(cs && cs.starter && (cs.starter.nt | 0) > 0); }   // 開放條件沿用原殿試閘(科技 dianshi);新手禮包的指名券(cs.starter.nt)未研發也可用
+function cardsNamedOpen(cs) { return cardsVenueOpen('G') || !!(cs && cs.starter && (cs.starter.nt | 0) > 0); }   // v58-C:指名池開場全開(cardsVenueOpen('G') 恆真),仍需指名券(cs.tok / cs.nameTokens 等資源規則)
 function cardsAddNameTokens(cs, n) { cs.nameTokens = Math.max(0, (cs.nameTokens | 0) + (n | 0)); return cs.nameTokens; }
 // 確定性:種子 = hash(cs.seed, 'named', mode, key, seedKey);seedKey = 已抽次數。不改 cs(除讀 cs.pity.G)。回批次 {key, venue:'G', cands, hasUpper, pityHit, named:{mode,key}}
 function cardsGenNamed(cs, mode, key, seedKey) {

@@ -153,7 +153,7 @@ function cuPersonCardHtml(cs, f) {
     '<span class="cupst">' + stars + (e.star ? ' 🔒' : '') + '</span></div>' +
     '<div class="cupr"><div class="cuph"><span class="cugr">' + G.ch + '</span><b class="cupn">' + cuEsc(e.name) + '</b>' + (e.zi ? '<span class="cusub">(' + cuEsc(e.zi) + ')</span>' : '') + '<span class="cupgem">' + cuCGem(G) + '</span></div>' +
     '<div class="cupsb">' + cuEsc(CARD_FAC[e.fac] || '') + ' · ' + cuCTroopIcon(e) + cuEsc(cuCTroop(e)) + '兵 · ' + cuEsc(CARD_LEARN[e.learn] || '') + '</div>' +
-    '<div class="cupsb cuink">' + (e.fig ? '名人' : '路人') + (j ? ' · ' + cuEsc(j.name) + ' ' + cuEsc(j.t[(e.ja[e.main] || 1) - 1]) : '') + ' · 才 ' + e.tai + '</div>' +
+    '<div class="cupsb cuink">' + (e.fig ? '名人' : '路人') + (j ? ' · ' + cuEsc(j.name) : '') + '</div>' +
     '<div class="cupstat">' + CARD_STATS.map(function (nm, k) { return '<span><i>' + nm + '</i><b>' + st[k] + '</b></span>'; }).join('') + '</div>' +
     '<div class="cupsk">' + chips + '</div>' +
     '<div class="cupbt"><button class="cub" data-a="cpop" data-k="bio" data-eid="' + cuEsc(e.id) + '">📜 人物傳記</button>' +
@@ -273,7 +273,7 @@ function cuPopPick(cs, f, p) {
       hd = cuCHolders(cs, id).filter(function (x) { return x.eid === c.holder; })[0] || null;
       why = '由『' + (hd ? cuEsc(hd.name) : '他人') + '』裝備中,換人要先卸下';
       if (hd) act = '<button class="cub warn" data-a="cpuneq" data-eid="' + cuEsc(hd.eid) + '" data-slot="' + hd.slot + '">從' + cuEsc(hd.name) + '卸下</button>';
-    } else if (c.reason === 'fit') why = c.msg || '學養不符';
+    } else if (c.reason === 'fit') why = c.msg || '條件不符';
     else why = CUC_REASON[c.reason] || '無法裝備';
     h += '<div class="cprow">' + cuPopTierChip(t) + '<button class="cpnm" data-a="cpgo" data-k="skill" data-id="' + cuEsc(id) + '" data-eid="' + cuEsc(e.id) + '" data-slot="-1">' + cuEsc(cuCSkName(id)) + '</button>' + act + (why ? '<span class="cpwhy">' + cuEsc(why) + '</span>' : '') + '</div>';
   });
@@ -341,10 +341,9 @@ function cuBioText(c) {
     fac = CARD_FAC[c.fac] || '';
     org = (c.org && c.org.k === 'pin') ? '縣試' : (CARD_VENUES[c.pool] ? CARD_VENUES[c.pool].orgName : '');
     j = CARD_JOB_BY_ID[c.main];
-    tm = (j && c.ja) ? j.t[(c.ja[c.main] || 1) - 1] : '';
     t = cuCTroop(c);
-    out.push(cuCEndDot(c.name + ',' + fac + org + '出身' + (tm ? ',' + tm : '')));
-    out.push(cuCEndDot('才 ' + c.tai + ',' + (t === '謀' ? '擅長謀略' : '擅長' + t + '兵')));
+    out.push(cuCEndDot(c.name + ',' + fac + org + '出身'));
+    out.push(cuCEndDot(t === '謀' ? '擅長謀略' : '擅長' + t + '兵'));
     names = [];
     (c.tr || []).forEach(function (id) { var x = (typeof CARD_TRAIT_BY_ID !== 'undefined') ? CARD_TRAIT_BY_ID[id] : null; if (x && names.indexOf(x.n) < 0) names.push(x.n); });
     (c.trn || []).forEach(function (x) { if (names.indexOf(x[0]) < 0) names.push(x[0]); });
@@ -423,7 +422,7 @@ function cuCardClick(a, b, cs) {
     f = cardsFind(cs, eid);
     r = (f && f.list === 'roster') ? bnSkcEquip(cs, f.e, slot, id) : { ok: false, reason: 'none' };
     if (r.ok) { CUC.pop = null; CUC.stack = []; cu.msg = '已裝備『' + cuCSkName(id) + '』'; cuSave(); }
-    else cuPopErr(r.reason === 'fit' ? (r.msg || '學養不符') : (CUC_REASON[r.reason] || '無法裝備'));
+    else cuPopErr(r.reason === 'fit' ? (r.msg || '條件不符') : (CUC_REASON[r.reason] || '無法裝備'));
   }
   else if (a === 'cpuneq') { bnSkcUnequip(eid, slot); cu.msg = '已卸下'; cuSave(); }
   else if (a === 'cpinh') { if (CUC.pop) { CUC.pop.confirm = true; CUC.pop.err = ''; } }

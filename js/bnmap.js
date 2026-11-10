@@ -3,7 +3,13 @@
 // 依賴:bnui.js(bnu BNUI bnUiEsc …)、bn_stages.js。ES2017;不用 ?. ??。
 // 全域:BNMAP bnMapRender bnMapDo bnMapMyPower bnMapRewardHtml bnMapStageStats bnMapEnv
 
-var BNMAP = { ch: 1, sel: '', bc: null, env: null };
+var BNMAP = { ch: 1, sel: '', bc: null, env: null, bf: 'sanguo' };
+// 戰場選擇列(頂部預留位置):開放的戰場 ≥ 2 才顯示;目前只有三國討伐,回空字串
+function bnMapBfHtml() {
+  var on = BN_BATTLEFIELDS.filter(function (b) { return b.open; });
+  if (on.length < 2) return '';
+  return '<div class="bnm-bf">' + on.map(function (b) { return '<button class="' + (BNMAP.bf === b.id ? 'on' : '') + '" data-a="mbf" data-i="' + b.id + '">' + bnUiEsc(b.name) + '</button>'; }).join('') + '</div>';
+}
 var BNMAP_SCENE = { plain: '平原', hill: '山地', water: '水域', rain: '雨天' };
 function bnMapEnv() { return BNMAP.env || bnStgEnv(BNUI.env); }
 function bnMapData() { return bnu.data || bnUiLoad(); }
@@ -68,16 +74,17 @@ function bnMapRouteHtml(d, env, ch) {
   return '<div class="bnm-route"><div class="rt">第 ' + ch.n + ' 章・第 ' + (cur && cur.ch === ch.n ? list.indexOf(cur) + 1 : 1) + ' 關 <span class="dots">' + dots + '</span></div><div class="rp">' + h + '</div></div>';
 }
 function bnMapRender() {
-  var el = bnu.mapEl, d, env, ord, mine, h = '', ch, st, rows = '', k, ui, cn, sel, f, rw, bt, doneB, can, ratio, stats, lock, cl, locked = {}, first;
+  var el = bnu.mapEl, d, env, mine, h = '', ch, st, rows = '', k, ui, cn, sel, f, rw, bt, can, ratio, stats, lock, cl, locked = {}, first;
   if (!el || typeof BN_STAGES === 'undefined') return;
   d = bnMapData(); env = bnMapEnv();
-  ord = bnStgOrders(d, env); mine = bnMapMyPower(); stats = bnMapStageStats(d);
+  mine = bnMapMyPower(); stats = bnMapStageStats(d);
   if (!BNMAP.sel || !bnStgById(BNMAP.sel)) {   // 預設選第一個尚未通關且已解鎖的關,否則最後通關關
     BNMAP.sel = '1-1';
     for (k = 0; k < BN_STAGES.length; k++) { if (!bnStgUnlock(d.clear, BN_STAGES[k].id, env).ok) break; BNMAP.sel = BN_STAGES[k].id; if (!(d.clear[BN_STAGES[k].id] | 0)) break; }
     BNMAP.ch = bnStgById(BNMAP.sel).ch;
   }
-  h += '<div class="bnm-head"><span>軍令 <b>' + ord.left + '/' + ord.max + '</b></span><span>我方戰力 <b>' + mine + '</b></span><span>進度 <b>' + stats.cleared + '/' + stats.total + '</b> · ★' + stats.stars + '/' + stats.total * 3 + '</span></div>';
+  h += bnMapBfHtml();
+  h += '<div class="bnm-head"><span>我方戰力 <b>' + mine + '</b></span><span>進度 <b>' + stats.cleared + '/' + stats.total + '</b> · ★' + stats.stars + '/' + stats.total * 3 + '</span></div>';
   h += '<div class="bnm-chs">';
   BN_CHAPTERS.forEach(function (c) {
     var u = bnStgUnlock(d.clear, c.n + '-1', env);
@@ -97,16 +104,16 @@ function bnMapRender() {
     h += '<div class="bnm-det"><h3>' + sel.id + ' ' + bnUiEsc(sel.name) + (sel.boss ? ' <i>頭目</i>' : '') + '</h3><p>' + bnUiEsc(sel.desc) + '</p><p class="sm">場景:' + (BNMAP_SCENE[sel.scene] || '平原') + (f.bonds.length ? ' · 敵方陣勢:' + f.bonds.map(bnUiEsc).join('、') : '') + '</p>';
     h += '<div class="bnm-foes">' + f.list.map(function (x) { return '<span><small>' + bnUiEsc(x.title) + '</small>' + bnUiEsc(x.name) + ' <u>' + bnUiEsc(x.troop) + '</u></span>'; }).join('') + '</div>';
     h += '<p>建議戰力 <b>' + f.rec + '</b> · 我方 <b>' + mine + '</b> <em class="' + ratio[1] + '">' + ratio[0] + '</em></p>';
-    h += '<p class="sm">' + (first ? '首通:' + bnMapRewardLine({ gold: rw.first.gold, goods: rw.first.goods, shards: rw.first.shards, book: rw.first.book, token: rw.first.token, pulls: rw.first.pulls }) + '(首通不耗軍令)' : '首通已領') + '</p>';
-    h += '<p class="sm">今日重複獎勵:還剩 <b>' + bnStgRepLeft(d, sel.id, env) + '/' + BN_STG.repPerDay + '</b> 場(金幣 ' + rw.repeat.gold + '、碎片 ' + rw.repeat.shards + '、' + bnMapGoodsName(rw.repeat.goods[0]) + ' 機率 ' + Math.round(rw.repeat.goodsP * 100) + '%、通用戰法「' + bnMapSkillName(rw.repeat.book) + '」機率 ' + Math.round(rw.repeat.bookP * 100) + '%;勝利耗 1 軍令)</p>';
+    h += '<p class="sm">' + (first ? '首通:' + bnMapRewardLine({ gold: rw.first.gold, goods: rw.first.goods, shards: rw.first.shards, book: rw.first.book, token: rw.first.token, pulls: rw.first.pulls }) + '' : '首通已領') + '</p>';
+    h += '<p class="sm">重複通關(不限次數):金幣 ' + rw.repeat.gold + '、' + bnMapGoodsName(rw.repeat.goods[0]) + ' 機率 ' + Math.round(rw.repeat.goodsP * 100) + '%、通用戰法「' + bnMapSkillName(rw.repeat.book) + '」機率 ' + Math.round(rw.repeat.bookP * 100) + '%(不給碎片與抽卡)</p>';
     if (!(((d.got || {})[sel.id] | 0) & 2)) h += '<p class="sm">三星首次:金幣 ' + rw.star3.gold + '、碎片 ' + rw.star3.shards + '(三星:勝利 + 無人陣亡 + 5 回合內全殲)</p>';
     h += '<button class="bnf-go" data-a="fight"' + (can.ok ? '' : ' disabled') + '>' + (can.ok ? '前往布陣' : bnUiEsc(can.why)) + '</button></div>';
   }
   if (typeof bnTeamStripHtml === 'function') h += bnTeamStripHtml({ mini: true, title: '目前隊伍' });   // 戰前準備:整隊武將戰法卡(js/bnteam.js)
   h += '</div></div>';
-  bt = bnMapBounty(d); doneB = bnStgBountyDone(d, env);
-  h += '<div class="bnm-foot"><div class="bnm-b"><b>每日流寇</b> <small>' + bnUiEsc(BN_CHAPTERS[bt.ch - 1].name) + ' · 建議戰力 ' + bt.rec + ' · 獎勵:金幣 ' + BN_STG.bounty.gold + '、碎片 ' + BN_STG.bounty.shards + '、' + bnMapGoodsName(BN_CHAPTERS[bt.ch - 1].mats[0]) + '(不耗軍令)</small><br>' + bt.list.map(function (x) { return bnUiEsc(x.name); }).join('、') +
-    '<button class="bnbtn" data-a="bounty"' + (doneB ? ' disabled' : '') + '>' + (doneB ? '今日已討平' : '出戰流寇') + '</button></div><div class="bnm-b"><b>練兵</b> <small>不計戰績、不給獎勵,敵將依我方戰力縮放,可自由試陣</small><br><button class="bnbtn" data-a="practice">進入練兵</button></div></div>';
+  bt = bnMapBounty(d);
+  h += '<div class="bnm-foot"><div class="bnm-b"><b>每日流寇</b> <small>' + bnUiEsc(BN_CHAPTERS[bt.ch - 1].name) + ' · 建議戰力 ' + bt.rec + ' · 獎勵:金幣 ' + BN_STG.bounty.gold + '、' + bnMapGoodsName(BN_CHAPTERS[bt.ch - 1].mats[0]) + ' ×' + BN_STG.bounty.goods + '(可重複討伐,每次勝利都有重複獎勵)</small><br>' + bt.list.map(function (x) { return bnUiEsc(x.name); }).join('、') +
+    '<button class="bnbtn" data-a="bounty">出戰流寇</button></div><div class="bnm-b"><b>練兵</b> <small>不計戰績、不給獎勵,敵將依我方戰力縮放,可自由試陣</small><br><button class="bnbtn" data-a="practice">進入練兵</button></div></div>';
   el.innerHTML = (typeof fxText === 'function') ? fxText(h) : h;   // 魔幻世界:軍令 → 號令、每日流寇 → 林間盜匪 …(歷史世界原樣)
   try { var se = el.querySelector && el.querySelector('.bnm-row.sel'); if (se && se.scrollIntoView) se.scrollIntoView({ block: 'nearest' }); } catch (er) { /* 舊瀏覽器略過 */ }   // 聚焦目前(下一)關
 }
@@ -119,7 +126,7 @@ function bnMapEnter(kind, id) {
     if (!can.ok) { bnUiToast(can.why); return false; }
     bnu.stg = { kind: 'stage', id: id };
   } else if (kind === 'bounty') {
-    if (bnStgBountyDone(d, env)) { bnUiToast('今日流寇已討平'); return false; }
+    // 流寇可重複討伐,不再有每日一次的限制
     def = bnMapBounty(d);
     bnu.stg = { kind: 'bounty', id: 'B', def: def };
   } else bnu.stg = { kind: 'practice', id: 'P' };
@@ -132,6 +139,7 @@ function bnMapEnter(kind, id) {
 function bnMapDo(a, id, r, c, t, i) {
   var d, env, u;
   if (a === 'mchap') { BNMAP.ch = i | 0; d = bnMapData(); env = bnMapEnv(); u = bnStgUnlock(d.clear, BNMAP.ch + '-1', env); BNMAP.sel = BNMAP.ch + '-1'; bnMapRender(); return true; }
+  if (a === 'mbf') { BNMAP.bf = id; bnMapRender(); return true; }
   if (a === 'stg') { BNMAP.sel = id; bnMapRender(); return true; }
   if (a === 'fight') { bnMapEnter('stage', BNMAP.sel); return true; }
   if (a === 'bounty') { bnMapEnter('bounty'); return true; }
@@ -145,7 +153,6 @@ function bnMapRewardHtml(rep) {
   var a = [], h = '';
   if (!rep) return '';
   if (!rep.win) return '';
-  if (rep.already) return '<p class="rw">今日流寇已討平,不再給獎勵</p>';
   if (rep.gold) a.push('金幣 +' + rep.gold);
   (rep.goods || []).forEach(function (g) { a.push(bnMapGoodsName(g.id) + ' ×' + g.n); });
   if (rep.shards) a.push('碎片 +' + rep.shards);
@@ -153,8 +160,7 @@ function bnMapRewardHtml(rep) {
   if (rep.token) a.push('指名券 ×' + rep.token);
   if (rep.pulls) a.push('抽卡 +' + rep.pulls + ' 抽');
   h += '<p class="rw">' + (rep.first && rep.id !== 'B' ? '首通 · ' : '') + (rep.star3 ? '三星首次 · ' : '') + (a.length ? '獲得:' + a.join('、') : '本次沒有獎勵') + '</p>';
-  if (rep.first === false && rep.id !== 'B' && rep.repLeft !== undefined) h += '<p class="sm">' + (rep.repGot ? '' : '今日重複獎勵已領完,本場僅練習。') + '今日重複獎勵剩餘 ' + rep.repLeft + ' 場</p>';
-  if (rep.order) h += '<p class="sm">消耗軍令 1</p>';
+  if (rep.repeat && rep.id !== 'B') h += '<p class="sm">重複通關:不給碎片與抽卡</p>';
   return h;
 }
 

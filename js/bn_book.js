@@ -73,7 +73,7 @@ function bnBookHtml(cs, e) { return bnBookTx(bnBookHtml0(cs, e)); }
 function bnBookHtml0(cs, e) {
   var h = '<div class="cusec">研兵(討伐)</div>', d, tr, lv, cost;
   if (!e || typeof bnDefaultTroop !== 'function' || typeof BN_DATA === 'undefined') return '';
-  if (!bnBookOpen()) return h + '<div class="cusub">開放討伐(官階亭長、名冊 3 人)後,可研兵強化兵種。</div>';
+  if (!bnBookOpen()) return h + '<div class="cusub">名冊至少 5 人後開放討伐,可研兵強化兵種。</div>';
   d = bnBookLoad();
   tr = bnDefaultTroop(e);
   lv = d.drill[tr] | 0;

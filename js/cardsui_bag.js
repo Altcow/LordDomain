@@ -1,4 +1,4 @@
-// js/cardsui_bag.js — 名冊人物的升星(cuStarHtml)與碎片兌換指名券(cuExchangeHtml / bex)。卡包列表 / 溢出區已移除(2026-11-10):抽到的卡直接進名冊,名冊列表與熔鍊在 cardsui_roster.js。
+// js/cardsui_bag.js — 名冊人物的升星(cuStarHtml)與碎片兌換指名券(cuExchangeHtml / bex)。卡包列表 / 溢出區已移除(2026-11-10):抽到的卡直接進名冊,名冊列表在 cardsui_roster.js,熔鍊與碎片兌換在熔爐分頁(cardsui_furnace.js)。
 // 碎片用途:(1)名冊詳情『強化(升星)』(cuStarHtml,動作 starup)(2)『碎片兌換』指名券(每週上限,cuExchangeHtml,動作 bex)(3)請回流浪名人。
 // 掛在 cardsui.js(cuStarHtml 由 typeof 守衛呼叫;cuBagClick 由 cuClick 呼叫)。引擎在 cards.js(cardsStar* / cardsExchange)。不發聲、不推播。ES2017;不用 ?. ??。
 // 全域名稱:cuStarHtml cuExchangeHtml cuBagClick CU_BAG_MSG

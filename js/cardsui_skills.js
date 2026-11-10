@@ -147,7 +147,7 @@ function cuSkInheritHtml(cs) {
 function cuSkDrillHtml() {
   var h = '<div class="cusec">研兵(討伐)</div>', d, pct;
   if (typeof bnBookOpen !== 'function' || typeof bnBookLoad !== 'function' || typeof BNBOOK === 'undefined') return h;
-  if (!bnBookOpen()) return h + '<div class="cusub">開放討伐(官階亭長、名冊 3 人)後,可研兵強化兵種。</div>';
+  if (!bnBookOpen()) return h + '<div class="cusub">名冊至少 5 人後開放討伐,可研兵強化兵種。</div>';
   d = bnBookLoad();
   pct = Math.round(BNBOOK.drillPer * 100);
   h += '<div class="cusub">全名冊同兵種共享;討伐中兵力 / 攻擊 / 謀略 / 治療每級 +' + pct + '%(敵人不吃)。</div>';
@@ -169,7 +169,7 @@ function cuSkillsHtml(cs) {
   cuSkCss();
   all = cuSkAll();
   own = cuSkOwned();
-  h = '<div class="cusk-desc">拆卡傳承技能後永久擁有;S/A 同時只能裝一人,B/C 可多人。</div>';
+  h = '';   // 說明文字移到『說明』浮層(cardsui.js CU_HELP.skills)
   h += '<div class="cusk-stat">已解鎖 ' + own.length + ' / ' + all.length + '</div>';
   if (CU_SK.sel) { if (bnSkcOwned(CU_SK.sel)) h += cuSkDetailHtml(cs, CU_SK.sel); else CU_SK.sel = ''; }
   h += '<input id="cuskq" class="cusk-q" type="search" placeholder="搜尋戰法、持有者" autocomplete="off" value="' + cuEsc(CU_SK.q) + '">';
@@ -213,7 +213,7 @@ function cuSkOnInput(ev) {
   CU_SK.q = t.value;
   box = cu.el.querySelector('#cuskl');
   cs = cardsGet();
-  if (box && cs) box.innerHTML = cuSkListHtml(cs);
+  if (box && cs) cuKeepScroll(function () { box.innerHTML = cuSkListHtml(cs); });
   else if (typeof cardsUiRender === 'function') cardsUiRender();
 }
 if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {

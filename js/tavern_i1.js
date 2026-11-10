@@ -6,7 +6,7 @@
 // 掌櫃職司:名冊人物派駐在酒館(npcdata.js 職司 keep)→ 收入與事件獎勵 +min(keepCap, 人事乘區% × keepScale + 詞條),酒館室內掌櫃換成該人物外觀。
 // 面板為室內 layer 內的 DOM(#tv1Panel),只在開啟時重繪;不增加每幀成本。不發聲(僅 toast)。ES2017;不用 ?. ??。
 // 全域名稱:TV1 tavernBuilt tavernHourIncome tavernRoomOcc tavernKeeperPerson tavernKeepBonus tavernEconSettle tavernTick tavernEventFor tavernEventOutcome tavernEventApply
-//          tavernLvUpInfo tavernLvUp tavernRoomUpInfo tavernRoomUp tavernI1Enter tavernI1Offer tavernI1OpenRoom tavernI1OpenEvent tavernI1OpenLedger tavernI1Close tavernI1Leave tavernI1DrawMark tavernI1Act
+//          tavernI1Enter tavernI1Offer tavernI1OpenRoom tavernI1OpenEvent tavernI1OpenLedger tavernI1Close tavernI1Leave tavernI1DrawMark tavernI1Act
 
 var TV1 = { acc: 0, last: null, panel: null, chip: null, btn: null, mode: '', roomI: 0, evRes: null, msg: '' };
 var TAVERN_LV_NAMES = ['酒肆', '酒舍', '酒樓', '名樓', '天下名樓'];
@@ -125,65 +125,6 @@ function tavernTick(dt) {
     if (r && TV1.chip) tavernI1Refresh();
     return r;
   } catch (e) { return null; }
-}
-
-// ───────── 升級 ─────────
-function tvGoodsText(goods) {
-  var out = [], id;
-  for (id in (goods || {})) out.push(((typeof GOODS !== 'undefined' && GOODS[id]) ? GOODS[id].name : id) + ' ' + goods[id]);
-  return out.join('、');
-}
-// 檢查並回 {ok, why, cost:{coin, goods}, need}
-function tvCheckCost(cost) {
-  var chk;
-  if (tvCoinHave() < cost.coin) return { ok: false, why: 'coin' };
-  if (cost.goods) {
-    if (typeof cityGoodsReq !== 'function') return { ok: false, why: 'goods' };
-    chk = cityGoodsReq(cost.goods);
-    if (!chk.ok) return { ok: false, why: 'goods' };
-  }
-  return { ok: true };
-}
-function tvSpend(cost) {
-  if (cost.goods && typeof cityGoodsSpend === 'function' && !cityGoodsSpend(cost.goods)) return false;
-  tvCoinAdd(-cost.coin);
-  return true;
-}
-function tavernLvUpInfo(tv) {
-  var E = TAVERN_ECON, nx = tv.lv + 1, U, rank, chk;
-  if (tv.lv >= 5) return { max: true, ok: false, why: 'max' };
-  U = E.lvUp[nx - 1];
-  rank = (typeof cardsRankLv === 'function') ? cardsRankLv() : 0;
-  if (rank > 0 && rank < U.rank) return { next: nx, cost: U, ok: false, why: 'rank', rank: U.rank };
-  if (U.gate && typeof nlFeatureOpen === 'function' && !nlFeatureOpen(U.gate)) return { next: nx, cost: U, ok: false, why: 'gate' };
-  chk = tvCheckCost(U);
-  return { next: nx, cost: U, ok: chk.ok, why: chk.ok ? '' : chk.why };
-}
-function tavernLvUp() {
-  var tv = tavernGet(), info = tv ? tavernLvUpInfo(tv) : null, i, need;
-  if (!info || !info.ok) return info || { ok: false, why: 'none' };
-  if (!tvSpend(info.cost)) return { ok: false, why: 'goods' };
-  tv.lv = info.next;
-  need = tavernRoomCount(tv);
-  while (tv.rooms.length < need) tv.rooms.push({ lv: 1, use: 'coin', staff: null });
-  tvToast('酒肆升為「' + TAVERN_LV_NAMES[tv.lv - 1] + '」,新增包間');
-  return { ok: true, lv: tv.lv };
-}
-function tavernRoomUpInfo(tv, i) {
-  var E = TAVERN_ECON, rl = tavernRoomLv(tv, i), nx = rl + 1, cost, chk;
-  if (i < 0 || i >= tavernRoomCount(tv)) return { ok: false, why: 'none' };
-  if (rl >= 5) return { max: true, ok: false, why: 'max' };
-  cost = { coin: Math.round(E.roomUpBase * Math.pow(E.roomUpMul, nx - 2)), goods: E.roomUpGoods[nx - 1] || null };
-  chk = tvCheckCost(cost);
-  return { next: nx, cost: cost, ok: chk.ok, why: chk.ok ? '' : chk.why };
-}
-function tavernRoomUp(i) {
-  var tv = tavernGet(), info = tv ? tavernRoomUpInfo(tv, i) : null;
-  if (!info || !info.ok) return info || { ok: false, why: 'none' };
-  if (!tvSpend(info.cost)) return { ok: false, why: 'goods' };
-  while (tv.rooms.length <= i) tv.rooms.push({ lv: 1, use: 'coin', staff: null });
-  tv.rooms[i].lv = info.next;
-  return { ok: true, lv: info.next };
 }
 
 // ───────── 小事件 ─────────
@@ -329,15 +270,7 @@ function tavernI1Close() {
 }
 function tavernI1Leave() { TV1.chip = null; TV1.btn = null; TV1.panel = null; TV1.mode = ''; TV1.evRes = null; }
 
-function tvCostText(c) { return tvFmt(c.coin) + ' 金' + (c.goods ? '、' + tvGoodsText(c.goods) : ''); }
-function tvWhy(info) {
-  if (info.why === 'rank') return '官階未達';
-  if (info.why === 'gate') return '科技未研';
-  if (info.why === 'goods') return '貨品不足';
-  if (info.why === 'coin') return '金幣不足';
-  return '';
-}
-function tavernI1Rebuild() {   // 酒館 / 包間升級後:重排門、重烘背景、重建實體
+function tavernI1Rebuild() {   // 重排門、重烘背景、重建實體(存檔載入 / 室內重建時用)
   var S = (typeof interiorState === 'function' && interiorState().open) ? interiorState().S : null, tv = tavernGet(), n, i, now = tvNow(), st;
   if (!S || !tv) return;
   n = tavernRoomCount(tv);
@@ -350,10 +283,9 @@ function tavernI1Rebuild() {   // 酒館 / 包間升級後:重排門、重烘背
 }
 
 function tavernI1OpenLedger() {
-  var tv = tavernGet(), now = tvNow(), kb, up, n, i, h, rows = '', st, upTxt, hr;
+  var tv = tavernGet(), now = tvNow(), kb, n, i, h, rows = '', st, hr;
   if (!tv) return;
   kb = tavernKeepBonus();
-  up = tavernLvUpInfo(tv);
   n = tavernRoomCount(tv);
   hr = tavernHourIncome(tv, now);
   h = '<div class="tvh"><b>帳房 · ' + TAVERN_LV_NAMES[tv.lv - 1] + ' Lv' + tv.lv + '</b><button class="tvx" data-a="x" aria-label="關閉">✕</button></div>';
@@ -367,26 +299,20 @@ function tavernI1OpenLedger() {
     rows += '<div class="tvr"><button data-a="room" data-i="' + i + '">' + '甲乙丙丁戊己'.charAt(i) + '房 Lv' + st.lv + '</button><span>' + (st.occ ? '客人入住' : '空房') + '</span></div>';
   }
   h += '<div class="tvt tvd">包間(點選查看)</div>' + rows;
-  if (up.max) upTxt = '<div class="tvd">酒肆已是最高等級</div>';
-  else upTxt = '<button data-a="lup"' + (up.ok ? '' : ' disabled') + '>升為「' + TAVERN_LV_NAMES[up.next - 1] + '」 ' + tvCostText(up.cost) + '</button>' + (up.ok ? '' : '<div class="tvd">' + tvWhy(up) + (up.why === 'rank' ? '(需官階 ' + up.rank + ' 級)' : '') + '</div>');
-  h += '<div class="tvt">' + upTxt + '</div>';
   if (TV1.msg) h += '<div class="tvd">' + tvEsc(TV1.msg) + '</div>';
   tvShow(h, 'ledger');
 }
 function tavernI1OpenRoom(S, i) {
-  var tv = tavernGet(), now = tvNow(), st, info, h, E = TAVERN_ECON, jn;
+  var tv = tavernGet(), now = tvNow(), st, h, E = TAVERN_ECON, jn;
   if (!tv || i < 0 || i >= tavernRoomCount(tv)) return;
   TV1.roomI = i;
   st = tavernRoomOcc(tv, i, now);
-  info = tavernRoomUpInfo(tv, i);
   jn = TAVERN_JOB_NAMES[st.job] || '客人';
   h = '<div class="tvh"><b>' + '甲乙丙丁戊己'.charAt(i) + '房 · Lv' + st.lv + '</b><button class="tvx" data-a="x" aria-label="關閉">✕</button></div>';
   h += '<div class="tvr"><span>狀態</span><span class="tvg">' + (st.occ ? '客人入住(' + jn + ' ' + st.n + ' 位)' : '空房') + '</span></div>';
   h += '<div class="tvr"><span>包廂費(每遊戲小時)</span><span>' + E.roomFee[st.lv - 1] + ' 文' + (st.occ ? '' : '(有客才收)') + '</span></div>';
   h += '<div class="tvr"><span>客人消費(每遊戲小時)</span><span>' + E.roomEat[st.lv - 1] + ' 文</span></div>';
   h += '<div class="tvr"><span>入住機率</span><span>約 ' + Math.round(((E.roomOcc[tavernPeriod(new Date(now).getHours())] || 0.5) + E.roomOccPerLv * (st.lv - 1)) * 100) + '%</span></div>';
-  if (info.max) h += '<div class="tvd">此間已是最高等級</div>';
-  else h += '<button data-a="rup"' + (info.ok ? '' : ' disabled') + '>升到 Lv' + info.next + ' ' + tvCostText(info.cost) + '</button>' + (info.ok ? '' : '<div class="tvd">' + tvWhy(info) + '</div>');
   h += '<div><button data-a="ledger">帳房總覽</button></div>';
   tvShow(h, 'room');
 }
@@ -425,23 +351,9 @@ function tavernI1Pick(i) {
   return out;
 }
 function tavernI1Act(a, idx) {
-  var r, i = idx === null || idx === undefined ? 0 : (idx | 0);
+  var i = idx === null || idx === undefined ? 0 : (idx | 0);
   if (a === 'x') { tavernI1Close(); return; }
   if (a === 'opt') { tavernI1Pick(i); return; }
   if (a === 'room') { tavernI1OpenRoom(null, i); return; }
   if (a === 'ledger') { TV1.msg = ''; tavernI1OpenLedger(); return; }
-  if (a === 'rup') {
-    r = tavernRoomUp(TV1.roomI);
-    if (r.ok) { tavernI1Rebuild(); tvToast('包間升為 Lv' + r.lv); }
-    tavernI1OpenRoom(null, TV1.roomI);
-    tavernI1Refresh();
-    return;
-  }
-  if (a === 'lup') {
-    r = tavernLvUp();
-    TV1.msg = r.ok ? '' : '無法升級';
-    if (r.ok) tavernI1Rebuild();
-    tavernI1OpenLedger();
-    tavernI1Refresh();
-  }
 }

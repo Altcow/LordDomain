@@ -184,7 +184,7 @@ function lhHtmlOverview() {
   if (typeof cardsUiOpen === 'function' && typeof cardsGet === 'function' && cardsGet()) {   // 卡包入口(新手禮包 / 抽卡次數 / 名冊名額;cardsui_starter.js)
     var cs = cardsGet(), stOk = typeof cardsStarterState === 'function' && cardsStarterState(cs) === 'ready', cap = (typeof cardsCap === 'function') ? cardsCap() : 0, ready = (typeof cardsPulls === 'function') ? cardsPulls(cs) : 0, nx = (typeof cardsNextIn === 'function') ? cardsNextIn(cs, 'T', Date.now()) : null, drawTxt = '';
     drawTxt = ready ? ' · <b>可抽 ' + ready + ' 次</b>' : (nx !== null ? ' · 下次補充:' + (nx < 3600000 ? '不到 1 小時' : Math.ceil(nx / 3600000) + ' 小時後') : '');
-    h += '<div class="lhsec">卡包</div><div class="lhr"><span>名冊 ' + cs.roster.length + '/' + cap + drawTxt + (stOk ? ' · <b>🎁 新手禮包可領</b>' : '') + '</span><button class="lhb" data-lh="cards">' + (stOk ? '領新手禮包' : '打開卡包') + '</button></div>';
+    h += '<div class="lhsec">卡片</div><div class="lhr"><span>名冊 ' + cs.roster.length + '/' + cap + drawTxt + (stOk ? ' · <b>🎁 新手禮包可領</b>' : '') + '</span><button class="lhb" data-lh="cards">' + (stOk ? '領新手禮包' : '打開卡片') + '</button></div>';
     if (cap && cs.roster.length >= cap) h += '<div class="lhr lhwarn"><span>名冊已滿(' + cap + '),停止抽卡;請先熔鍊或遣散</span></div>';
   }
   h += '<div><button class="lhb" data-lh="mood"' + (lhMoodFn() ? '' : ' disabled') + '>開啟民情總覽</button>' +

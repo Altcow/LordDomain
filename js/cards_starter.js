@@ -101,7 +101,7 @@ function cardsStarterStage(cs) {
 function cardsStarterHint() {
   var cs = (typeof cardsGet === 'function') ? cardsGet() : null;
   if (!cs || cardsStarterState(cs) !== 'ready') return false;
-  if (typeof showToast === 'function') showToast('新手禮包已備好:打開側欄〈卡包〉就能領(' + CARD_STARTER.pulls + ' 抽,保底 1 張金卡)');
+  if (typeof showToast === 'function') showToast('新手禮包已備好:打開側欄〈卡片〉就能領(' + CARD_STARTER.pulls + ' 抽,保底 1 張金卡)');
   return true;
 }
 

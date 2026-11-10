@@ -322,7 +322,7 @@ function cuCodexExists(kind, id) {
   return !!cuCxIdx().byId[id];
 }
 function cuCodexFigPop(cs, id) {
-  var it = cuCxIdx().byId[id], om = cuCxOm(), ow = om[id], c = (typeof cxCard === 'function') ? cxCard(id) : null, lst = { roster: '名冊', wait: '待定席', wander: '流浪中', bag: '卡包' }, h = '', rows, traits, bonds, teams, bio, lines, st;
+  var it = cuCxIdx().byId[id], om = cuCxOm(), ow = om[id], c = (typeof cxCard === 'function') ? cxCard(id) : null, lst = { roster: '名冊', wait: '待定席', wander: '流浪中', bag: '其他' }, h = '', rows, traits, bonds, teams, bio, lines, st;
   if (!it) return null;
   h += '<div class="cux-dh">' + cuCxAv(id, !!ow, it.gr, false) + '<div class="cux-dm">' +
     '<b class="cux-big">' + cuEsc(it.name) + (it.zi ? '<small>(' + cuEsc(it.zi) + ')</small>' : '') + '</b>' +
@@ -515,7 +515,7 @@ function cuCodexOnInput(ev) {
   CUX.q = String(t.value || '').slice(0, 20);
   CUX.page = 0;
   box = cu.el.querySelector('#cuxb');
-  if (box) box.innerHTML = cuCodexBodyHtml();
+  if (box) cuKeepScroll(function () { box.innerHTML = cuCodexBodyHtml(); });
   else if (typeof cardsUiRender === 'function') cardsUiRender();
 }
 // 下拉篩選:只重畫分頁內容
@@ -525,7 +525,7 @@ function cuCodexOnChange(ev) {
   CUX[f] = String(t.value);
   CUX.page = 0;
   box = cu.el.querySelector('#cuxb');
-  if (box) box.innerHTML = cuCodexBodyHtml();
+  if (box) cuKeepScroll(function () { box.innerHTML = cuCodexBodyHtml(); });
 }
 if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
   document.addEventListener('click', cuCodexOnClick, true);

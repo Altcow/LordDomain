@@ -593,7 +593,7 @@ function bnsInvShow() {
   el = document.createElement('div'); el.id = 'bnsInv';
   el.innerHTML = '<div class="box" role="dialog" aria-label="' + (isRep ? '收到戰報' : '收到挑戰隊伍') + '"><h2>' + (isRep ? '收到戰報' : '收到挑戰隊伍') + '</h2>' +
     '<p>' + (isRep ? '朋友傳來一場對戰練習的戰報,要打開來看嗎?' : '朋友傳來一支隊伍,要跟它打一場練習戰嗎?(不給獎勵、不影響進度)') + '</p>' +
-    (can ? '' : '<p class="bs-warn">戰鬥要官階達「亭長」、名冊 3 人以上才開放。可以先複製碼留著,開放後到「戰鬥 → 對戰」貼上。</p><textarea id="bnsInvCode" readonly rows="3">' + bnsEsc(code) + '</textarea>') +
+    (can ? '' : '<p class="bs-warn">戰鬥要名冊 5 人以上才開放。可以先複製碼留著,開放後到「戰鬥 → 對戰」貼上。</p><textarea id="bnsInvCode" readonly rows="3">' + bnsEsc(code) + '</textarea>') +
     '<div class="row">' + (can ? '<button class="pri" data-v="go">' + (isRep ? '打開戰報' : '去挑戰') + '</button>' : '<button class="pri" data-v="copy">複製碼</button>') + '<button data-v="no">先不要</button></div></div>';
   el.addEventListener('click', bnsInvClick);
   document.body.appendChild(el);

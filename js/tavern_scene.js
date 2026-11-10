@@ -10,15 +10,14 @@ var TAVERN_DEF = null;
 var TAVERN_ROOM_USES = ['coin', 'xue', 'wang', 'mood', 'rec'];   // 預留:酒錢 / 茶敘 / 雅集 / 說書 / 引薦(使用者決議:包間只影響收入,I1 一律當 coin)
 
 function tavernInt(v, lo, hi, d) { return (typeof v === 'number' && isFinite(v)) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d; }
-// 正規化 world.city.tavern;hint 給定時(新資料)種子由 hint 雜湊而來,否則亂數(只在缺種子時發生一次)
+// 正規化 world.city.tavern;v58-C 起酒館無升級:lv 與包間一律最高級 5(舊存檔的 lv / 包間等級讀入時忽略),包間固定 6 間;hint 給定時(新資料)種子由 hint 雜湊而來,否則亂數(只在缺種子時發生一次)
 function tavernNormSave(v, hint) {
-  var n = { lv: 1, rooms: [], seed: 0 };
+  var n = { lv: 5, rooms: [], seed: 0 };
   if (v && typeof v === 'object') {
-    n.lv = tavernInt(v.lv, 1, 5, 1);
     if (Array.isArray(v.rooms)) {
       n.rooms = v.rooms.slice(0, 6).map(function (r) {
         if (!r || typeof r !== 'object') return null;
-        return { lv: tavernInt(r.lv, 1, 5, 1), use: TAVERN_ROOM_USES.indexOf(r.use) >= 0 ? r.use : 'coin', staff: (typeof r.staff === 'string' && r.staff) ? r.staff.slice(0, 20) : null };
+        return { lv: 5, use: TAVERN_ROOM_USES.indexOf(r.use) >= 0 ? r.use : 'coin', staff: (typeof r.staff === 'string' && r.staff) ? r.staff.slice(0, 20) : null };
       }).filter(function (r) { return !!r; });
     }
     if (typeof v.seed === 'number' && isFinite(v.seed) && v.seed > 0) n.seed = v.seed >>> 0;
@@ -31,6 +30,7 @@ function tavernNormSave(v, hint) {
       if (evn > 0 || evb.length) n.ev = { d: Math.floor(v.ev.d), n: evn, b: evb };
     }
   }
+  while (n.rooms.length < 6) n.rooms.push({ lv: 5, use: 'coin', staff: null });
   if (!n.seed) n.seed = (hint !== undefined) ? (interiorHash('tavern', hint) || 1) : (((Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0) || 1);
   return n;
 }
@@ -44,7 +44,7 @@ function tavernGet() {
   }
   return c.tavern;
 }
-// 包間數(依酒館 lv)與單間等級;rooms[] 只存升過級 / 有狀態的間,缺的視為 Lv1
+// 包間數(依酒館 lv,v58-C 起恆為 6 間)與單間等級(v58-C 起恆為 Lv5);缺的視為 Lv1
 function tavernRoomCount(tv) {
   var R = (typeof TAVERN_ECON !== 'undefined') ? TAVERN_ECON.roomsByLv : [2, 3, 4, 5, 6];
   return R[Math.max(1, Math.min(5, (tv && tv.lv) | 0 || 1)) - 1];

@@ -262,7 +262,7 @@ function fxTextInstall() {
 }
 
 // ───────── 包住回傳字串的面板函式(魔幻世界過一次 fxText;歷史世界原樣)─────────
-var FX_TXT_WRAP = ['cuRosterHtml', 'cuDrawTabHtml', 'cuDrawPoolHtml', 'cuDrawNamedHtml', 'cuRosterPageHtml', 'cuVenueHtml', 'cuLastHtml', 'cardsUiInfoHtml', 'cuNpcDetailHtml', 'cuRosterTabHtml',
+var FX_TXT_WRAP = ['cuRosterHtml', 'cuDrawTabHtml', 'cuDrawPoolHtml', 'cuDrawNamedHtml', 'cuRosterPageHtml', 'cuVenueHtml', 'cuLastHtml', 'cardsUiInfoHtml', 'cuNpcDetailHtml', 'cuRosterTabHtml', 'cuFurnaceTabHtml', 'cuFurnaceSetPop', 'cuHelpBtn',
   'lhHtmlOverview', 'lhHtmlJobs', 'lhHtmlPosts', 'bnMapRewardHtml', 'nextStepHtml', 'cuArtCard', 'tuLabel', 'tuDesc'];
 function fxTxGlobal() { return (typeof window !== 'undefined' && window) ? window : (typeof globalThis !== 'undefined' ? globalThis : null); }
 function fxTxWrap(name, post) {
