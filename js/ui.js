@@ -200,8 +200,7 @@ let uiSideExpanded = false;
 const UI_SIDE_NORMAL_MAX = 7;   // 正常模式第一層上限(拍照不在第一層,收進展開列)
 const UI_SIDE_ITEMS = [
   { key: 'search', icon: '🔍', label: '搜尋', title: '搜尋建築與科技(未解鎖者可看缺什麼)', scope: 'estate', special: 'search' },
-  { key: 'slots', icon: '🏘', label: '版面', title: '版面選擇(3 格):點一下打開,再點一次關閉', scope: 'all', special: 'slots' },
-  { key: 'edit', icon: '🔨', label: '布置', title: '草稿布置(單一草稿,存到版面格)', scope: 'all', special: 'edit' },
+  { key: 'layout', icon: '🏘', label: '版面', title: '我的版面:看 3 格版面、點一格換成那份;底部可開新草稿編輯布置', scope: 'all', special: 'layout' },
   { key: 'hide', icon: '👁', label: '建築', title: '隱藏建築（整地用，H）', top: true, scope: 'all', target: 'btnHide' },
   { key: 'fish', icon: '🎣', label: '釣魚', title: '釣魚', top: true, scope: 'estate', target: 'btnFish', gate: 'fishing' },
   { key: 'pet', icon: '🐲', label: '仙獸', title: '仙獸苑', top: true, scope: 'estate', target: 'btnPet', gate: 'pet' },
@@ -212,11 +211,10 @@ const UI_SIDE_ITEMS = [
   { key: 'goods', icon: '📦', label: '庫房', title: '庫房(貨品與工坊狀態)', scope: 'estate', target: 'btnGoods' },
   { key: 'caravan', icon: '🛻', label: '走鏢', title: '走鏢(鏢師、馬車與高階貨品)', scope: 'estate', target: 'btnCaravan', gate: 'caravan' },
   { key: 'bn', icon: '⚔', label: '戰鬥', title: '戰鬥(5v5 回合制練習戰)', scope: 'estate', special: 'bn', gate: 'battleA', showLocked: true },
-  { key: 'save', icon: '💾', label: '存檔', title: '布置存檔', scope: 'estate', target: 'btnLayoutSave' },
   { key: 'season', icon: '🌤', label: '季節', title: '季節與時段', scope: 'estate', target: 'seasonBtn' },
   { key: 'help', icon: '❓', label: '說明', title: '戰鬥布置工具說明', scope: 'camp', target: 'btnToolHelp' },
   { key: 'labels', icon: '🏷', label: '標籤', title: '顯示或隱藏範本的區域標籤', scope: 'camp', target: 'btnTplLabels' },
-  { key: 'mode', icon: '⊞', label: '精簡', title: '切換正常 / 精簡介面', scope: 'all', special: 'mode' },
+  { key: 'mode', icon: '⊞', label: '精簡', title: '切換正常 / 精簡介面(精簡:按鈕收進 ⋯ 展開列)', scope: 'all', special: 'mode' },
   { key: 'photo', icon: '📷', label: '拍照', title: '拍照模式(隱藏介面,只留還原鈕)', scope: 'all', special: 'photo', gate: 'photo' }
 ];
 
@@ -293,8 +291,7 @@ function uiSideAct(key) {
   const it = UI_SIDE_ITEMS.find(x => x.key === key);
   if (!it) return;
   if (it.special === 'mode') uiSetMode(uiMode === 'compact' ? 'normal' : 'compact');
-  else if (it.special === 'edit') editSideAct();
-  else if (it.special === 'slots') { if (typeof slotPopToggle === 'function') slotPopToggle(); }
+  else if (it.special === 'layout') { if (typeof slotPopToggle === 'function') slotPopToggle(); }
   else if (it.special === 'tech') { if (typeof techPanelToggle === 'function') techPanelToggle(); }
   else if (it.special === 'cards') { if (typeof cardsUiToggle === 'function') cardsUiToggle('O'); }
   else if (it.special === 'search') { if (typeof srToggle === 'function') srToggle(); }
@@ -328,24 +325,24 @@ function syncSideBar() {
     } else if (it.key === 'hide') {
       icon = hide.on ? '🙈' : '👁';
       label = hide.on ? '隱藏中' : '建築';
-    } else if (it.special === 'slots') {
+    } else if (it.special === 'layout') {
       const camp = game.mode === 'battleDesign';
-      icon = camp ? '⚔' : '🏘';
-      label = camp ? '戰鬥' : '版面';
+      if (ui.editing) { icon = '🔨'; label = '草稿'; }   // 草稿中:同一顆鈕顯示目前在草稿
+      else { icon = camp ? '⚔' : '🏘'; label = camp ? '戰鬥' : '版面'; }
     }
     let hid = it.target ? (!orig || !!orig.hidden) : false;
-    if (it.special === 'slots') hid = typeof slotPopAvail === 'function' ? !slotPopAvail() : true;
+    if (it.special === 'layout') hid = typeof slotPopAvail === 'function' ? !slotPopAvail() : true;
     const locked = !!it.gate && !isUnlocked('feature', it.gate);
     if (locked && !it.showLocked) hid = true;   // showLocked:未達條件仍顯示、灰掉,點擊時 toast 說明缺什麼
     b.hidden = hid;
     b.style.opacity = locked ? '.45' : '';
     b.setAttribute('aria-disabled', locked ? 'true' : 'false');
-    const slotsOn = it.special === 'slots' && typeof slotPopIsOpen === 'function' && slotPopIsOpen();
-    b.classList.toggle('on', it.special === 'edit' ? !!ui.editing : (it.special === 'slots' ? slotsOn : (it.special === 'cards' ? (typeof cu !== 'undefined' && !!cu.open) : !!(orig && orig.classList.contains('on')))));
+    const slotsOn = it.special === 'layout' && typeof slotPopIsOpen === 'function' && slotPopIsOpen();
+    b.classList.toggle('on', it.special === 'layout' ? slotsOn : (it.special === 'cards' ? (typeof cu !== 'undefined' && !!cu.open) : !!(orig && orig.classList.contains('on'))));
     b.querySelector('.ic').textContent = icon;
     b.querySelector('.lb').textContent = label;
   });
-  // 正常模式第一層最多 UI_SIDE_NORMAL_MAX 顆:拍照一律收進展開列;超量再依序捨棄 季節 → 存檔 → 精簡(收進展開列;戰鬥鈕、卡包鈕不捨棄,未達條件時灰掉);精簡模式的展開列都還在;頂列項目與另一畫面的項目不算
+  // 正常模式第一層最多 UI_SIDE_NORMAL_MAX 顆:拍照一律收進展開列;超量再依序捨棄 季節 → 精簡 → 搜尋(收進展開列;版面、戰鬥鈕、卡包鈕不捨棄,未達條件時灰掉);精簡模式的展開列都還在;頂列項目與另一畫面的項目不算
   if (!uiIsCompact()) {
     const camp = game.mode === 'battleDesign';
     const vis = key => {
@@ -357,7 +354,7 @@ function syncSideBar() {
     const overflow = hasPhoto || count() > UI_SIDE_NORMAL_MAX;
     if (!uiSideExpanded) {
       if (hasPhoto) vis('photo').hidden = true;
-      ['season', 'save', 'mode'].forEach(k => { if (count() > UI_SIDE_NORMAL_MAX && vis(k)) vis(k).hidden = true; });
+      ['season', 'mode', 'search'].forEach(k => { if (count() > UI_SIDE_NORMAL_MAX && vis(k)) vis(k).hidden = true; });
     }
     const ex = document.getElementById('sideExpand');
     if (ex) { ex.hidden = !overflow; ex.textContent = uiSideExpanded ? '▴ 收合' : '▾ 全部'; ex.title = uiSideExpanded ? '收合側欄' : '展開全部功能'; side.classList.toggle('expanded', uiSideExpanded && overflow); }
@@ -2969,7 +2966,7 @@ function editEnter(unsaved) {
   setTool(null);
   updateResBar();
   syncSideBar();
-  showToast('草稿布置(' + (game.backup.draft.type === 'camp' ? '戰鬥' : '經營') + '):改完按 💾 儲存到版面格,使用中的版面不受影響');
+  showToast('草稿模式:改動不會影響正在用的' + (game.backup.draft.type === 'camp' ? '戰陣' : '城') + '。改好按上方「💾 存到版面…」');
   return true;
 }
 // 直接離開(不檢查、不還原):呼叫端負責先存檔或還原

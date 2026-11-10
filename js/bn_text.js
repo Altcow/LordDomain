@@ -428,8 +428,9 @@ function bnCardSkillIds(card, o) {   // o 可選 {troop}:布陣時依所選兵�
   if (!card || typeof bnUnitSpec !== 'function') return out;
   try { spec = bnUnitSpec(card, o && o.troop ? { troop: o.troop } : {}); } catch (e) { return out; }
   fg = card.fig && typeof BN_FIG_SKILLS !== 'undefined' ? BN_FIG_SKILLS[card.fig] : null;
+  var bf = fg && typeof BN_KIT_BY !== 'undefined' && BN_KIT_BY.figs[card.fig] ? (BN_KIT_BY.figs[card.fig].bondFix || []) : [];   // 專屬聯動:不占被動 / 選擇槽
   for (i = 0; i < spec.skills.length; i++) {
-    out.push({ id: spec.skills[i], role: fg ? (i === 0 && fg.passive ? 'passive' : 'skill') : (i === 0 ? 'native' : 'learned') });
+    out.push({ id: spec.skills[i], role: fg ? (i === 0 && fg.passive ? 'passive' : (bf.indexOf(spec.skills[i]) >= 0 ? 'bond' : 'skill')) : (i === 0 ? 'native' : 'learned') });
   }
   if (spec.ult) out.push({ id: spec.ult, role: 'ult' });
   return out.filter(function (x) { return !!(typeof BN_SKILLS !== 'undefined' && BN_SKILLS[x.id]); });
@@ -441,7 +442,7 @@ function bnCardSkillRows(card, o) {
   });
 }
 // ---------- 卡面「戰法」區塊:名稱連結 + 類別小標 + 一行短說明;完整說明在彈窗(cardsui 說明浮層 kind=bnskill,bnSkillInfo) ----------
-var BNT_ROLE = { native: '職業預設', learned: '學習' };
+var BNT_ROLE = { native: '職業預設', learned: '學習', bond: '專屬聯動' };
 var BNT_TS = { self: '自身', ally_one: '我單體', ally_all: '我全隊', ally_front: '我前排', ally_back: '我後排', ally_lowest: '我最弱', ally_row: '我同排', enemy_one: '敵單體', enemy_front: '敵前排', enemy_back: '敵後排',
   enemy_all: '敵全隊', enemy_lowest: '敵最弱', enemy_highest_atk: '敵最強', enemy_cross: '敵十字', enemy_col: '敵縱列', members: '夥伴' };
 var BNT_KS = {

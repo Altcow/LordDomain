@@ -535,6 +535,7 @@ function bnInit(rec) {
       S.teams[sd].maxHpSum += u.maxHp;
     }
   });
+  bnBondGate(S);
   S.cnt = bnNewCnt();
   // 賭徒:每場確定性決定
   S.units.forEach(function (x) {

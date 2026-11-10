@@ -10,7 +10,7 @@
 var CX = { pageFig: 20, pageSk: 30, srMax: 10, debounce: 150, catOrder: ['command', 'active', 'pursuit', 'passive', 'ult'] };
 var CX_TABS = [['fig', '武將'], ['skill', '戰法'], ['team', '配隊']];
 var CX_CAT = { command: '指揮', active: '主動', pursuit: '追擊', passive: '被動', ult: '大招' };
-var CX_SRC = { fig: '名人專屬', teach: '名人戰法・可傳授', generic: '通用・兵書可學', ult: '兵種大招(路人)' };
+var CX_SRC = { fig: '名人專屬', teach: '名人戰法・可傳授', generic: '通用・兵書可學', ult: '兵種大招(路人)', bond: '專屬聯動' };
 var CX_ROW = ['前排', '中排', '後排'];
 var CX_RACE = { elf: '精靈', dwarf: '矮人', kingdom: '王國' };
 var cx = { el: null, tool: null, list: null, ov: null, title: null, open: false, tab: 'fig', stack: [], ovId: '', q: '', fac: -1, troop: '', gr: -1, own: '', skq: '', cat: '', src: '', tfac: -1,
@@ -29,19 +29,21 @@ function cxToast(m) { if (typeof showToast === 'function') { try { showToast(m);
 function cxKey() {
   return cxWorld() + '|' + cxSrcFigs().length + '|' + (typeof BN_SKILLS !== 'undefined' ? Object.keys(BN_SKILLS).length : 0);
 }
-function cxSkSrc(d, ultBy) {
+function cxSkSrc(d, ultBy, bondSet) {
+  if (bondSet && bondSet[d.id]) return 'bond';   // 專屬聯動:隨名人自帶、不占被動 / 選擇槽,只在指定武將在場時生效
   if (d.fig) return d.learn ? 'teach' : 'fig';
   if (ultBy[d.id]) return 'ult';
   return 'generic';
 }
 function cxIndex() {
-  var key = cxKey(), figs = [], byId = {}, own = {}, skills = [], skById = {}, vsBy = {}, ultBy = {};
+  var key = cxKey(), figs = [], byId = {}, own = {}, skills = [], skById = {}, vsBy = {}, ultBy = {}, bondSet = {};
+  if (typeof BN_KIT_BY !== 'undefined' && BN_KIT_BY.figs) Object.keys(BN_KIT_BY.figs).forEach(function (fid) { (BN_KIT_BY.figs[fid].bondFix || []).forEach(function (sid) { bondSet[sid] = fid; }); });
   if (cx.idx && cx.key === key) return cx.idx;
   if (typeof BN_ULT_BY !== 'undefined') Object.keys(BN_ULT_BY).forEach(function (t) { var u = BN_ULT_BY[t]; (ultBy[u] = ultBy[u] || []).push(t); });
   cxSrcFigs().forEach(function (f) {
     var fs = (typeof BN_FIG_SKILLS !== 'undefined') ? BN_FIG_SKILLS[f.id] : null, sk, it;
     if (!fs) return;
-    sk = [fs.passive].concat(fs.skills || []).concat(fs.ult ? [fs.ult] : []).filter(function (k) { return k && typeof BN_SKILLS !== 'undefined' && BN_SKILLS[k]; });
+    sk = [fs.passive].concat(Object.keys(bondSet).filter(function (k) { return bondSet[k] === f.id; })).concat(fs.skills || []).concat(fs.ult ? [fs.ult] : []).filter(function (k) { return k && typeof BN_SKILLS !== 'undefined' && BN_SKILLS[k]; });
     it = { id: f.id, f: f, name: String(f.name), zi: f.zi && f.zi !== '新' ? String(f.zi) : '', fac: f.fac, gr: f.gr, troop: fs.troop, row: fs.row === '前' ? 0 : fs.row === '中' ? 1 : 2, sk: sk, race: f.race || '' };
     it.nn = cxNorm(it.name + it.zi); it.idn = cxNorm(f.id);
     figs.push(it); byId[f.id] = it;
@@ -51,7 +53,7 @@ function cxIndex() {
     var d = BN_SKILLS[k], it;
     if (d.fig && !own[k]) return;              // 他世界名人的戰法不列
     if (!d.fig && !d.generic && !ultBy[k]) return;
-    it = { id: k, d: d, name: String(d.name), cat: d.cat, src: cxSkSrc(d, ultBy), owners: own[k] || [], troops: ultBy[k] || [], nn: cxNorm(d.name) };
+    it = { id: k, d: d, name: String(d.name), cat: d.cat, src: cxSkSrc(d, ultBy, bondSet), owners: own[k] || [], troops: ultBy[k] || [], nn: cxNorm(d.name) };
     skills.push(it); skById[k] = it;
     if (d.vs && d.vs.fig && own[k]) d.vs.fig.forEach(function (t) { (vsBy[t] = vsBy[t] || []).push({ sk: k, by: own[k][0] }); });
   });
@@ -158,6 +160,7 @@ function cxOwnersTxt(it, n) {
   var idx = cxIndex(), names;
   if (it.src === 'generic') return '通用戰法(路人可用兵書學)';
   if (it.src === 'ult') return it.troops.join('、') + '兵路人的大招';
+  if (it.src === 'bond') return '專屬聯動(' + it.owners.map(function (f) { return idx.byId[f] ? idx.byId[f].name : f; }).join('、') + ')';
   names = it.owners.map(function (f) { return idx.byId[f] ? idx.byId[f].name : f; });
   return (names.length > n ? names.slice(0, n).join('、') + ' 等' : names.join('、')) + (it.src === 'teach' ? '(可傳授)' : '');
 }
@@ -267,6 +270,7 @@ function cxSkillDetailHtml(id) {
   if (it.src === 'teach') h += '<div class="cx-l cx-dim">名冊有這位名人時,可在名冊詳情「戰法學習」把這招傳授給路人。</div>';
   if (it.src === 'generic') h += '<div class="cx-l">路人武將可用兵書學會(名冊詳情 →「戰法學習」);兵書在討伐中掉落。</div>';
   if (it.src === 'ult') h += '<div class="cx-l">路人武將擔任「' + cxEsc(it.troops.join('、')) + '」兵時自動帶這招大招。</div>';
+  if (it.src === 'bond') h += '<div class="cx-l cx-dim">名人隨身的專屬聯動,不占被動與選擇槽;只在指定武將在場或成為對象時才生效。</div>';
   return h + '</div>';
 }
 function cxSkillRowHtml(it) {
@@ -531,7 +535,7 @@ function cxToolHtml() {
     cxSel('gr', cx.gr, [['-1', '全部品階'], ['4', '金'], ['3', '紫']]) + cxSel('own', cx.own, [['', '全部'], ['y', '已擁有'], ['n', '未獲得']]) + '</div>';
   if (cx.tab === 'skill') return '<input type="search" data-cxin="skq" placeholder="搜尋戰法或武將姓名,例如 火攻、回復" aria-label="搜尋戰法" autocomplete="off" enterkeyhint="search" value="' + cxEsc(cx.skq) + '">' +
     '<div class="cx-fs">' + cxSel('cat', cx.cat, [['', '全部類別']].concat(CX.catOrder.map(function (c) { return [c, CX_CAT[c]]; }))) +
-    cxSel('src', cx.src, [['', '全部來源'], ['fig', CX_SRC.fig], ['teach', CX_SRC.teach], ['generic', CX_SRC.generic], ['ult', CX_SRC.ult]]) + '</div>';
+    cxSel('src', cx.src, [['', '全部來源'], ['fig', CX_SRC.fig], ['teach', CX_SRC.teach], ['generic', CX_SRC.generic], ['ult', CX_SRC.ult], ['bond', CX_SRC.bond]]) + '</div>';
   return '<div class="cx-fs">' + cxSel('tfac', cx.tfac, [['-1', '全部陣營']].concat(cxTeamFacs().map(function (f) { return [String(f), cxTeamFacName(f)]; }))) +
     '<button type="button" data-cx="rec">依我的名冊推薦</button></div>';
 }

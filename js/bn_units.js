@@ -176,6 +176,8 @@ function bnUnitSpec(card, o) {
   };
   if (fg) {
     if (fg.passive) skills.push(fg.passive);
+    var kfb = (typeof BN_KIT_BY !== 'undefined' && BN_KIT_BY.figs && BN_KIT_BY.figs[card.fig]) || null;   // 專屬聯動(bondFix):不占被動 / 選擇槽,隨名人自帶;vs 條件不成立時該技能自行略過
+    if (kfb && kfb.bondFix) for (i = 0; i < kfb.bondFix.length; i++) skills.push(kfb.bondFix[i]);
     spec.el = fg.el || '';
     for (i = 0; i < fg.skills.length; i++) skills.push(fg.skills[i]);
     spec.ult = fg.ult;
@@ -361,3 +363,21 @@ function bnAutoLayout(specs, rng) {
 }
 
 if (typeof module !== 'undefined' && module.exports) module.exports = { bnEff: bnEff };
+// 專屬聯動條件化(2026-11-10):下列名人的 bondFix 戰法只在指定武將在場時才存在(ally = 我方在場;其餘 = 敵方在場),不在場整個移除,不再無條件生效
+var BN_BOND_GATED = { mifuren: 1, huaxiong: 1, zuoci: 1, elf_baizhou: 1, diaochan: 1 };
+function bnBondGate(S) {
+  S.units.forEach(function (u) {
+    var kfb = (typeof BN_KIT_BY !== 'undefined' && BN_KIT_BY.figs && BN_KIT_BY.figs[u.fig]) || null;   // 專屬聯動條件化只讀 bondFix 清單
+    if (!BN_BOND_GATED[u.fig] || !kfb || !kfb.bondFix) return;
+    var bf = kfb.bondFix;
+    function gateOk(list) {
+      return list.filter(function (inst) {
+        if (bf.indexOf(inst.def.id) < 0 || !inst.def.vs) return true;
+        var ally = inst.def.vs.mode === 'ally';
+        return S.units.some(function (x) { return x !== u && (ally ? x.side === u.side : x.side !== u.side) && bnVsMatch(S, inst.def.vs, x); });
+      });
+    }
+    u.act = gateOk(u.act);
+    u.pas = gateOk(u.pas);
+  });
+}

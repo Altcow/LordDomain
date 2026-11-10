@@ -979,14 +979,14 @@ function ldClose(id) {
   if (d) { d.hidden = true; d._acts = {}; }
 }
 function ldCloseAll() {
-  ['draftStartDlg', 'saveSlotDlg', 'slotAskDlg', 'ldConfirm'].forEach(ldClose);
+  ['draftStartDlg', 'saveSlotDlg', 'slotAskDlg', 'slotDoneDlg', 'ldConfirm'].forEach(ldClose);
 }
 function ldOpen(id) {
   const d = document.getElementById(id);
   return !!d && !d.hidden;
 }
 function ldAnyOpen() {
-  return ['draftStartDlg', 'saveSlotDlg', 'slotAskDlg', 'ldConfirm'].some(ldOpen);
+  return ['draftStartDlg', 'saveSlotDlg', 'slotAskDlg', 'slotDoneDlg', 'ldConfirm'].some(ldOpen);
 }
 function ldConfirm(title, msg, okLabel, onOk) {
   const h = ldNew('ldConfirm', title);
@@ -1247,23 +1247,16 @@ function editBarBuild() {
   const bar = document.createElement('div');
   bar.id = 'editBar';
   bar.hidden = true;
-  const tag = document.createElement('span');
-  tag.className = 'eb-tag';
-  bar.appendChild(tag);
-  bar.tagEl = tag;
-  [['save', '💾', '儲存'], ['clear', '🗑', '清空'], ['discard', '↩', '放棄'], ['leave', '✕', '離開']].forEach(a => {
+  const msg = document.createElement('span');
+  msg.className = 'eb-msg';
+  bar.appendChild(msg);
+  bar.msgEl = msg;
+  [['save', '💾 存到版面…', '把草稿存進 3 格版面之一'], ['leave', '✕ 離開草稿', '離開草稿(有未存變更會先問)']].forEach(a => {
     const b = document.createElement('button');
     b.setAttribute('data-eact', a[0]);
     b.setAttribute('aria-label', a[2]);
     b.title = a[2];
-    const ic = document.createElement('span');
-    ic.className = 'ic';
-    ic.textContent = a[1];
-    const lb = document.createElement('span');
-    lb.className = 'lb';
-    lb.textContent = a[2];
-    b.appendChild(ic);
-    b.appendChild(lb);
+    b.textContent = a[1];
     bar.appendChild(b);
   });
   document.body.appendChild(bar);
@@ -1276,20 +1269,18 @@ function editBarBuild() {
 function editBarAct(act) {
   if (!ui.editing) return;
   if (act === 'save') layoutSave();
-  else if (act === 'clear') draftClearBoard();
-  else if (act === 'discard') editCancel();
   else if (act === 'leave') {
     editGuard(null);
-    if (!ui.editing) showToast('已離開草稿布置');
+    if (!ui.editing) showToast('已離開草稿');
   }
 }
 function editBarSync() {
   const bar = document.getElementById('editBar');
   if (!bar) return;
   bar.hidden = !ui.editing;
-  if (ui.editing && bar.tagEl && game.backup && game.backup.draft) {
-    const t = '草稿·' + layoutTypeName(game.backup.draft.type);
-    if (bar.tagEl.textContent !== t) bar.tagEl.textContent = t;
+  if (ui.editing && bar.msgEl && game.backup && game.backup.draft) {
+    const t = game.backup.draft.type === 'camp' ? '草稿模式(戰陣):改動不會影響正在用的戰陣' : '草稿模式:改動不會影響正在用的城';
+    if (bar.msgEl.textContent !== t) bar.msgEl.textContent = t;
   }
 }
 // 🗑 清空草稿:只清草稿棋盤,不動使用中的版面、資源與科技
@@ -1309,19 +1300,18 @@ function draftClearBoard() {
   return true;
 }
 
-// ── 儲存對話框 #saveSlotDlg ──
+/// ── 存到版面對話框 #saveSlotDlg(草稿橫幅「💾 存到版面…」;列出 3 格,空格 / 覆蓋標示) ──
 let saveCtx = null;
 function saveSlotDlgOpen(after) {
   if (!ui.editing || !draftIsOn()) return false;
-  saveCtx = { after: after || null, setActive: false, pick: -1 };
+  saveCtx = { after: after || null, pick: -1 };
   saveSlotRender();
   return true;
 }
 function saveSlotRender() {
   const type = game.backup.draft.type;
-  const h = ldNew('saveSlotDlg', '💾 儲存到哪一格?');
+  const h = ldNew('saveSlotDlg', '💾 存到版面…');
   ldBody(h);
-  ldMsg(h, '覆蓋所選格子的內容(這份草稿是「' + layoutTypeName(type) + '」)');
   if (saveCtx.pick >= 0) {
     const n = saveCtx.pick, s = layoutSlot(type, n);
     ldMsg(h, '覆蓋「' + layoutTypeName(type) + ' ' + (n + 1) + '」?格內目前是「' + (s ? s.name : '') + '」(' + layoutSlotText(type, n) + '),覆蓋後無法復原。', 'warn');
@@ -1330,21 +1320,14 @@ function saveSlotRender() {
     ldBtn(h, foot, 'back', '返回', () => { saveCtx.pick = -1; saveSlotRender(); }, '');
     return;
   }
-  const t = type;
+  ldMsg(h, '選一格存進去(這份草稿是「' + layoutTypeName(type) + '」)。存好後可以繼續改,也可以離開草稿並套用。');
   for (let n = 0; n < LAYOUT_SLOTS; n++) {
     const row = ldRow(h, '');
-    const act = world.layoutActive[t] === n;
-    ldBtn(h, row, 'slot:' + t + ':' + n, layoutTypeName(t) + ' ' + (n + 1) + (act ? ' ★使用中' : ''), () => saveSlotPick(n), 'slot' + (layoutSlot(t, n) ? '' : ' empty'), false,
-      layoutSlotText(t, n));
+    const s = layoutSlot(type, n);
+    const act = world.layoutActive[type] === n;
+    const sub = s ? layoutObjCount(s.board) + ' 件 · ' + layoutTimeText(s.savedAt) + ' · 覆蓋' + (act ? '(使用中,同步套用)' : '') : '空格';
+    ldBtn(h, row, 'slot:' + type + ':' + n, layoutTypeName(type) + ' ' + (n + 1) + (act ? ' ★使用中' : ''), () => saveSlotPick(n), 'slot' + (s ? '' : ' empty'), false, sub);
   }
-  const forced = world.layoutActive[type] !== null && saveCtx.pick < 0;
-  const tg = ldRow(h, 'ld-col ld-opt');
-  ldBtn(h, tg, 'active', (saveCtx.setActive ? '☑' : '☐') + ' 同時設為使用中', () => { saveCtx.setActive = !saveCtx.setActive; saveSlotRender(); }, saveCtx.setActive ? 'on' : '', false,
-    type === 'camp' ? '戰鬥版面會先驗證,不合格不會設為使用中' : (forced ? '存到使用中那一格時一律同步套用' : ''));
-  const why = document.createElement('div');
-  why.className = 'ld-msg ld-note';
-  why.textContent = '設為使用中=' + (type === 'camp' ? '整個戰陣' : '整座城') + '立刻換成這份';
-  tg.appendChild(why);
   const foot = ldRow(h, 'ld-foot');
   ldBtn(h, foot, 'cancel', '取消', () => { saveCtx = null; ldClose('saveSlotDlg'); }, '');
 }
@@ -1354,47 +1337,55 @@ function saveSlotPick(n) {
   if (layoutSlot(type, n)) { saveCtx.pick = n; saveSlotRender(); }
   else saveSlotCommit(n);
 }
-// 實際寫入第 n 格(同類型);回傳 { ok, activated, why }
+// 實際寫入第 n 格(同類型)。存到使用中那一格 = 一律同步套用(戰陣不合格則不存);其他格只寫入,之後由 draftSavedAsk 問要不要套用
 function saveSlotCommit(n) {
   if (!saveCtx || !draftIsOn()) return null;
   const type = game.backup.draft.type;
-  const want = saveCtx.setActive || world.layoutActive[type] === n;
+  const forced = world.layoutActive[type] === n;
+  const copy = forced ? layoutCopyBoard(liveBoard()) : null;
+  const why = forced && type === 'camp' ? layoutCampCheck(copy) : '';
+  if (why) { showToast('戰陣不合格,無法存到使用中的格:' + why); return { ok: false, why: why }; }
   const bj = boardToJSON(liveBoard());
-  let why = '';
-  const copy = want ? layoutCopyBoard(liveBoard()) : null;
-  if (want && type === 'camp') why = layoutCampCheck(copy);
-  const res = { ok: true, activated: false, why: why };
-  const fin = () => {
-    layoutSlotWrite(type, n, bj);
-    let msg = '已儲存到' + layoutTypeName(type) + ' ' + (n + 1);
-    if (want && !why) {
-      if (world.layoutActive[type] !== n) layoutWriteBack(type);
-      layoutInstall(type, copy);
-      world.layoutActive[type] = n;
-      res.activated = true;
-      msg += ',並設為使用中';
-    } else if (want && why) {
-      msg += ',但未設為使用中:' + why;
-    } else if (type === 'camp' && world.layoutActive[type] === null) {
-      msg += '(未設為使用中)';
-    }
-    editSnap = editSnapshot();
-    editUnsaved = false;
-    saveWorld();
-    const after = saveCtx ? saveCtx.after : null;
-    saveCtx = null;
-    ldClose('saveSlotDlg');
-    mapeditUpdateDot();
-    layoutPickSync(true);
-    showToast(msg);
-    if (after) after();
-  };
-  if (want && !why && world.layoutActive[type] === null && world.layoutActive[type] !== n && boardHasContent(layoutActiveBoard(type))) {
-    slotAskOpen(type, ok => { if (ok) fin(); });
+  const after = saveCtx.after;
+  layoutSlotWrite(type, n, bj);
+  if (forced) layoutInstall(type, copy);
+  editSnap = editSnapshot();
+  editUnsaved = false;
+  saveWorld();
+  saveCtx = null;
+  ldClose('saveSlotDlg');
+  mapeditUpdateDot();
+  layoutPickSync(true);
+  if (after) {
+    showToast('已存到版面 ' + (n + 1));
+    after();
+  } else if (forced) {
+    showToast('已存到版面 ' + (n + 1) + '(使用中,已同步套用)');
   } else {
-    fin();
+    draftSavedAsk(type, n);
   }
-  return res;
+  return { ok: true, activated: forced };
+}
+
+// 存到非使用中的格後:繼續編輯,或離開草稿並套用這格(預設不強制;戰陣先驗證,不合格的按鈕停用並說明)
+function draftSavedAsk(type, n) {
+  const h = ldNew('slotDoneDlg', '已存到' + layoutTypeName(type) + '版面 ' + (n + 1));
+  ldMsg(h, '草稿還開著,要繼續改,還是離開草稿並套用這份版面?套用會換掉正在用的版面(原來的版面會先存回它自己的格子)。');
+  const bd = layoutSlot(type, n) ? boardFromJSON(layoutSlot(type, n).board, type) : null;
+  const why = type === 'camp' ? (bd ? layoutCampCheck(bd) : '資料損壞') : '';
+  const foot = ldRow(h, 'ld-foot ld-col');
+  ldBtn(h, foot, 'apply', '離開草稿並套用此版面', () => { ldClose('slotDoneDlg'); draftApplySlot(type, n); }, 'pok', !!why, why ? '無法套用:' + why : '');
+  ldBtn(h, foot, 'stay', '繼續編輯', () => ldClose('slotDoneDlg'), '');
+}
+// 離開草稿後切換到第 n 格(沿用 layoutPickClick 的切換流程:使用中先存回原格、空格與戰陣驗證都在裡面)
+function draftApplySlot(type, n) {
+  editLeave();
+  if (!layoutSlot(type, n)) { showToast('該格是空的'); return; }
+  slotEnsureHome(type, () => {
+    const r = layoutActivate(type, n);
+    if (!r.ok) showToast('無法切換:' + r.reason);
+    else layoutAfterSwitch(type, n);
+  });
 }
 
 // ── 目前使用中版面不屬於任何格時:問「存到哪一格 / 不存直接切換」 ──
@@ -1446,6 +1437,10 @@ function slotPickBuild() {
   const box = document.createElement('div');
   box.id = 'slotPop';
   box.hidden = true;
+  const head = document.createElement('div');
+  head.className = 'sp-head';
+  box.appendChild(head);
+  box.headEl = head;
   const note = document.createElement('div');
   note.className = 'sp-note';
   note.hidden = true;
@@ -1456,20 +1451,34 @@ function slotPickBuild() {
     const b = document.createElement('button');
     b.setAttribute('data-slot', String(n));
     b.className = 'sp-btn';
-    const a = document.createElement('span');
-    a.className = 'sp-a';
-    const c = document.createElement('span');
-    c.className = 'sp-b';
-    b.appendChild(a);
-    b.appendChild(c);
+    ['sp-a', 'sp-b', 'sp-c'].forEach(c => {
+      const s = document.createElement('span');
+      s.className = c;
+      b.appendChild(s);
+    });
     box.appendChild(b);
   }
+  const nw = document.createElement('button');
+  nw.className = 'sp-new';
+  nw.setAttribute('data-slot-new', '1');
+  nw.textContent = '🔨 開新草稿(編輯布置)';
+  nw.appendChild(document.createElement('small'));
+  box.appendChild(nw);
+  box.newEl = nw;
   document.body.appendChild(box);
   box.addEventListener('pointerdown', e => e.stopPropagation());
   box.addEventListener('click', e => {
-    const b = e.target.closest('button');
+    if (e.target.closest('.sp-new')) { slotPopNewDraft(); return; }
+    const b = e.target.closest('button[data-slot]');
     if (b) layoutPickClick(+b.getAttribute('data-slot'));
   });
+}
+// 面板底部「開新草稿」:收起面板,沿用原有「草稿從哪裡開始」選擇(ui.js editSideAct)
+function slotPopNewDraft() {
+  if (typeof panelClose === 'function') panelClose('slotPop');
+  slotPopClose();
+  if (typeof syncSideBar === 'function') syncSideBar();
+  editSideAct();
 }
 function layoutPickSync(force) {
   const box = document.getElementById('slotPop');
@@ -1481,21 +1490,25 @@ function layoutPickSync(force) {
   const type = slotPickType();
   const act = world.layoutActive[type];
   const lock = !!ui.editing;
-  const sig = type + '|' + act + '|' + (lock ? 1 : 0) + '|' + [0, 1, 2].map(n => { const s = layoutSlot(type, n); return s ? s.name + ':' + layoutObjCount(s.board) : ''; }).join(',');
+  const sig = type + '|' + act + '|' + (lock ? 1 : 0) + '|' + Array.from({ length: LAYOUT_SLOTS }, (_, n) => { const s = layoutSlot(type, n); return s ? s.name + ':' + layoutObjCount(s.board) + ':' + s.savedAt : ''; }).join(',');
   if (sig === slotPickSig && !force) return;
   slotPickSig = sig;
   box.setAttribute('data-type', type);
   box.classList.toggle('locked', lock);
   box.noteEl.hidden = !lock;
-  box.querySelectorAll('button').forEach(b => {
+  box.headEl.textContent = '我的版面 · ' + layoutTypeName(type);
+  box.newEl.hidden = lock;
+  box.newEl.querySelector('small').textContent = '另開一份草稿慢慢改,不影響正在用的' + (type === 'camp' ? '戰陣' : '城');
+  box.querySelectorAll('button[data-slot]').forEach(b => {
     const n = +b.getAttribute('data-slot'), s = layoutSlot(type, n);
-    b.querySelector('.sp-a').textContent = (n + 1) + ' ' + (s ? (s.name || '版面') : '空');
-    b.querySelector('.sp-b').textContent = s ? layoutObjCount(s.board) + ' 件' + (act === n ? ' · 使用中' : '') : '空格';
+    b.querySelector('.sp-a').textContent = (n + 1) + ' ' + (s ? (s.name || '版面') : '空格');
+    b.querySelector('.sp-b').textContent = s ? layoutObjCount(s.board) + ' 件' + (s.savedAt ? ' · ' + layoutTimeText(s.savedAt) : '') : '空格';
+    b.querySelector('.sp-c').textContent = act === n ? '● 使用中' : '';
     b.classList.toggle('on', act === n);
     b.classList.toggle('empty', !s);
     b.classList.toggle('off', lock);
     b.setAttribute('aria-disabled', lock ? 'true' : 'false');
-    b.title = layoutTypeName(type) + '格 ' + (n + 1) + (s ? '(' + layoutSlotText(type, n) + ')' : '(空)') + (act === n ? ' 使用中' : '');
+    b.title = layoutTypeName(type) + '第 ' + (n + 1) + ' 格' + (s ? '(' + layoutSlotText(type, n) + ')' : '(空)') + (act === n ? ',使用中' : '') + (lock ? ',草稿中不能切換' : ',點一下換成這份版面');
     b.setAttribute('aria-label', b.title);
   });
 }

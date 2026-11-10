@@ -27,14 +27,15 @@ var GUIDE_TOPICS = [
     { target: null, text: '拖曳空地可以平移地圖,兩指捏合可以縮放。' }
   ] },
   { id: 'sidebar', title: '右側按鈕列', feat: null, mode: 'estate', steps: [
-    { target: ['#sideBar [data-px="slots"]', '#sideMore'], text: '這顆是版面選擇:可以存 3 份經營布置,點一格就換成那份。' },
-    { target: '#sideBar [data-px="edit"]', text: '布置:另開一份草稿慢慢設計,不影響正在用的城。' },
+    { target: ['#sideBar [data-px="layout"]', '#sideMore'], text: '這顆是「🏘 版面」:看 3 格存好的版面,點一格就換成那份。想改版面,就從面板底部的「🔨 開新草稿」開始。' },
     { target: '#sideBar [data-px="shop"]', text: '商店:在這裡買東西。' },
     { target: '#sideBar [data-px="mode"]', text: '精簡:把介面縮小,讓畫面更大。' }
   ] },
-  { id: 'draft', title: '布置草稿與存檔', feat: null, mode: 'estate', steps: [
-    { target: '#sideBar [data-px="edit"]', text: '點 🔨 布置進入草稿:在草稿裡隨便改,正在用的城不會變。' },
-    { target: '#sideBar [data-px="save"]', text: function () { return gdCity() ? '改好按 💾 存檔,選一格存進去。經營布置有 3 格,存好的版面可隨時切換。' : '改好按 💾 存檔,選一格存進去。經營和戰鬥布置各有 3 格,存好的版面可隨時切換。'; } }
+  { id: 'draft', title: '草稿與存到版面', feat: null, mode: 'estate', steps: [
+    { target: ['#sideBar [data-px="layout"]', '#sideMore'], text: '在「🏘 版面」面板底部按「🔨 開新草稿」:另開一份草稿慢慢改,正在用的城不會變。' },
+    { target: null, text: '草稿中上方會出現橫幅「草稿模式」,在草稿裡隨便改都不會影響正在用的城。' },
+    { target: null, text: function () { return gdCity() ? '改好按橫幅的「💾 存到版面…」,選一格存進去;存好的版面可隨時在 🏘 版面 切換。' : '改好按橫幅的「💾 存到版面…」,選一格存進去(經營與戰鬥各有 3 格);存好的版面可隨時在 🏘 版面 切換。'; } },
+    { target: null, text: '不想要草稿的改動,按橫幅的「✕ 離開草稿」即可,正在用的版面不會變。' }
   ] },
   { id: 'camp', title: '戰鬥布置', feat: 'battleDesign', mode: 'camp', steps: [
     { target: '#modeBtn', text: '左下這顆可以切換「經營布置」和「戰鬥布置」。你現在在戰鬥布置,這裡設計的是被攻打時的防守陣。' },

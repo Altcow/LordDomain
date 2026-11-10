@@ -895,30 +895,36 @@ body.atk-mode #toast, body.sandbox #toast { top: auto; bottom: calc(92px + env(s
 .ld-foot.ld-col button { flex: 0 0 auto; }
 .ld-box .pok { background: #2e7d4f; border-color: #5fc98a; }
 .ld-box .pno { background: #6b2b2b; border-color: #c96a5f; }
-/* #editBar:草稿中固定在左緣的直欄(頂列下方),≥44px;直橫版同位置,不碰中央區、右側邊欄與底部列 */
-#editBar { position: fixed; z-index: 3; left: max(4px, env(safe-area-inset-left)); top: calc(var(--top-h) + env(safe-area-inset-top) + 8px); width: 52px; display: flex; flex-direction: column; gap: 4px; }
+/* #editBar:草稿模式橫幅(頂列下方置中),只有「💾 存到版面…」「✕ 離開草稿」兩顆;草稿中才顯示,不碰右側邊欄與底部列 */
+#editBar { position: fixed; z-index: 3; left: 50%; transform: translateX(-50%); top: calc(var(--top-h) + env(safe-area-inset-top) + 4px); max-width: calc(100vw - 110px); box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 10px; background: #c9892f; color: #1b1308; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); font-size: 12px; }
 #editBar[hidden] { display: none !important; }
-#editBar .eb-tag { align-self: stretch; text-align: center; font-size: 10px; line-height: 1.2; padding: 3px 0; border-radius: 6px; background: #c9892f; color: #1b1308; font-weight: bold; white-space: nowrap; }
-#editBar button { width: 52px; height: 46px; min-height: 46px; margin: 0; padding: 2px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border-radius: 10px; background: rgba(47, 59, 77, .9); border: 1px solid rgba(69, 86, 110, .9); color: #e8edf2; }
-#editBar button .ic { font-size: 18px; line-height: 1; }
-#editBar button .lb { font-size: 10px; line-height: 1.1; white-space: nowrap; }
-#editBar button[data-eact="save"] { background: #2e7d4f; border-color: #5fc98a; }
-#editBar button[data-eact="discard"] { background: #6b2b2b; border-color: #c96a5f; }
-body.camp-mode #editBar .eb-tag { background: #d9534f; color: #fff; }
+#editBar .eb-msg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; }
+#editBar button { flex: 0 0 auto; min-height: 40px; margin: 0; padding: 4px 10px; font-size: 13px; line-height: 1.2; white-space: nowrap; border-radius: 8px; background: rgba(20, 26, 36, .9); border: 1px solid rgba(69, 86, 110, .9); color: #e8edf2; }
+#editBar button[data-eact="save"] { background: #2e7d4f; border-color: #5fc98a; color: #fff; }
+#editBar button[data-eact="leave"] { background: #6b2b2b; border-color: #c96a5f; color: #fff; }
+body.camp-mode #editBar { background: #d9534f; color: #fff; top: calc(var(--top-h) + env(safe-area-inset-top) + 30px); }
 body.sandbox #editBar, body.atk-mode #editBar, body.replay-mode #editBar { display: none !important; }
-/* #slotPop:版面選擇小面板(右側邊欄第一個鈕開關),貼在邊欄左邊、與第一顆鈕同高;寬 112px 不蓋中央區;不自動關閉 */
-#slotPop { position: fixed; z-index: 3; top: calc(var(--top-h) + env(safe-area-inset-top) + 6px); right: calc(44px + env(safe-area-inset-right, 0px) + 4px); width: 112px; box-sizing: border-box; display: flex; flex-direction: column; gap: 3px; padding: 4px; border-radius: 10px; background: rgba(20, 26, 36, .88); border: 1px solid rgba(69, 86, 110, .9); box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
-#slotPop[hidden] { display: none !important; }
+/* #slotPop:「我的版面」面板(右側邊欄「🏘 版面」開關),貼在邊欄左邊、寬 132px 不蓋中央區;3 格 + 底部「開新草稿」;不自動關閉 */
+#slotPop { position: fixed; z-index: 3; top: calc(var(--top-h) + env(safe-area-inset-top) + 6px); right: calc(44px + env(safe-area-inset-right, 0px) + 4px); width: 132px; box-sizing: border-box; display: flex; flex-direction: column; gap: 3px; padding: 4px; border-radius: 10px; background: rgba(20, 26, 36, .9); border: 1px solid rgba(69, 86, 110, .9); box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
+#slotPop[hidden], #slotPop [hidden] { display: none !important; }
+#slotPop .sp-head { font-size: 12px; font-weight: bold; padding: 2px 3px; color: #f0b45a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #slotPop .sp-note { font-size: 10px; line-height: 1.3; padding: 2px 3px; color: #ffcf8a; }
-#slotPop .sp-btn { width: 100%; min-height: 40px; margin: 0; padding: 3px 6px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; border-radius: 8px; font-size: 12px; line-height: 1.2; text-align: left; background: rgba(47, 59, 77, .9); border: 1px solid rgba(69, 86, 110, .9); color: #e8edf2; overflow: hidden; }
+#slotPop .sp-btn { width: 100%; min-height: 44px; margin: 0; padding: 3px 6px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; border-radius: 8px; font-size: 12px; line-height: 1.2; text-align: left; background: rgba(47, 59, 77, .9); border: 1px solid rgba(69, 86, 110, .9); color: #e8edf2; overflow: hidden; }
 #slotPop .sp-a { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; }
 #slotPop .sp-b { font-size: 10px; opacity: .8; white-space: nowrap; }
+#slotPop .sp-c { font-size: 10px; color: #ffcf8a; white-space: nowrap; }
+#slotPop .sp-c:empty { display: none; }
 #slotPop .sp-btn.empty { opacity: .55; color: #9aa6b4; }
 #slotPop .sp-btn.on { background: #c9892f; border-color: #f0b45a; color: #1b1308; opacity: 1; }
+#slotPop .sp-btn.on .sp-c { color: #1b1308; font-weight: bold; }
 #slotPop[data-type="camp"] .sp-btn.on { background: #d9534f; border-color: #ff8a7e; color: #fff; }
+#slotPop[data-type="camp"] .sp-btn.on .sp-c { color: #fff; }
 #slotPop.locked .sp-btn { filter: grayscale(1); opacity: .4; }
+#slotPop .sp-new { width: 100%; min-height: 48px; margin: 4px 0 0; padding: 5px 6px; display: flex; flex-direction: column; align-items: center; gap: 2px; border-radius: 8px; font-size: 13px; font-weight: bold; line-height: 1.2; background: #2e7d4f; border: 1px solid #5fc98a; color: #fff; }
+#slotPop .sp-new small { font-size: 10px; font-weight: normal; opacity: .9; white-space: normal; text-align: center; }
 @media (orientation: landscape) { #slotPop { right: calc(91px + env(safe-area-inset-right, 0px) + 4px); } }
 body.ui-compact #slotPop { top: calc(var(--top-h) + env(safe-area-inset-top) + 4px); right: calc(30px + env(safe-area-inset-right, 0px) + 6px); }
+body.photo-mode #slotPop, body.sandbox #slotPop, body.atk-mode #slotPop, body.replay-mode #slotPop { display: none !important; }
 body.photo-mode #slotPop, body.sandbox #slotPop, body.atk-mode #slotPop, body.replay-mode #slotPop { display: none !important; }
 
 /* 出征清單 / 沙盤設定:主要按鈕在頂部 sticky 列,明細在下方捲動 */
@@ -1341,7 +1347,7 @@ body.panel-cover :is(#toolbar, #catbar, #varbar, #topMenu, #draftFloat, #draftBa
 /* ===== 放置中(js/ui.js uiSyncPlacing → body.ui-placing:經營板選了工具或有草稿虛影):收起與放置無關的東西 =====
    側欄只留「布置」「隱藏建築」;推薦卡非教學時隱藏、教學時縮成精簡版(說明一行 + 按鈕,不顯示原因);縣丞氣泡、加到主畫面提示隱藏(縣丞小臉保留)。
    退出放置用左側「✋ 瀏覽」浮動鈕;離開放置即還原 */
-body.ui-placing #sideBar :is(.side-more, .side-expand), body.ui-placing #sideBar .side-btn:not([data-px="edit"]):not([data-px="hide"]) { display: none !important; }
+body.ui-placing #sideBar :is(.side-more, .side-expand), body.ui-placing #sideBar .side-btn:not([data-px="layout"]):not([data-px="hide"]) { display: none !important; }
 body.ui-placing :is(#fsTip, #advTip, #installTip) { display: none !important; }
 body.ui-placing #nsCard:not(.ns-tut) { display: none !important; }
 body.ui-placing #nsCard.ns-tut { height: auto !important; }

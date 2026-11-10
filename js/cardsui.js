@@ -12,7 +12,7 @@ var CU_ROMAN = ['', 'I', 'II', 'III', 'IV'];
 var CU_LIVE_CITY = '城建類:資料已備,派駐於對口建築時計入;產出數值結算尚在接入(巡視綠光已有)';
 var CU_LIVE_WAR = '討伐戰鬥中生效';
 var cuMiss = {};
-var cu = { open: false, tab: 'O', detail: null, confirm: null, el: null, timer: 0, msg: '', info: null, chain: false, nmode: 'fac', nkey: 0, revealing: false, last: null,
+var cu = { open: false, tab: 'O', detail: null, confirm: null, el: null, timer: 0, msg: '', info: null, chain: false, nmode: 'fac', nkey: 0, revealing: false, skipAll: false, last: null,
   bf: -1, br: '', bs: 'gr', bn: 1, bsel: {}, bid: null, ble: 0, bpend: null, omsg: '' };   // bf.. = 卡包分頁狀態(品階 / 職業分類篩選、排序、頁數、勾選、詳情、一鍵熔鍊門檻、待確認)
 var CU_OPEN_MSG = { none: '沒有可抽次數', busy: '上一批還在開啟中', bagfull: '名冊與卡包都滿了,先遣散或熔鍊幾張', closed: '尚未開放', bad: '請先選擇陣營或職業分類', ticket: '指名券不足' };
 
@@ -275,12 +275,13 @@ function cuJoinToast(res) {
 }
 // 抽卡特效掛點(js/cardsreveal.js 提供 cardsRevealPlay(cards, onDone));沒有該函式就直接 done。done 只會執行一次
 // quick = true:不播特效直接 done(全部開啟的第 2 批起,避免連播多次漫長特效;結果進摘要)
-function cuRevealThen(cards, done, quick) {
+// opts(選用):{more: 還有下一批, onSkipAll: 按『全部跳過』時呼叫},傳給 cardsRevealPlay
+function cuRevealThen(cards, done, quick, opts) {
   var fin = false;
   function once() { if (fin) return; fin = true; cu.revealing = false; try { done(); } catch (e) { /* 略過 */ } }
   if (quick || typeof cardsRevealPlay !== 'function') { once(); return; }
   cu.revealing = true;
-  try { cardsRevealPlay(cards, once); } catch (e) { once(); }
+  try { cardsRevealPlay(cards, once, opts); } catch (e) { once(); }
 }
 // 結果摘要累計:chain 時多批合併成一份。items 的 how:bag 入包 auto 自動熔爐 token 化為信物 shard 信物已滿轉碎片
 function cuLastAdd(label, tab, res, fresh) {
@@ -300,11 +301,13 @@ function cuFinishBatch(v, label, fresh, tab) {
   cuSave();
   return res;
 }
-// 抽卡:n 次(數字或 'all')。每批最多 CARD_DRAW.maxOne 張走一段開卡特效,多於一批時第二批起直接入包(摘要合併);名冊 / 卡包 / 溢出區滿了就停
+// 抽卡:n 次(數字或 'all')。每批最多 CARD_DRAW.maxOne 張,每批都完整播開卡特效(按『收下』或自然結束才進下一批);
+// 演出中按『全部跳過』:本批結束,剩餘批次 quick 直接入包(摘要合併);名冊 / 卡包 / 溢出區滿了就停
 function cuDoPull(cs, v, n) {
   var total = (n === 'all') ? cardsPulls(cs) : (parseInt(n, 10) | 0);
   total = Math.max(1, Math.min(total, cardsPulls(cs)));
   if (cardsPulls(cs) < 1) { cu.msg = CU_OPEN_MSG.none; return; }
+  cu.skipAll = false;
   cuPullRun(v, total, true);
 }
 function cuPullRun(v, left, first) {
@@ -315,14 +318,15 @@ function cuPullRun(v, left, first) {
   r = cardsBagStage(cs, v, k);
   if (!r.ok) { cu.chain = false; cu.msg = CU_OPEN_MSG[r.reason] || '無法抽卡'; if (typeof showToast === 'function') showToast(cu.msg); cardsUiRender(); return; }
   cuSave();
-  cu.chain = left - k > 0;   // 還有下一批:連抽進行中(第二批起不播完整特效)
+  cu.chain = left - k > 0;   // 還有下一批:連抽進行中(每批都播完整特效;按『全部跳過』後才 quick)
+  var more = left - k > 0 && cardsPulls(cs) > 0;   // 扣次數已在 cardsBagStage 完成
   cuRevealThen(r.cards, function () {
     var res = cuFinishBatch(v, CARD_VENUES[v].name, first), L = cu.last;
     if (left - k > 0 && cardsPulls(cardsGet()) > 0) { cuPullRun(v, left - k, false); return; }
     cu.chain = false;
     if (L && typeof cuJoinToast === 'function') cuJoinToast({ roster: L.roster, added: L.added, over: L.overN, dissolved: L.dissolved, tokenN: L.tokenN });   // 已加入名冊 N 人
     if (cu.open) cardsUiRender();
-  }, !first);
+  }, cu.skipAll, { more: more, onSkipAll: function () { cu.skipAll = true; } });
 }
 function cuItemRow(it) {
   var c = it.c, G = CARD_GRADE[c.gr], j = CARD_JOB_BY_ID[c.main], corner = '', i, tag;

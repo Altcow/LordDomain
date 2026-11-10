@@ -206,7 +206,8 @@ function rvClose() {
 
 function cardsRevealActive() { return !!rvS; }
 function cardsRevealLog() { return rvLastLog.slice(); }
-function cardsRevealPlay(cards, onDone) {
+// opts(選用,向下相容):{more: true 表示還有下一批 → 顯示『全部跳過 ▸▸▸』; onSkipAll: 按下時先呼叫(再自動略過並收下本批)}
+function cardsRevealPlay(cards, onDone, opts) {
   var s, root, main, grid, top, bot, plan, power, list, st;
   if (rvS && !rvS.closed && rvS.fired) rvClose();   // 上一場已略過(onDone 已通知)、停在最終排列頁:直接收掉再開新的,否則新批的 onDone 會掛在已結束的場次上永不呼叫
   if (rvS && !rvS.closed) { if (typeof onDone === 'function') rvS.cbs.push(onDone); return false; }   // 重複呼叫不疊加:只共用這一場,結束時一併通知
@@ -232,9 +233,15 @@ function cardsRevealPlay(cards, onDone) {
   s.fin = rvDiv('rv-fin', root); s.cap = rvDiv('rv-cap', root);
   top = rvDiv('rv-top', root); bot = rvDiv('rv-bot', root);
   s.skip = document.createElement('button'); s.skip.className = 'rv-skip'; s.skip.textContent = '略過 ▸▸'; top.appendChild(s.skip);
+  s.skipAll = document.createElement('button'); s.skipAll.className = 'rv-skipall'; s.skipAll.textContent = '全部跳過 ▸▸▸'; s.skipAll.hidden = !(opts && opts.more); top.appendChild(s.skipAll);
   s.hint = rvDiv('rv-hint', bot); s.hint.textContent = '點一下加速';
   s.btn = document.createElement('button'); s.btn.className = 'rv-ok'; s.btn.textContent = '收下'; s.btn.hidden = true; bot.appendChild(s.btn);
   s.skip.addEventListener('click', function (e) { if (e && e.stopPropagation) e.stopPropagation(); rvSkip(); });
+  s.skipAll.addEventListener('click', function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (opts && typeof opts.onSkipAll === 'function') { try { opts.onSkipAll(); } catch (err) { /* 旗標失敗不影響略過 */ } }
+    rvSkip(); rvClose();   // 本批立即結束並自動收下;剩餘批次由 onDone 鏈接續(呼叫端已設 quick)
+  });
   s.btn.addEventListener('click', function (e) { if (e && e.stopPropagation) e.stopPropagation(); rvClose(); });
   root.addEventListener('click', function () { rvTap(); });
   document.body.appendChild(root);
