@@ -260,6 +260,7 @@ function npcErrandDone(cs, qid, now) {
 
 // 主迴圈掛點(cards.js cardsNamedTick 每 5 秒呼叫):日期變更時處理派駐年資與發請託
 function npcTick(dt) {
+  if (!featureOn('citysim')) return;   // @DORMANT citysim
   var cs, now;
   NPC.tickT += dt || 0;
   if (NPC.tickT < 5) return 0;

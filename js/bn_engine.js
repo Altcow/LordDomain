@@ -616,7 +616,7 @@ function bnFinish(S, reason) {
 function bnMakeUnit(S, side, spec, idx) {
   var st = spec.stats, u = {
     id: S.units.length, side: side, idx: idx, name: spec.name, fig: spec.fig || '', troop: spec.troop, row: spec.row, col: spec.col, spec: spec, fac: spec.fac,
-    maxHp: Math.round(st.hp), hp: Math.round(st.hp), alive: true, el: spec.el || '',
+    maxHp: Math.round(st.hp), hp: (spec.hpR > 0 && spec.hpR < 1) ? Math.max(1, Math.round(st.hp * spec.hpR)) : Math.round(st.hp), alive: true, el: spec.el || '',
     base: { atk: st.atk, mag: st.mag, def: st.def, sres: st.sres, spd: st.spd, heal: st.heal, sh: st.sh, crit: st.crit, res: st.res },
     mods: JSON.parse(JSON.stringify(spec.mods || {})), st: {}, sc: {}, acted: false, immunes: [], immuneFirstUsed: {},
     kit2: !!spec.kit2, healCnt: 0, healRound: 0, dmgRound: 0, hpAtRoundStart: 0, act: [], pas: [], ult: null, killStack: 0,

@@ -407,7 +407,7 @@ function stUiSec() {
       stRender();
     }), '開(預設):畫面放大到一定程度時,有室內空間的建築頭上顯示小門 🚪;縮小或省電模式時自動隱藏。點建築會顯示名稱,可進入者再按〔進入〕。');
   }
-  if (typeof advFaceSet === 'function' && typeof advFaceOn === 'function') {
+  if (featureOn('citysim') && typeof advFaceSet === 'function' && typeof advFaceOn === 'function') {   // @DORMANT citysim
     stAdd(nodes, '縣丞小臉', stSwitch(advFaceOn(), function (v) {
       advFaceSet(v);
       stRender();
@@ -517,7 +517,7 @@ function stAdvSec() {
     });
     stAdd(nodes, '音效快取', cb, '遊戲會把合成好的音效存在手機裡加快載入。聲音怪怪的才需要清除,下次啟動會重新合成(不影響存檔)。');
   }
-  if (typeof savesUiOpen === 'function' && typeof worldTagOn === 'function') {
+  if (featureOn('multiworld') && typeof savesUiOpen === 'function' && typeof worldTagOn === 'function') {   // @DORMANT multiworld
     nodes.push(stSaveBtn('世界小標籤:' + (worldTagOn() ? '顯示' : '隱藏'), '頂列的「世 NN」,點它開啟我的世界', function () { try { localStorage.setItem(WORLD_TAG_KEY, worldTagOn() ? '0' : '1'); } catch (e) { /* 略過 */ } if (typeof svTagSync === 'function') svTagSync(); stRender(); }));
     nodes.push(stEl('p', 'st-hint st-note', '決定畫面頂端要不要顯示目前是第幾個世界的小標籤,只影響外觀。'));
   }
@@ -708,8 +708,8 @@ function stWorldSec() {
     nodes.push(stEl('div', 'st-hint', '目前:' + worldTitle(w.active, w.names[w.active])));
   }
   if (typeof savesUiOpen === 'function') {
-    nodes.push(stSaveBtn('我的世界(' + WORLD_COUNT + ')', ok ? '切換 / 重新開始 / 改名 / 回溯點' : '此裝置無法多世界', function () { stClosePanel(); savesUiOpen(); }));
-    nodes.push(stEl('p', 'st-hint st-note', '你有好幾個互相獨立的存檔(平行世界),可以在這裡切換、改名,或回到之前的時間點。'));
+    if (featureOn('multiworld')) nodes.push(stSaveBtn('我的世界(' + WORLD_COUNT + ')', ok ? '切換 / 重新開始 / 改名 / 回溯點' : '此裝置無法多世界', function () { stClosePanel(); savesUiOpen(); }));   // @DORMANT multiworld
+    if (featureOn('multiworld')) nodes.push(stEl('p', 'st-hint st-note', '你有好幾個互相獨立的存檔(平行世界),可以在這裡切換、改名,或回到之前的時間點。'));   // @DORMANT multiworld
     nodes.push(stSaveBtn('復原上一步', ok ? '救回剛被重新開始 / 刪除 / 切換前的內容' : '此裝置無法使用', function () { stClosePanel(); savesUiUndo(); }));
     nodes.push(stEl('p', 'st-hint st-note', '不小心按到重新開始或刪除時,按這個可以救回剛才的內容(只救最近一次)。'));
   }
@@ -731,7 +731,7 @@ function stCampSec() {
 function stDangerSec() {
   if (typeof savesDoAction !== 'function') return null;
   const nodes = [stEl('p', 'st-hint st-warn', '下面的按鈕會清掉內容。按下後會先跳出確認說明並自動備份,按錯了可用上面的「復原上一步」救回。')];
-  nodes.push(stSaveBtn('重新開始目前世界…', '只影響目前這個世界,偏好設定保留', function () { stClosePanel(); if (typeof worldWizardOpen === 'function' && worldWizardOpen({ kind: 'restart', n: worldsActive(), from: 'settings' })) return; savesDoAction('all'); }, true));
+  nodes.push(stSaveBtn('重新開始目前世界…', '只影響目前這個世界,偏好設定保留', function () { stClosePanel(); if (featureOn('multiworld') && typeof worldWizardOpen === 'function' && worldWizardOpen({ kind: 'restart', n: worldsActive(), from: 'settings' })) return; savesDoAction('all'); }, true));   // @DORMANT multiworld
   return stSec('⚠ 危險操作', nodes.concat(stCampSec()), 'world', 'st-sec-danger');
 }
 

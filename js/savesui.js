@@ -79,7 +79,7 @@ function svEnsure() {
   el.setAttribute('role', 'dialog');
   el.setAttribute('aria-label', '我的世界');
   var h = svNode('div', 'svh');
-  h.appendChild(svNode('b', '', '我的世界(' + WORLD_COUNT + ')'));
+  h.appendChild(svNode('b', '', featureOn('multiworld') ? '我的世界(' + WORLD_COUNT + ')' : '回溯點'));   // @DORMANT multiworld
   var x = svBtn('✕', svClose, 'svx');
   x.setAttribute('aria-label', '關閉');
   h.appendChild(x);
@@ -319,6 +319,7 @@ function svTagSync() {
   if (typeof document === 'undefined' || !document.getElementById) return null;
   var bar = document.getElementById('topbar'), tag = document.getElementById('worldTag'), w = worldsGet(), after;
   if (!bar) return null;
+  if (!featureOn('multiworld')) { if (tag) tag.hidden = true; return null; }   // @DORMANT multiworld
   svCss();
   if (!tag) {
     tag = svNode('span', '', '');

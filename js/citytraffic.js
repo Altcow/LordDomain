@@ -498,6 +498,7 @@ function lifeXShed(role, k) {
 
 // 每 0.5 秒:統計 → 目標 → 補生成(一次最多 2 個,剛進場前 6 個一次補齊)/ 縮減
 function lifeTrafficTick(dt) {
+  if (!featureOn('citysim')) return;   // @DORMANT citysim
   LIFE.xT -= dt;
   const R = LIFE.road;
   if (LIFE.xT > 0 || !R || !R.x) return;

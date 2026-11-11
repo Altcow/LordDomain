@@ -188,6 +188,7 @@ function initAdvUI() {
 }
 
 function advUiTick(dt) {
+  if (!featureOn('citysim')) return;   // @DORMANT citysim
   var c;
   if (!advUi.inited) return;
   if (!advCityActive()) { advUi.el.chip.hidden = true; advUi.el.sprite.hidden = true; if (advUi.dockOpen) advUiCloseDock(); return; }
@@ -201,6 +202,7 @@ function advUiTick(dt) {
 // ───────── 開關 ─────────
 function advUiToggle() { if (advUi.dockOpen) advUiCloseDock(); else advUiOpenDock('bars'); }
 function advUiOpenDock(tab) {
+  if (!featureOn('citysim')) return;   // @DORMANT citysim
   if (!advUi.inited) return;
   advUi.tab = tab || advUi.tab || 'bars';
   advUi.dockOpen = true;

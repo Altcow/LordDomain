@@ -1,4 +1,4 @@
-const VERSION = 'v59';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v60';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -12,6 +12,7 @@ const PRECACHE = [
   './css/search.css',
   './css/codex.css',
   './css/bnshare.css',
+  './js/features.js',
   './js/data.js',
   './js/units.js',
   './js/unitinfo.js',
@@ -178,6 +179,9 @@ const PRECACHE = [
   './js/bn_text.js',
   './js/bn_stages.js',
   './js/bn_engine.js',
+  './js/wm_data.js',
+  './js/wm_core.js',
+  './js/wm_ui.js',
   './js/bn_effects.js',
   './js/bn_book.js',
   './js/bn_skcard.js',
@@ -188,6 +192,8 @@ const PRECACHE = [
   './js/bnmap.js',
   './js/bnshare.js',
   './js/bnteam.js',
+  './js/bn_tourney.js',
+  './js/bn_tourney_ui.js',
   './js/codex_teams_data.js',
   './js/codex.js',
   './js/minimap.js',

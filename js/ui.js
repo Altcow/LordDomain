@@ -200,23 +200,43 @@ let uiSideExpanded = false;
 const UI_SIDE_NORMAL_MAX = 7;   // 正常模式第一層上限(超過才出現展開鈕;超量時拍照收進展開列)
 const UI_SIDE_ITEMS = [
   { key: 'search', icon: '🔍', label: '搜尋', title: '搜尋建築與科技(未解鎖者可看缺什麼)', scope: 'estate', special: 'search' },
-  { key: 'layout', icon: '🏘', label: '版面', title: '我的版面:看 3 格版面、點一格換成那份;底部可開新草稿編輯布置', scope: 'all', special: 'layout' },
-  { key: 'hide', icon: '👁', label: '建築', title: '隱藏建築（整地用，H）', top: true, scope: 'all', target: 'btnHide' },
-  { key: 'fish', icon: '🎣', label: '釣魚', title: '釣魚', top: true, scope: 'estate', target: 'btnFish', gate: 'fishing' },
-  { key: 'pet', icon: '🐲', label: '仙獸', title: '仙獸苑', top: true, scope: 'estate', target: 'btnPet', gate: 'pet' },
-  { key: 'sandbox', icon: '⚔', label: '沙盤', title: '沙盤推演', top: true, scope: 'camp', target: 'btnSandbox' },
-  { key: 'shop', icon: '🏪', label: '商店', title: '商店', scope: 'estate', target: 'btnShop', gate: 'shop' },
-  { key: 'tech', icon: '📜', label: '科技', title: '科技樹與研發序列', scope: 'estate', special: 'tech' },
+  { key: 'layout', icon: '🏘', label: '版面', title: '我的版面:看 3 格版面、點一格換成那份;底部可開新草稿編輯布置', scope: 'all', dorm: 'cityedit', special: 'layout' },
+  { key: 'hide', icon: '👁', label: '建築', title: '隱藏建築（整地用，H）', top: true, scope: 'all', target: 'btnHide', dorm: 'cityedit' },
+  { key: 'fish', icon: '🎣', label: '釣魚', title: '釣魚', top: true, scope: 'estate', target: 'btnFish', gate: 'fishing', dorm: 'fishing' },
+  { key: 'pet', icon: '🐲', label: '仙獸', title: '仙獸苑', top: true, scope: 'estate', target: 'btnPet', gate: 'pet', dorm: 'pet' },
+  { key: 'sandbox', icon: '⚔', label: '沙盤', title: '沙盤推演', top: true, scope: 'camp', target: 'btnSandbox', dorm: 'cityedit' },
+  { key: 'shop', icon: '🏪', label: '商店', title: '商店', scope: 'estate', target: 'btnShop', gate: 'shop', dorm: 'citysim' },
+  { key: 'tech', icon: '📜', label: '科技', title: '科技樹與研發序列', scope: 'estate', special: 'tech', dorm: 'citysim' },
   { key: 'cards', icon: '🃏', label: '卡片', title: '卡片:抽卡、卡包、熔爐與傳承(次數隨時間累積)', scope: 'estate', special: 'cards' },
   { key: 'goods', icon: '📦', label: '庫房', title: '庫房(貨品與工坊狀態)', scope: 'estate', target: 'btnGoods' },
-  { key: 'caravan', icon: '🛻', label: '走鏢', title: '走鏢(鏢師、馬車與高階貨品)', scope: 'estate', target: 'btnCaravan', gate: 'caravan' },
+  { key: 'caravan', icon: '🛻', label: '走鏢', title: '走鏢(鏢師、馬車與高階貨品)', scope: 'estate', target: 'btnCaravan', gate: 'caravan', dorm: 'caravan' },
   { key: 'bn', icon: '⚔', label: '戰鬥', title: '戰鬥(5v5 回合制練習戰)', scope: 'estate', special: 'bn', gate: 'battleA', showLocked: true },
-  { key: 'season', icon: '🌤', label: '季節', title: '季節與時段', scope: 'estate', target: 'seasonBtn' },
+  { key: 'season', icon: '🌤', label: '季節', title: '季節與時段', scope: 'estate', target: 'seasonBtn', dorm: 'citysim' },
   { key: 'help', icon: '❓', label: '說明', title: '戰鬥布置工具說明', scope: 'camp', target: 'btnToolHelp' },
   { key: 'labels', icon: '🏷', label: '標籤', title: '顯示或隱藏範本的區域標籤', scope: 'camp', target: 'btnTplLabels' },
   { key: 'mode', icon: '⊞', label: '精簡', title: '切換正常 / 精簡介面(精簡:按鈕收進 ⋯ 展開列)', scope: 'all', special: 'mode' },
   { key: 'photo', icon: '📷', label: '拍照', title: '拍照模式(隱藏介面,只留還原鈕)', scope: 'all', special: 'photo', gate: 'photo' }
 ];
+
+// B 包休眠:邊欄項目的 dorm 欄位對應旗標,旗標關閉時該顆不顯示(程式保留)
+function uiSideDormant(it) {
+  if (it.dorm === 'cityedit') return !featureOn('cityedit');   // @DORMANT cityedit
+  if (it.dorm === 'citysim') return !featureOn('citysim');   // @DORMANT citysim
+  if (it.dorm === 'pet') return !featureOn('pet');   // @DORMANT pet
+  if (it.dorm === 'fishing') return !featureOn('fishing');   // @DORMANT fishing
+  if (it.dorm === 'caravan') return !featureOn('caravan');   // @DORMANT caravan
+  return false;
+}
+// B 包休眠:頂列元素標了 data-dormant="旗標名"(index.html),旗標關閉時隱藏;只設 hidden = true,不還原
+function dormantSyncDom() {
+  if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
+  const list = document.querySelectorAll('[data-dormant]') || [];
+  list.forEach(el => {
+    const f = el.getAttribute('data-dormant');
+    if (f === 'cityedit' && !featureOn('cityedit')) el.hidden = true;   // @DORMANT cityedit
+    if (f === 'citysim' && !featureOn('citysim')) el.hidden = true;   // @DORMANT citysim
+  });
+}
 
 function initSideUI() {
   const side = document.createElement('div');
@@ -304,6 +324,7 @@ function uiSideAct(key) {
 // 邊欄按鈕跟隨原按鈕的隱藏與狀態(定時同步;行為仍由原按鈕負責)
 function syncSideBar() {
   if (document.hidden) return;
+  dormantSyncDom();
   uiSyncPlacing();
   syncFeatureGate();
   editSyncUi();
@@ -329,6 +350,7 @@ function syncSideBar() {
     let hid = it.target ? (!orig || !!orig.hidden) : false;
     if (it.special === 'layout') hid = typeof slotPopAvail === 'function' ? !slotPopAvail() : true;
     const locked = !!it.gate && !isUnlocked('feature', it.gate);
+    if (uiSideDormant(it)) hid = true;   // B 包休眠(見 uiSideDormant)
     if (locked && !it.showLocked) hid = true;   // showLocked:未達條件仍顯示、灰掉,點擊時 toast 說明缺什麼
     b.hidden = hid;
     b.style.opacity = locked ? '.45' : '';
@@ -499,7 +521,7 @@ function bindEvents(canvas) {
   leaveDlg.addEventListener('pointerdown', e => e.stopPropagation());
   leaveDlg.addEventListener('click', onLeaveClick);
   const layoutBtn = document.getElementById('btnLayoutSave');
-  if (layoutBtn) layoutBtn.addEventListener('click', () => layoutSave());
+  if (layoutBtn) layoutBtn.addEventListener('click', () => { if (!featureOn('cityedit') && game.mode === 'estate') return; layoutSave(); });   // @DORMANT cityedit
 
   document.getElementById('btnShop').addEventListener('click', () => toggleShop());
   document.getElementById('btnHide').addEventListener('click', () => toggleHide());
@@ -508,6 +530,7 @@ function bindEvents(canvas) {
     saveWorld();
   });
   document.getElementById('btnClear').addEventListener('click', () => {
+    if (!featureOn('cityedit') && game.mode === 'estate') return;   // @DORMANT cityedit
     if (game.mode === 'battleDesign') {
       mapeditClear();
       return;
@@ -569,6 +592,7 @@ function bindEvents(canvas) {
 function buildToolbar() {
   const bar = document.getElementById('toolbar');
   bar.innerHTML = '';
+  if (!featureOn('cityedit') && game.mode === 'estate') return;   // @DORMANT cityedit
   if (game.mode === 'battleDesign' && typeof buildCampToolbar === 'function') {
     buildCampToolbar(bar);
   } else if (game.mode === 'estate') {
@@ -742,6 +766,7 @@ function menuTopEntry(M) {
 }
 
 function buildTopToolbar(bar) {
+  if (!featureOn('cityedit') && game.mode === 'estate') return;   // @DORMANT cityedit
   const M = menuSrc();
   const cur = menuTopEntry(M);
   M.setTop(cur.id);
@@ -795,6 +820,7 @@ function topSet(top) {
 }
 
 function buildTopMenu() {
+  if (!featureOn('cityedit') && game.mode === 'estate') return;   // @DORMANT cityedit
   let box = document.getElementById('topMenu');
   if (!box) {
     box = document.createElement('div');
@@ -819,6 +845,7 @@ function buildTopMenu() {
 
 // 變體列(樹種):選到有變體的代表工具時,在底部列上方列出已開放變體;選哪個就用哪個放置
 function buildVarBar() {
+  if (!featureOn('cityedit') && game.mode === 'estate') return;   // @DORMANT cityedit
   let box = document.getElementById('varbar');
   if (!box) {
     box = document.createElement('div');
@@ -995,6 +1022,7 @@ function buildCatList(top) {
 
 // 工具列上方的小分類標籤列(橫向可捲動);只在經營模式的建築頂層顯示
 function buildCatBar() {
+  if (!featureOn('cityedit') && game.mode === 'estate') return;   // @DORMANT cityedit
   let box = document.getElementById('catbar');
   if (!box) {
     box = document.createElement('div');
@@ -1168,6 +1196,7 @@ function isCampTool(t) {
 }
 
 function setTool(id) {
+  if (!featureOn('cityedit') && game.mode === 'estate' && id !== null) return;   // @DORMANT cityedit
   if (hide.on && id !== null && (OBJECTS[id] || uiIsCombo(id)) && !toggleHide(false)) return;
   draftDiscard();
   closeSettle();
@@ -1362,6 +1391,7 @@ function pendRotateSel() {
 
 // 隱藏建築（PLAN 12.17）。on 省略 = 切換。回傳是否已切到目標狀態（關閉時使用者取消 confirm → false）
 function toggleHide(on) {
+  if (!featureOn('cityedit') && game.mode === 'estate') return false;   // @DORMANT cityedit
   on = on === undefined ? !hide.on : !!on;
   if (on === hide.on) return true;
   if (on) {
@@ -1934,6 +1964,7 @@ function updateDealTimer() {
 }
 
 function toggleShop(open) {
+  if (!featureOn('citysim')) return;   // @DORMANT citysim
   ui.shopOpen = open === undefined ? !ui.shopOpen : !!open;
   document.getElementById('shop').hidden = !ui.shopOpen;
   if (ui.shopOpen) {

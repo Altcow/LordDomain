@@ -253,6 +253,7 @@ function caravanPanelTick(panel, now) {
   });
 }
 function caravanPanelToggle(open) {
+  if (!featureOn('caravan') && open !== false) return;   // @DORMANT caravan:走鏢面板休眠(v60),只允許收合
   caravanPanelOpen = open === undefined ? !caravanPanelOpen : !!open;
   caravanPanelRender();
   if (caravanPanelOpen) { if (typeof panelOpen === 'function') panelOpen('caravan'); } else if (typeof panelClose === 'function') panelClose('caravan');
@@ -328,7 +329,7 @@ function caravanUiInit() {
     btn.addEventListener('click', function () { caravanPanelToggle(); });
     var top = document.getElementById('topbar');
     if (top) top.appendChild(btn);
-    var sync = function () { if (!document.hidden) btn.hidden = !(typeof isUnlocked === 'function' && isUnlocked('feature', 'caravan')); };
+    var sync = function () { if (!document.hidden) btn.hidden = !featureOn('caravan') || !(typeof isUnlocked === 'function' && isUnlocked('feature', 'caravan')); };   // @DORMANT caravan
     sync();
     setInterval(sync, 1000);
     setInterval(function () {

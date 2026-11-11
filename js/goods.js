@@ -355,6 +355,7 @@ function goodsStep(dt, mul, noAge) {
 
 // 線上:tickResources(dt) 每幀呼叫;累積到 GOODS_STEP_SEC 才結算一次
 function cityGoodsTick(dt) {
+  if (!featureOn('citysim')) return;   // @DORMANT citysim
   if (!(dt > 0)) return;
   goodsAcc += dt;
   if (goodsAcc < GOODS_STEP_SEC) return;
@@ -368,6 +369,7 @@ function cityGoodsTick(dt) {
 
 // 離線:最多 48 步、每步 ≥ 10 分鐘,產出與消耗同乘 offlineRate();回傳摘要 { sec, steps, gain, coin }
 function cityGoodsOffline(sec) {
+  if (!featureOn('citysim')) return null;   // @DORMANT citysim
   var c = goodsCity();
   if (!c || !(sec > 0)) return null;
   goodsMigrateMats(false);

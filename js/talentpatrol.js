@@ -149,6 +149,7 @@ function tpEnv() {
 }
 
 function talentPatrolTick(dt) {
+  if (!featureOn('citysim')) return;   // @DORMANT citysim
   if (typeof REC !== 'undefined' && REC && REC.state === 'recording' && REC.opts && REC.opts.clean) return;
   const env = tpEnv();
   if (env) tpStep(Math.min(dt, 0.25), env);
@@ -172,6 +173,7 @@ function tpGlow() {
 
 // 每幀入口(render 疊加鉤子):time 為毫秒時鐘,由相鄰兩幀差換算 dt 後 tick,再繪製
 function talentPatrolDraw(ctx, time) {
+  if (!featureOn('citysim')) return;   // @DORMANT citysim
   if (typeof time === 'number') {
     const dt = TP.last ? (time - TP.last) / 1000 : 0;
     TP.last = time;

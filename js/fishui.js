@@ -609,6 +609,7 @@ function fuOnVis() {
 
 // 進入釣魚場景。src 為入口名稱(目前只有 'top')。只能從經營模式進入。進入後先開「開始」面板。
 function fishEnter(src) {
+  if (!featureOn('fishing')) return false;   // @DORMANT fishing:釣魚入口休眠(v60)
   if (fuLayer || typeof game === 'undefined' || game.mode !== 'estate') return false;
   if (typeof featGuard === 'function' && !featGuard('fishing')) return false;
   fishLoad();
@@ -702,6 +703,7 @@ function fuSyncTop() {
 
 // 頂列 🎣 鈕:只在經營模式顯示。
 function fuMountButton() {
+  if (!featureOn('fishing')) return;   // @DORMANT fishing:頂列 🎣 不建(v60)
   var top = document.getElementById('topbar'), btn;
   if (!top || document.getElementById('btnFish')) return;
   btn = document.createElement('button');

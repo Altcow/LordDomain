@@ -84,6 +84,7 @@ function mktBuyInfo(id, n) {
 
 // 收購:n 超過額度 / 容量時只收得下的部分(至少 1 件才成交)。成功入庫、扣金幣、記今日用量
 function mktBuy(id, n) {
+  if (!featureOn('citysim')) return { ok: false, n: 0, paid: 0, why: 'dormant' };   // @DORMANT citysim
   var info = mktBuyInfo(id, n), p, c, st;
   if (!info.ok) return { ok: false, n: 0, paid: 0, why: info.why };
   p = mktPay(id, info.can);
@@ -100,6 +101,7 @@ function mktBuy(id, n) {
 function mktToast(m) { if (typeof showToast === 'function') showToast(m); }
 // 確認視窗:缺口 / 可收購 / 單價 / 總價 → 確認後成交。done(result) 成交後呼叫
 function mktBuyUi(id, n, done) {
+  if (!featureOn('citysim')) return false;   // @DORMANT citysim
   var info = mktBuyInfo(id, n), msg, run;
   if (!info.can) { mktToast(MKT_WHY[info.why] || '無法收購'); return false; }
   msg = '缺口 ' + info.n + ' 件' + (info.can < info.n ? '(今日只能再收購 ' + info.can + ' 件)' : '') + '　單價 🪙' + (Math.round(info.unit * 100) / 100) + '　總價 🪙' + info.total +

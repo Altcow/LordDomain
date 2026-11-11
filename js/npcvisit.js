@@ -180,6 +180,7 @@ function npcVisitSpawn(figId, day) {
 
 // citylife lifeFrame 掛點:每秒一次(dt 秒)。管理在場名人的停留上限、更新「畫不畫」旗標、依行程表放人
 function npcVisitTick(dt) {
+  if (!featureOn('citysim')) return;   // @DORMANT citysim
   var V = NPCV, now, day, plan, rec, mn, i, s, fig, L, n, d;
   V.t -= dt || 0;
   if (V.t > 0) return;

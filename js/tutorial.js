@@ -17,7 +17,7 @@ var TUT_SHOP_TRY_MAX = 60;      // 商店聚光孔教學:連續 60 次(約 1.5 �
 
 function tutCity() { if (typeof goodsCity === 'function' && typeof world !== 'undefined' && world) goodsCity(); return (typeof world !== 'undefined' && world && world.city && typeof world.city === 'object') ? world.city : null; }   // 先正規化:goodsCity 可能換掉 world.city 物件(tut 會被複製),之後持有的 t 不能變孤兒
 function tutClock() { return (typeof nsRt !== 'undefined' && nsRt && typeof nsRt.clock === 'function') ? nsRt.clock() : Date.now(); }
-function tutActive() { var c = tutCity(); return !!(c && c.tut && c.tut.step !== 'END'); }
+function tutActive() { if (!featureOn('tutorial')) return false; /* @DORMANT tutorial:舊教學休眠(v60),程式與存檔保留 */ var c = tutCity(); return !!(c && c.tut && c.tut.step !== 'END'); }
 function tutHas() { var c = tutCity(); return !!(c && c.tut); }
 function tutGraduated() { var c = tutCity(); return !!(c && c.tut && c.tut.step === 'END'); }
 function tutProgress(step) { var i = TUT_IDS.indexOf(step); return i < 0 ? '' : i + '/' + TUT_TOTAL; }
@@ -27,6 +27,7 @@ function tutHasSeen(k) { var c = tutCity(); return !!(c && c.tut && c.tut.seen &
 function tutToast(m) { if (typeof showToast === 'function') showToast(m); }
 
 function tutStartNew() {
+  if (!featureOn('tutorial')) return false;   // @DORMANT tutorial:舊教學休眠(v60),全新世界不建 tut
   var c = tutCity();
   if (!c || c.tut) return false;
   c.tut = { v: 1, step: 'T0', skipped: false, grants: {}, at: {} };

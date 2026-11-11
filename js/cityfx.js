@@ -293,7 +293,7 @@ function cfxEnsure(force) {
   cfxCalc();
 }
 
-function cityFxTick() { cfxEnsure(false); }
+function cityFxTick() { if (!featureOn('citysim')) return; cfxEnsure(false); }   // @DORMANT citysim
 function cityFxInvalidate() { cfx.roadCd = 0; cfx.checkAt = -1e15; cfx.ready = false; cfx.hint = null; }
 function cityFxSetClock(fn) { cfx.clock = fn || function () { return Date.now(); }; }
 function cityFxStats() { return { full: cfx.stats.full, partial: cfx.stats.partial, sampled: cfx.stats.sampled, lastMs: cfx.stats.lastMs, calcs: cfx.stats.calcs, houses: cfx.houses.length }; }

@@ -39,7 +39,8 @@ function setCityOnly(v) {
 
 // 此功能 id 在城建專注模式下是否隱藏
 function cityOnlyHides(id) {
-  if (id === 'fishing' || id === 'pet') return true;   // 釣魚、仙獸苑:使用者決定永久隱藏入口(程式與存檔保留),不受城建專注開關影響
+  if (id === 'fishing') return !featureOn('fishing');   // @DORMANT fishing:釣魚入口由旗標控制(v60 預設關;程式與存檔保留)
+  if (id === 'pet') return true;   // 仙獸苑:使用者決定永久隱藏入口(程式與存檔保留),不受城建專注開關影響
   return isCityOnly() && CITY_HIDE_FEATURES.indexOf(id) >= 0;
 }
 

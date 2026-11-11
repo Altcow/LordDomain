@@ -21,7 +21,7 @@ var SAVE_KEY_PROG = 'lorddomain.prog.v1';
 var SAVE_NOOFFLINE_KEY = 'lorddomain.load.noOffline';   // 舊版旗標(已不再使用);啟動時若殘留一律清除
 
 // 進度鍵:整組進槽;讀檔時槽內沒有的會被移除(避免殘留)
-var SAVE_SLOT_KEYS = ['lorddomain.save.v1', 'lorddomain.prog.v1', 'lorddomain.fish.v1', 'lorddomain.pet.v1', 'lorddomain.caravan.v1', 'lorddomain.visit.v1', 'lorddomain.bn.v1', 'lorddomain.bnlog.v1', 'lorddomain.bnteam.v1', 'lorddomain.bnbook.v1', 'lorddomain.bnskc.v1'];
+var SAVE_SLOT_KEYS = ['lorddomain.save.v1', 'lorddomain.prog.v1', 'lorddomain.fish.v1', 'lorddomain.pet.v1', 'lorddomain.caravan.v1', 'lorddomain.visit.v1', 'lorddomain.bn.v1', 'lorddomain.bnlog.v1', 'lorddomain.bnteam.v1', 'lorddomain.bnbook.v1', 'lorddomain.bnskc.v1', 'lorddomain.tourney.v1', 'lorddomain.wm.v1'];
 // 暫態進度鍵:不進槽,但讀檔 / 重新開始時一律清掉(與舊盤面綁定,留著會錯亂)
 var SAVE_TRANSIENT_KEYS = ['lorddomain.draft.v1'];
 // 偏好鍵:不進槽,讀檔 / 重新開始後保留目前值
@@ -499,6 +499,7 @@ async function savesDoAction(kind, opts) {
 // ───────── 切換 / 重新開始 / 刪除 世界 ─────────
 // 進入世界 to(空世界 = 新世界)。目前世界先寫回自己的槽並驗證,失敗就不切換;成功會 reload
 async function worldsEnter(to) {
+  if (!featureOn('multiworld')) return { ok: false, reason: 'dormant' };   // @DORMANT multiworld
   if (!savesAvailable()) return { ok: false, reason: 'unavailable' };
   if (!savesIsWorldId(to)) return { ok: false, reason: 'id' };
   return worldsWithLock(async function () {

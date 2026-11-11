@@ -26,16 +26,16 @@
   <div id="resbar"></div>
   <span id="info"></span>
   <span class="spacer"></span>
-  <button id="btnHide" title="隱藏建築（整地用，H）"><span class="ic">👁</span><span class="lbl">建築</span></button>
-  <select id="selSeason" title="季節主題">
+  <button id="btnHide" data-dormant="cityedit" title="隱藏建築（整地用，H）"><span class="ic">👁</span><span class="lbl">建築</span></button>
+  <select id="selSeason" data-dormant="citysim" title="季節主題">
     <option value="spring">春</option>
     <option value="summer">夏</option>
     <option value="autumn">秋</option>
     <option value="winter">冬</option>
   </select>
-  <button id="btnShop">商店</button>
-  <button id="btnLayoutSave" title="布置存檔">💾 布置存檔</button>
-  <button id="btnClear">清空</button>
+  <button id="btnShop" data-dormant="citysim">商店</button>
+  <button id="btnLayoutSave" data-dormant="cityedit" title="布置存檔">💾 布置存檔</button>
+  <button id="btnClear" data-dormant="cityedit">清空</button>
 </div>
 <canvas id="game"></canvas>
 <div id="shop" hidden></div>
@@ -44,6 +44,7 @@
 <div id="pendBar" hidden></div>
 <div id="toolbar"></div>
 <button id="modeFloat" type="button" hidden></button>
+<script src="js/features.js"></script>
 <script src="js/data.js"></script>
 <script src="js/units.js"></script>
 <script src="js/unitinfo.js"></script>
@@ -220,12 +221,17 @@
 <script src="js/bnmap.js"></script>
 <script src="js/bnshare.js"></script>
 <script src="js/bnteam.js"></script>
+<script src="js/bn_tourney.js"></script>
+<script src="js/bn_tourney_ui.js"></script>
 <script src="js/codex_teams_data.js"></script>
 <script src="js/codex.js"></script>
 <script src="js/minimap.js"></script>
 <script src="js/fx_text_data.js"></script>
 <script src="js/fx_stages_data.js"></script>
 <script src="js/fx_text.js"></script>
+<script src="js/wm_data.js"></script>
+<script src="js/wm_core.js"></script>
+<script src="js/wm_ui.js"></script>
 <script src="js/main.js"></script>
 <script src="js/installtip.js"></script>
 <script src="js/pwa.js"></script>

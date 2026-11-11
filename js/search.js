@@ -92,7 +92,7 @@ function srKey() {
 function srIndex() {
   var key = srKey(), obj = [], tech = [];
   if (sr.idx && sr.key === key) return sr.idx;
-  if (typeof OBJECTS !== 'undefined') Object.keys(OBJECTS).forEach(function (id) {
+  if (typeof OBJECTS !== 'undefined' && featureOn('cityedit')) Object.keys(OBJECTS).forEach(function (id) {   // @DORMANT cityedit
     var d = OBJECTS[id], g, top, nm;
     if (!d || d.retired) return;
     if (typeof fxHiddenObj === 'function' && fxHiddenObj(id)) return;
@@ -258,6 +258,7 @@ function srBuildBlock(id) {   // 不能直接前往建造的原因;可以則回 
   return '';
 }
 function srGoBuild(id) {
+  if (!featureOn('cityedit')) return false;   // @DORMANT cityedit
   var leader, top, g, M;
   if (typeof OBJECTS === 'undefined' || !OBJECTS[id] || typeof ESTATE_MENU === 'undefined' || srBuildBlock(id)) return false;
   leader = (typeof varLeader === 'function') ? varLeader(id) : id;

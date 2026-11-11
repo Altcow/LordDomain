@@ -917,6 +917,7 @@ function gatherPrefill() {
 
 // lifeFrame 掛點:每幀更新成員(≤ 48 人),每 0.5 秒排程
 function gatherTick(dt) {
+  if (!featureOn('citysim')) return;   // @DORMANT citysim
   if (!GATHER.inited) gthInit();
   if (!GATHER.built) return;
   const t0 = lifeNow();

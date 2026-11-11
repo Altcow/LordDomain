@@ -211,6 +211,7 @@ function cityscoreCompute(objs, board, lvOverride) {
 
 // 目前經營棋盤的評分(每 1 秒節流快取;force = 立即重算)
 function cityscoreGet(force) {
+  if (!featureOn('citysim') && cityCs.res) return cityCs.res;   // @DORMANT citysim:城市模擬休眠後板面凍結,沿用上次結果不再重算
   var now = Date.now(), objs = [], board = null;
   if (!force && cityCs.res && now - cityCs.t < 1000) return cityCs.res;
   if (typeof estateObjects === 'function') { try { objs = estateObjects() || []; board = (typeof estateBoard === 'function') ? estateBoard() : null; } catch (e) { objs = []; } }

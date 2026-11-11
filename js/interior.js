@@ -608,6 +608,7 @@ function interiorRestoreCity(s) {
   } catch (e) { /* 略過 */ }
 }
 function interiorEnter(id, opts) {
+  if (!featureOn('interiors')) return false;   // @DORMANT interiors
   var def = INTERIOR_DEFS[id], t0 = (typeof performance !== 'undefined') ? performance.now() : 0, S;
   if (!def || itr.leaving || !interiorCanEnter()) return false;   // 淡出中(≤ 0.3 秒)不重入
   opts = opts || {};

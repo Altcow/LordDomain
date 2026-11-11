@@ -1047,6 +1047,7 @@ function draftEnvLeave() {
 
 // 開始草稿。src:已複製好的棋盤(來自使用中 / 格);tplId:範本;皆無 = 空白。unsaved:繼續上次草稿(視為有未存變更)
 function draftBegin(type, from, src, tplId, unsaved) {
+  if (!featureOn('cityedit') && type === 'estate') return false;   // @DORMANT cityedit
   if (type !== 'estate' && type !== 'camp') return false;
   if (ui.editing || game.backup) { showToast('目前無法進入草稿布置'); return false; }
   if (game.mode !== 'estate' && game.mode !== 'battleDesign') { showToast('目前無法進入草稿布置'); return false; }
@@ -1109,6 +1110,7 @@ function draftResume(saved) {
 // 側欄 🔨 / 範本載入入口。opt: { type, tpl }
 function draftStartOpen(opt) {
   opt = opt || {};
+  if (!featureOn('cityedit') && game.mode === 'estate') return;   // @DORMANT cityedit
   if (ui.editing) { showToast('已在草稿布置中'); return; }
   if (game.backup || (game.mode !== 'estate' && game.mode !== 'battleDesign')) { showToast('目前無法進入草稿布置'); return; }
   const st = { type: opt.type || (game.mode === 'battleDesign' ? 'camp' : 'estate'), tpl: opt.tpl || null, view: 'main' };
@@ -1415,6 +1417,7 @@ function slotPickType() { return game.mode === 'battleDesign' ? 'camp' : 'estate
 function slotPopIsOpen() { return slotPopOn; }
 // 此畫面能不能用版面格(側欄按鈕是否顯示)
 function slotPopAvail() {
+  if (!featureOn('cityedit') && game.mode === 'estate') return false;   // @DORMANT cityedit
   return !(cornerHidden() || (game.backup && !ui.editing) || (game.mode !== 'estate' && game.mode !== 'battleDesign'));
 }
 function slotPopToggle() {

@@ -243,7 +243,7 @@ function bnUiCurFoes(mySpecs) {
   f.label = '練兵'; f.kind = 'practice';
   return f;
 }
-function bnUiStageLabel() { var g = bnu.stg || {}; return g.kind === 'stage' ? '討伐 ' + g.id : (g.kind === 'bounty' ? '每日流寇' : '練兵'); }
+function bnUiStageLabel() { var g = bnu.stg || {}; return g.kind === 'stage' ? '討伐 ' + g.id : (g.kind === 'bounty' ? '每日流寇' : (g.kind === 'tourney' ? '擂台' : '練兵')); }
 function bnUiDayNo() { var d = new Date(); return d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate(); }
 function bnUiRec() {
   var b = bnUiBuild(), foes = bnUiCurFoes(b.team.units), cs = (typeof cardsGet === 'function') ? cardsGet() : null, fp = bnu.slots.map(function (s) { return s.id + ':' + s.row + s.col + (s.troop || bnu.tp[s.id] || ''); }).join(',');
@@ -913,7 +913,7 @@ function bnUiShowResult() {
   if (rep && rep.win && g.kind === 'stage' && typeof BNMAP !== 'undefined') { BNMAP.sel = null; BNMAP.ch = 0; }   // 勝利 → 回地圖時預設選下一關(bnMapRender 預設選第一個未通關的已解鎖關)
   if (bnu.P) bnPlSfxEnd(d.winner);
   bnUiDrawOnce();
-  if (typeof bnsOnResult === 'function') bnsOnResult(d);   // 對戰練習(js/bnshare.js):不計進度、改結算按鈕
+  if (typeof bnsOnResult === 'function') bnsOnResult(d); if (typeof bnTourOnResult === 'function') bnTourOnResult(d);   // 對戰練習(js/bnshare.js):不計進度、改結算按鈕;擂台回播(js/bn_tourney_ui.js):改結算按鈕
 }
 function bnPlSfxEnd(w) { if (typeof bnSfxEnd === 'function') { try { bnSfxEnd(w); } catch (e) { /* 略過 */ } } else if (typeof sfxwPlay === 'function') { try { sfxwPlay(w === 'A' ? 'win' : (w === 'B' ? 'lose' : 'flag')); } catch (e) { /* 略過 */ } } }
 function bnUiToForm() {
@@ -926,21 +926,25 @@ function bnUiToForm() {
 }
 // 戰鬥入口(側欄『戰鬥』開啟後的第一個畫面):副本 / 對戰 / 戰報 / 練兵
 function bnUiRenderEntry() {
-  var el = bnu.entEl, d, done = 0, tot = 0;
+  var el = bnu.entEl, d, done = 0, tot = 0, stgOn;
   if (!el) return;
   d = bnu.data || bnUiLoad();
   if (typeof bnMapStageStats === 'function' && typeof BN_STAGES !== 'undefined') { done = bnMapStageStats(d).cleared; tot = BN_STAGES.length; }
-  el.innerHTML = '<div class="bnen"><p class="bnen-sum">卡包 ' + bnUiRosterList().length + ' 人 · 討伐進度 ' + done + '/' + tot + '</p>' +
-    '<button class="bnen-b" data-a="ent" data-t="stage"><b>副本</b><small>討伐地圖:選章節與關卡,首通有獎勵,可重複通關</small></button>' +
+  stgOn = featureOn('stages');   // @DORMANT stages:副本休眠(v60)時入口不列副本鈕,摘要也不顯示討伐進度
+  el.innerHTML = '<div class="bnen"><p class="bnen-sum">卡包 ' + bnUiRosterList().length + ' 人' + (stgOn ? ' · 討伐進度 ' + done + '/' + tot : '') + '</p>' +
+    (stgOn ? '<button class="bnen-b" data-a="ent" data-t="stage"><b>副本</b><small>討伐地圖:選章節與關卡,首通有獎勵,可重複通關</small></button>' : '') +
     '<button class="bnen-b" data-a="ent" data-t="share"><b>對戰</b><small>對戰碼與擂台(不計進度、不給獎勵)</small></button>' +
     '<button class="bnen-b" data-a="ent" data-t="log"><b>戰報</b><small>最近的戰報,可查看與儲存</small></button>' +
-    '<button class="bnen-b" data-a="ent" data-t="prac"><b>練兵</b><small>不計戰績、不給獎勵,敵將依我方戰力縮放,可自由試陣</small></button></div>';
+    '<button class="bnen-b" data-a="ent" data-t="tourney"><b>擂台</b><small>16 隊單淘汰,比出前三名;系統隊伍自動補滿,每 2 小時一屆</small></button>' +
+    '<button class="bnen-b" data-a="ent" data-t="prac"><b>練兵</b><small>不計戰績、不給獎勵,敵將依我方戰力縮放,可自由試陣</small></button>' + (typeof featureOn === 'function' && featureOn('worldmap') ? '<button class="bnen-b" data-a="ent" data-t="wm"><b>外勤</b><small>派部隊出外採集或討伐據點;清單每格會刷新,離開時也會照算</small></button>' : '') + '</div>'; // @DORMANT worldmap
 }
 function bnUiEntryDo(t) {
-  if (t === 'stage') bnUiToMap();
+  if (t === 'stage') { if (featureOn('stages')) bnUiToMap(); }   // @DORMANT stages:副本入口休眠(v60)
   else if (t === 'share') { if (typeof bnsOpen === 'function') bnsOpen('share'); }
   else if (t === 'log') { if (typeof bnLogOpen === 'function') bnLogOpen('recent'); }
+  else if (t === 'tourney') { if (typeof bnTourOpen === 'function') bnTourOpen(); }
   else if (t === 'prac') { if (typeof bnMapEnter === 'function') bnMapEnter('practice'); }
+  else if (t === 'wm') { if (typeof wmOpen === 'function') wmOpen(); }
 }
 function bnUiToEntry() {
   if (bnu.P) { bnPlDispose(bnu.P); bnu.P = null; }
@@ -951,6 +955,7 @@ function bnUiToEntry() {
   bnUiRenderEntry();
 }
 function bnUiToMap() {
+  if (!featureOn('stages')) { bnUiToEntry(); return; }   // @DORMANT stages:副本 / 流寇頁休眠(v60),回入口
   if (bnu.P) { bnPlDispose(bnu.P); bnu.P = null; }
   bnUiStopLoop();
   bnUiShowRes(false); bnUiShowPause(false); bnUiCutRender(null);
@@ -993,7 +998,9 @@ function bnUiBack() {
   if (bnPopBack()) return true;   // 人物詳情開著:先關   // 戰法說明浮層開著:先關
   if (typeof BNMAP !== 'undefined' && BNMAP.det) { BNMAP.det = false; bnMapRender(); return true; }   // 副本關卡詳細說明開著:先關
   if (typeof bnLogBack === 'function' && bnLogBack()) return true;   // 戰報面板開著:先關面板
-  if (typeof bnsBack === 'function' && bnsBack()) return true;   // 對戰練習面板開著:先關面板
+  if (typeof bnsBack === 'function' && bnsBack()) return true;   // 對戰練習面板開著:先關面板  |  擂台面板 / 擂台結算:先關或回擂台(js/bn_tourney_ui.js)
+  if (typeof bnTourBack === 'function' && bnTourBack()) return true;
+  if (typeof wmBack === 'function' && wmBack()) return true;   // 外勤面板(js/wm_ui.js):先關派遣面板,再關外勤
   if (bnu.phase === 'fight') { bnUiPause(!bnu.paused); return true; }
   if (bnu.phase === 'res') { bnUiToForm(); return true; }
   if (bnu.phase === 'form' && typeof bnMapRender === 'function') { if (bnu.stg && bnu.stg.kind === 'practice') bnUiToEntry(); else bnUiToMap(); return true; }

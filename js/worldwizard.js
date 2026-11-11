@@ -247,6 +247,7 @@ function wwWarnText(st) {
 
 // 開啟精靈。opts: {kind:'create'|'restart', n:世界編號, from:'saves'|'settings', confirm:替代確認函式(測試用)}
 function worldWizardOpen(opts) {
+  if (!featureOn('multiworld')) return false;   // @DORMANT multiworld
   var o = opts || {}, kind = o.kind === 'create' ? 'create' : 'restart', n = o.n, w, el, list, i, op, cur, nm;
   if (typeof worldsGet !== 'function' || typeof WORLD_PACKS === 'undefined') return false;
   w = worldsGet();

@@ -146,6 +146,9 @@ function gdCityHidden(t) {
   return !!t.feat && typeof cityOnlyHides === 'function' && cityOnlyHides(t.feat);
 }
 
+// 釣魚主題在旗標關閉時不列出(v60 休眠;isUnlocked 同時擋下,程式與主題表保留)
+function gdDormantHidden(t) { return t.feat === 'fishing' && !featureOn('fishing'); }   // @DORMANT fishing
+
 function gdFeatOpen(feat) {
   if (!feat) return true;
   if (typeof isUnlocked !== 'function') return true;
@@ -464,7 +467,7 @@ function gdListRender() {
   body.textContent = '';
   GUIDE_TOPICS.forEach(function (t) {
     var open = gdFeatOpen(t.feat), card = gdEl('div', 'gl-item' + (open ? '' : ' lock')), head = gdEl('div', 'gl-head'), ol = gdEl('ol', 'gl-steps'), btn;
-    if (gdCityHidden(t)) return;   // 城建專注模式:戰鬥 / 釣魚 / 仙獸主題不列出
+    if (gdCityHidden(t) || gdDormantHidden(t)) return;   // 城建專注模式:戰鬥 / 釣魚 / 仙獸主題不列出;釣魚休眠時也不列
     head.appendChild(gdEl('b', 'gl-t', t.title));
     if (!open) head.appendChild(gdEl('span', 'gl-tag', 'Lv ' + guideTopicLv(t) + ' 開放'));
     else if (t.mode !== 'attack') {

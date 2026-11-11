@@ -723,6 +723,7 @@ function lifePortSpawn() {
 
 // 每 0.5 秒:苦力不足就補(一次最多 3 名),過多則淡出多出的(畫面外優先)
 function lifePortTick(dt) {
+  if (!featureOn('citysim')) return;   // @DORMANT citysim
   LIFE.portT -= dt;
   if (LIFE.portT > 0) return;
   LIFE.portT = 0.5;
@@ -754,6 +755,7 @@ function lifePortTick(dt) {
 //  夜市(吃食 / 酒水攤開張)在 citytraffic.js 的叫賣者 / 圍觀者目標;晚歸者提燈在 lifeNew。皆算居民額度(下限內)
 const LIFE_TAVERN_TYPES = { tavern: 1, shop_wine: 1, inn: 1 };
 function lifeNightTick(dt) {
+  if (!featureOn('citysim')) return;   // @DORMANT citysim
   LIFE.nightT -= dt;
   if (LIFE.nightT > 0) return;
   LIFE.nightT = 2;
@@ -814,6 +816,7 @@ function lifeNightTick(dt) {
 }
 
 function lifeSpawnTick(dt) {
+  if (!featureOn('citysim')) return;   // @DORMANT citysim
   if (LIFE.seedLeft > 0) {
     let tries = 0;
     while (LIFE.seedLeft > 0 && LIFE.live < LIFE.target && tries < 10) {

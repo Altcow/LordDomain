@@ -340,6 +340,8 @@ function copyEstateToCamp() {
 
 // 解鎖閘門（PLAN_TD_MASTER §3.6；PLAN_PROGRESSION §2.5）：開放等級由 progUnlockLv 查表；表中沒有的 id 或 prog 未載入一律開放
 function isUnlocked(kind, id) {
+  if (kind === 'feature' && id === 'fishing' && !featureOn('fishing')) return false;   // @DORMANT fishing:釣魚休眠(v60)
+  if (kind === 'feature' && id === 'caravan' && !featureOn('caravan')) return false;   // @DORMANT caravan:走鏢休眠(v60)
   if (kind === 'feature' && typeof cityOnlyHides === 'function' && cityOnlyHides(id)) return false;   // 城建專注模式(js/cityonly.js):釣魚 / 仙獸 / 戰鬥相關功能一律視為未開放
   if (kind === 'feature' && id === 'battleA') return typeof bnUnlocked === 'function' ? bnUnlocked() : false;   // 戰鬥 A(js/bnui.js):名冊 ≥ 5 人即開(v58-C),不看官階、建築、科技,不受等級表影響
   if (kind === 'estate' && typeof nlUnlocked === 'function') {   // NL1:經營板物件改看起手集合 ∪ 已研完科技(citytech.js);戰陣板與其他類別沿用等級表

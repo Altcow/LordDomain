@@ -727,6 +727,7 @@ function tuHide() {
 }
 function techPanelIsOpen() { return !!tu.open; }
 function techPanelOpen(nodeId) {
+  if (!featureOn('citysim')) return false;   // @DORMANT citysim
   var el = tuEnsure(), n = nodeId ? techNode(nodeId) : null;
   if (typeof CITY_TECHS === 'undefined' || typeof techState !== 'function') return false;
   tu.msg = ''; tu.confirm = ''; tu.qOpen = false;

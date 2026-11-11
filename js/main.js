@@ -21,7 +21,7 @@ function boot() {
   const freshWorld = !loadWorld();
   if (freshWorld) applyTemplate(DEFAULT_TEMPLATE);
   if (freshWorld && typeof tutStartNew === 'function') { if (world && !world.city) world.city = {}; tutStartNew(); }   // 全新世界才開新手教學(舊存檔沒有 tut = 已畢業)
-  if (typeof worldWizardBoot === 'function') worldWizardBoot(freshWorld);   // 精靈選的世界風格 / 起手範本(只在全新世界套用一次)
+  if (featureOn('multiworld') && typeof worldWizardBoot === 'function') worldWizardBoot(freshWorld);   // @DORMANT multiworld:精靈選的世界風格 / 起手範本(只在全新世界套用一次)
   initUI(canvas);
   if (migr.migrated && typeof showToast === 'function') showToast('舊領地已備份,從 1 級重新開始(設定可還原備份)');
   if (typeof initBattleUI === 'function') initBattleUI();
