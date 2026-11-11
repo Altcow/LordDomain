@@ -78,7 +78,7 @@ function frame(nowMs) {
     saveWorld();
   }
   if (typeof battleUiTick === 'function') battleUiTick(dt);
-  if (typeof cardsNamedTick === 'function') cardsNamedTick(dt);   // 指名券:官階晉升檢查(cards.js,每 5 秒)
+  if (typeof cardsTick === 'function') cardsTick(dt);   // 卡片主迴圈掛點(cards.js,每 5 秒):人物互動 / 舊存檔提示
   if (typeof tavernTick === 'function') tavernTick(dt);   // 酒館包間收益結算(tavern_i1.js,每 5 秒檢查、每遊戲小時入帳)
   if (typeof game !== 'undefined' && game.mode === 'bn') { requestAnimationFrame(frame); return; }   // 戰鬥 A(js/bnui.js):全螢幕戰鬥畫面自己畫,不重畫城市
   if (typeof game !== 'undefined' && (game.mode === 'fishing' || game.mode === 'interior')) { requestAnimationFrame(frame); return; }   // 釣魚 / 室內:全螢幕子畫面自己畫,不重畫城市

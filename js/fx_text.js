@@ -31,15 +31,15 @@ var FX_HAZ_LABEL = { common: { locust: '防蟲群' }, elf: { fire: '防林火', 
 
 // ───────── 用語替換表(依族,首次使用時建立;長詞在前)─────────
 function fxTerms(p) {
-  var R, P, E, G, T, gw, list, xs;
+  var R, P, E, T, gw, list, xs;
   if (FX_TXT.terms[p]) return FX_TXT.terms[p];
   R = (fxTxD('ranks') || {})[p] || []; P = fxTxD('posts') || {}; gw = fxTxD('guardWarn') || {};
-  E = fxVenue('E', p) || {}; G = fxVenue('G', p) || {}; T = fxVenue('T', p) || {};
+  E = fxVenue('E', p) || {}; T = fxVenue('T', p) || {};
   xs = (typeof fxTechName === 'function') ? fxTechName('ed_xuexiao') : null;
   list = [
-    ['近來黃巾餘黨出沒,務必小心。', gw[p] || gw.common], ['九品中正考課', E.alias], ['天子親策', G.alias], ['招賢酒肆', T.alias],
-    ['縣試品評', E.name ? E.name + '品評' : null], ['舊殿試', G.name ? '舊' + G.name : null], ['殿試台', (FX_OBJ_TXT.dian_shi_tai || {})[p]],
-    ['縣試', E.name], ['殿試', G.name], ['徵辟', G.orgName],
+    ['近來黃巾餘黨出沒,務必小心。', gw[p] || gw.common], ['九品中正考課', E.alias], ['招賢酒肆', T.alias],
+    ['縣試品評', E.name ? E.name + '品評' : null], ['殿試台', (FX_OBJ_TXT.dian_shi_tai || {})[p]],
+    ['縣試', E.name],
     ['黃巾餘黨', '林道盜匪'], ['黃巾', '盜匪'], ['太平道', '邪教'],
     ['郡國學校', xs], ['縣衙大堂', fxObjNow('xian_ya')], ['縣衙', fxObjNow('xian_ya')], ['郡府', fxObjNow('palace')], ['翻車', fxObjNow('fan_che')],
     ['里正', R[0]], ['亭長', R[1]], ['縣尉', R[2]], ['縣令', R[3]], ['刺史', R[5]], ['太守', P['太守']],
@@ -232,10 +232,10 @@ function fxTextInstall() {
   if (typeof BNT_CITY !== 'undefined') Object.keys(BNT_CITY).forEach(function (k) { fxTxDefText(BNT_CITY, k); });
   if (typeof CARD_GRADE !== 'undefined') CARD_GRADE.forEach(function (g) { fxTxDefText(g, 'line'); });
   // 魔幻英雄專屬詞條說明(魔幻專用資料,直接改字):太守職 → 城主府總管職
-  // 魔幻科技說明裡殘留的「(殿試)」(fx_tech_data.js,魔幻專用資料):換成本族召見場所名
+  // 魔幻科技說明裡殘留的「(殿試)」(fx_tech_data.js,魔幻專用資料):換成本族殿試台名(指名池 G 已刪除,不再用 G 場所名)
   if (typeof FX_TECH_DATA !== 'undefined' && FX_TECH_DATA.nodes) Object.keys(FX_TECH_DATA.nodes).forEach(function (p) {
-    var S = FX_TECH_DATA.nodes[p], G = fxVenue('G', p);
-    if (S && G && G.name) Object.keys(S).forEach(function (id) { if (S[id] && typeof S[id][1] === 'string' && S[id][1].indexOf('殿試') >= 0) S[id][1] = S[id][1].split('殿試').join(G.name); });
+    var S = FX_TECH_DATA.nodes[p], N = (FX_OBJ_TXT.dian_shi_tai || {})[p];
+    if (S && N) Object.keys(S).forEach(function (id) { if (S[id] && typeof S[id][1] === 'string' && S[id][1].indexOf('殿試') >= 0) S[id][1] = S[id][1].split('殿試').join(N); });
   });
   if (typeof FX_FIGS !== 'undefined') FX_FIGS.forEach(function (f) { (f.tr || []).forEach(function (t) { if (typeof t[2] === 'string') t[2] = t[2].split('太守').join(((fxTxD('posts') || {})['太守']) || '總管'); }); });
   // 路人台詞 / 居民姓名 / 招呼
@@ -262,8 +262,8 @@ function fxTextInstall() {
 }
 
 // ───────── 包住回傳字串的面板函式(魔幻世界過一次 fxText;歷史世界原樣)─────────
-var FX_TXT_WRAP = ['cuRosterHtml', 'cuDrawTabHtml', 'cuDrawPoolHtml', 'cuDrawNamedHtml', 'cuRosterPageHtml', 'cuVenueHtml', 'cuLastHtml', 'cardsUiInfoHtml', 'cuNpcDetailHtml', 'cuRosterTabHtml', 'cuFurnaceTabHtml', 'cuFurnaceSetPop', 'cuHelpBtn',
-  'lhHtmlOverview', 'lhHtmlJobs', 'lhHtmlPosts', 'bnMapRewardHtml', 'nextStepHtml', 'cuArtCard', 'tuLabel', 'tuDesc'];
+var FX_TXT_WRAP = ['cuRosterHtml', 'cuDrawTabHtml', 'cuRosterPageHtml', 'cuLastHtml', 'cardsUiInfoHtml', 'cuNpcDetailHtml', 'cuRosterTabHtml', 'cuFurnaceTabHtml', 'cuFurnaceSetPop', 'cuHelpBtn',
+  'lhHtmlOverview', 'lhHtmlJobs', 'lhHtmlPosts', 'bnMapRewardHtml', 'cuArtCard', 'tuLabel', 'tuDesc'];
 function fxTxGlobal() { return (typeof window !== 'undefined' && window) ? window : (typeof globalThis !== 'undefined' ? globalThis : null); }
 function fxTxWrap(name, post) {
   var g = fxTxGlobal(), f = g ? g[name] : null, w;

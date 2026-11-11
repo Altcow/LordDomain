@@ -47,7 +47,7 @@ if (IP2_OK) (function () {
       ipSlot('2F', [2, 0], 0, 'v', { sit: true }), ipSlot('2F', [3, 0], 0, 'v', { sit: true }), ipSlot('2F', [4, 3], 0, 'v')
     ],
     keeper: { name: '祭酒', floor: '1F', at: [3, 2], look: { job: 'scholar', key: 17, head: 'hat', headCol: '#2f4a6a', tunic: '#3f5f8f', trim: '#e3b95c' }, act: { t: 'panel', id: 'roster' },
-      lines: ['有教無類,因材施教。', '想送誰進修?名冊裡挑人便是。', '名冊人物都在這裡,想看誰?', '學成之後,辦起事來自然得心應手。'] },
+      lines: ['有教無類,因材施教。', '想送誰進修?卡包裡挑人便是。', '卡包人物都在這裡,想看誰?', '學成之後,辦起事來自然得心應手。'] },
     hotspots: [{ id: 'lectern', floor: '1F', at: [3, 1], act: { t: 'panel', id: 'roster' }, label: '講席' }, { id: 'desk2', floor: '2F', at: [2, 1], act: { t: 'talk', line: '典籍按經史子集,分門別類。' }, label: '書案' }],
     people: { kind: 'workshop', max: 2, opts: { posts: ['study'] } }, visitors: { n: [1, 3], jobs: ['scholar', 'elder', 'official', 'farmer'] },
     lines: ['聽說學宮收學生了?', '家裡孩子若能讀書就好了。', '讀書人的聲音,聽著舒服。'],

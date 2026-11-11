@@ -1,10 +1,10 @@
 // js/bn_skcard.js — 戰法傳承與裝備(card_ui_redesign §2 R1~R13;skill_rework §2.3)。
 // 傳承 = 拆一張名冊卡 → 該卡可傳承的戰法永久解鎖(R1);金名人 S、紫名人 A、路人 B/C(R5);路人門檻紫以上(R3)。拆卡永遠消耗該卡(名人轉流浪,路人消失),另得碎片 BN_SKC.frag(R4)。
-// 裝備:選擇槽白 1、青以上 2(BN_KIT_CFG.selSlots);S/A 同時只能裝在 1 人身上、要換人須先卸下,B/C 不限人數(R6);解鎖後不消耗、不計張數(R7)。
+// 裝備:選擇槽白 1、青以上 2(BN_KIT_CFG.selSlots);任何已解鎖戰法都可裝進選擇槽(無適性 / 階級限制;可選 onlyTroops 才限兵種;兵種卡限同基礎兵種);同一戰法同時裝備人數上限 = BN_SKILL_MAXUSE[id](S/A 與名人 / 兵種 = 1,會壞平衡者 = 1,其餘 B 3 / C 5);解鎖後不消耗、不計張數(R7)。
 // 兵書(章節掉落)直接解鎖通用戰法;已擁有則回傳碎片 BN_SKC.dupFrag(R12,由呼叫端 bnStgGrant 發碎片)。
 // 存檔:世界內 'lorddomain.bnskc.v1'(進度鍵 SAVE_SLOT_KEYS;有值才寫):{v:2, own:{戰法id:解鎖時間}, eq:{entryId:[戰法id|null, 戰法id|null]}}。版本不符 / 壞檔 = 空;解鎖表外的戰法、重複 / 超額裝備在讀入時清掉。
 // 對 bn_units.js 提供:bnSkcLearnOf(card)(路人裝備的戰法,沒有回 null;名人不走此路徑,B2 另接)。
-// 全域:BNSKC bnskc bnSkcLoad bnSkcSave bnSkcOwned bnSkcTier bnSkcExclusive bnSkcHolder bnSkcSlots bnSkcCanEquip bnSkcEquip bnSkcUnequip bnSkcOnLeave bnSkcInheritList bnSkcInheritCheck bnSkcInherit bnSkcGrant bnSkcRecommend bnSkcOtherOf bnSkcLearnOf
+// 全域:BNSKC bnskc bnSkcLoad bnSkcSave bnSkcOwned bnSkcTier bnSkcMaxUse bnSkcTroopOk bnSkcHolders bnSkcHolder bnSkcUseCount bnSkcSlots bnSkcCanEquip bnSkcEquip bnSkcUnequip bnSkcOnLeave bnSkcInheritList bnSkcInheritCheck bnSkcInherit bnSkcGrant bnSkcRecommend bnSkcOtherOf bnSkcLearnOf
 // 不發聲、不寫 DOM。ES2017;不用 ?. ??。
 
 var BNSKC = { key: 'lorddomain.bnskc.v1', v: 2 };
@@ -40,10 +40,16 @@ function bnSkcTier(id) {
   if (t === 'S' || t === 'A') t = BN_SKC.genericMaxTier;
   return t;
 }
-// S / A 為獨占(同一時間只能裝在 1 人身上)
-function bnSkcExclusive(id) {
-  var t = bnSkcTier(id);
-  return !!t && (BN_SKC.uniqueTiers || []).indexOf(t) >= 0;
+// 同時裝備上限(BN_SKILL_MAXUSE,由 tools/bn_kit_gen.js 產生;缺項 = 1)。S / A 階與名人 / 兵種戰法 = 1
+function bnSkcMaxUse(id) {
+  var n = typeof BN_SKILL_MAXUSE !== 'undefined' && BN_SKILL_MAXUSE ? BN_SKILL_MAXUSE[id] : 0;
+  return n > 0 ? n : 1;
+}
+// 兵種限制(可選欄位 onlyTroops:沒寫 = 全兵種可裝);兵種卡另由 bnSkcCanEquip 限同基礎兵種
+function bnSkcTroopOk(e, id) {
+  var d = bnSkcSkill(id), ot = d && d.onlyTroops;
+  if (!ot || !ot.length) return true;
+  return ot.indexOf(bnDefaultTroop(e)) >= 0;
 }
 
 // 讀檔(依 localStorage 原字串快取;切換世界後字串變了就重讀)
@@ -62,10 +68,10 @@ function bnSkcLoad() {
         var x = a[j];
         if (typeof x !== 'string' || !d.own.hasOwnProperty(x)) continue;
         if (arr.indexOf(x) >= 0) continue;
-        if (bnSkcExclusive(x) && taken[x]) continue;
+        if ((taken[x] || 0) >= bnSkcMaxUse(x)) continue;
         if (bnSkcIsLegion(x) && legionOf[key]) continue;
         arr[j] = x;
-        if (bnSkcExclusive(x)) taken[x] = key;
+        taken[x] = (taken[x] || 0) + 1;
         if (bnSkcIsLegion(x)) legionOf[key] = 1;
       }
       if (arr.some(function (v) { return v; })) d.eq[key] = arr;
@@ -88,44 +94,39 @@ function bnSkcSave(d) {
 
 function bnSkcOwned(id) { return bnSkcLoad().own.hasOwnProperty(id); }
 // 持有人:回名冊 entry id 或 null(cs 省略時用 cardsGet;只認名冊內的人)
-function bnSkcHolder(id, cs) {
-  var d = bnSkcLoad(), k;
-  for (k in d.eq) if (d.eq[k].indexOf(id) >= 0 && (!bnSkcCs(cs) || bnSkcEntry(cs, k))) return k;
-  return null;
+function bnSkcHolders(id, cs) {
+  var d = bnSkcLoad(), k, out = [];
+  for (k in d.eq) if (d.eq[k].indexOf(id) >= 0 && (!bnSkcCs(cs) || bnSkcEntry(cs, k))) out.push(k);
+  return out;
 }
+function bnSkcHolder(id, cs) {
+  var h = bnSkcHolders(id, cs);
+  return h.length ? h[0] : null;
+}
+// 目前使用數(名冊內裝備此戰法的人數)
+function bnSkcUseCount(id, cs) { return bnSkcHolders(id, cs).length; }
 // 選擇槽數:白 1、青以上 2(BN_KIT_CFG.selSlots 依品階索引)
 function bnSkcSlots(e) {
   var n = (typeof BN_KIT_CFG !== 'undefined' && BN_KIT_CFG.selSlots) || [0, 0, 0, 0, 0];
   return e ? (n[e.gr | 0] | 0) : 0;
 }
-// 學養限制(沿用原 bnBookFit 規則);本人專屬戰法不限;通才不限
-function bnSkcFit(e, id) {
-  var d = bnSkcSkill(id), apt, f, troops, okT, okJ;
-  if (!d) return '不是可裝備的戰法';
-  if (d.fig && e.fig === d.fig) return '';
-  if ((e.learn | 0) === 0) return '';
-  apt = bnAptOf(e).apt;
-  if (d.fig) { troops = [BN_FIG_SKILLS[d.fig] ? BN_FIG_SKILLS[d.fig].troop : '']; okJ = false; }
-  else { f = d.fit || {}; troops = f.troops || []; okJ = !!(f.jobs && e.ja && f.jobs.some(function (j) { return e.ja[j]; })); }
-  okT = troops.some(function (t) { return apt[t] && apt[t] !== 'C'; });
-  if (!troops.length && !(d.fit && d.fit.jobs)) okT = true;
-  return okT || okJ ? '' : '學養非通才:需兵種適性 B 以上或職業相符(' + (troops.join('、') || '—') + '兵)';
-}
-// 能否裝備:回 {ok, reason};reason:none(不在名冊)/ own(未解鎖)/ slot(槽位不存在)/ dup(同人兩槽同戰法)/ legion(兵種卡每人 1 張、限同兵種)/ fit(學養)/ held(S/A 已由他人裝備)
+// 能否裝備:回 {ok, reason};reason:none(不在名冊)/ own(未解鎖)/ slot(槽位不存在)/ dup(同人兩槽同戰法)/ legion(兵種卡每人 1 張、限同兵種)/ troop(onlyTroops 不符)/ full(使用數已達 maxUse,holders 為目前裝備者)
+// 學養(fit)為軟適性:只影響發動 / 傷害(引擎端),不擋裝備。
 function bnSkcCanEquip(cs, e, slot, id) {
-  var r = bnSkcEntry(cs, e && e.id), d = bnSkcLoad(), cur, i, h, why;
+  var r = bnSkcEntry(cs, e && e.id), cur, i, hs, n;
   if (!r) return { ok: false, reason: 'none' };
   if (!bnSkcOwned(id)) return { ok: false, reason: 'own' };
   if (!(slot >= 0 && slot < bnSkcSlots(r))) return { ok: false, reason: 'slot' };
-  cur = d.eq[r.id] || [null, null];
+  cur = bnSkcLoad().eq[r.id] || [null, null];
   for (i = 0; i < 2; i++) if (i !== slot && cur[i] === id) return { ok: false, reason: 'dup' };
   if (bnSkcIsLegion(id)) {
     if (BN_LEGION.cards[id].troop !== bnDefaultTroop(r)) return { ok: false, reason: 'legion' };
     for (i = 0; i < 2; i++) if (i !== slot && cur[i] && bnSkcIsLegion(cur[i])) return { ok: false, reason: 'legion' };
-  }
-  why = bnSkcFit(r, id);
-  if (why) return { ok: false, reason: 'fit', msg: why };
-  if (bnSkcExclusive(id)) { h = bnSkcHolder(id, cs); if (h && h !== r.id) return { ok: false, reason: 'held', holder: h }; }
+  } else if (!bnSkcSkill(id)) return { ok: false, reason: 'own' };
+  if (!bnSkcTroopOk(r, id)) return { ok: false, reason: 'troop' };
+  hs = bnSkcHolders(id, cs).filter(function (k) { return k !== r.id; });
+  n = bnSkcMaxUse(id);
+  if (hs.length >= n) return { ok: false, reason: 'full', holders: hs, max: n };
   return { ok: true, reason: '' };
 }
 // 裝備:回 {ok, reason};S/A 不自動搶,要換人須先 bnSkcUnequip
@@ -165,7 +166,7 @@ function bnSkcNatural(e) {
 function bnSkcInheritList(e) {
   var K = (typeof BN_KIT_BY !== 'undefined' && BN_KIT_BY.figs) ? BN_KIT_BY.figs : {}, k, ids = [], out = [];
   if (!e) return out;
-  if (e.fig) { k = K[e.fig]; if (!k) return out; ids = (k.pool || []).slice(); if (k.legion) ids.push(k.legion); }
+  if (e.fig) { k = K[e.fig]; if (!k) return out; ids = (k.pool || []).slice(); if (k.legacy) ids.push(k.legacy); if (k.legion) ids.push(k.legion); }
   else ids = bnSkcNatural(e);
   ids.forEach(function (id) {
     var t = bnSkcTier(id);

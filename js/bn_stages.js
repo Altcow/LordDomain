@@ -8,7 +8,7 @@
 var BN_STG = {
   // 軍令與每日場數上限已取消(2026-11-10 v58-E):關卡可無限重打,重複通關每場給固定少量金幣 / 貨物 / 兵書機率
   gold1: 600, repeatDiv: 5, star3Gold: 200, star3Shards: 2,   // 首通 600 × 章、重複金幣 = 首通 / 5、三星額外
-  shards1: 5, bookRepP: 0.05, matRepP: 0.5,                   // 首通碎片 / 兵書;重複通關不給碎片、不給抽卡次數(避免刷關無限抽卡)
+  shards1: 5, bossShards: 120, bookRepP: 0.05, matRepP: 0.5,  // 首通碎片 / 兵書;章末頭目首通另給 bossShards 碎片(原指名券 1 張的等值,指名券已刪);重複通關不給碎片、不給抽卡次數(避免刷關無限抽卡)
   bounty: { gold: 200, goods: 1, lo: 0.95, hi: 1.05, k: 1.06 },   // 流寇每次討伐都有重複獎勵(金幣 + 主材料,不給碎片);敵方戰力 × k = 建議戰力口徑(流寇敵將編制較整齊、無名人;戰鬥改版後實測 k=1.06 使最強隊勝率約 50~60%,原 1.15)
   // 敵將五維基準 v(逐關,36 個;由 tools/bn_stage_check.js 解出);grOf = 各章敵將品階
   v: [40.6,45.9,32.3,31.4,39.5,37.7,45,47.9,45.5,45,47.6,40.7,45.3,48.1,42.5,54.1,52.1,43.6,56.4,59.5,55,58.6,61.4,58.3,76.8,69.4,65.5,72.1,72.1,86.4,68.5,59.4,60.5,66.8,68.3,71],
@@ -271,7 +271,6 @@ function bnStgEnv(over) {
     coin: function (n) { if (typeof world !== 'undefined' && world && world.res) { world.res.coin = (world.res.coin || 0) + n; return true; } return false; },
     goods: function (id, n) { return (typeof cityGoodsAdd === 'function') ? cityGoodsAdd(id, n) : 0; },
     shards: function (n) { if (typeof cardsGet === 'function' && typeof cardsShardGain === 'function') { cardsShardGain(cardsGet(), n); return true; } return false; },
-    tokens: function (n) { if (typeof cardsGet === 'function' && typeof cardsAddNameTokens === 'function') { cardsAddNameTokens(cardsGet(), n); return true; } return false; },
     pulls: function (n, id) { return (typeof cardsGet === 'function' && typeof cardsBossGive === 'function' && cardsGet()) ? cardsBossGive(cardsGet(), id, n) : 0; }   // 頭目首通贈抽卡次數(cards.js;cs.boss 防重領)
   }, k;
   if (over) for (k in over) e[k] = over[k];
@@ -305,14 +304,13 @@ function bnStgPack(d) {
 }
 
 
-// 解鎖:章 n 需官階第 n 階;章內依序;新章需前章頭目已過。clear = d.clear。回 {ok, why}
+// 解鎖(2026-11-11 移除官階閘):第 1 章開局開放;第 n 章需第 n-1 章頭目(n-1-6)通關;章內依序。clear = d.clear。回 {ok, why}
 function bnStgUnlock(clear, id, env) {
   var st = bnStgById(id), prev;
   if (!st) return { ok: false, why: '無此關卡' };
-  if (env.rank() < st.rank) return { ok: false, why: '官階達「' + (typeof LH_RANKS !== 'undefined' && LH_RANKS[st.rank - 1] ? LH_RANKS[st.rank - 1].n : '第 ' + st.rank + ' 階') + '」開放' };
   if (st.idx > 1) prev = st.ch + '-' + (st.idx - 1);
   else if (st.ch > 1) prev = (st.ch - 1) + '-6';
-  if (prev && !((clear[prev] | 0) >= 1)) return { ok: false, why: '先通過 ' + prev };
+  if (prev && !((clear[prev] | 0) >= 1)) return { ok: false, why: st.idx > 1 ? '先通過 ' + prev : '通關第 ' + (st.ch - 1) + ' 章頭目後開放' };
   return { ok: true, why: '' };
 }
 // 能否開打:只看解鎖條件(軍令與每日上限已取消,可無限重打)。回 {ok, why, free};free 恆為 true(欄位保留給呼叫端)
@@ -332,7 +330,7 @@ function bnStgRewards(id) {
   if (!st) return null;
   ch = bnStgChapter(st.ch); n = st.ch; m = ch.mats; g1 = BN_STG.gold1 * n;
   return {
-    first: { gold: g1, goods: [[m[0], 2 + (st.idx >= 5 ? 1 : 0)]].concat(st.boss ? [[m[1], 1]] : []), shards: BN_STG.shards1, book: [st.book, 1], token: st.boss ? 1 : 0, pulls: (st.boss && typeof CARD_BOSS !== 'undefined') ? CARD_BOSS.pulls : 0 },
+    first: { gold: g1, goods: [[m[0], 2 + (st.idx >= 5 ? 1 : 0)]].concat(st.boss ? [[m[1], 1]] : []), shards: BN_STG.shards1 + (st.boss ? BN_STG.bossShards : 0), book: [st.book, 1], pulls: (st.boss && typeof CARD_BOSS !== 'undefined') ? CARD_BOSS.pulls : 0 },
     repeat: { gold: Math.round(g1 / BN_STG.repeatDiv), goods: [m[0], 1], goodsP: BN_STG.matRepP, book: st.book, bookP: BN_STG.bookRepP },   // 重複:無次數上限;不給碎片、不給抽卡次數
     star3: { gold: BN_STG.star3Gold * n, shards: BN_STG.star3Shards }
   };
@@ -349,24 +347,23 @@ function bnStgGrant(d, env, want, rep) {
     rep.bookId = want.bookId; rep.bookUnlock = !!bk.unlocked;
   }
   (want.goods || []).forEach(function (x) { if (x[1] > 0) { env.goods(x[0], x[1]); rep.goods.push({ id: x[0], n: x[1] }); } });
-  if (want.token > 0) { env.tokens(want.token); rep.token = want.token; }
   if (want.pulls > 0) { rep.pulls = env.pulls(want.pulls, rep.id) | 0; }
   rep.gold = g; rep.shards = s; rep.books = b;
   return rep;
 }
-// 討伐結算。res = {winner, stars, seed}。d 為 bn 存檔資料(clear、got、books 會被改;存檔鍵見 bnStgSk)。回報告 {win, first, repeat, star3, gold, shards, books, goods, token}
+// 討伐結算。res = {winner, stars, seed}。d 為 bn 存檔資料(clear、got、books 會被改;存檔鍵見 bnStgSk)。回報告 {win, first, repeat, star3, gold, shards, books, goods}
 // 首通:完整首通獎勵(只一次);重複通關:每場都有金幣 + 貨物 / 兵書機率(無次數上限,不給碎片與抽卡次數)
 function bnStgSettle(d, id, res, env) {
-  var st = bnStgById(id), rep = { win: false, id: id, first: false, repeat: false, star3: false, books: 0, gold: 0, shards: 0, goods: [], token: 0 }, rw, k, got, first, stars, want;
+  var st = bnStgById(id), rep = { win: false, id: id, first: false, repeat: false, star3: false, books: 0, gold: 0, shards: 0, goods: [] }, rw, k, got, first, stars, want;
   env = bnStgEnv(env);
   if (!st || !res || res.winner !== 'A') return rep;
   d.clear = d.clear || {}; d.got = d.got || {}; d.books = d.books || {};
   k = bnStgSk(id, st.bf, st.diff);
   rw = bnStgRewards(id); stars = bnStgInt(res.stars, 1, 3); got = d.got[k] | 0; first = !(got & 1);
   rep.win = true; rep.first = first; rep.repeat = !first; rep.stars = stars;
-  want = { gold: 0, shards: 0, books: 0, goods: [], token: 0, bookId: st.book };
+  want = { gold: 0, shards: 0, books: 0, goods: [], bookId: st.book };
   if (first) {
-    want.gold += rw.first.gold; want.shards += rw.first.shards; want.books += rw.first.book[1]; want.goods = rw.first.goods.map(function (x) { return [x[0], x[1]]; }); want.token = rw.first.token; want.pulls = rw.first.pulls;
+    want.gold += rw.first.gold; want.shards += rw.first.shards; want.books += rw.first.book[1]; want.goods = rw.first.goods.map(function (x) { return [x[0], x[1]]; }); want.pulls = rw.first.pulls;
     got |= 1;
   } else {
     want.dupShards = false;
@@ -382,12 +379,12 @@ function bnStgSettle(d, id, res, env) {
 }
 // 每日流寇:每次勝利都給重複獎勵(金幣 + 主材料;不給碎片、不給抽卡次數、不耗軍令、不限次數)
 function bnStgBountySettle(d, res, env) {
-  var rep = { win: false, id: 'B', first: false, repeat: true, gold: 0, shards: 0, books: 0, goods: [], token: 0 }, want, mats;
+  var rep = { win: false, id: 'B', first: false, repeat: true, gold: 0, shards: 0, books: 0, goods: [] }, want, mats;
   env = bnStgEnv(env);
   if (!res || res.winner !== 'A') return rep;
   rep.win = true;
   mats = bnStgChapter(Math.max(1, Math.min(6, res.ch | 0 || 1))).mats[0];
-  want = { gold: BN_STG.bounty.gold, shards: 0, books: 0, goods: [[mats, BN_STG.bounty.goods]], token: 0 };
+  want = { gold: BN_STG.bounty.gold, shards: 0, books: 0, goods: [[mats, BN_STG.bounty.goods]] };
   bnStgGrant(d, env, want, rep);
   return rep;
 }

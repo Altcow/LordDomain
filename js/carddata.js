@@ -85,12 +85,12 @@ var CARD_POST_GROUP = { '農': '工', '工': '工', '商': '商', '文': '文', 
 // 招募場所(§2.3、§2.4、§2.5):periodMs 期長(招募歲鐘 = 真實時間);cap 累積上限;gr 品階機率(%,白青藍紫金);
 // floor 批內保底品階(至少 1 位 ≥);upper 十批保底的「上等」(gr = 品階;zhuan = 1 表示紫須專才以上);bFig 紫中 B 級名人機率;aFig 金 = A 級名人
 // 2026-11-09 起酒館 / 縣試的節奏與每批張數改由 CARD_DRAW 決定(periodMs / cap / unit 只留給舊資料參考;batch = 一批最多張數)
-var CARD_VENUE_ORDER = ['T', 'E', 'G'];
+// 2026-11-11 卡池改為『小池』(T,最高紫)與『大池』(E,可出金);指名池 G 已刪除。小池 / 大池各自一個抽卡次數錢包(cs.pl.T / cs.pl.E)。
+var CARD_VENUE_ORDER = ['T', 'E'];
 var CARD_VENUES = {
-  T: { id: 'T', name: '酒館', alias: '招賢酒肆', periodMs: 3600000, cap: 48, batch: 7, gr: [65, 30, 5, 0, 0], floor: 1, upper: { gr: 2, zhuan: 0 }, gate: 'cardpack', org: 'bu', orgName: '布衣', bFig: 0, aFig: 0, theme: 'wind', unit: '1 歲' },
-  E: { id: 'E', name: '縣試', alias: '九品中正考課', periodMs: 14400000, cap: 12, batch: 7, gr: [30, 40, 24, 6, 0], floor: 2, upper: { gr: 3, zhuan: 0 }, gate: 'exam', org: 'pin', orgName: '縣試', bFig: 0.16, aFig: 0, theme: 'subject', unit: '4 歲',
-       starGr: { 2: [24.6, 40, 27.6, 7.8, 0], 3: [19.2, 40, 31.2, 9.6, 0] } },
-  G: { id: 'G', name: '殿試', alias: '天子親策', periodMs: 86400000, cap: 2, batch: 7, gr: [6, 30, 38, 20, 6], floor: 3, upper: { gr: 3, zhuan: 1 }, gate: 'dianshi', org: 'dian', orgName: '徵辟', bFig: 0.16, aFig: 1, theme: 'faction', unit: '1 日' }
+  T: { id: 'T', name: '小池', alias: '招賢酒肆', periodMs: 3600000, cap: 48, batch: 7, gr: [60, 30, 7, 3, 0], floor: 1, upper: { gr: 3, zhuan: 0 }, gate: 'cardpack', org: 'bu', orgName: '布衣', bFig: 0, aFig: 0, theme: 'wind', unit: '1 歲' },
+  E: { id: 'E', name: '大池', alias: '九品中正考課', periodMs: 14400000, cap: 12, batch: 7, gr: [28, 38, 24, 7, 3], floor: 2, upper: { gr: 3, zhuan: 0 }, gate: 'exam', org: 'pin', orgName: '縣試', bFig: 0.16, aFig: 0, theme: 'subject', unit: '4 歲',
+       starGr: { 2: [23.6, 38, 27.6, 7.8, 3], 3: [17.2, 38, 31.2, 9.6, 4] } }
 };
 // 縣試科目(§2.3):依期輪替;該科職業權重 ×3(jobs 指定職業,rows 指定整行)
 var CARD_EXAM_SUBJECTS = [
@@ -117,20 +117,20 @@ var CARD_COST = { zongBonus: 4 };
 var CARD_DRAW = {
   stock: 2, cap: 200, maxOne: 10, floorMin: 7,
   size: [{ n: 10 }],
-  gap: [{ h: 24 }, { h: 18, tech: 'wr_shusi' }, { h: 12, tech: 'e_wuzhu' }, { h: 8, tech: 'ed_hongdu' }],
+  gap: { T: 8, E: 12 },   // 2026-11-11 使用者決議:補充間隔固定(小池 T 每 8 小時、大池 E 每 12 小時,各 +10 抽);科技不再影響間隔
   pity: 20,
   wineShard: 5, mileShard: 50, recallShard: 50, relRate: 1
 };
 // 首次通關各章頭目關(bn_stages.js 第 6 關)送抽卡次數(寫進任務清單;cs.boss 記錄防重領)
+// 頭目首通贈抽送『大池』抽卡次數(cards.js cardsBossGive)
 var CARD_BOSS = { pulls: 10 };
-// 新手禮包(使用者回饋「前期抽卡太小氣」;數值皆 PLACEHOLDER)。新世界第一次開招賢面板時一次性領取,存 cs.starter(cards.js cardsStarter*;舊存檔已有卡片或已畢業教學 = 不適用、不補發)。
-//   pulls 張,分 batches 批開(沿用開批 → 抽卡特效 → 入卡包,不自動熔爐);gr = 禮包每張的基本品階機率(白青藍紫金 %),再套保底:至少 goldGuarantee 張金(名人;魔幻世界優先本族英雄)、另至少 purpleGuarantee 張紫
-//   namedTokens 指名券(指名池還沒研發也能用這幾張);禮包的卡與抽卡一樣直接進名冊(名冊滿了先放卡包)
-//   新手期:領取後的前 nbCards 張(酒館 / 縣試開批的卡)改用 nbGr 品階機率,並有逐張保底:連續 nbPurple − 1 張沒有紫以上 → 下一張必紫;連續 nbGold − 1 張沒有金 → 下一張必金(名人)
-//   (每日一抽後每批 4 張:nbPurple 10 → 8、nbGold 50 → 30,讓前一兩週仍有紫金進帳)
+// 補償(2026-11-11 使用者決議 v59;數值皆 PLACEHOLDER):不需領取、不跳彈窗。存檔旗標 cs.gift200 = ver;與旗標不同就補一次 pulls 抽(入大池 E 次數錢包,可超過上限)。
+//   第一次進入、被重啟(新建角色 / 重設存檔)、已在玩的帳號一律補;之後改版時改 ver 即會再補一次(重玩 / 重啟同樣會補)。
+var CARD_GIFT = { ver: 'v59', pulls: 2000, pool: 'E' };   // 2026-11-11 使用者決議:補償改 2000 抽(一次性、可超過上限;旗標 cs.gift200 = 已發)
+// 新手期(開局 / 重啟後的前 nbCards 張小池 / 大池卡;數值皆 PLACEHOLDER)。cards_starter.js cardsGiftCheck 補償時重新開始計數(重玩 / 重啟才會重開新手期;已在玩的老帳號只保留既有計數)。
+//   新手期:改用 nbGr 品階機率,並有逐張保底:連續 nbPurple − 1 張沒有紫以上 → 下一張必紫(小池 / 大池);連續 nbGold − 1 張沒有金 → 下一張必金(只限大池,名人)。小池不出金,故不套金保底。
 var CARD_STARTER = {
-  pulls: 200, legacyPulls: 20, batches: 3, gr: [20, 40, 30, 10, 0], goldGuarantee: 1, purpleGuarantee: 2, namedTokens: 3,
-  nbCards: 100, nbGr: { T: [52, 30, 10, 6, 2], E: [26, 38, 26, 8, 2] }, nbPurple: 8, nbGold: 30
+  nbCards: 100, nbGr: { T: [50, 30, 12, 8, 0], E: [26, 38, 26, 8, 2] }, nbPurple: 8, nbGold: 30
 };
 var CARD_CFG = {
   cap: 300,                // 名冊固定格數(2026-11-10 決議,不隨官階);滿了停止抽卡,先熔鍊或遣散。卡包 / 溢出區已移除
@@ -388,7 +388,7 @@ var CARD_VISIT = {
 // 名冊熔鍊 / 自動熔爐 / 名人重複(2026-11-10:卡包與溢出區已移除,抽到的卡直接進名冊;名冊滿了停止抽卡)。
 var CARD_BAG = {
   batchNeed: 7,                // 一批連抽需要的名冊空位上限(抽卡時取 min(所需張數, 空位))
-  autoDefault: -1,             // 自動熔爐預設:關(-1);0 = 品階 ≤ 白
+  autoDefault: 2,              // 自動熔爐預設:開,門檻藍以下(2);-1 = 關;白青藍路人直接熔成碎片,名人不熔
   autoMax: 2,                  // 自動熔爐最高可設到藍(紫以上不提供自動)
   figDupShard: { 3: 8, 4: 16 } // 名人重複且信物已滿(CARD_CFG.tokMax)時轉成的碎片數
 };

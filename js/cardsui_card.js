@@ -10,7 +10,7 @@ var CUC_TIER_ORD = ['S', 'A', 'B', 'C'];
 var CUC_APT_PT = { S: 3, A: 2, B: 1, C: 0 };
 var CUC_CAT = { ult: '大', passive: '被', active: '主', pursuit: '追', command: '指', legion: '兵' };
 var CUC_ROLE = { ult: '固定', native: '固定', passive: '被動', bond: '聯動' };
-var CUC_REASON = { none: '此人不在名冊,不能裝備', own: '此戰法尚未解鎖', slot: '此槽位目前未開放', dup: '同一人兩槽不可裝同一戰法', legion: '兵種卡每人 1 張,且限同兵種', held: '已由他人裝備中,換人要先卸下' };
+var CUC_REASON = { none: '此人不在卡包,不能裝備', own: '此戰法尚未解鎖', slot: '此槽位目前未開放', dup: '同一人兩槽不可裝同一戰法', legion: '兵種卡每人 1 張,且限同兵種', troop: '此戰法限特定兵種裝備', full: '已達同時裝備上限,需先卸下他人' };
 var CUC_INH_REASON = { none: '沒有可傳承的戰法', grade: '品階未達紫,不可傳承', locked: '已鎖定(🔒),先解除鎖定才能傳承', owned: '可傳承戰法已全部擁有,可改用熔爐' };
 
 function cuCardCss() {
@@ -110,7 +110,7 @@ function cuCOtherTxt(o) {
 // 回 {ok, n(未擁有可傳承數), reason};派駐中 / 非名冊 / 鎖定 / 品階 / 全部擁有 皆不可傳承
 function cuInhState(cs, f) {
   var e = f.e, chk;
-  if (f.list !== 'roster') return { ok: false, n: 0, reason: '待定或流浪中的人不能傳承,請先收入名冊' };
+  if (f.list !== 'roster') return { ok: false, n: 0, reason: '待定或流浪中的人不能傳承,請先收入卡包' };
   if (e.at) return { ok: false, n: 0, reason: '派駐中,請先卸任再傳承' };
   chk = bnSkcInheritCheck(cs, e);
   if (!chk.ok) return { ok: false, n: 0, reason: CUC_INH_REASON[chk.reason] || '不可傳承' };
@@ -240,8 +240,9 @@ function cuPopSkill(cs, f, p) {
     lines.push(['來源', '傳承自 ' + cuCFigName(d.fig) + '(' + (fg && fg.gr === 4 ? '金' : '紫') + '名人)']);
     if (e && e.fig === d.fig) lines.push(['原主效果', '本人(原主)裝備:發動率 ' + cuCPp(BN_KIT_CFG.homeRate || 0) + ' 本命加成']);
     else { o = bnSkcOtherOf(p.id, e || { fig: '' }); lines.push(['原主效果', '原主本人裝備時依上方效果;他人裝備時 ' + (o ? cuCOtherTxt(o) : '')]); }
-  } else lines.push(['來源', '通用戰法(B / C 不限人數裝備)']);
-  if (tier) lines.push(['傳承階級', tier + '(' + (bnSkcExclusive(p.id) ? 'S / A 同時只能一人裝備' : 'B / C 可多人裝備') + ')']);
+  } else lines.push(['來源', '通用戰法']);
+  if (tier) lines.push(['傳承階級', tier]);
+  if (!d.legion) lines.push(['使用', bnSkcUseCount(p.id, cs) + '/' + bnSkcMaxUse(p.id)]);
   troops = d.legion ? [d.troop] : (d.fig && typeof BN_FIG_SKILLS !== 'undefined' && BN_FIG_SKILLS[d.fig]) ? [BN_FIG_SKILLS[d.fig].troop] : ((d.fit && d.fit.troops) || []);
   if (troops.length) lines.push(['適合兵種', troops.join('、') + '兵']);
   holders = cuCHolders(cs, p.id);
@@ -259,22 +260,21 @@ function cuPopSkill(cs, f, p) {
 // 選擇槽裝備清單:只列已解鎖的戰法;可裝 → [裝備];S/A 被他人持有 → 顯示持有者與 [從 X 卸下](不自動搶)
 function cuPopPick(cs, f, p) {
   var e = f ? f.e : null, slot = p.slot, owned, h = '';
-  if (!e || f.list !== 'roster') return { title: '裝備戰法', html: '<div class="cpwarn">非名冊人員不能裝備戰法(先收入名冊)</div>' };
+  if (!e || f.list !== 'roster') return { title: '裝備戰法', html: '<div class="cpwarn">非卡包人員不能裝備戰法(先收入卡包)</div>' };
   if (slot < 0 || slot >= bnSkcSlots(e)) return { title: '裝備戰法', html: '<div class="cpwarn">此槽位目前未開放</div>' };
   owned = Object.keys(bnSkcLoad().own).filter(function (id) { return !!bnSkcTier(id); });
   owned.sort(function (a, b) { return CUC_TIER_ORD.indexOf(bnSkcTier(a)) - CUC_TIER_ORD.indexOf(bnSkcTier(b)); });
-  h += '<div class="cpl">' + cuEsc(e.name) + ' · 第 ' + (slot + 1) + ' 槽。從已解鎖的戰法選一個;S / A 同時只能裝在一人身上,換人要先從對方卸下。</div>';
+  h += '<div class="cpl">' + cuEsc(e.name) + ' · 第 ' + (slot + 1) + ' 槽。從已解鎖的戰法選一個;每個戰法有同時裝備人數上限(見各列說明),已滿的需先從對方卸下。</div>';
   if (p.err) h += '<div class="cpwarn">' + cuEsc(p.err) + '</div>';
-  if (!owned.length) h += '<div class="cpl">尚未解鎖任何選擇戰法。傳承其他人可解鎖。</div>';
+  if (!owned.length) h += '<div class="cpl">尚未解鎖任何選擇戰法。拆名人卡(傳承)即可解鎖該名人的全部戰法。</div><div class="cprow"><button class="cub" data-a="cptabs">去傳承頁</button></div>';
   owned.forEach(function (id) {
     var c = bnSkcCanEquip(cs, e, slot, id), t = bnSkcTier(id), act = '', why = '', hd;
     if (c.ok) act = '<button class="cub" data-a="cpeq" data-id="' + cuEsc(id) + '" data-eid="' + cuEsc(e.id) + '" data-slot="' + slot + '">裝備</button>';
-    else if (c.reason === 'held') {
-      hd = cuCHolders(cs, id).filter(function (x) { return x.eid === c.holder; })[0] || null;
-      why = '由『' + (hd ? cuEsc(hd.name) : '他人') + '』裝備中,換人要先卸下';
-      if (hd) act = '<button class="cub warn" data-a="cpuneq" data-eid="' + cuEsc(hd.eid) + '" data-slot="' + hd.slot + '">從' + cuEsc(hd.name) + '卸下</button>';
-    } else if (c.reason === 'fit') why = c.msg || '條件不符';
-    else why = CUC_REASON[c.reason] || '無法裝備';
+    else if (c.reason === 'full') {
+      hd = cuCHolders(cs, id).filter(function (x) { return x.eid === (c.holders || [])[0]; })[0] || null;
+      why = '已被 ' + (c.holders || []).length + ' 位裝備(上限 ' + c.max + ')' + (hd ? ':' + cuEsc(hd.name) : '');
+      if (hd && c.max === 1) act = '<button class="cub warn" data-a="cpuneq" data-eid="' + cuEsc(hd.eid) + '" data-slot="' + hd.slot + '">從' + cuEsc(hd.name) + '卸下</button>';
+    } else why = CUC_REASON[c.reason] || '無法裝備';
     h += '<div class="cprow">' + cuPopTierChip(t) + '<button class="cpnm" data-a="cpgo" data-k="skill" data-id="' + cuEsc(id) + '" data-eid="' + cuEsc(e.id) + '" data-slot="-1">' + cuEsc(cuCSkName(id)) + '</button>' + act + (why ? '<span class="cpwhy">' + cuEsc(why) + '</span>' : '') + '</div>';
   });
   return { title: '選擇槽 · ' + e.name, html: h };
@@ -292,7 +292,7 @@ function cuPopBio(cs, f) {
 // 傳承:規則 2 行 → 清單(階級 / 名 / 摘要 / 已擁有或未得 / 推薦 3 名)→ [傳承此卡] → 二次確認
 function cuPopInherit(cs, f, p) {
   var e = f.e, fig = !!e.fig, st = cuInhState(cs, f), list = bnSkcInheritList(e), tiers = {}, fresh, frag, sum, h = '';
-  h += '<div class="cpl">傳承後此卡離開名冊(' + (fig ? '名人轉流浪,可花 ' + CARD_RECALL_COST + ' 碎片請回' : '路人消失') + '),以下戰法永久解鎖。S / A 同時只能一人裝備;B / C 可多人裝備。</div>';
+  h += '<div class="cpl">傳承後此卡離開卡包(' + (fig ? '名人轉流浪,可花 ' + CARD_RECALL_COST + ' 碎片請回' : '路人消失') + '),以下戰法永久解鎖。同一戰法有同時裝備人數上限(見傳承頁『使用 n/上限』)。</div>';
   list.forEach(function (x) {
     var recs = cuRecommend(cs, x.id, e, 3), rh = '';
     recs.forEach(function (r) {
@@ -339,7 +339,7 @@ function cuBioText(c) {
     if (typeof FAMOUS_LINES !== 'undefined' && FAMOUS_LINES[c.fig]) FAMOUS_LINES[c.fig].slice(0, 2).forEach(function (x) { out.push('「' + x + '」'); });
   } else {
     fac = CARD_FAC[c.fac] || '';
-    org = (c.org && c.org.k === 'pin') ? '縣試' : (CARD_VENUES[c.pool] ? CARD_VENUES[c.pool].orgName : '');
+    org = (c.org && c.org.k === 'pin') ? '大池' : (c.pool === 'T' ? '小池' : '大池');
     j = CARD_JOB_BY_ID[c.main];
     t = cuCTroop(c);
     out.push(cuCEndDot(c.name + ',' + fac + org + '出身'));
@@ -373,7 +373,7 @@ function cuRecScore(c, id) {
   eq = (c.id && bnSkcLoad().eq[c.id]) || [null, null];
   filled = eq.filter(function (x) { return !!x; }).length;
   if (c.id && filled >= bnSkcSlots(c)) s -= 1;
-  if (eq.some(function (x) { return !!x && bnSkcExclusive(x); })) s -= 0.5;
+  if (eq.some(function (x) { return !!x && bnSkcMaxUse(x) === 1; })) s -= 0.5;
   return s;
 }
 function cuCRecSort(a, b) { return (b.score - a.score) || ((b.c.gr | 0) - (a.c.gr | 0)) || ((b.c.tai | 0) - (a.c.tai | 0)); }
@@ -388,7 +388,6 @@ function cuRecommend(cs, id, exclude, n) {
   cs.roster.forEach(function (r) {
     if (r.id === ex.id) return;
     if (L && cuCTroop(r) !== troop) return;
-    if (bnSkcFit(r, id)) return;
     list.push({ e: r, c: r, score: cuRecScore(r, id) });
   });
   list.sort(cuCRecSort);
@@ -397,9 +396,8 @@ function cuRecommend(cs, id, exclude, n) {
     src.forEach(function (fg) {
       var c;
       if (fg.id === ex.fig || cardsFindFig(cs, fg.id)) return;
-      c = cardFromFig(fg, 'G', 0);
+      c = cardFromFig(fg, 'E', 0);
       if (L && cuCTroop(c) !== troop) return;
-      if (bnSkcFit(c, id)) return;
       fills.push({ e: null, c: c, score: cuRecScore(c, id) });
     });
     fills.sort(cuCRecSort);
@@ -417,12 +415,13 @@ function cuCardClick(a, b, cs) {
   if (!a || a.indexOf('cp') !== 0 || !cs) return false;
   if (a === 'cpop' || a === 'cpgo') cuPopGo({ k: k, id: id, eid: eid, slot: slot, confirm: false, err: '' }, a === 'cpgo');
   else if (a === 'cpclose') { CUC.pop = null; CUC.stack = []; }
+  else if (a === 'cptabs') { CUC.pop = null; CUC.stack = []; cuSetTab('S'); }
   else if (a === 'cpback') CUC.pop = CUC.stack.pop() || null;
   else if (a === 'cpeq') {
     f = cardsFind(cs, eid);
     r = (f && f.list === 'roster') ? bnSkcEquip(cs, f.e, slot, id) : { ok: false, reason: 'none' };
     if (r.ok) { CUC.pop = null; CUC.stack = []; cu.msg = '已裝備『' + cuCSkName(id) + '』'; cuSave(); }
-    else cuPopErr(r.reason === 'fit' ? (r.msg || '條件不符') : (CUC_REASON[r.reason] || '無法裝備'));
+    else cuPopErr(CUC_REASON[r.reason] || '無法裝備');
   }
   else if (a === 'cpuneq') { bnSkcUnequip(eid, slot); cu.msg = '已卸下'; cuSave(); }
   else if (a === 'cpinh') { if (CUC.pop) { CUC.pop.confirm = true; CUC.pop.err = ''; } }

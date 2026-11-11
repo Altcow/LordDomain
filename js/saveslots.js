@@ -27,7 +27,7 @@ var SAVE_TRANSIENT_KEYS = ['lorddomain.draft.v1'];
 // 偏好鍵:不進槽,讀檔 / 重新開始後保留目前值
 var SAVE_PREF_KEYS = [
   'lorddomain.settings.v1', 'lorddomain.mute', 'lorddomain.bgm.pick', 'lorddomain.bgm.rot', 'lorddomain.art.v1', 'lorddomain.life.v1',
-  'lorddomain.render', 'lorddomain.fps', 'lorddomain.powersave', 'lorddomain.cityonly', 'lorddomain.adv.mode', 'lorddomain.guide.v1', 'lorddomain.id.v1',
+  'lorddomain.render', 'lorddomain.fps', 'lorddomain.powersave', 'lorddomain.cityonly', 'lorddomain.adv.mode', 'lorddomain.adv.faceHide', 'lorddomain.guide.v1', 'lorddomain.id.v1',
   'lorddomain.ui.top', 'lorddomain.ui.cat', 'lorddomain.ui.camptop', 'lorddomain.ui.campcat', 'lorddomain.ui.variant', 'lorddomain.ui.wallskin',
   'lorddomain.ui.mode', 'lorddomain.ui.prevMode', 'lorddomain.ui.compact', 'lorddomain.ui.bpreview', 'lorddomain.ui.fsTipDismissed', 'lorddomain.ui.worldtag', 'lorddomain.ui.settingsTab', 'lorddomain.extsprites', 'lorddomain.nextstep', 'lorddomain.uiicons', 'lorddomain.terraintex', 'lorddomain.ui.minimap', 'lorddomain.bn.pref', 'lorddomain.bnshare.pref', 'lorddomain.ui.autoBrowse', 'lorddomain.ui.installTip', 'lorddomain.ui.doorMarks',
   'lorddomain.goods.mode', 'lorddomain.goods.auto'

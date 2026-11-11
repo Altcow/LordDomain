@@ -207,7 +207,7 @@ const UI_SIDE_ITEMS = [
   { key: 'sandbox', icon: '⚔', label: '沙盤', title: '沙盤推演', top: true, scope: 'camp', target: 'btnSandbox' },
   { key: 'shop', icon: '🏪', label: '商店', title: '商店', scope: 'estate', target: 'btnShop', gate: 'shop' },
   { key: 'tech', icon: '📜', label: '科技', title: '科技樹與研發序列', scope: 'estate', special: 'tech' },
-  { key: 'cards', icon: '🃏', label: '卡片', title: '卡片:抽卡、名冊、熔爐與指名(次數隨時間累積)', scope: 'estate', special: 'cards' },
+  { key: 'cards', icon: '🃏', label: '卡片', title: '卡片:抽卡、卡包、熔爐與傳承(次數隨時間累積)', scope: 'estate', special: 'cards' },
   { key: 'goods', icon: '📦', label: '庫房', title: '庫房(貨品與工坊狀態)', scope: 'estate', target: 'btnGoods' },
   { key: 'caravan', icon: '🛻', label: '走鏢', title: '走鏢(鏢師、馬車與高階貨品)', scope: 'estate', target: 'btnCaravan', gate: 'caravan' },
   { key: 'bn', icon: '⚔', label: '戰鬥', title: '戰鬥(5v5 回合制練習戰)', scope: 'estate', special: 'bn', gate: 'battleA', showLocked: true },
@@ -281,7 +281,7 @@ function initSideUI() {
 
 // 戰鬥鈕未達條件時的說明(v58-C:只看名冊人數 ≥ BNUI.minRoster)
 function uiBattleLockToast() {
-  if (typeof showToast === 'function') showToast('名冊至少 ' + BNUI.minRoster + ' 人才能出戰(目前 ' + bnUiRosterList().length + ' 人)');
+  if (typeof showToast === 'function') showToast('卡包至少 ' + BNUI.minRoster + ' 人才能出戰(目前 ' + bnUiRosterList().length + ' 人)');
 }
 function uiSideAct(key) {
   const it = UI_SIDE_ITEMS.find(x => x.key === key);

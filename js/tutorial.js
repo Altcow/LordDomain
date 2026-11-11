@@ -7,7 +7,7 @@
 // ES2017;不用 ?. ??。
 
 var TUT_GRANT_KEYS = ['xue1', 'md', 'skip', 'grad', 't9'];
-var TUT_SEEN_KEYS = ['detail', 'team'];   // 卡包教學步驟的『看過』旗標:C3 看過卡詳情、C4 先記著(戰鬥未開放時)
+var TUT_SEEN_KEYS = ['cards', 'detail', 'team'];   // 卡包教學步驟的『看過』旗標:C1 打開過卡片面板、C3 看過卡詳情、C4 先記著(戰鬥未開放時)
 var TUT_HOLD_MS = 5000;         // T8 三根長條綠色需維持的時間
 var TUT_IDLE_MS = 90000;        // 同一步閒置超過此時間,卡片加註「幫你選好位置」
 var TUT_T9_GUARANTEE_MS = 900000; // T9 起算 15 分鐘仍未排入,補到學識 10(保底)
@@ -142,7 +142,7 @@ function tutFillGo(go) {
   return o;
 }
 
-// 卡包開場步驟(C1~C4,兩種模式共用)的完成條件:C1 領了新手禮包(不適用 / 已領都算)、C2 抽過卡、C3 看過卡詳情、C4 組了隊(討伐陣容有人)或按了『先記著』
+// 卡包開場步驟(C1~C4,兩種模式共用)的完成條件:C1 打開過卡片面板(cardsui.js cardsUiOpen 寫入 tutSeen('cards');補償自動發放不需領取)、C2 抽過卡、C3 看過卡詳情、C4 組了隊(討伐陣容有人)或按了『先記著』
 function tutTeamFormed() {
   var d = null, i;
   if (typeof bnUiLoad !== 'function') return false;
@@ -156,8 +156,8 @@ function tutDoneCards(step) {
   var cs = (typeof cardsGet === 'function') ? cardsGet() : null;
   if (!cs) return true;
   switch (step) {
-    case 'C1': return typeof cardsStarterState !== 'function' || cardsStarterState(cs) !== 'ready';
-    case 'C2': return (cs.pl && (cs.pl.tot | 0) >= 1) || cs.roster.length > 0;
+    case 'C1': return tutHasSeen('cards');
+    case 'C2': return (cs.pl && ((cs.pl.T && (cs.pl.T.tot | 0) >= 1) || (cs.pl.E && (cs.pl.E.tot | 0) >= 1))) || cs.roster.length > 0;
     case 'C3': return tutHasSeen('detail');
     case 'C4': return tutHasSeen('team') || tutTeamFormed();
     default: return false;
@@ -285,7 +285,6 @@ function tutGrad() {
   tutGrantXue(t, 'grad', 10);
   tutSetStep(t, 'END', tutClock());
   t.gsp = 1;
-  if (typeof cardsStarterHint === 'function') cardsStarterHint();   // 新手禮包提示(cards_starter.js)
   return true;
 }
 // 跳過:補發學識 20(只一次);md_cesuo 免費覆寫仍保留到研成為止

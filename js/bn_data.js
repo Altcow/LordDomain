@@ -275,15 +275,14 @@ var BN_RATE_CAP = {
   castsPerActMax: 1.6, perSkillMax: 5,   // 驗收:10 回合內平均每次行動施放數、單一戰法場均施放次數
   wired: true                       // B2:已接 bnRateOf(bn_engine.js)
 };
-// 戰法傳承(card_ui_redesign §2.3 / R1~R13):傳承 = 拆卡確定解鎖該卡全部可傳承戰法(無機率、無保底、無庫存)。階級:金名人 S、紫名人 A(tierByGr);通用戰法封頂 B;S/A 獨占(uniqueTiers)
+// 戰法傳承(card_ui_redesign §2.3 / R1~R13;2026-11-11 改版):傳承 = 拆卡確定解鎖該卡全部可傳承戰法(無機率、無保底、無庫存)。階級:金名人 S、紫名人 A(tierByGr);通用戰法封頂 B。
+// 同時裝備上限不在這裡:逐戰法欄位 BN_SKILL_MAXUSE(tools/bn_kit_gen.js 產生,可由 tools/battle_skills/maxuse.json 覆寫;S/A = 1)。
 var BN_SKC = {
   v: 2,
   consume: 1,
   minGr: 3,                         // 品階索引 3 = 紫(白0 青1 藍2 紫3 金4);傳承門檻紫以上
   tierByGr: { 4: 'S', 3: 'A' },     // 名人來源品階 → 傳承階級
   genericMaxTier: 'B',              // 通用戰法傳承階級封頂
-  exclusive: { S: 1, A: 1 },        // S / A 同時只能裝在 1 人身上
-  uniqueTiers: ['S', 'A'],          // 唯一階(同 exclusive 的鍵)
   frag: { purple: 8, purpleMaster: 12, figPurple: 10, figGold: 20 },   // 傳承另得碎片:紫路人 8、宗師 12、紫名人 10、金名人 20
   dupFrag: 4,                       // 兵書 / 通用戰法已擁有 → 轉碎片
   legionExtra: 1                    // 兵種卡(與名人綁定)每人 1 張

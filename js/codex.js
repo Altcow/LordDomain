@@ -66,7 +66,7 @@ function cxIndex() {
 function cxCard(id) {   // 名人的示意卡(未獲得也能算戰法 / 適性);快取到索引失效
   var f = (typeof CARD_FIG_BY_ID !== 'undefined') ? CARD_FIG_BY_ID[id] : null;
   if (!f) return null;
-  if (!cx.cards[id] && typeof cardFromFig === 'function') { try { cx.cards[id] = cardFromFig(f, 'G', 0); } catch (e) { cx.cards[id] = null; } }
+  if (!cx.cards[id] && typeof cardFromFig === 'function') { try { cx.cards[id] = cardFromFig(f, 'E', 0); } catch (e) { cx.cards[id] = null; } }
   return cx.cards[id] || null;
 }
 function cxSkillRows(id) {
@@ -246,7 +246,7 @@ function cxApplySlots(slots) {
 }
 function cxApplyTeam(t) {
   var p = cxTeamPlan(t), r;
-  if (!p.slots.length) { cx.msg = '名冊裡沒有這組的任何人(含替代人選),無法套用。'; return { ok: false, placed: 0, missing: p.missing }; }
+  if (!p.slots.length) { cx.msg = '卡包裡沒有這組的任何人(含替代人選),無法套用。'; return { ok: false, placed: 0, missing: p.missing }; }
   r = cxApplySlots(p.slots);
   if (!r.ok) { cx.msg = r.reason === 'nobn' ? '布陣功能尚未載入。' : '無法套用。'; return { ok: false, placed: 0, missing: p.missing }; }
   cx.msg = '已套用「' + t.name + '」到布陣:' + r.placed + ' 人上陣' + (p.used.some(function (u) { return u.alt; }) ? '(部分用替代人選)' : '') + (p.missing.length ? ';缺 ' + p.missing.join('、') + ',該位置留空' : '') + '。下次出戰時生效。';
@@ -269,7 +269,7 @@ function cxRecommend() {
     rows = cxSkillsOfEntry(e, tr);
     return { e: e, troop: tr, sp: sp, pw: pw, sup: cxIsSupport(rows) };
   }).filter(function (x) { return x.sp; });
-  if (!list.length) return { picks: [], fac: -1, reasons: ['名冊還沒有可上陣的人。'], slots: [] };
+  if (!list.length) return { picks: [], fac: -1, reasons: ['卡包還沒有可上陣的人。'], slots: [] };
   list.forEach(function (x) { var f = x.e.fac; if (f === 4 || f === undefined) return; (facSum[f] = facSum[f] || []).push(x.pw); });
   Object.keys(facSum).forEach(function (f) { var a = facSum[f].sort(function (p, q) { return q - p; }); if (a.length >= 3) { var v = a.slice(0, 5).reduce(function (s, n) { return s + n; }, 0) * (1 + 0.02 * Math.min(5, a.length)); if (v > bestV) { bestV = v; best = +f; } } });
   function sc(x) {
@@ -294,9 +294,9 @@ function cxRecommend() {
   picks.forEach(function (p) { p.row = p.sp.row; p.col = p.sp.col; delete p.sp; });
   if (best >= 0) {
     var n = picks.filter(function (p) { return p.e.fac === best; }).length;
-    reasons.push(n >= 3 ? '同為' + cxFacName(best) + ' ' + n + ' 人:觸發陣營加成(' + cxFacBonusTxt(n) + ')。' : '名冊中' + cxFacName(best) + '人數最多,可再補同陣營的人觸發加成。');
-  } else reasons.push('名冊中沒有 3 位以上同陣營(中立不算),以戰力與定位為主。');
-  if (!picks.some(function (p) { return list.some(function (x) { return x.e.id === p.e.id && x.sup; }); })) reasons.push('名冊沒有會治療 / 護盾的人,建議抽一位補上(看「戰法」分頁搜尋「回復」)。');
+    reasons.push(n >= 3 ? '同為' + cxFacName(best) + ' ' + n + ' 人:觸發陣營加成(' + cxFacBonusTxt(n) + ')。' : '卡包中' + cxFacName(best) + '人數最多,可再補同陣營的人觸發加成。');
+  } else reasons.push('卡包中沒有 3 位以上同陣營(中立不算),以戰力與定位為主。');
+  if (!picks.some(function (p) { return list.some(function (x) { return x.e.id === p.e.id && x.sup; }); })) reasons.push('卡包沒有會治療 / 護盾的人,建議抽一位補上(看「戰法」分頁搜尋「回復」)。');
   if (typeof BN_BONDS !== 'undefined') BN_BONDS.special.forEach(function (b) { var c = picks.filter(function (p) { return p.e.fig && b.members.indexOf(p.e.fig) >= 0; }).length; if (c >= b.need) bondNames.push(b.name); });
   if (bondNames.length) reasons.push('觸發羈絆:' + bondNames.join('、') + '。');
   return { picks: picks, fac: best, reasons: reasons, slots: picks.map(function (p) { return { id: p.e.id, row: p.row, col: p.col, troop: p.troop }; }) };
@@ -359,14 +359,14 @@ function cxTeamHtml(t) {
   });
   h += '</div><div class="cx-l">' + cxEsc(t.why) + '</div>';
   if (t.bonds && t.bonds.length) h += '<div class="cx-l"><b class="cx-k">羈絆</b>' + cxEsc(t.bonds.join('、')) + '</div>';
-  h += '<div class="cx-l">' + (o.roster < o.n ? '<small>名冊可上陣 ' + o.roster + ' 人' + (o.alt ? '、另 ' + o.alt + ' 格可用替代人選' : '') + (o.own > o.roster ? ';有人在待定席或流浪中,名冊有空位時才能上陣' : '') + '</small>' : '') +
+  h += '<div class="cx-l">' + (o.roster < o.n ? '<small>卡包可上陣 ' + o.roster + ' 人' + (o.alt ? '、另 ' + o.alt + ' 格可用替代人選' : '') + (o.own > o.roster ? ';有人在待定席或流浪中,卡包有空位時才能上陣' : '') + '</small>' : '') +
     '<button type="button" data-cx="apply" data-k="' + cxEsc(t.id) + '"' + (o.roster + o.alt ? '' : ' disabled') + '>一鍵套用到布陣</button></div>';
   return h + '</div>';
 }
 function cxRecHtml() {
   var r = cx.rec, h;
   if (!r) return '';
-  h = '<div class="cx-team cx-rec"><div class="cx-th"><b>依我的名冊推薦</b></div>';
+  h = '<div class="cx-team cx-rec"><div class="cx-th"><b>依我的卡包推薦</b></div>';
   if (!r.picks.length) return h + '<div class="cx-l">' + cxEsc(r.reasons.join('')) + '</div></div>';
   h += '<div class="cx-slots">' + r.picks.map(function (p) { return '<div class="cx-slot"><small>' + CX_ROW[p.row] + '・' + cxEsc(p.troop) + '</small><b>' + cxEsc(p.e.name) + '</b><small>' + cxEsc(p.why) + '</small></div>'; }).join('') + '</div>';
   h += r.reasons.map(function (s) { return '<div class="cx-l">' + cxEsc(s) + '</div>'; }).join('');
@@ -430,7 +430,7 @@ function cxSel(name, val, opts) {
 }
 function cxToolHtml() {
   return '<div class="cx-fs">' + cxSel('tfac', cx.tfac, [['-1', '全部陣營']].concat(cxTeamFacs().map(function (f) { return [String(f), cxTeamFacName(f)]; }))) +
-    '<button type="button" data-cx="rec">依我的名冊推薦</button></div>';
+    '<button type="button" data-cx="rec">依我的卡包推薦</button></div>';
 }
 function cxTeamFacs() { var s = {}, out = []; cxTeams().forEach(function (t) { var k = cxWorld() === 'han' ? t.fac : t.world; if (!s[k]) { s[k] = 1; out.push(k); } }); return out; }
 function cxTeamFacName(f) { return cxWorld() === 'han' ? cxFacName(+f) : (CX_RACE[f] || f); }

@@ -309,7 +309,7 @@ function cuCodexBodyHtml() {
   } else {
     teams = cuCxTeams();
     h += cuCodexHintHtml();
-    h += '<div class="cux-sum">共 ' + teams.length + ' 組推薦隊伍。隊伍成員可點開看人物;名冊中已得的成員以金字標示。</div>';
+    h += '<div class="cux-sum">共 ' + teams.length + ' 組推薦隊伍。隊伍成員可點開看人物;卡包中已得的成員以金字標示。</div>';
     if (!teams.length) h += '<div class="cusub">沒有符合的隊伍。</div>';
     teams.forEach(function (t) { h += cuCxTeamHtml(t); });
   }
@@ -322,14 +322,14 @@ function cuCodexExists(kind, id) {
   return !!cuCxIdx().byId[id];
 }
 function cuCodexFigPop(cs, id) {
-  var it = cuCxIdx().byId[id], om = cuCxOm(), ow = om[id], c = (typeof cxCard === 'function') ? cxCard(id) : null, lst = { roster: '名冊', wait: '待定席', wander: '流浪中', bag: '其他' }, h = '', rows, traits, bonds, teams, bio, lines, st;
+  var it = cuCxIdx().byId[id], om = cuCxOm(), ow = om[id], c = (typeof cxCard === 'function') ? cxCard(id) : null, lst = { roster: '卡包', wait: '待定席', wander: '流浪中', bag: '其他' }, h = '', rows, traits, bonds, teams, bio, lines, st;
   if (!it) return null;
   h += '<div class="cux-dh">' + cuCxAv(id, !!ow, it.gr, false) + '<div class="cux-dm">' +
     '<b class="cux-big">' + cuEsc(it.name) + (it.zi ? '<small>(' + cuEsc(it.zi) + ')</small>' : '') + '</b>' +
     '<small>' + cuEsc(cuCxGrName(it.gr) + '階・' + cuCxFacName(it.fac) + (it.f.home ? '・' + it.f.home : '') + (it.f.birth ? '・' + it.f.birth : '')) + '</small>' +
     '<small>擅長:' + cuEsc(it.troop) + '兵・預設' + CUX_ROW[it.row] + '</small>' +
     '<span class="cux-tg ' + (ow ? 'on' : 'off') + '" style="align-self:flex-start">' + (ow ? '已得(' + (lst[ow.list] || '') + ')' : '未得') + '</span>' +
-    (ow ? '<button type="button" class="cux-go" data-kx="roster" data-id="' + cuEsc(id) + '">到名冊查看</button>' : '') + '</div></div>';
+    (ow ? '<button type="button" class="cux-go" data-kx="roster" data-id="' + cuEsc(id) + '">到卡包查看</button>' : '') + '</div></div>';
   if (c && typeof cardsStats === 'function' && typeof CARD_STATS !== 'undefined') {
     st = cardsStats(c);
     h += '<div class="cux-stat">' + CARD_STATS.map(function (nm, k) { return '<span><i>' + nm + '</i><b>' + st[k] + '</b></span>'; }).join('') + '</div>';
@@ -474,7 +474,7 @@ function cuCodexClick(a, b, cs) {
     CUX.pop = { kind: kt, id: id };
     return true;
   }
-  if (a === 'rdet') {   // 路人無人物頁:開名冊詳情
+  if (a === 'rdet') {   // 路人無人物頁:開卡包詳情
     if (typeof cardsUiOpen !== 'function') return false;
     CUX.pop = null; CUX.stack = [];
     cardsUiOpen('R');

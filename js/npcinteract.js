@@ -325,7 +325,7 @@ function npcInteriorPeople(kind, max, opts) {
 
 // ───────── P3 城內 hero 人物 ─────────
 // 類型登錄(w = 0,不參與一般抽籤;只由 npcHeroTick 依名冊生成,不占居民額度)
-if (typeof LIFE_TYPES !== 'undefined' && !LIFE_TYPES.hero) LIFE_TYPES.hero = { name: '名冊人物', looks: ['man', 'woman'], w: 0, spd: 0.75, to: {} };
+if (typeof LIFE_TYPES !== 'undefined' && !LIFE_TYPES.hero) LIFE_TYPES.hero = { name: '卡包人物', looks: ['man', 'woman'], w: 0, spd: 0.75, to: {} };
 function npcLowEnd() { return typeof lifeLowEnd === 'function' && lifeLowEnd(); }
 function npcHeroCap() {
   var c = NPC_CFG.heroCap;

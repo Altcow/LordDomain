@@ -467,10 +467,10 @@ function BN_BONDS_CAP() { return BN_BONDS.cap || BN_DATA.bondCap; }
 // ───────── 模擬器 / 測試用:隨機名冊卡與隊伍 ─────────
 function bnRandomCard(rng, gr, figId) {
   var cs, key, card, f;
-  if (figId) { f = CARD_FIG_BY_ID[figId]; card = cardFromFig(f, 'G', 0); card.tok = 0; return card; }
+  if (figId) { f = CARD_FIG_BY_ID[figId]; card = cardFromFig(f, 'E', 0); card.tok = 0; return card; }
   cs = { seed: Math.floor(rng() * 4294967295), fame: { E: 0 } };
-  key = 'G:' + Math.floor(rng() * 1000);
-  card = cardGen(cs, 'G', key, Math.floor(rng() * 9), gr, 't' + Math.floor(rng() * 1e9), {});
+  key = 'E:' + Math.floor(rng() * 1000);
+  card = cardGen(cs, 'E', key, Math.floor(rng() * 9), gr, 't' + Math.floor(rng() * 1e9), {});
   card.tok = 0; card.up = 0;
   return card;
 }

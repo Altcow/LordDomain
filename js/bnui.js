@@ -17,7 +17,7 @@ var BNUI_FOE = {
 };
 var bnu = {
   open: false, leaving: false, layer: null, cv: null, ctx: null, top: null, bar: null, backBtn: null, titleEl: null, subEl: null, strip: null, stripEls: [], roundEl: null, formEl: null, resEl: null, pauseEl: null, cutEl: null, cutParts: null,
-  btns: {}, mapEl: null, stg: { kind: 'practice', id: 'P' }, report: null, phase: 'form', slots: [], sel: null, tp: {}, filter: '', data: null, pref: null, P: null, L: null, rec: null, raf: 0, last: 0, gate: null, paused: false, histOn: false, histSkip: false, snap: null, rz: [], dpr: 1,
+  btns: {}, mapEl: null, entEl: null, stg: { kind: 'practice', id: 'P' }, report: null, phase: 'form', slots: [], sel: null, tp: {}, filter: '', data: null, pref: null, P: null, L: null, rec: null, raf: 0, last: 0, gate: null, paused: false, histOn: false, histSkip: false, snap: null, rz: [], dpr: 1,
   vw: 0, vh: 0, result: null, msg: '', frames: 0, listeners: false, hudRound: '', pop: null, popEl: null, popSlot: -1, drag: null, dragAt: 0
 };
 function bnUiActive() { return !!bnu.open; }
@@ -319,6 +319,16 @@ function bnUiCss() {
     '.bnf-prey table{border-collapse:collapse;width:100%;margin-bottom:2px}.bnf-prey th{width:2em;text-align:center;color:#ffd25a}.bnf-prey td{padding:1px 4px}.bnf-prey td.u{color:#a6e58f}.bnf-prey td.d{color:#ffa595}' +
     '@media (orientation:landscape) and (min-width:700px){#bnForm{display:none}#bnLayer.ph-form #bnForm{display:grid;grid-template-columns:minmax(300px,1fr) minmax(300px,1.2fr);column-gap:14px;align-content:start}#bnForm .c1{grid-column:1}#bnForm .c2{grid-column:2}.bnf-roster{flex-wrap:wrap;overflow-x:visible}}' +
     '#bnMap{position:relative;z-index:2;flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:8px calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));display:none}#bnLayer.ph-map #bnMap{display:block}' +
+    '#bnEntry{position:relative;z-index:2;flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:12px calc(12px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));display:none}#bnLayer.ph-entry #bnEntry{display:block}' +
+    '.bnen{display:flex;flex-direction:column;gap:10px;max-width:520px;margin:0 auto}.bnen-sum{margin:0;font-size:13px;text-align:center;opacity:.9}' +
+    '.bnen-b{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-height:76px;padding:12px 14px;border:2px solid rgba(255,255,255,.18);border-radius:12px;background:rgba(255,255,255,.1);color:#f4ead2;text-align:left;font-size:13px;cursor:pointer}.bnen-b b{font-size:20px;color:#ffd25a}.bnen-b small{font-size:12px;line-height:1.4;opacity:.85}' +
+    '#bnBar .mf{display:none}#bnLayer.ph-map #bnBar .mf{display:inline-block;background:#c9892f;color:#1b1308;font-weight:bold;min-width:76px}#bnLayer.ph-map #bnBar .mf[disabled]{opacity:.4;background:rgba(255,255,255,.14);color:#f4ead2}' +
+    '#bnLayer.ph-map .ne,#bnLayer.ph-entry .ne{display:none}' +
+    '.bnm-hint{margin:0 0 6px;padding:6px 8px;border-radius:8px;background:rgba(201,137,47,.22);font-size:13px;line-height:1.5}' +
+    '.bnm-dbtn{display:block;margin-top:6px;min-height:44px;padding:0 14px;border:none;border-radius:8px;background:rgba(255,255,255,.14);color:#f4ead2;font-size:15px}' +
+    '.bnm-foot .bnm-b{display:block;width:100%;box-sizing:border-box;text-align:left;border:2px solid rgba(255,255,255,.18);color:#f4ead2;font-family:inherit;font-size:13px;line-height:1.6;cursor:pointer}.bnm-foot .bnm-b.sel{border-color:#ffd25a}' +
+    '.bnm-ov{position:fixed;left:0;top:0;right:0;bottom:0;z-index:8;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(10,8,6,.72)}' +
+    '.bnm-dlg{box-sizing:border-box;width:min(92vw,420px);max-height:86vh;overflow:auto;border-radius:14px;background:#2a2118;border:2px solid #c9892f;padding:14px 16px;font-size:14px;line-height:1.5}.bnm-dlg h3{margin:0 0 6px;font-size:17px}.bnm-dlg .bnm-dbtn{width:100%;margin-top:10px}' +
     '.bnm-head{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;margin:0 0 6px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.07)}.bnm-head b{color:#ffd25a}' +
     '.bnm-chs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin:0 0 6px}.bnm-chs::-webkit-scrollbar{display:none}.bnm-chs button{flex:0 0 auto;min-height:40px;min-width:44px;padding:0 10px;border:none;border-radius:8px;background:rgba(255,255,255,.12);color:#f4ead2;font-size:14px}.bnm-chs button.on{background:#c9892f;color:#1b1308;font-weight:bold}.bnm-chs button.lock{opacity:.45}' +
     '.bnm-chn{font-size:14px;margin:0 0 4px}.bnm-chn small{opacity:.75;font-size:12px}.bnm-list{display:flex;flex-direction:column;gap:4px}' +
@@ -381,9 +391,11 @@ function bnUiBuildLayer() {
   bar.appendChild(bnu.backBtn); bar.appendChild(bnu.titleEl); bar.appendChild(bnu.roundEl);
   bnu.btns.spd = bnUiBtn('1×', '倍速', function () { bnUiSetSpeed(); }, 'fo ib');
   // 頂列只留左上返回(戰鬥中 = 暫停選單,內含撤退);不放右上關閉 / 略過鈕。戰報鈕只在非戰鬥階段顯示
-  bnu.btns.log = bnUiBtn('戰報', '戰報', function () { bnUiDo('log'); }, 'nf');
+  bnu.btns.log = bnUiBtn('戰報', '戰報', function () { bnUiDo('log'); }, 'nf ne');
   ['spd', 'log'].forEach(function (k) { bar.appendChild(bnu.btns[k]); });
   if (typeof bnsBarBtn === 'function') bar.appendChild(bnsBarBtn());   // 對戰練習(js/bnshare.js;非戰鬥階段顯示)
+  bnu.btns.mfight = bnUiBtn('出戰', '出戰', function () { bnUiDo('mfight'); }, 'mf');   // 副本的出戰鈕(右上;依目前選取的關卡 / 流寇,沒選時灰掉)
+  bar.appendChild(bnu.btns.mfight);
   bnu.stripEls = [];   // 行動順序條已移除(出手太快看不到;先後順序改看文字戰報)
   top.appendChild(bar);
   bnu.formEl = bnUiMk('div', 'bnForm');
@@ -394,10 +406,11 @@ function bnUiBuildLayer() {
   bnu.cutParts.fig.addEventListener('error', function () { var f = bnu.cutParts.fig, a = f.getAttribute('data-alt'); if (a) { f.removeAttribute('data-alt'); f.setAttribute('src', a); } else if (f.style) f.style.display = 'none'; });
   ['bg', 'fig', 'nm', 'sk'].forEach(function (k) { bnu.cutEl.appendChild(bnu.cutParts[k]); });
   bnu.mapEl = bnUiMk('div', 'bnMap'); bnu.mapEl.addEventListener('click', bnUiFormClick);
+  bnu.entEl = bnUiMk('div', 'bnEntry'); bnu.entEl.addEventListener('click', bnUiFormClick);
   bnu.resEl = bnUiMk('div', 'bnRes'); bnu.resEl.addEventListener('click', bnUiFormClick);
   bnu.pauseEl = bnUiMk('div', 'bnPause'); bnu.pauseEl.addEventListener('click', bnUiFormClick);
   bnu.feedEl = bnUiMk('div', 'bnFeed'); bnu.feedEl.addEventListener('click', function () { bnu.feedOff = !bnu.feedOff; bnUiFeedRender(); bnUiResize(); });   // 戰況播報(點一下收合 / 展開)
-  layer.appendChild(cv); layer.appendChild(bnu.formEl); layer.appendChild(bnu.mapEl); layer.appendChild(top); layer.appendChild(bnu.feedEl); layer.appendChild(bnu.cutEl); layer.appendChild(bnu.resEl); layer.appendChild(bnu.pauseEl);
+  layer.appendChild(cv); layer.appendChild(bnu.formEl); layer.appendChild(bnu.mapEl); layer.appendChild(bnu.entEl); layer.appendChild(top); layer.appendChild(bnu.feedEl); layer.appendChild(bnu.cutEl); layer.appendChild(bnu.resEl); layer.appendChild(bnu.pauseEl);
   bnu.formEl.addEventListener('pointerdown', bnUiDragDown);
   ['l', 'r'].forEach(function (k) { var tz = bnUiMk('div', '', 'bnf-trash ' + k); tz.setAttribute('data-drop', 'trash'); tz.innerHTML = '<span>🗑</span><small>下陣</small>'; layer.appendChild(tz); });
   cv.addEventListener('pointerup', bnUiCvTap);
@@ -408,8 +421,8 @@ function bnUiBuildLayer() {
 function bnUiSetPhase(ph) {
   var cl = bnu.layer && bnu.layer.classList;
   bnu.phase = ph;
-  if (cl) { cl.remove('ph-form'); cl.remove('ph-map'); cl.remove('ph-fight'); cl.remove('ph-res'); cl.add('ph-' + ph); }
-  if (bnu.titleEl) bnu.titleEl.textContent = ph === 'map' ? '討伐' : (ph === 'form' ? '戰前布陣 · ' + bnUiStageLabel() : (ph === 'fight' ? bnUiStageLabel() : '戰果'));
+  if (cl) { cl.remove('ph-form'); cl.remove('ph-map'); cl.remove('ph-entry'); cl.remove('ph-fight'); cl.remove('ph-res'); cl.add('ph-' + ph); }
+  if (bnu.titleEl) bnu.titleEl.textContent = ph === 'entry' ? '戰鬥' : (ph === 'map' ? '副本' : (ph === 'form' ? '戰前布陣 · ' + bnUiStageLabel() : (ph === 'fight' ? bnUiStageLabel() : '戰果')));
   if (bnu.subEl) bnu.subEl.textContent = '';
 }
 
@@ -456,7 +469,7 @@ function bnUiRenderForm() {
       } else top += '<button class="bnf-cell em" data-a="cell" data-drop="cell" data-r="' + r + '" data-c="' + c + '" aria-label="空格,可放入人物"><small>＋ 放這裡</small></button>';
     }
   }
-  top += '</div><div class="bnf-hint">拖名冊人物進空格上陣 · 拖格內人物可移位 / 交換 · 拖到兩側 🗑 下陣 · 點人物看詳情</div></div>';
+  top += '</div><div class="bnf-hint">拖卡包人物進空格上陣 · 拖格內人物可移位 / 交換 · 拖到兩側 🗑 下陣 · 點人物看詳情</div></div>';
   h = top + '<div class="c1"><div class="bnf-foe">' + (foes.kind === 'practice' ? '敵將:山賊(練兵)' : '敵將:' + bnUiEsc(foes.label)) + ' · 建議戰力 <b>' + foes.power + '</b> · 我方 <b>' + mineP + '</b><br>' +
     foes.specs.map(function (x) { return '<i>' + (x.title ? bnUiEsc(x.title) + ' ' : '') + bnUiEsc(x.name) + ' ' + bnUiTI(x.troop) + bnUiEsc(x.troop) + '</i>'; }).join('') + '</div>';
   h += '<div class="bnf-bonds">羈絆:' + (bonds.on.length ? bonds.on.map(function (x) { return '<i>' + bnUiEsc(x) + '</i>'; }).join('') : '<u>尚未成立</u>') + bonds.hint.map(function (x) { return '<u>' + bnUiEsc(x) + '</u>'; }).join('') + '</div>';
@@ -468,7 +481,7 @@ function bnUiRenderForm() {
       '戰法:' + (typeof bnTeamSkillLinksHtml === 'function' ? bnTeamSkillLinksHtml(selE, tr) : sc.skills.concat(sc.ult ? [sc.ult] : []).map(function (id) { return BN_SKILLS[id] ? bnUiEsc(BN_SKILLS[id].name) : ''; }).filter(Boolean).join('、')) + '<div class="bnf-chips">' +
       BN_DATA.troopList.map(function (t) { var a = bnUiAptTxt(selE, t); return '<button class="' + (t === tr ? 'on' : '') + (a === 'C' ? ' bad' : '') + '" data-a="troop" data-id="' + bnUiEsc(selE.id) + '" data-t="' + t + '">' + bnUiTI(t) + t + ' ' + a + '</button>'; }).join('') +
       (bnUiSlotOf(selE.id) ? '<button data-a="remove" data-id="' + bnUiEsc(selE.id) + '">撤下</button>' : '') + '</div></div>';
-  } else h += '<div class="bnf-sel">拖名冊人物到上方空格上陣(最多 ' + BNUI.maxUnits + ' 人);也可先點名冊人物,再點空格。點上陣人物看詳情與裝備。</div>';
+  } else h += '<div class="bnf-sel">拖卡包人物到上方空格上陣(最多 ' + BNUI.maxUnits + ' 人);也可先點卡包人物,再點空格。點上陣人物看詳情與裝備。</div>';
   h += '<div class="bnf-chips">' + [['', '全部']].concat(BN_DATA.troopList.map(function (t) { return [t, bnUiTI(t) + t]; })).map(function (f) { return '<button class="' + (bnu.filter === f[0] ? 'on' : '') + '" data-a="filter" data-t="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>';
   if (typeof bnTeamRosterHtml === 'function') h += bnTeamRosterHtml();   // 名冊:搜尋 / 排序 / 陣營 / 品階 / 分頁 / 可拖曳縮圖(js/bnteam.js)
   else {
@@ -652,7 +665,7 @@ function bnUiDo(a, id, r, c, t, i) {
       if (o && s && s === o) { bnu.sel = null; bnUiRenderForm(); }
       else bnUiAct('place', bnu.sel, r, c);
     } else if (s) bnUiPopOpen(s.id);   // 點上陣人物 = 詳細介紹
-    else bnUiToast('先點名冊人物再點空格,或直接拖曳上陣');
+    else bnUiToast('先點卡包人物再點空格,或直接拖曳上陣');
   }
   else if (a === 'troop') bnUiAct('troop', id, t);
   else if (a === 'remove') bnUiAct('remove', id);
@@ -660,6 +673,7 @@ function bnUiDo(a, id, r, c, t, i) {
   else if (a === 'auto' || a === 'clear') bnUiAct(a);
   else if (a === 'saveP' || a === 'loadP') bnUiAct(a, i);
   else if (a === 'go') bnUiStart();
+  else if (a === 'ent') bnUiEntryDo(t);
   else if (a === 'pop') bnUiPopOpen(id);
   else if (a === 'pclose') bnUiPopClose();
   else if (a === 'pslot') { bnu.popSlot = (bnu.popSlot === i) ? -1 : i; bnUiPopRender(); }
@@ -795,6 +809,7 @@ function bnUiStart() {
 function bnUiSyncBtns() {
   var pr = bnUiPref();
   if (bnu.btns.spd) bnu.btns.spd.textContent = pr.spd + '×';
+  if (typeof bnMapSyncFight === 'function') bnMapSyncFight();
 }
 function bnUiSetSpeed() {
   var pr = bnUiPref();
@@ -909,6 +924,32 @@ function bnUiToForm() {
   bnUiSetPhase('form');
   bnUiRenderForm();
 }
+// 戰鬥入口(側欄『戰鬥』開啟後的第一個畫面):副本 / 對戰 / 戰報 / 練兵
+function bnUiRenderEntry() {
+  var el = bnu.entEl, d, done = 0, tot = 0;
+  if (!el) return;
+  d = bnu.data || bnUiLoad();
+  if (typeof bnMapStageStats === 'function' && typeof BN_STAGES !== 'undefined') { done = bnMapStageStats(d).cleared; tot = BN_STAGES.length; }
+  el.innerHTML = '<div class="bnen"><p class="bnen-sum">卡包 ' + bnUiRosterList().length + ' 人 · 討伐進度 ' + done + '/' + tot + '</p>' +
+    '<button class="bnen-b" data-a="ent" data-t="stage"><b>副本</b><small>討伐地圖:選章節與關卡,首通有獎勵,可重複通關</small></button>' +
+    '<button class="bnen-b" data-a="ent" data-t="share"><b>對戰</b><small>對戰碼與擂台(不計進度、不給獎勵)</small></button>' +
+    '<button class="bnen-b" data-a="ent" data-t="log"><b>戰報</b><small>最近的戰報,可查看與儲存</small></button>' +
+    '<button class="bnen-b" data-a="ent" data-t="prac"><b>練兵</b><small>不計戰績、不給獎勵,敵將依我方戰力縮放,可自由試陣</small></button></div>';
+}
+function bnUiEntryDo(t) {
+  if (t === 'stage') bnUiToMap();
+  else if (t === 'share') { if (typeof bnsOpen === 'function') bnsOpen('share'); }
+  else if (t === 'log') { if (typeof bnLogOpen === 'function') bnLogOpen('recent'); }
+  else if (t === 'prac') { if (typeof bnMapEnter === 'function') bnMapEnter('practice'); }
+}
+function bnUiToEntry() {
+  if (bnu.P) { bnPlDispose(bnu.P); bnu.P = null; }
+  bnUiStopLoop();
+  bnUiShowRes(false); bnUiShowPause(false); bnUiCutRender(null);
+  bnu.paused = false;
+  bnUiSetPhase('entry');
+  bnUiRenderEntry();
+}
 function bnUiToMap() {
   if (bnu.P) { bnPlDispose(bnu.P); bnu.P = null; }
   bnUiStopLoop();
@@ -950,11 +991,13 @@ function bnUiBack() {
   if (bnu.leaving || !bnu.open) return false;
   if (typeof bnTeamBack === 'function' && bnTeamBack()) return true;
   if (bnPopBack()) return true;   // 人物詳情開著:先關   // 戰法說明浮層開著:先關
+  if (typeof BNMAP !== 'undefined' && BNMAP.det) { BNMAP.det = false; bnMapRender(); return true; }   // 副本關卡詳細說明開著:先關
   if (typeof bnLogBack === 'function' && bnLogBack()) return true;   // 戰報面板開著:先關面板
   if (typeof bnsBack === 'function' && bnsBack()) return true;   // 對戰練習面板開著:先關面板
   if (bnu.phase === 'fight') { bnUiPause(!bnu.paused); return true; }
   if (bnu.phase === 'res') { bnUiToForm(); return true; }
-  if (bnu.phase === 'form' && typeof bnMapRender === 'function') { bnUiToMap(); return true; }
+  if (bnu.phase === 'form' && typeof bnMapRender === 'function') { if (bnu.stg && bnu.stg.kind === 'practice') bnUiToEntry(); else bnUiToMap(); return true; }
+  if (bnu.phase === 'map') { bnUiToEntry(); return true; }
   return bnUiLeave();
 }
 
@@ -990,7 +1033,7 @@ function bnUiOnPop() {
   if (!bnu.open) return;
   if (bnu.histSkip) { bnu.histSkip = false; return; }
   bnu.histOn = false;
-  if (bnPopIsOpen() || (typeof bnLogIsOpen === 'function' && bnLogIsOpen()) || (typeof bnTeamIsOpen === 'function' && bnTeamIsOpen()) || (typeof bnsIsOpen === 'function' && bnsIsOpen()) || (bnu.phase !== 'map' && !(bnu.phase === 'form' && typeof bnMapRender !== 'function'))) {
+  if (bnPopIsOpen() || (typeof bnLogIsOpen === 'function' && bnLogIsOpen()) || (typeof bnTeamIsOpen === 'function' && bnTeamIsOpen()) || (typeof bnsIsOpen === 'function' && bnsIsOpen()) || (typeof BNMAP !== 'undefined' && BNMAP.det) || bnu.phase !== 'entry') {
     try { history.pushState({ bn: 1 }, ''); bnu.histOn = true; } catch (e) { /* 略過 */ }
     bnUiBack();
     return;
@@ -1015,7 +1058,7 @@ function bnUiBind(on) {
 }
 function bnUiOpen() {
   var t0 = (typeof performance !== 'undefined') ? performance.now() : 0, d;
-  if (!bnUnlocked()) { bnUiToast('名冊至少 ' + BNUI.minRoster + ' 人才能出戰(目前 ' + bnUiRosterList().length + ' 人)'); return false; }
+  if (!bnUnlocked()) { bnUiToast('卡包至少 ' + BNUI.minRoster + ' 人才能出戰(目前 ' + bnUiRosterList().length + ' 人)'); return false; }
   if (!bnUiCanEnter()) return false;
   bnu.snap = bnUiSnap();
   try { if (typeof pend !== 'undefined' && pend) { pend.sel = null; pend.moving = null; } } catch (e) { /* 略過 */ }
@@ -1031,8 +1074,8 @@ function bnUiOpen() {
   game.mode = 'bn';
   if (document.body.classList) document.body.classList.add('in-bn');
   bnu.stg = { kind: 'practice', id: 'P' }; BNUI.stage = 'P';
-  if (typeof bnMapRender === 'function') { bnUiSetPhase('map'); bnMapRender(); }
-  else { bnUiSetPhase('form'); bnUiRenderForm(); }
+  if (typeof BNMAP !== 'undefined') BNMAP.det = false;
+  bnUiSetPhase('entry'); bnUiRenderEntry();
   bnUiResize();
   bnUiSyncBtns();
   bnUiBind(true);
@@ -1067,7 +1110,7 @@ function bnUiLeave(immediate, fromPop) {
   bnu.snap = null;
   function done() {
     if (layer && layer.parentNode) layer.parentNode.removeChild(layer);
-    bnu.layer = null; bnu.popEl = null; bnu.cv = null; bnu.ctx = null; bnu.bar = null; bnu.top = null; bnu.backBtn = null; bnu.titleEl = null; bnu.subEl = null; bnu.roundEl = null; bnu.formEl = null; bnu.mapEl = null; bnu.resEl = null; bnu.pauseEl = null; bnu.cutEl = null; bnu.cutParts = null; bnu.strip = null; bnu.stripEls = []; bnu.btns = {};
+    bnu.layer = null; bnu.popEl = null; bnu.cv = null; bnu.ctx = null; bnu.bar = null; bnu.top = null; bnu.backBtn = null; bnu.titleEl = null; bnu.subEl = null; bnu.roundEl = null; bnu.formEl = null; bnu.mapEl = null; bnu.entEl = null; bnu.resEl = null; bnu.pauseEl = null; bnu.cutEl = null; bnu.cutParts = null; bnu.strip = null; bnu.stripEls = []; bnu.btns = {};
     bnu.leaving = false; bnu.L = null;
     if (typeof saveWorld === 'function') { try { saveWorld(); } catch (e) { /* 略過 */ } }
   }

@@ -5,15 +5,16 @@
 //   庫房尚未載入(goodsCity() 為 null)時不結算,等下一次 tick。
 // 對外:caravanGet caravanSave caravanTick caravanBuyCart caravanHire caravanDismiss caravanStart caravanQuote caravanPoolToday caravanUsedToday caravanLeft
 //   caravanHall caravanCartCount caravanCartBusy caravanCartFree caravanShedUsed caravanRouteOpen
-// 馬車可重複擁有:carts = { 品階id: 輛數 }(舊檔 { white: 1 } 即 1 輛,直接沿用);每趟 trips[i].no = 該品階第幾輛(1 起),占用以「品階 + 序號」判定。
+// 馬車:carts = { 品階id: 輛數 },開局每種 1 輛(caravanStartCarts);舊檔缺的品階補 1 輛、已有的輛數保留。買車 caravanBuyCart 休眠中(CARAVAN_BUY_ON = false,@DORMANT caravan_buy);每趟 trips[i].no = 該品階第幾輛(1 起),占用以「品階 + 序號」判定。
 //   持有總數受鏢局車棚上限(買車時檢查;舊檔超額不刪,只是不能再買);同時出隊數受鏢局等級限制。
 // ES2017;不用 ?. ??。
 
 const CARAVAN_KEY = 'lorddomain.caravan.v1';
 var caravanCache = null, caravanRaw = null;
 
+function caravanStartCarts() { var o = {}; CARAVAN_CARTS.forEach(function (c) { o[c.id] = 1; }); return o; }   // 開局:每種馬車 1 輛
 function caravanBlank() {
-  return { v: 1, carts: { white: 1 }, roster: [], trips: [], day: '', used: 0, log: [], stats: { trips: 0, great: 0, fail: 0 } };
+  return { v: 1, carts: caravanStartCarts(), roster: [], trips: [], day: '', used: 0, log: [], stats: { trips: 0, great: 0, fail: 0 } };
 }
 function caravanInt(v, lo, hi, d) {
   v = Number(v);
@@ -25,11 +26,9 @@ function caravanNorm(d) {
   var s = caravanBlank(), seen = {};
   if (!d || typeof d !== 'object' || d.v !== 1) return s;
   var capMax = CARAVAN_HALL[CARAVAN_HALL.length - 1].shed;
-  CARAVAN_CARTS.forEach(function (c) {   // 舊檔值為 1(或 true)→ 1 輛;數量夾在 0~最大車棚,不憑空多車
-    var n = d.carts && typeof d.carts === 'object' ? caravanInt(d.carts[c.id] === true ? 1 : d.carts[c.id], 0, capMax, 0) : 0;
-    if (n > 0) s.carts[c.id] = n;
+  CARAVAN_CARTS.forEach(function (c) {   // 舊檔值為 1(或 true)→ 1 輛;數量夾在 1~最大車棚:每種至少 1 輛(缺的品階補發),已有的輛數保留
+    s.carts[c.id] = d.carts && typeof d.carts === 'object' ? caravanInt(d.carts[c.id] === true ? 1 : d.carts[c.id], 1, capMax, 1) : 1;
   });
-  if (!(s.carts.white >= 1)) s.carts.white = 1;
   if (Array.isArray(d.roster)) d.roster.forEach(function (id) {
     if (caravanEscortValid(id) && !seen[id] && s.roster.length < CARAVAN_ROSTER_MAX) { seen[id] = 1; s.roster.push(id); }
   });
@@ -164,8 +163,9 @@ function caravanCartFree(cartId) { return Math.max(0, caravanCartCount(cartId) -
 function caravanCartPrice(cartId) { var c = caravanCart(cartId); return !c ? 0 : (c.cost > 0 ? c.cost : CARAVAN_WHITE_EXTRA); }
 
 // ───────── 買車(同品階可多輛,受車棚上限)─────────
-function caravanBuyCart(cartId) {
+function caravanBuyCart(cartId) {   // @DORMANT caravan_buy
   var s = caravanGet(), c = caravanCart(cartId), cost, cap = caravanHall().shed;
+  if (!CARAVAN_BUY_ON) return { ok: false, reason: '買車暫停中' };   // @DORMANT caravan_buy
   if (!c) return { ok: false, reason: '沒有這種車' };
   if (caravanShedUsed() >= cap) return { ok: false, reason: '車棚已滿(' + cap + ' 輛)' };
   cost = caravanCartPrice(cartId);

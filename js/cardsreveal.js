@@ -1,8 +1,8 @@
 // js/cardsreveal.js — 抽卡特效(一批卡開獎演出)。樣式在 css/cardsreveal.css。
-// 入口:cardsRevealPlay(cards, onDone) — cards 為本批卡陣列(gr 0白/1青/2藍/3紫/4金);動畫結束(按「收下」)或玩家按「略過」時呼叫 onDone(只一次)。
+// 入口:cardsRevealPlay(cards, onDone) — cards 為本批卡陣列(gr 0白/1青/2藍/3紫/4金);動畫結束或玩家按「略過」時呼叫 onDone(只一次);最終排列頁點一下畫面任何地方即關閉(2026-11-11 起拿掉「收下」鈕)。
 // 排程:階段1 白青藍快速翻開(≤0.6s)→ 階段2 紫階逐張(中央放大旋轉+紫光,再飛向格子)→ 階段3 金階逐張(滿版金光+粒子)→ 終局:紫金 ≥4 張時最後 4 張同時開。
 // 三種強度:單抽(1 張)= 聚焦翻開 + 品階光(白青藍也有光);10 抽 = 一包,紫金各自亮相、最後 4 張合開;全抽的第 2 包起 = 同一套演出但加速(0.4×),仍逐步播放,可按『全部跳過』。
-// 無紫金:只做快速翻牌。點一下 = 跳到下一小步並進入加速;略過 = 直接顯示最終排列並呼叫 onDone;結尾停在最終排列頁等「收下」。
+// 無紫金:只做快速翻牌。點一下 = 跳到下一小步並進入加速;略過 = 直接顯示最終排列並呼叫 onDone;結尾停在最終排列頁,點一下畫面任何地方關閉(卡片已自動入卡包)。
 // 全域名稱:cardsRevealPlay cardsRevealPlan cardsRevealActive cardsRevealLog。依賴(皆 typeof 守衛):cardart.js 美術卡(整批邊框 / 背景 / 卡背都已載入才用,root 加 .art;否則原畫法)、cardsui.js 頭像函式、carddata.js 職業、audio.js auPlay、perf.js isPowerSave。ES2017;只用 transform/opacity 動畫。
 var RV_FIN_MAX = 4;                      // 終局合開最多張數
 var RV_MS = { flip: 600, one: 900, p: 1200, g: 1800, fin: 2000, ps: 0.5, fast: 0.4 };
@@ -150,9 +150,8 @@ function rvFinal() {
   s.cards.forEach(function (el) { el.classList.add('up', 'nt'); });
   s.root.classList.remove('dim', 'fxon');
   s.root.classList.add('final');
-  s.btn.hidden = false; s.hint.hidden = true; s.skip.hidden = true;
+  s.hint.textContent = '點一下關閉'; s.hint.hidden = false; s.skip.hidden = true;
   s.final = true;
-  if (typeof codexRevealHook === 'function') { try { codexRevealHook(s); } catch (e) { /* 圖鑑「看戰法」失敗不影響開獎 */ } }
 }
 
 function rvBuildSteps(plan) {
@@ -240,17 +239,15 @@ function cardsRevealPlay(cards, onDone, opts) {
   s.fin = rvDiv('rv-fin', root); s.cap = rvDiv('rv-cap', root);
   top = rvDiv('rv-top', root); bot = rvDiv('rv-bot', root);
   s.skip = document.createElement('button'); s.skip.className = 'rv-skip'; s.skip.textContent = '略過 ▸▸'; top.appendChild(s.skip);
-  s.skipAll = document.createElement('button'); s.skipAll.className = 'rv-skipall'; s.skipAll.textContent = '全部跳過 ▸▸▸'; s.skipAll.hidden = !((opts && opts.more) || chain);   // 連抽鏈中的每一批(含最後一批)都可按『全部跳過』 top.appendChild(s.skipAll);
+  s.skipAll = document.createElement('button'); s.skipAll.className = 'rv-skipall'; s.skipAll.textContent = '全部跳過 ▸▸▸'; s.skipAll.hidden = !((opts && opts.more) || chain); top.appendChild(s.skipAll);   // 連抽鏈中的每一批(含最後一批)都可按『全部跳過』
   s.hint = rvDiv('rv-hint', bot); s.hint.textContent = '點一下加速';
-  s.btn = document.createElement('button'); s.btn.className = 'rv-ok'; s.btn.textContent = '收下'; s.btn.hidden = true; bot.appendChild(s.btn);
   s.skip.addEventListener('click', function (e) { if (e && e.stopPropagation) e.stopPropagation(); rvSkip(); });
   s.skipAll.addEventListener('click', function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
     if (opts && typeof opts.onSkipAll === 'function') { try { opts.onSkipAll(); } catch (err) { /* 旗標失敗不影響略過 */ } }
     rvSkip(); rvClose(); rvLastMore = false;   // 本批立即結束並自動收下;剩餘批次由 onDone 鏈接續(呼叫端已設 quick)
   });
-  s.btn.addEventListener('click', function (e) { if (e && e.stopPropagation) e.stopPropagation(); rvClose(); });
-  root.addEventListener('click', function () { rvTap(); });
+  root.addEventListener('click', function () { if (s.final) rvClose(); else rvTap(); });   // 最終排列頁點一下即關閉(onDone 只會呼叫一次)
   document.body.appendChild(root);
   if (document.body.classList) document.body.classList.add('cards-reveal');
   rvSetScale();

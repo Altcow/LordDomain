@@ -39,6 +39,14 @@ function advUiMode() {
   advUi.mode = m;
   return m;
 }
+// 縣丞小臉開關(設定 > 畫面):關掉後小臉與氣泡都不顯示;預設開。只影響小臉,左上 🧭 民情總覽照常
+var ADV_FACE_KEY = 'lorddomain.adv.faceHide';
+function advFaceOn() { try { return localStorage.getItem(ADV_FACE_KEY) !== '1'; } catch (e) { return true; } }
+function advFaceSet(on) {
+  try { localStorage.setItem(ADV_FACE_KEY, on ? '0' : '1'); } catch (e) { /* 略過 */ }
+  if (!on && advUi.el && advUi.el.sprite) advUi.el.sprite.hidden = true;
+  else if (on && typeof advUiRefresh === 'function' && advUi.inited) advUiRefresh(true);
+}
 function advUiSetMode(m) {
   advUi.mode = m;
   try { localStorage.setItem(ADV_MODE_KEY, m); } catch (e) { /* 略過 */ }
@@ -440,7 +448,7 @@ function advUiAutoHelp(c) {
 // ───────── 縣丞精靈(Q 版 emoji + 氣泡)─────────
 function advUiSprite(c) {
   var e = advUi.el, sp = e.sprite, vp = advVp(), mode = advUi.mode, main = c.main, show, pop, now, face, dot, bub, acts, rect, nowSec;
-  if (mode === 'off' || !main) { sp.hidden = true; return; }
+  if (mode === 'off' || !main || !advFaceOn()) { sp.hidden = true; return; }
   nowSec = advGetSec();
   show = mode === 'full' && !advUi.dockOpen && main.tier !== 'B' ? true : (mode === 'full' && !advUi.dockOpen && main.id === advUi.bubbleId);
   if (mode === 'full' && !advUi.dockOpen && main.id !== advUi.lastMainId && (main.tier === 'R' || nowSec - advUi.lastPop >= ADV_BUBBLE_GAP_SEC)) {

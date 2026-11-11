@@ -73,11 +73,11 @@ function bnBookHtml(cs, e) { return bnBookTx(bnBookHtml0(cs, e)); }
 function bnBookHtml0(cs, e) {
   var h = '<div class="cusec">研兵(討伐)</div>', d, tr, lv, cost;
   if (!e || typeof bnDefaultTroop !== 'function' || typeof BN_DATA === 'undefined') return '';
-  if (!bnBookOpen()) return h + '<div class="cusub">名冊至少 5 人後開放討伐,可研兵強化兵種。</div>';
+  if (!bnBookOpen()) return h + '<div class="cusub">卡包至少 5 人後開放討伐,可研兵強化兵種。</div>';
   d = bnBookLoad();
   tr = bnDefaultTroop(e);
   lv = d.drill[tr] | 0;
-  h += '<div class="cusub cuink">研兵(全名冊同兵種共享):' + tr + '兵 ' + lv + '/' + BNBOOK.drillMax + ' 級' + (lv ? ',討伐中兵力 / 攻擊 / 謀略 / 治療 +' + Math.round(lv * BNBOOK.drillPer * 100) + '%' : '') + '</div>';
+  h += '<div class="cusub cuink">研兵(卡包內同兵種共享):' + tr + '兵 ' + lv + '/' + BNBOOK.drillMax + ' 級' + (lv ? ',討伐中兵力 / 攻擊 / 謀略 / 治療 +' + Math.round(lv * BNBOOK.drillPer * 100) + '%' : '') + '</div>';
   if (lv < BNBOOK.drillMax) { cost = BNBOOK.drillCost(lv); h += bnBookBtn('研兵:' + tr + '兵升 ' + (lv + 1) + ' 級(碎片 ' + cost.shards + '、金幣 ' + cost.coin + ')', 'drill', [e.id, tr]); }
   if (bnbk.msg) h += '<div class="cuwarn">' + bnBookEsc(bnbk.msg) + '</div>';
   return h;

@@ -224,7 +224,7 @@ function tavernOnAct(S, spot) {
 }
 function tavernSub() {
   var cs = (typeof cardsGet === 'function') ? cardsGet() : null;
-  return cs ? '名冊 ' + cs.roster.length + '/' + ((typeof cardsCap === 'function') ? cardsCap() : 0) + ' · 🎫 ' + (cs.nameTokens | 0) : '';
+  return cs ? '卡包 ' + cs.roster.length + '/' + ((typeof cardsCap === 'function') ? cardsCap() : 0) + ' · 小池 ' + cardsPulls(cs, 'T') + ' · 大池 ' + cardsPulls(cs, 'E') : '';
 }
 function tavernSceneDef() {
   var L;

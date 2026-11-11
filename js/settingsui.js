@@ -407,6 +407,12 @@ function stUiSec() {
       stRender();
     }), '開(預設):畫面放大到一定程度時,有室內空間的建築頭上顯示小門 🚪;縮小或省電模式時自動隱藏。點建築會顯示名稱,可進入者再按〔進入〕。');
   }
+  if (typeof advFaceSet === 'function' && typeof advFaceOn === 'function') {
+    stAdd(nodes, '縣丞小臉', stSwitch(advFaceOn(), function (v) {
+      advFaceSet(v);
+      stRender();
+    }), '畫面左側的縣丞小臉(🙂 / 🧐 / 😰)與它的氣泡提示。關掉後都不顯示;左上角 🧭 民情總覽仍可打開。預設開。');
+  }
   return stSec('畫面', nodes.concat(stExtraNodesH('畫面')), 'view');
 }
 

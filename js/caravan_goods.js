@@ -37,7 +37,9 @@ const CARAVAN_HALL = [
   { lv: 2, rank: 3, trips: 2, shed: 6 },
   { lv: 3, rank: 5, trips: 3, shed: 8 }
 ];
-const CARAVAN_WHITE_EXTRA = 500;    // 白車開局送 1 輛;再添購每輛的價錢(PLACEHOLDER)
+const CARAVAN_WHITE_EXTRA = 500;    // 添購每輛的價錢(PLACEHOLDER)。開局每種馬車各 1 輛(caravanStartCarts)
+// @DORMANT caravan_buy:買車 / 車棚添購休眠。false = 買車區塊不畫、caravanBuyCart 回報暫停;改 true 即恢復(見 tools\dormant_features.md)
+var CARAVAN_BUY_ON = false;
 
 // ───────── 3. 結算 ─────────
 const CARAVAN_POWER_K = 0.02;       // 每 1 點鏢師戰力降低的受阻機率

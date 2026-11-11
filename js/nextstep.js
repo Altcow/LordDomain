@@ -275,8 +275,8 @@ function nsCardCands(mem) {
   if (typeof cardsGet !== 'function' || typeof cardsPulls !== 'function') return out;
   cs = cardsGet();
   if (!cs) return out;
-  n = cardsPulls(cs);
-  if (n >= 10 && !mem.dismissed.card_pulls) out.push({ id: 'card_pulls', src: 'chain', tier: 'C', icon: '🃏', text: '卡片有 ' + n + ' 抽可用,不妨抽一輪。', why: '抽到的人直接進名冊;次數存滿 ' + CARD_DRAW.cap + ' 就不再累積。', go: { kind: 'cards', tab: 'T' } });
+  n = cardsPulls(cs, 'T') + cardsPulls(cs, 'E');
+  if (n >= 10 && !mem.dismissed.card_pulls) out.push({ id: 'card_pulls', src: 'chain', tier: 'C', icon: '🃏', text: '卡片有 ' + n + ' 抽可用(小池 + 大池),不妨抽一輪。', why: '抽到的人直接進卡包;各池次數存滿 ' + CARD_DRAW.cap + ' 就不再累積。', go: { kind: 'cards', tab: 'T' } });
   if (typeof BN_STAGES !== 'undefined' && typeof CARD_BOSS !== 'undefined') {
     for (i = 0; i < BN_STAGES.length; i++) {
       st = BN_STAGES[i];
