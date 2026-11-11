@@ -92,10 +92,12 @@ function cuRosterListHtml(cs) {
   return h;
 }
 function cuRosterPageHtml(cs) {
-  var R = cuRoState(), h = '', cap = cardsCap(), n = cs.roster.length, f;
+  var R = cuRoState(), h = '', cap = cardsCap(), n = cs.roster.length, f, bar = '';
   cuRosterCss();
-  if (cu.detail) { f = cardsFind(cs, cu.detail); if (f) return cuDetailHtml(cs, f); cu.detail = null; }
-  h += '<div class="cur"><span>卡包 <b>' + n + '/' + cap + '</b></span><span class="cusub">待定席 ' + cs.wait.length + '/' + CARD_CFG.waitSeats + '</span></div>';
+  if (typeof itemsSubBarHtml === 'function') bar = itemsSubBarHtml();   // 卡包頁頂部『卡片 | 道具』子頁(items_ui.js)
+  if (bar && IU.sub === 'item') return bar + itemsTabHtml() + itemsPopHtml();
+  if (cu.detail) { f = cardsFind(cs, cu.detail); if (f) return bar + cuDetailHtml(cs, f); cu.detail = null; }
+  h += bar + '<div class="cur"><span>卡包 <b>' + n + '/' + cap + '</b></span><span class="cusub">待定席 ' + cs.wait.length + '/' + CARD_CFG.waitSeats + '</span></div>';
   if (n >= cap) h += '<div class="cuwarn">卡包已滿(' + cap + ')、停止抽卡。先到『熔爐』熔鍊或遣散,騰出空位才能再抽。</div>';
   else if (n >= cap - 10) h += '<div class="cusub">卡包剩 ' + (cap - n) + ' 格。</div>';
   if (cs.lastRel) h += '<button class="cub" data-a="undo">復原最近遣散</button>';
@@ -124,6 +126,7 @@ function cuRosterInput(ev) {
 // 卡包頁的點擊動作(cuClick 呼叫;不認得的動作回 false)
 function cuRosterClick(a, b, cs) {
   var R = cuRoState(), v = b.getAttribute('data-v'), id = b.getAttribute('data-id'), f;
+  if (typeof cuItemsClick === 'function' && cuItemsClick(a, b, cs)) return true;   // 道具子頁 / 道具選單(items_ui.js)
   if (a === 'rgr') { R.gr = +v; R.n = 1; return true; }
   if (a === 'rfac') { R.fac = +v; R.n = 1; return true; }
   if (a === 'rtroop') { R.troop = v || ''; R.n = 1; return true; }

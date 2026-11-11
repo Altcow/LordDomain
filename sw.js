@@ -1,4 +1,4 @@
-const VERSION = 'v60';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v61';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -132,11 +132,13 @@ const PRECACHE = [
   './js/portrait_gender.js',
   './js/cards.js',
   './js/cards_starter.js',
+  './js/items.js',
   './js/cardart.js',
   './js/cardsui.js',
   './js/cardsui_named.js',
   './js/cardsui_bag.js',
   './js/cardsui_roster.js',
+  './js/items_ui.js',
   './js/cardsui_furnace.js',
   './js/cardsui_starter.js',
   './js/cardsui_draw.js',

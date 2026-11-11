@@ -143,7 +143,7 @@ function tutFillGo(go) {
   return o;
 }
 
-// 卡包開場步驟(C1~C4,兩種模式共用)的完成條件:C1 打開過卡片面板(cardsui.js cardsUiOpen 寫入 tutSeen('cards');補償自動發放不需領取)、C2 抽過卡、C3 看過卡詳情、C4 組了隊(討伐陣容有人)或按了『先記著』
+// 卡包開場步驟(C1~C4,兩種模式共用)的完成條件:C1 打開過卡片面板(cardsui.js cardsUiOpen 寫入 tutSeen('cards');新手禮包為道具,開局自動發放、不需領取)、C2 抽過卡、C3 看過卡詳情、C4 組了隊(討伐陣容有人)或按了『先記著』
 function tutTeamFormed() {
   var d = null, i;
   if (typeof bnUiLoad !== 'function') return false;

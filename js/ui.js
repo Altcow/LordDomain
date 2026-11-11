@@ -330,6 +330,7 @@ function syncSideBar() {
   editSyncUi();
   const side = document.getElementById('sideBar');
   if (!side) return;
+  if (typeof itemsSyncDots === 'function') itemsSyncDots();   // 道具紅點(側欄卡片鈕)與進遊戲新禮包提示(items_ui.js)
   side.querySelectorAll('.side-btn').forEach(b => {
     const it = UI_SIDE_ITEMS.find(x => x.key === b.getAttribute('data-px'));
     if (!it) return;

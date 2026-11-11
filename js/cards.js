@@ -2,7 +2,7 @@
 // 2026-11-09 使用者決議:移除酒令與『任用』—— 抽到的卡直接進名冊(名冊滿了先放卡包 cs.bag,有空位自動補進);酒館 / 縣試改『每日一抽』(CARD_DRAW:每批 4~7 張、每 24~8 小時一批,離線最多 2 批)。舊存檔一次性遷移見 cardsNormSave(cs.v 2)。
 // 2026-11-09 再改『抽卡次數制』:全域次數錢包 cs.pl = {n 可抽次數, t 下次補充時間戳, tot 累計抽數}(酒館 / 縣試池共用),依 CARD_DRAW 階梯每 8~24 小時 +10 抽(離線補算),累積上限 CARD_DRAW.cap;單抽 / 連抽走 cardsPullStage;頭目首通贈抽 cardsBossGive(cs.boss 防重領);cs.v 3。
 // 2026-11-11(v59):指名池 G / 指名券 nameTokens / 指名批次已刪除;卡池為小池 T(最高紫)與大池 E(可出金);次數錢包拆成 cs.pl.T / cs.pl.E(各自 n / t / tot,各上限 CARD_DRAW.cap);
-//   補償 CARD_GIFT(大池 200 抽)由 cardsGiftCheck 依旗標 cs.gift200 自動補(cardsGet 內觸發,不需領取);舊存檔 cs.v < 6 的單一錢包 pl.n 併入大池、tot 兩池共用起點。
+//   新手禮包(道具,CARD_GIFT 2000 抽)由 cardsGiftCheck 發放(cardsGet 內觸發,不需領取),到道具頁籤使用才入大池;舊存檔 cs.v < 6 的單一錢包 pl.n 併入大池、tot 兩池共用起點。
 // 純資料邏輯,不寫 DOM;時間一律由呼叫端傳入 now(毫秒),模擬層不讀 Date.now()。資料表在 js/carddata.js,介面在 js/cardsui.js。
 // 存檔:world.city.cards(goods.js goodsNormCity 帶過 cardsNormSave);名冊 roster 即派工用的 world.city.talents(同一批物件,不可列舉,不重複存檔)。
 // 第一階段刻意未做:名冊人物/小兵卡/人物圈、取捨詞條 §4.4A、戰場技能內容(只記數量 skn)、記名簿、快速模式、文鬥小遊戲(星數固定 1)、結義。
@@ -60,7 +60,7 @@ function cardsGet() {
   else if (typeof world !== 'undefined' && world) c = world.city;
   if (!c) return null;
   if (!c.cards) c.cards = cardsStateNew();
-  if (typeof cardsGiftCheck === 'function') cardsGiftCheck(c.cards);   // 補償 CARD_GIFT(大池 200 抽):旗標不同就補一次,不需領取
+  if (typeof cardsGiftCheck === 'function') cardsGiftCheck(c.cards);   // 新手禮包(道具)發放:旗標不同就發一次,不需領取
   return c.cards;
 }
 // 科技 / 里程碑完成(citytech.js 的 techFinish、techBigDone 呼叫):每節點只處理一次(cs.tokenGiven)。里程碑 +碎片(原 +10 酒令)。
@@ -870,7 +870,7 @@ function cardsNormSave(v, now) {
     if (nm && key.length <= 40) n.tokenGiven[key] = 1;
   });
   if (typeof v.gift200 === 'string' && v.gift200.length <= 12) n.gift200 = v.gift200;   // 補償版本旗標(cardsGiftCheck)
-  if (cardNum(v.gift200Msg, 0, 1e6, 0) > 0) n.gift200Msg = cardNum(v.gift200Msg, 0, 1e6, 0) | 0;   // 待顯示的補償 toast(抽卡頁顯示後清除)
+  if (cardNum(v.gift200Msg, 0, 1e6, 0) > 0) n.gift200Msg = cardNum(v.gift200Msg, 0, 1e6, 0) | 0;   // 舊版待顯示的補償 toast(已無寫入端,讀入保留以免丟欄位)
   CARD_VENUE_ORDER.forEach(function (x) {
     n.last[x] = (v.last && typeof v.last[x] === 'number') ? (v.last[x] | 0) : -1;
     n.acc[x] = [];   // 舊『待開批次』已在上面轉成次數

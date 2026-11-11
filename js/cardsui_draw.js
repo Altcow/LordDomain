@@ -1,5 +1,5 @@
 // js/cardsui_draw.js — 抽卡分頁 D(2026-11-11 v59):卡池只剩『小池』(T,最高紫)與『大池』(E,可出金)。頂部顯示兩池各自的『持有抽數 n / 200』、『卡池說明』鈕、卡池單選(選哪個就抽哪個)與三顆抽卡鈕(單抽 / 10 抽 / 全抽,只抽目前單選的池)。
-// 指名池(G)與指名券已刪除;新手禮包改為自動補償(cards_starter.js cardsGiftCheck,大池 200 抽),不再有領取鈕 / 彈窗。
+// 指名池(G)與指名券已刪除;新手禮包改為道具(items.js,發放見 cards_starter.js cardsGiftCheck,內含大池 2000 抽,到道具頁籤使用),不再有領取鈕 / 彈窗。
 // 其餘說明(機率、保底、新手期、補充節奏、贈抽)全收進『卡池說明』pop(cu.dpop = 'info')。pop 覆蓋在面板內,頁面不展開說明。
 // 捲動:分頁重畫前記下 .cubd 的 scrollTop、重畫後還原(cuDrawKeepInstall 在面板 capture 點擊時記下、下一拍還原;cardsreveal.js 特效結束時也會還原)。
 // 本檔組字:cuDrawTabHtml / cuDrawBtns / cuDrawPop(卡池說明 pop 分派)/ cuDrawInfoPop / cuPityLine / cuNbLine / cuBossHtml / cuDrawCss / cuDrawClick / cuDrawScrollY / cuDrawScrollSet / cuDrawKeepInstall。
@@ -101,7 +101,7 @@ function cuDrawInfoPop(cs) {
   nx = cardsNextIn(cs, v, cuNow());
   if (nx !== null) h += '<div class="cusub">' + cuEsc(CU_DRAW_LABEL[v]) + '下次 +' + T.n + ' 抽:<span data-cd="' + v + '">' + cardsUiFmtCd(nx) + '</span> 後</div>';
   h += '<div class="cusec">贈抽與補償</div>';
-  h += '<div class="cuil"><b>補償</b> ' + (cs.gift200 === G.ver ? '已補償大池 ' + G.pulls + ' 抽(自動,不需領取;開局與重啟後都會補一次)。' : '開局或重啟後自動補償大池 ' + G.pulls + ' 抽(不需領取,可超過上限 ' + D.cap + ')。') + '</div>';
+  h += '<div class="cuil"><b>新手禮包</b> 新手禮包(道具)內含 ' + G.pulls + ' 抽,到卡包的道具頁籤使用(入大池,可超過上限 ' + D.cap + ')。' + (typeof itemCount === 'function' && itemCount('gift_newbie') > 0 ? '目前尚未使用。' : '') + '</div>';
   h += '<div class="cuil"><b>頭目贈抽</b> 每章頭目首次通關 +' + CARD_BOSS.pulls + ' 抽(大池)。</div>';
   h += cuBossHtml(cs, true);
   h += '<div class="cusec">卡包</div><div class="cuil">卡包滿了就停止抽卡(次數保留、不扣),遣散或熔鍊騰出空位後才能再抽。</div>';

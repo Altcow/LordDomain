@@ -1,7 +1,8 @@
 // js/cards_starter.js — 補償與新手期(純資料邏輯,不寫 DOM;數值在 carddata.js CARD_GIFT / CARD_STARTER)。介面在 js/cardsui_starter.js、js/cardsui_draw.js。
-// 2026-11-11(v59):新手禮包『領取』流程與禮包批次(cur.G、三批開批)已刪除。改為『自動補償』:cardsGiftCheck 依存檔旗標 cs.gift200 = CARD_GIFT.ver,不同就補 CARD_GIFT.pulls 抽到大池(E),不需按領取、不跳彈窗。
-//   抽到的卡與抽卡一樣入冊(cardsBagCommit);補償只加次數,不動保底計數。
-// 存檔:cs.gift200 = 補償版本字串;cs.gift200Msg = 待顯示的補償抽數(抽卡頁顯示一次 toast 後清除);cs.starter = { done 0/1, at 開局時間, nb {n 新手期已抽張數, p 距上次紫以上張數, g 距上次金張數} }。
+// 2026-11-11(v59):新手禮包『領取』流程與禮包批次(cur.G、三批開批)已刪除。v60 起禮包為道具『新手禮包』(items.js),需到卡包的道具頁籤點『使用』才入大池(CARD_GIFT.pulls 抽,E 池,不受上限截斷)。
+//   抽到的卡與抽卡一樣入冊(cardsBagCommit);禮包使用只加次數,不動保底計數。
+// 存檔:cs.gift200 = 禮包版本字串(與道具鍵的 gv 同步,發放以道具鍵為準,見 items.js itemGiftGrant);cs.starter = { done 0/1, at 開局時間, nb {n 新手期已抽張數, p 距上次紫以上張數, g 距上次金張數} }。
+//   已停用欄位:gift200Msg(舊版待顯示的補償 toast,已無寫入端;讀入仍保留,不影響功能)。
 // 全域名稱:cardsStarterNorm cardsGiftCheck cardsStarterFig cardsNbOn cardsNbLeft cardsNbPity cardsNbCount。ES2017;不用 ?. ??。
 
 function cardsStarterNorm(v) {
@@ -11,20 +12,22 @@ function cardsStarterNorm(v) {
   if (v.nb && typeof v.nb === 'object') o.nb = { n: cardNum(v.nb.n, 0, 1e6, 0) | 0, p: cardNum(v.nb.p, 0, 1e6, 0) | 0, g: cardNum(v.nb.g, 0, 1e6, 0) | 0 };
   return o;
 }
-// 自動補償(cardsGet 內呼叫,無 DOM):旗標不同 → 大池 +CARD_GIFT.pulls 抽、記旗標與待顯示 toast;回補了多少(已補過 = 0)。
-// 新開世界 / 重啟(沒有卡、沒有開過卡)才重開新手期計數;已在玩的帳號保留既有新手期計數。
+// 新手禮包(道具化,v60):cs.gift200 ≠ CARD_GIFT.ver → itemGiftGrant(ver)(js/items.js)在道具鍵同一次寫入內發『新手禮包』、記發放版本 gv、設進遊戲提示;再同步 cs.gift200 與新手期。
+// 發放以道具鍵的 gv 為準:道具已寫入但卡片存檔未落盤(重開)時不會重發,只補同步 cs 旗標。不直接加抽數;玩家在卡包的道具頁籤點『使用』才入大池(items.js itemUse 讀 CARD_GIFT.pulls)。道具系統未載入時不發、不設旗標。
+// 新開世界 / 重啟(沒有卡、沒有開過卡)才重開新手期計數;已在玩的帳號保留既有新手期計數。回 1 = 本次發了禮包,0 = 已發過 / 未發。
 function cardsGiftCheck(cs) {
-  var G = CARD_GIFT, fresh;
+  var G = CARD_GIFT, fresh, got;
   if (!cs || cs.gift200 === G.ver) return 0;
+  if (typeof worldReadyFlag === 'undefined' || !worldReadyFlag) return 0;   // 世界尚未載入(開機前的占位狀態):不發、不存檔,免得把占位狀態寫進 save.v1 蓋掉真存檔
+  if (typeof itemGiftGrant !== 'function') return 0;
+  got = itemGiftGrant(G.ver);
+  if (got < 0) return 0;
   fresh = !(cs.seq | 0) && !(cs.roster && cs.roster.length);
   cs.gift200 = G.ver;
-  cardsPullGrant(cs, G.pulls, G.pool);
-  if (cs.bagAuto === -1) delete cs.bagAuto;   // 補償時自動熔爐若為關(-1)一併改回預設(開,藍以下);使用者可在熔爐設定再關
-  cs.gift200Msg = G.pulls;
   if (fresh || !cs.starter) cs.starter = { done: 1, at: (cs.clock && cs.clock.maxSeen) || 0, nb: { n: 0, p: 0, g: 0 } };
   else cs.starter.done = 1;
-  if (typeof saveWorld === 'function') { try { saveWorld(); } catch (e) { /* 存檔失敗不影響補償 */ } }
-  return G.pulls;
+  if (typeof saveWorld === 'function') { try { saveWorld(); } catch (e) { /* 存檔失敗不影響禮包 */ } }
+  return got;
 }
 // 金階名人:魔幻世界優先本族英雄;避開已擁有與本批已出現者(都沒有就退回整池)
 function cardsStarterFig(cs, r, venue, slot, seen) {

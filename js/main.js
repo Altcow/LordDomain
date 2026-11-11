@@ -1,4 +1,5 @@
 let canvas, ctx;
+let worldReadyFlag = false;   // 世界存檔載入完成後才為 true(boot);開機前的占位卡牌狀態不發禮包、不存檔(cards_starter.js cardsGiftCheck)
 let lastFrameMs = 0;
 let resBarTimer = 0;
 let saveTimer = 0;
@@ -19,6 +20,7 @@ function boot() {
   window.addEventListener('orientationchange', () => { [120, 450].forEach(ms => setTimeout(() => { resizeCanvas(canvas); const sb = document.getElementById('sideBar'); if (sb) { sb.style.display = 'none'; void sb.offsetWidth; sb.style.display = ''; } }, ms)); });
   const migr = progBoot();
   const freshWorld = !loadWorld();
+  worldReadyFlag = true;
   if (freshWorld) applyTemplate(DEFAULT_TEMPLATE);
   if (freshWorld && typeof tutStartNew === 'function') { if (world && !world.city) world.city = {}; tutStartNew(); }   // 全新世界才開新手教學(舊存檔沒有 tut = 已畢業)
   if (featureOn('multiworld') && typeof worldWizardBoot === 'function') worldWizardBoot(freshWorld);   // @DORMANT multiworld:精靈選的世界風格 / 起手範本(只在全新世界套用一次)

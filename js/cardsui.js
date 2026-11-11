@@ -514,7 +514,7 @@ function cardsUiRender() {
   if (!cs) { el.innerHTML = '<div class="cubd">尚無城邦資料</div>'; return; }
   if (tabs.indexOf(cu.tab) < 0) cuSetTab(cu.tab);   // 舊代號(例如 'O')先對映
   sv = cuScrollSave(el);
-  h = '<div class="cuhd"><b>🃏 卡片 · 卡包 ' + cs.roster.length + '/' + cardsCap() + '</b>' + (typeof codexBtnHtml === 'function' ? codexBtnHtml() : '') + '<button class="cuq" data-a="info" data-k="legend" data-key="all" aria-label="圖例說明">?</button><button class="cux" data-a="close" aria-label="關閉">×</button><div class="cutabs">' + tabs.map(function (t) { return '<button class="cutab' + (cu.tab === t ? ' on' : '') + '" data-a="tab" data-t="' + t + '">' + CU_TAB_NEW[t] + '</button>'; }).join('') + '</div></div><div class="cubd">';
+  h = '<div class="cuhd"><b>🃏 卡片 · 卡包 ' + cs.roster.length + '/' + cardsCap() + '</b>' + (typeof codexBtnHtml === 'function' ? codexBtnHtml() : '') + '<button class="cuq" data-a="info" data-k="legend" data-key="all" aria-label="圖例說明">?</button><button class="cux" data-a="close" aria-label="關閉">×</button><div class="cutabs">' + tabs.map(function (t) { return '<button class="cutab' + (cu.tab === t ? ' on' : '') + '" data-a="tab" data-t="' + t + '">' + CU_TAB_NEW[t] + (t === 'R' && typeof itemsDotHtml === 'function' ? itemsDotHtml() : '') + '</button>'; }).join('') + '</div></div><div class="cubd">';
   if (cu.tab !== 'D') h += cuHelpBtn(cu.tab);
   if (cu.tab === 'R') h += cuRosterTabHtml(cs);
   else if (cu.tab === 'F') h += cuFurnaceTabHtml(cs);   // 熔爐分頁(cardsui_furnace.js)
@@ -523,7 +523,6 @@ function cardsUiRender() {
   else h += (typeof cuCodexHtml === 'function') ? cuCodexHtml(cs) : cuBuildingHtml();   // 大全(cardsui_codex.js,K7)
   el.innerHTML = h + '</div>' + (cu.info ? cardsUiInfoHtml(cu.info.k, cu.info.key) : (cu.fset ? cuFurnaceSetPop(cs) : ((typeof cuDrawPop === 'function') ? cuDrawPop(cs) : '')));   // 抽卡說明 pop(cardsui_draw.js)
   el.setAttribute('data-tab', cu.tab);
-  if (cu.tab === 'D' && cs.gift200Msg) { if (typeof showToast === 'function') showToast('已補償大池 ' + cs.gift200Msg + ' 抽'); delete cs.gift200Msg; cuSave(); }   // 補償 toast:只顯示一次(cardsGiftCheck 寫入)
   cuScrollRestore(el, sv);
 }
 
