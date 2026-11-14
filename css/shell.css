@@ -1,0 +1,63 @@
+/* css/shell.css — B 包主畫面外殼(js/shell.js,旗標 shell 預設關;關閉時 DOM 不產生,本檔規則不生效)。
+   直立與橫向同一版面:頂列(直立 52 / 橫向 44)+ 主區(首頁:風景場景 + 右上基本數據)+ 底部 dock 52(7 顆 + 子浮層)。數值與 shellLayout() 一致(tools/test_shell.js 核對)。
+   舊介面隱藏只在 body.shell-on 下生效,不改舊樣式。 */
+:root { --sh-top-p: 52px; --sh-top-l: 44px; --sh-dock-p: 52px; }
+body.shell-on #topbar, body.shell-on #game, body.shell-on #toolbar, body.shell-on #pendBar, body.shell-on #modeFloat,
+body.shell-on #shop, body.shell-on #techPanel, body.shell-on #tplMenu, body.shell-on #sideBar { display: none !important; }
+/* 舊城市引導(guide.js):#guideRoot 是全螢幕遮罩(會攔截點擊),外殼開啟時整組隱藏(只隱藏,不改引導狀態) */
+body.shell-on #guideRoot, body.shell-on #guideBubble, body.shell-on #guideHole, body.shell-on #guideSkip { display: none !important; }
+#shellRoot { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 5; display: flex; flex-direction: column; box-sizing: border-box; background: #141a24; color: #eee; font-size: 14px; overflow: hidden; }
+#shellRoot[hidden] { display: none !important; }
+#shellRoot button { font: inherit; color: inherit; }
+/* 頂列:貼壁扁薄;左側頭像+名稱+Lv,之後是提示晶片(有內容才顯示),右側錢 / 抽數 / 戰力 */
+#shellRoot .sh-top { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; height: var(--sh-top-p); padding: calc(env(safe-area-inset-top) + 2px) 6px 2px; box-sizing: border-box; background: rgba(20, 26, 36, .78); border-bottom: 1px solid rgba(255, 255, 255, .08); }
+#shellRoot.sh-l .sh-top { height: var(--sh-top-l); padding: 2px 6px 2px calc(env(safe-area-inset-left) + 6px); background: rgba(20, 26, 36, .6); }
+#shellRoot .sh-item { flex: 0 0 auto; min-width: 0; min-height: 40px; display: flex; align-items: center; gap: 4px; padding: 0 3px; border: 0; background: none; text-align: left; font-size: 12px; }
+#shellRoot .sh-item:first-child { flex: 0 1 auto; max-width: 96px; }
+#shellRoot .sh-txt { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#shellRoot .sh-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+#shellRoot .sh-main { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; overflow: hidden; }
+#shellRoot .sh-page { position: absolute; left: 0; top: 0; right: 0; bottom: 0; box-sizing: border-box; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 12px; }
+#shellRoot .sh-page[hidden] { display: none; }
+#shellRoot.sh-l .sh-page { padding-left: calc(env(safe-area-inset-left) + 12px); }
+/* 首頁:不留邊距,場景佔滿頂列以下、dock 以上 */
+#shellRoot .sh-home { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+#shellRoot.sh-l .sh-home { padding-left: 0; }
+/* 提示晶片(頂列內):只顯示圖示、名稱與紅點;無內容整列隱藏 */
+#shellRoot .sh-evt { flex: 1 1 0; min-width: 0; display: flex; gap: 4px; padding: 0; box-sizing: border-box; overflow-x: auto; background: none; border: 0; }
+#shellRoot .sh-evt[hidden] { display: none; }
+#shellRoot .sh-ev { position: relative; flex: 0 0 auto; min-width: 0; min-height: 34px; padding: 0 6px 0 3px; border: 0; border-radius: 16px; background: rgba(40, 48, 62, .9); display: flex; flex-direction: row; align-items: center; gap: 3px; font-size: 11px; }
+#shellRoot .sh-elb { font-size: 11px; line-height: 14px; white-space: nowrap; }
+#shellRoot .sh-esub { display: none; }
+#shellRoot .sh-dot { position: absolute; right: -2px; top: -3px; width: 9px; height: 9px; border-radius: 50%; background: #e0463c; border: 2px solid #141a24; box-sizing: border-box; }
+/* 風景場景:背景圖缺圖時退回漸層;右上基本數據貼場景右上角 */
+#shellRoot .sh-scene { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: linear-gradient(#3b5b78 0%, #5a7a5a 55%, #2a3a2a 100%); }
+#shellRoot .sh-bg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+#shellRoot .sh-bg[hidden] { display: none; }
+/* 基本數據:透明底,文字用描邊 / 陰影確保可讀;整體 pointer-events 關閉,只有收合鈕可點,不擋底下建築 */
+#shellRoot .sh-stat { position: absolute; right: 6px; top: 6px; z-index: 2; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; pointer-events: none; color: #fff; font-size: 12px; text-shadow: 0 1px 2px #000, 0 0 4px #000, 0 0 2px #000; }
+#shellRoot .sh-stt { pointer-events: auto; min-height: 26px; padding: 0 8px; border: 1px solid rgba(255, 255, 255, .45); border-radius: 13px; background: none; color: #fff; font-size: 12px; }
+#shellRoot .sh-stb { display: flex; flex-direction: column; gap: 1px; min-width: 120px; padding: 2px 0; background: none; }
+#shellRoot .sh-stb[hidden] { display: none; }
+#shellRoot .sh-str { display: flex; justify-content: space-between; gap: 10px; line-height: 16px; }
+#shellRoot .sh-stv { font-variant-numeric: tabular-nums; }
+/* 圖示:色塊徽章 + 字形;有圖檔時 img 疊在上方 */
+#shellRoot .sh-ico { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 50%; overflow: hidden; color: #fff; font-size: 24px; line-height: 1; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .25), 0 2px 6px rgba(0, 0, 0, .4); }
+#shellRoot .sh-ico .sh-img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; }
+#shellRoot .sh-av { width: 30px; height: 30px; font-size: 16px; border: 2px solid #f0b45a; box-sizing: border-box; }
+/* 底部單一 dock:7 顆等寬,圖示 24 + 一行字;點開子浮層 */
+#shellRoot .sh-dock { flex: 0 0 auto; display: flex; height: calc(var(--sh-dock-p) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); box-sizing: border-box; background: rgba(20, 26, 36, .94); border-top: 1px solid rgba(255, 255, 255, .08); }
+#shellRoot .sh-dk { flex: 1 1 0; min-width: 0; height: var(--sh-dock-p); padding: 2px 0; border: 0; background: none; color: #ccd; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 11px; position: relative; }
+#shellRoot .sh-dk[aria-expanded="true"] { color: #f0b45a; }
+#shellRoot .sh-dic { width: 24px; height: 24px; font-size: 13px; }
+#shellRoot .sh-dl { line-height: 13px; white-space: nowrap; }
+#shellRoot .sh-dkdot { position: absolute; right: calc(50% - 17px); top: 3px; width: 9px; height: 9px; border-radius: 50%; background: #e0463c; border: 2px solid #141a24; box-sizing: border-box; }
+#shellRoot .sh-dkdot[hidden] { display: none; }
+/* 子浮層:貼在 dock 鈕上方,點外面關閉;一次只開一個 */
+#shellRoot .sh-float { position: absolute; z-index: 4; bottom: calc(var(--sh-dock-p) + env(safe-area-inset-bottom) + 6px); left: 8px; min-width: 150px; max-width: 220px; padding: 6px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; background: rgba(20, 26, 36, .97); border: 1px solid rgba(255, 255, 255, .12); border-radius: 10px; box-shadow: 0 6px 18px rgba(0, 0, 0, .5); }
+#shellRoot .sh-float[hidden] { display: none; }
+#shellRoot .sh-fi { min-height: 44px; padding: 0 12px; border: 0; border-radius: 8px; background: rgba(40, 48, 62, .9); display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; font-size: 15px; }
+#shellRoot .sh-fi.sh-fsoon { color: #778; background: rgba(40, 48, 62, .5); }
+#shellRoot .sh-fnote { font-size: 11px; color: #778; white-space: nowrap; }
+#photoBack { display: none; position: fixed; right: 12px; bottom: 12px; z-index: 90; min-width: 56px; min-height: 44px; border: 0; border-radius: 22px; background: rgba(20, 26, 36, .85); color: #eee; }
+body.photo-mode #photoBack { display: flex; align-items: center; justify-content: center; }

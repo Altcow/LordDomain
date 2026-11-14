@@ -652,4 +652,4 @@ function progQuestOpen() {
   return true;
 }
 
-if (typeof document !== 'undefined' && document.body) initProgUI();
+if (typeof document !== 'undefined' && document.body && !cityRuntimeOff()) initProgUI();

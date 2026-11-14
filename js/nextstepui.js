@@ -170,5 +170,5 @@ function nsUiTutSkip() {
 function nsUiAllOff() { nsSetEnabled(false); nsUi.menu = false; nsUi.sig = ''; nsUi.el.hidden = true; }
 function nsUiMenu(on) { nsUi.menu = !!on; nsUi.sig = ''; nsUiTick(); }
 
-if (typeof document !== 'undefined' && document && document.body) initNsUI();
-else if (typeof document !== 'undefined' && document && document.addEventListener) document.addEventListener('DOMContentLoaded', function () { initNsUI(); });
+if (typeof document !== 'undefined' && document && document.body && !cityRuntimeOff()) initNsUI();
+else if (!cityRuntimeOff() && typeof document !== 'undefined' && document && document.addEventListener) document.addEventListener('DOMContentLoaded', function () { initNsUI(); });

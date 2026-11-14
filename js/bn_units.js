@@ -17,8 +17,7 @@ function bnEff(v) {
   return k[0] + (k[1] - k[0]) * s[0] + (v - k[1]) * s[1];
 }
 function bnCardStats(card) {
-  var t = card.tok || 0;
-  return card.st.map(function (v) { return bnEff(v + t); });   // [統, 武, 智, 政, 魅]
+  return card.st.map(function (v) { return bnEff(v); });   // [統, 武, 智, 政, 魅](信物已取消 2026-11-11)
 }
 function bnRound(x) { return Math.round(x + 1e-9); }
 function bnFormula(f, T, W, Z, P) { return f[0] + f[1] * T + f[2] * W + f[3] * Z + f[4] * P; }
@@ -361,16 +360,30 @@ function bnUnitSpec(card, o) {
   if (dr > 0) { ['hp', 'atk', 'mag', 'heal'].forEach(function (k) { spec.stats[k] = bnRound(spec.stats[k] * (1 + dr)); }); spec.drill = dr; }
   // 升星加成(卡片熔爐 cardsStarBonus;缺函式 / 缺欄位 = 0)。注意 entry.star 是鎖定旗標,不是星等,不讀
   var sb = (typeof cardsStarBonus === 'function') ? cardsStarBonus(card) : null;
-  if (sb && (sb.atk || sb.def || sb.hp)) {
-    spec.stats.atk = bnRound(spec.stats.atk * (1 + (sb.atk || 0))); spec.stats.mag = bnRound(spec.stats.mag * (1 + (sb.atk || 0)));
-    spec.stats.def = bnRound(spec.stats.def * (1 + (sb.def || 0))); spec.stats.sres = bnRound(spec.stats.sres * (1 + (sb.def || 0)));
-    spec.stats.hp = bnRound(spec.stats.hp * (1 + (sb.hp || 0)));
+  // 裝備(js/ld_equip.js;只在旗標 ldui 開啟、且 card 是名冊卡時;o.gear = 指定裝備數值,隊伍碼 / 戰報碼重建用,優先於本機)。升星 % 與裝備 % 放同一加法池:最終 = 基礎 ×(1 + 升星% + 裝備%);沒裝備時結果與原本乘法完全相同
+  var gg = (o.gear && typeof o.gear === 'object') ? o.gear : ((typeof gearForCard === 'function') ? gearForCard(card) : null);   // @DORMANT ldui
+  var sbA = sb ? (sb.atk || 0) : 0, sbD = sb ? (sb.def || 0) : 0, sbH = sb ? (sb.hp || 0) : 0;
+  if (sbA || sbD || sbH || gg) {
+    spec.stats.atk = bnRound(spec.stats.atk * (1 + sbA + (gg ? gg.atk || 0 : 0))); spec.stats.mag = bnRound(spec.stats.mag * (1 + sbA + (gg ? gg.mag || 0 : 0)));
+    spec.stats.def = bnRound(spec.stats.def * (1 + sbD + (gg ? gg.def || 0 : 0))); spec.stats.sres = bnRound(spec.stats.sres * (1 + sbD + (gg ? gg.sres || 0 : 0)));
+    spec.stats.hp = bnRound(spec.stats.hp * (1 + sbH + (gg ? gg.hp || 0 : 0)));
+  }
+  if (gg) {
+    if (gg.heal) { spec.stats.heal = bnRound(spec.stats.heal * (1 + gg.heal)); spec.stats.sh = bnRound(spec.stats.sh * (1 + gg.heal)); }
+    if (gg.spd) spec.stats.spd = bnRound(spec.stats.spd + gg.spd);
+    if (gg.crit) spec.stats.crit += gg.crit;
+    if (gg.res) spec.stats.res = Math.min(BN_DATA.resMax + 0.08, spec.stats.res + gg.res);
+    if (gg.cdmg) spec.mods.critDmgUp = (spec.mods.critDmgUp || 0) + gg.cdmg;
+    Object.keys(gg.mods || {}).forEach(function (k) {
+      var v = gg.mods[k], cur = spec.mods[k];
+      if (Array.isArray(v)) { if (!cur || v[1] < cur[1]) spec.mods[k] = [v[0], v[1]]; }   // lowHpTaken:取較好者
+      else spec.mods[k] = (cur || 0) + v;
+    });
+    if (gg.n) spec.gear = gg.n;   // 穿了幾件(只供顯示)
   }
   if (sb && sb.lv) spec.starLv = sb.lv;
   if (sb && sb.skill) spec.mods.skillPlus = BN_DATA.starSkillPlus;   // 3 星起:戰法強化
   if (sb && sb.mark) spec.starMark = true;                            // 5 星:專屬標記(僅供 UI)
-  if (card.tok >= 3) spec.mods.rateBonus = (spec.mods.rateBonus || 0) + 0.05;
-  if (card.tok >= 5) spec.mods.ultPlus = 0.10;
   if (o.scene) bnApplyScene(spec, o.scene);
   return spec;
 }
@@ -467,11 +480,11 @@ function BN_BONDS_CAP() { return BN_BONDS.cap || BN_DATA.bondCap; }
 // ───────── 模擬器 / 測試用:隨機名冊卡與隊伍 ─────────
 function bnRandomCard(rng, gr, figId) {
   var cs, key, card, f;
-  if (figId) { f = CARD_FIG_BY_ID[figId]; card = cardFromFig(f, 'E', 0); card.tok = 0; return card; }
+  if (figId) { f = CARD_FIG_BY_ID[figId]; card = cardFromFig(f, 'E', 0); return card; }
   cs = { seed: Math.floor(rng() * 4294967295), fame: { E: 0 } };
   key = 'E:' + Math.floor(rng() * 1000);
   card = cardGen(cs, 'E', key, Math.floor(rng() * 9), gr, 't' + Math.floor(rng() * 1e9), {});
-  card.tok = 0; card.up = 0;
+  card.up = 0;
   return card;
 }
 function bnRandomLearned(rng, card, troop) {

@@ -276,6 +276,8 @@ function bnLogCss() {
   st = document.createElement('style'); st.id = 'bnLogStyle'; st.textContent = BNLOG_CSS;
   document.head.appendChild(st);
 }
+// 可重播:記憶體裡有開戰紀錄(rec)且版本可重播;舊的存檔戰報沒有 rec,不顯示按鈕
+function bnLogCanReplay(id) { return !!BNLOG.recs[id] && typeof bnRptReplayable === 'function' && bnRptReplayable(BNLOG.recs[id]); }
 function bnLogIsOpen() { return !!(BNLOG.el && BNLOG.el.parentNode); }
 function bnLogOnClick(e) {
   var t = e && e.target, b = t && t.closest ? t.closest('[data-l]') : null;
@@ -328,6 +330,7 @@ function bnLogDo(a, id, i) {
     else { items = bnLogItems(r); BNLOG.view = { rep: r, items: items, n: bnLogViewGroups(items), step: -1, rd: 0 }; BNLOG.msg = ''; }
   } else if (a === 'save') { r = bnLogSave(id); BNLOG.msg = r.ok ? '已儲存戰報' : r.why; bnLogToast(BNLOG.msg); }
   else if (a === 'share') { if (typeof bnsDo === 'function') { bnLogClose(); bnsDo('rcode'); return true; } }   // 分享戰報碼(對戰練習;結算畫面只留「查看戰報 / 離開」,分享移到這裡)
+  else if (a === 'replay') { if (bnLogCanReplay(id) && typeof bnBattleShow === 'function') bnBattleShow(BNLOG.recs[id], { mode: 'play', mySide: 'A' }); else BNLOG.msg = '這場沒有可重播的紀錄'; }
   else if (a === 'del') { if (bnLogDel(id)) { BNLOG.msg = '已刪除'; if (v && v.rep.id === id) BNLOG.view = null; } }
   else if (v && (a === 'first' || a === 'prev' || a === 'next' || a === 'all' || a === 'rd')) {
     if (a === 'all') { v.step = -1; v.rd = 0; }
@@ -363,7 +366,7 @@ function bnLogRender() {
       (rep.bA.length ? '<br>羈絆 / 陣型:' + bnLogEsc(rep.bA.join('、')) : '') + '</div>';
     h += '<details' + (bnLogWide() ? ' open' : '') + '><summary>陣容快照(武將 / 品階 / 星 / 兵種 / 位置 / 兵力 / 戰力 / 戰法)</summary><div class="sm">我方陣容</div>' + bnLogUnitRows(rep.A, true) + '<div class="sm">敵方陣容</div>' + bnLogUnitRows(rep.B, false) + '</details>';
     saved = bnLogLoad().saved.some(function (x) { return x.id === rep.id; });
-    h += '<div class="ctl">' + (saved ? '<button data-l="del" data-id="' + bnLogEsc(rep.id) + '">刪除</button>' : '<button data-l="save" data-id="' + bnLogEsc(rep.id) + '">儲存戰報</button>') + (BNLOG.recs[rep.id] ? '<button data-l="verify">重打驗證</button>' : '') +
+    h += '<div class="ctl">' + (saved ? '<button data-l="del" data-id="' + bnLogEsc(rep.id) + '">刪除</button>' : '<button data-l="save" data-id="' + bnLogEsc(rep.id) + '">儲存戰報</button>') + (bnLogCanReplay(rep.id) ? '<button data-l="replay" data-id="' + bnLogEsc(rep.id) + '">重播</button>' : '') + (BNLOG.recs[rep.id] ? '<button data-l="verify">重打驗證</button>' : '') +
       (rep.kind === 'duel' && typeof BNS !== 'undefined' && BNS.last && typeof bnu !== 'undefined' && rep.id === bnu.logId ? '<button data-l="share">分享戰報碼</button>' : '') + '</div>';
     if (BNLOG.msg) h += '<div class="msg">' + bnLogEsc(BNLOG.msg) + '</div>';
     h += '</div><div class="c2">';
@@ -386,7 +389,7 @@ function bnLogRender() {
     h += list.map(function (r) {
       var isSaved = BNLOG.tab === 'saved' || d.saved.some(function (x) { return x.id === r.id; });
       return '<div class="it"><div class="t"><b>' + bnLogEsc(r.lb) + '</b> · ' + bnLogEsc(bnLogResTxt(r)) + '<br><small>' + bnLogDate(r.ts) + ' · ' + bnLogEsc(r.A.map(function (u) { return u.n; }).join('、')) + '</small></div>' +
-        '<button data-l="view" data-id="' + bnLogEsc(r.id) + '">檢視</button>' +
+        '<button data-l="view" data-id="' + bnLogEsc(r.id) + '">檢視</button>' + (bnLogCanReplay(r.id) ? '<button data-l="replay" data-id="' + bnLogEsc(r.id) + '">重播</button>' : '') +
         (BNLOG.tab === 'saved' ? '<button data-l="del" data-id="' + bnLogEsc(r.id) + '">刪除</button>' : (isSaved ? '<button disabled>已儲存</button>' : '<button data-l="save" data-id="' + bnLogEsc(r.id) + '">儲存</button>')) + '</div>';
     }).join('');
     h += '</div>';

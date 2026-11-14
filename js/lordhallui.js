@@ -77,26 +77,30 @@ function lordhallJobSites() {
   });
   return out;
 }
-function lordhallAssign(tid, siteId) {
-  var ts = lordhallTalents(), t = null, site = null, i;
+function lordhallAssign(tid, siteId) { return lordhallAssignDo(tid, siteId).ok; }
+// 委任(回 {ok, reason}):被擋時 reason 為原因字串,呼叫端(lhClick)據此 toast
+function lordhallAssignDo(tid, siteId) {
+  var ts = lordhallTalents(), t = null, site = null, i, ub;
   for (i = 0; i < ts.length; i++) if (ts[i].id === tid) t = ts[i];
-  if (!t) return false;
-  if (siteId === null || siteId === undefined || siteId === '') { t.at = null; delete t.since; lhStaffDirty(); return true; }
+  if (!t) return { ok: false, reason: '找不到人員' };
+  if (siteId === null || siteId === undefined || siteId === '') { t.at = null; delete t.since; lhStaffDirty(); return { ok: true, reason: '' }; }
   lordhallJobSites().forEach(function (s) { if (s.id === siteId) site = s; });
-  if (!site) return false;
-  if (site.who.length >= site.slots && site.who.indexOf(t) < 0) return false;
-  if (site.post && typeof npcCanAssign === 'function' && t.at !== siteId && !npcCanAssign(t, siteId)) return false;   // 職司席位已滿
+  if (!site) return { ok: false, reason: '找不到站點' };
+  if (site.who.length >= site.slots && site.who.indexOf(t) < 0) return { ok: false, reason: '站點已滿' };
+  if (typeof cardsUseBlock === 'function') { ub = cardsUseBlock(t, 'appoint'); if (!ub.ok) return { ok: false, reason: ub.reason + ',不能委任' }; }   // 外勤中 / 駐派中不可委任(委任中換站點放行)
+  if (site.post && typeof npcCanAssign === 'function' && t.at !== siteId && !npcCanAssign(t, siteId)) return { ok: false, reason: '職司席位已滿' };   // 職司席位已滿
   t.at = siteId;
   if (typeof npcDayOf === 'function') t.since = npcDayOf(Date.now());   // 派駐年資起算日
   lhStaffDirty();
-  return true;
+  return { ok: true, reason: '' };
 }
 function lhStaffDirty() { if (typeof npcStaffDirty === 'function') npcStaffDirty(); }
 // 指派到某職司:挑該職司第一個有空位的建築;回 true/false
-function lordhallAssignPost(tid, postId) {
+function lordhallAssignPost(tid, postId) { return lordhallAssignPostDo(tid, postId).ok; }
+function lordhallAssignPostDo(tid, postId) {
   var site = null;
   lordhallJobSites().forEach(function (s) { if (!site && s.post === postId && s.who.length < s.slots) site = s; });
-  return site ? lordhallAssign(tid, site.id) : false;
+  return site ? lordhallAssignDo(tid, site.id) : { ok: false, reason: '此職司已無空位' };
 }
 // 全部自動分派:閒置人才優先給職司對口(t.job === site.grp)的建築,其次任何有空位者;有職司表時改以個人人事值最高的職司為先
 function lordhallAutoAssign() {
@@ -183,7 +187,7 @@ function lhHtmlOverview() {
   var hasTech = (typeof techPanelOpen === 'function') || (typeof toggleTechPanel === 'function');
   if (typeof cardsUiOpen === 'function' && typeof cardsGet === 'function' && cardsGet()) {   // 卡包入口(抽卡次數 / 卡包名額)
     var cs = cardsGet(), cap = (typeof cardsCap === 'function') ? cardsCap() : 0, nT = (typeof cardsPulls === 'function') ? cardsPulls(cs, 'T') : 0, nE = (typeof cardsPulls === 'function') ? cardsPulls(cs, 'E') : 0, nx = (typeof cardsNextIn === 'function') ? cardsNextIn(cs, 'T', Date.now()) : null, drawTxt = '';
-    drawTxt = (nT || nE) ? ' · <b>可抽 小池 ' + nT + ' / 大池 ' + nE + '</b>' : (nx !== null ? ' · 下次補充:' + (nx < 3600000 ? '不到 1 小時' : Math.ceil(nx / 3600000) + ' 小時後') : '');
+    drawTxt = nE ? ' · <b>可抽 S01卡池 ' + nE + '</b>' : (nx !== null ? ' · 下次補充:' + (nx < 3600000 ? '不到 1 小時' : Math.ceil(nx / 3600000) + ' 小時後') : '');
     h += '<div class="lhsec">卡片</div><div class="lhr"><span>卡包 ' + cs.roster.length + '/' + cap + drawTxt + '</span><button class="lhb" data-lh="cards">打開卡片</button></div>';
     if (cap && cs.roster.length >= cap) h += '<div class="lhr lhwarn"><span>卡包已滿(' + cap + '),停止抽卡;請先熔鍊或遣散</span></div>';
   }
@@ -249,6 +253,7 @@ function lordhallRender() {
     '<button class="lhx" data-lh="x" aria-label="關閉">✕</button></div>' +
     '<div class="lhbd">' + (lh.tab === 'job' ? lhHtmlJobs() : lhHtmlOverview()) + '</div>';
 }
+function lhToastFail(r) { if (r && !r.ok && typeof showToast === 'function') showToast('委任失敗:' + r.reason); }
 function lhClick(e) {
   var b = e.target && e.target.closest ? e.target.closest('button') : null;
   if (!b) return;
@@ -256,8 +261,8 @@ function lhClick(e) {
   if (a === 'x') lordhallClose();
   else if (a === 'tab') { lh.tab = b.getAttribute('data-tab') === 'job' ? 'job' : 'ov'; lordhallRender(); }
   else if (a === 'auto') { lordhallAutoAssign(); lordhallRender(); }
-  else if (a === 'asp') { lordhallAssignPost(b.getAttribute('data-t'), b.getAttribute('data-p')); lordhallRender(); }
-  else if (a === 'as') { lordhallAssign(b.getAttribute('data-t'), b.getAttribute('data-s')); lordhallRender(); }
+  else if (a === 'asp') { lhToastFail(lordhallAssignPostDo(b.getAttribute('data-t'), b.getAttribute('data-p'))); lordhallRender(); }
+  else if (a === 'as') { lhToastFail(lordhallAssignDo(b.getAttribute('data-t'), b.getAttribute('data-s'))); lordhallRender(); }
   else if (a === 'un') { lordhallAssign(b.getAttribute('data-t'), null); lordhallRender(); }
   else if (a === 'tech') { if (typeof techPanelOpen === 'function') { lordhallClose(); techPanelOpen(); } else if (typeof toggleTechPanel === 'function') { lordhallClose(); toggleTechPanel(true); } }
   else if (a === 'mood') { var f = lhMoodFn(); if (f) { lordhallClose(); f(); } }

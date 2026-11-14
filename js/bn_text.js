@@ -52,6 +52,11 @@ function bntKT(kind, power, sc) {
   v = t[i === undefined ? 1 : i];
   return v * (sc === undefined ? 1 : sc);
 }
+// 攻擊類倍率(顯示用):同 bn_effects.js bnAtkMul 的基礎部分 —— params.mulOverride 取代檔位表,params.mulScale 再乘(B 級對齊 / S·A 補強用)
+function bntAtkV(kind, power, P) {
+  P = P || {};
+  return (P.mulOverride !== undefined ? P.mulOverride : bntKT(kind, power)) * (P.mulScale || 1);
+}
 function bntTg(tg, def) { return BNT_TG[tg] || BNT_TG[def] || '目標'; }
 function bntFigName(id) { return (typeof CARD_FIG_BY_ID !== 'undefined' && CARD_FIG_BY_ID[id]) ? CARD_FIG_BY_ID[id].name : id; }
 function bntStName(s) { return BNT_ST[s] || '特定狀態'; }
@@ -125,7 +130,7 @@ function bntClause(kind, target, power, P, d, isExtra) {
   var sc = bntScale(d, kind, P), pw = power || d.power || 'M', v, T, dur = bntDur(d, P, pw), c, s, n, i;
   P = P || {};
   function atkLine(tg, def, mulKind, extra) {
-    v = bntKT(mulKind || kind, pw);
+    v = bntAtkV(mulKind || kind, pw, P);
     return '對' + bntTg(tg, def) + '造成 ' + bntPct(v) + ' ' + bntDmgName(d) + (extra || '');
   }
   switch (kind) {
@@ -133,10 +138,10 @@ function bntClause(kind, target, power, P, d, isExtra) {
     case 'atk_front': return atkLine(target === 'enemy_one' || !target ? 'enemy_front' : target, 'enemy_front').replace('敵方單體', '敵方前排');
     case 'atk_back': return atkLine('enemy_back', 'enemy_back');
     case 'atk_all': return atkLine('enemy_all', 'enemy_all');
-    case 'atk_pierce': return '貫穿' + bntTg(target, 'enemy_col') + ',每人造成 ' + bntPct(bntKT(kind, pw)) + ' ' + bntDmgName(d);
-    case 'atk_cross': return '攻擊目標與其上下左右相鄰的敵人,各造成 ' + bntPct(bntKT(kind, pw)) + ' ' + bntDmgName(d);
-    case 'atk_multi': return '對' + bntTg(target, 'enemy_one') + '連續多段攻擊' + (P.hits ? '(' + P.hits + ' 段' + (P.scaleBy === 'spd' ? ',速度越快段數越多' : '') + ')' : '') + ',每段 ' + bntPct(bntKT(kind, pw)) + ' ' + bntDmgName(d);
-    case 'atk_snipe': return '狙擊' + bntTg(target, 'enemy_lowest') + ',造成 ' + bntPct(bntKT(kind, pw)) + ' ' + bntDmgName(d) + (target === 'enemy_lowest' || !target ? '' : '');
+    case 'atk_pierce': return '貫穿' + bntTg(target, 'enemy_col') + ',每人造成 ' + bntPct(bntAtkV(kind, pw, P)) + ' ' + bntDmgName(d);
+    case 'atk_cross': return '攻擊目標與其上下左右相鄰的敵人,各造成 ' + bntPct(bntAtkV(kind, pw, P)) + ' ' + bntDmgName(d);
+    case 'atk_multi': return '對' + bntTg(target, 'enemy_one') + '連續多段攻擊' + (P.hits ? '(' + P.hits + ' 段' + (P.scaleBy === 'spd' ? ',速度越快段數越多' : '') + ')' : '') + ',每段 ' + bntPct(bntAtkV(kind, pw, P)) + ' ' + bntDmgName(d);
+    case 'atk_snipe': return '狙擊' + bntTg(target, 'enemy_lowest') + ',造成 ' + bntPct(bntAtkV(kind, pw, P)) + ' ' + bntDmgName(d) + (target === 'enemy_lowest' || !target ? '' : '');
     case 'atk_exec': return atkLine(target, 'enemy_one') + ',目標兵力越低傷害越高(斬殺)';
     case 'execute_chain':
       if (d.cat === 'passive' || d.cat === 'command') return '出手者攻擊 +' + bntPct(bntKT('execute_chain_stack', pw)) + (P.stackMax ? '(最多疊 ' + P.stackMax + ' 層)' : '(可疊加)');
@@ -224,6 +229,7 @@ function bntNotes(d, P) {
       out.push('同時' + bntClause(ex.kind, ex.target === 'same' ? d.target : ex.target, ex.power || d.power, ex.params || {}, d, true));
     }
   }
+  if (P.floor) out.push('另對 1 名敵人造成 ' + bntPct(P.floor) + ' ' + bntDmgName(d) + '(保底傷害;上述效果的條件不成立時,改打這一擊)');
   if (P.hpCost && d.kind !== 'self_sacrifice') out.push('代價:自損 ' + bntPct(P.hpCost) + ' 兵力');
   if (P.healBlock) {
     hb = P.healBlock; r = Math.min(1, ((hb.rate || 30) / 100) * BN_DATA.hb.rateScale);

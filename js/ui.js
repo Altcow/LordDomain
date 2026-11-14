@@ -113,12 +113,13 @@ function initUI(canvas) {
   uiInitMode();
   uiMenuLoad();
   buildToolbar();
-  initSideUI();
+  if (!featureOn('shell')) initSideUI();   // 外殼 shell 開啟時不建舊右側邊欄(js/shell.js 接手)   // @DORMANT shell
   setTool(null);
   bindEvents(canvas);
   syncSeasonSelect();
   updateResBar();
-  if (typeof initMapEdit === 'function') initMapEdit();
+  if (typeof shellInit === 'function') shellInit();   // 旗標 shell 關閉時直接返回
+  if (typeof initMapEdit === 'function' && !cityRuntimeOff()) initMapEdit();   // shell:城市角落鈕不建
   if (typeof settingsAddRow === 'function') settingsAddRow('📋 範本…', openTemplatesFromSettings, '畫面');
   if (typeof settingsAddRow === 'function' && typeof themeIds === 'function') settingsAddRow('🏘️ 城市風格…', cycleThemeFromSettings, '畫面');
 }
@@ -210,7 +211,7 @@ const UI_SIDE_ITEMS = [
   { key: 'cards', icon: '🃏', label: '卡片', title: '卡片:抽卡、卡包、熔爐與傳承(次數隨時間累積)', scope: 'estate', special: 'cards' },
   { key: 'goods', icon: '📦', label: '庫房', title: '庫房(貨品與工坊狀態)', scope: 'estate', target: 'btnGoods' },
   { key: 'caravan', icon: '🛻', label: '走鏢', title: '走鏢(鏢師、馬車與高階貨品)', scope: 'estate', target: 'btnCaravan', gate: 'caravan', dorm: 'caravan' },
-  { key: 'bn', icon: '⚔', label: '戰鬥', title: '戰鬥(5v5 回合制練習戰)', scope: 'estate', special: 'bn', gate: 'battleA', showLocked: true },
+  { key: 'bn', icon: '⚔', label: '戰鬥', title: '戰鬥(3v3 回合制練習戰)', scope: 'estate', special: 'bn', gate: 'battleA', showLocked: true },
   { key: 'season', icon: '🌤', label: '季節', title: '季節與時段', scope: 'estate', target: 'seasonBtn', dorm: 'citysim' },
   { key: 'help', icon: '❓', label: '說明', title: '戰鬥布置工具說明', scope: 'camp', target: 'btnToolHelp' },
   { key: 'labels', icon: '🏷', label: '標籤', title: '顯示或隱藏範本的區域標籤', scope: 'camp', target: 'btnTplLabels' },
@@ -592,6 +593,7 @@ function bindEvents(canvas) {
 
 function buildToolbar() {
   const bar = document.getElementById('toolbar');
+  if (!bar) return;
   bar.innerHTML = '';
   if (!featureOn('cityedit') && game.mode === 'estate') return;   // @DORMANT cityedit
   if (game.mode === 'battleDesign' && typeof buildCampToolbar === 'function') {
@@ -1211,7 +1213,8 @@ function setTool(id) {
   preview.tool = id;
   syncRiverDir();
   preview.visible = false;
-  document.getElementById('info').textContent = toolInfo();
+  const infoEl = document.getElementById('info');
+  if (infoEl) infoEl.textContent = toolInfo();
   pend.sel = -1;
   pend.moving = false;
   ui.objSel = null;
@@ -1902,6 +1905,7 @@ function onShopClick(e) {
 }
 
 function updateResBar() {
+  if (cityRuntimeOff()) return;   // shell:城市頂列已移除
   const p = productionPerSec();
   let html = '';
   for (const k in RESOURCES) {
@@ -1946,7 +1950,7 @@ function updateShop() {
   }
   if (html !== lastShopHtml) {
     lastShopHtml = html;
-    document.getElementById('shop').innerHTML = html;
+    if (document.getElementById('shop')) document.getElementById('shop').innerHTML = html;
   }
   updateDealTimer();
 }
@@ -1967,7 +1971,7 @@ function updateDealTimer() {
 function toggleShop(open) {
   if (!featureOn('citysim')) return;   // @DORMANT citysim
   ui.shopOpen = open === undefined ? !ui.shopOpen : !!open;
-  document.getElementById('shop').hidden = !ui.shopOpen;
+  if (document.getElementById('shop')) document.getElementById('shop').hidden = !ui.shopOpen;
   if (ui.shopOpen) {
     toggleTplMenu(false);
     toggleTechPanel(false);
@@ -1978,7 +1982,7 @@ function toggleShop(open) {
 
 function toggleTplMenu(open) {
   ui.tplOpen = open === undefined ? !ui.tplOpen : !!open;
-  document.getElementById('tplMenu').hidden = !ui.tplOpen;
+  if (document.getElementById('tplMenu')) document.getElementById('tplMenu').hidden = !ui.tplOpen;
   if (ui.tplOpen) {
     toggleShop(false);
     toggleTechPanel(false);
@@ -1989,6 +1993,7 @@ function toggleTplMenu(open) {
 
 function buildTplMenu() {
   const menu = document.getElementById('tplMenu');
+  if (!menu) return;
   menu.textContent = '';
   const head = document.createElement('b');
   head.textContent = ui.editing ? '範本(套用到草稿)' : '範本(載入到草稿)';
@@ -2071,7 +2076,7 @@ function toggleTechPanel(open) {
     return;
   }
   ui.techOpen = open === undefined ? !ui.techOpen : !!open;
-  document.getElementById('techPanel').hidden = !ui.techOpen;
+  if (document.getElementById('techPanel')) document.getElementById('techPanel').hidden = !ui.techOpen;
   if (ui.techOpen) {
     toggleShop(false);
     toggleTplMenu(false);
@@ -2135,7 +2140,7 @@ function updateTechPanel() {
   }
   if (html !== lastTechHtml) {
     lastTechHtml = html;
-    document.getElementById('techPanel').innerHTML = html;
+    if (document.getElementById('techPanel')) document.getElementById('techPanel').innerHTML = html;
   }
   updateTechTimer();
 }
@@ -2366,6 +2371,7 @@ function mfBind(btn) {
 function updatePendBar() {
   const bar = document.getElementById('pendBar');
   const n = pend.list.length;
+  if (!bar) { updateDraftBar(); skinBarSync(); syncModeFloat(); return; }
   updateDraftBar();
   skinBarSync();
   syncModeFloat();

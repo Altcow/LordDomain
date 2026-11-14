@@ -1,0 +1,126 @@
+/* css/ld_home.css — 新首頁(旗標 ldui 開啟時,shell.js 在 #shellRoot 加 .sh-ld;js/ld_home.js)。設計_介面骨架實作計畫.md §3-3。
+   直式:頂列 52 / 場景 / 隊伍欄 76 / 圓鈕列 64 / 底列 60。橫式:頂列 44 / 場景滿版 / 隊伍欄右側直排(寬 200)/ 底列置中 440×52 / 圓鈕在左下右下角。
+   全部規則都在 #shellRoot.sh-ld 之下(旗標關閉時不生效);顏色用 ld_theme.css 變數;點擊區皆 >= 44。 */
+#shellRoot.sh-ld { background: var(--wood3); font-family: var(--ld-font); }
+#shellRoot.sh-ld button { font-family: var(--ld-font); -webkit-tap-highlight-color: transparent; }
+/* 頂列 */
+#shellRoot.sh-ld .sh-top { box-sizing: content-box; height: 52px; gap: 4px; align-items: center;
+  padding: env(safe-area-inset-top, 0px) calc(6px + env(safe-area-inset-right, 0px)) 0 calc(6px + env(safe-area-inset-left, 0px));
+  background: linear-gradient(#8a5a32, #5b3a1e 70%, #4a2d18); border-bottom: 3px solid var(--ink); }
+#shellRoot.sh-ld.sh-l .sh-top { height: 44px; padding-top: 0; }
+#shellRoot.sh-ld .sh-item { min-height: 44px; height: 44px; max-width: none; padding: 0; }
+#shellRoot.sh-ld .sh-lav { position: relative; flex: 0 0 44px; width: 44px; }
+#shellRoot.sh-ld .sh-lavc { position: absolute; left: 2px; top: 0; width: 40px; height: 40px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border: 3px solid var(--gold); border-radius: 50%;
+  background: linear-gradient(var(--paper2), var(--paper3)); color: var(--ink); font: 900 20px/1 var(--ld-font); box-shadow: var(--drop2); }
+#shellRoot.sh-ld .sh-lv { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); padding: 0 6px; border: 2px solid var(--ink); border-radius: 8px; background: var(--gold); color: var(--ink); font: 900 12px/14px var(--ld-font); white-space: nowrap; }
+#shellRoot.sh-ld .sh-lslot { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 5px; padding: 0 8px 0 5px; box-sizing: border-box; border: var(--line2); border-radius: 22px; background: linear-gradient(var(--paper), var(--paper3)); color: var(--ink); box-shadow: var(--drop2); }
+#shellRoot.sh-ld .sh-llab { flex: 0 0 auto; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--ink); border-radius: 50%; background: var(--gold); font: 900 13px/1 var(--ld-font); }
+#shellRoot.sh-ld .sh-lslot .sh-txt { flex: 1 1 auto; min-width: 0; font: 900 13px/1.2 var(--ld-font); text-align: right; }
+#shellRoot.sh-ld .sh-lstat { flex: 0 0 44px; width: 44px; border: var(--line2); border-radius: 50%; background: linear-gradient(var(--gold2), var(--gold)); color: var(--ink); box-shadow: var(--drop2); font: 900 12px/1 var(--ld-font); display: flex; align-items: center; justify-content: center; }
+#shellRoot.sh-ld .sh-lstat.on { background: linear-gradient(#ef6a4c, var(--red)); color: #fff; }
+/* 場景:背景圖缺圖時退回漸層;基本數據面板預設收合,展開時是木框小面板(直式右上、橫式左上) */
+#shellRoot.sh-ld .sh-scene { background: linear-gradient(#3b5b78 0%, #5a7a5a 55%, #2a3a2a 100%); }
+#shellRoot.sh-ld .sh-stat { top: 8px; right: calc(8px + env(safe-area-inset-right, 0px)); z-index: 4; text-shadow: none; }
+#shellRoot.sh-ld.sh-l .sh-stat { right: auto; left: calc(8px + env(safe-area-inset-left, 0px)); align-items: flex-start; }
+#shellRoot.sh-ld .sh-stb { min-width: 168px; padding: 8px 10px; border: var(--line2); border-radius: 12px; background: #2b1a10ee; box-shadow: var(--drop2); font-size: 13px; color: #fbeed2; pointer-events: auto; }
+#shellRoot.sh-ld .sh-str { line-height: 20px; }
+#shellRoot.sh-ld .sh-stk { color: #e9d3a6; }
+/* 建築木牌:中心點定位,寬 64 高 60;鎖定 = 灰 + 小字 */
+.ldh-plqs { position: absolute; left: 0; top: 0; height: 100%; pointer-events: none; z-index: 2; }
+.ldh-plq { position: absolute; width: 64px; height: 60px; box-sizing: border-box; transform: translate(-50%, -50%); padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; pointer-events: auto; cursor: pointer;
+  border: var(--line2); border-radius: 10px; background: linear-gradient(#e0b27a, #b07642 70%, #8a5a32); box-shadow: var(--drop2), inset 0 0 0 1px #fff5; color: var(--ink); }
+.ldh-plq:active { transform: translate(-50%, calc(-50% + 3px)); box-shadow: 0 0 0 var(--ink); }
+.ldh-plq .ldh-md { flex: 0 0 auto; width: 28px; height: 28px; margin-top: 2px; font-size: 15px; border-radius: 8px; }
+.ldh-plq .ldh-nm { flex: 0 0 auto; margin-top: 1px; max-width: 100%; font: 900 13px/16px var(--ld-font); white-space: nowrap; }
+.ldh-plq .ldh-sub { flex: 0 0 auto; font: 900 12px/12px var(--ld-font); color: #fff; text-shadow: 0 1px 0 var(--ink); white-space: nowrap; }
+.ldh-plq.lock { filter: grayscale(.9) brightness(.85); }
+.ldh-dot { position: absolute; right: -4px; top: -4px; width: 12px; height: 12px; box-sizing: border-box; border: 2px solid #fff; border-radius: 50%; background: #e0463c; pointer-events: none; }
+.ldh-dot[hidden] { display: none; }
+/* 隊伍欄:3 格,整格是一個按鈕 */
+.ldh-team { position: absolute; z-index: 3; left: 0; right: 0; bottom: calc(124px + env(safe-area-inset-bottom, 0px)); height: 76px; box-sizing: border-box; display: flex; gap: 6px; padding: 0 calc(8px + env(safe-area-inset-right, 0px)) 0 calc(8px + env(safe-area-inset-left, 0px)); }
+.ldh-tm { position: relative; flex: 1 1 0; min-width: 0; height: 76px; padding: 0; overflow: hidden; text-align: left; cursor: pointer; color: #fbeed2;
+  border: var(--line2); border-radius: 12px; background: linear-gradient(#6b4426, #3a2414); box-shadow: var(--drop2), inset 0 0 0 1px #f5c54288; }
+.ldh-tm:active { transform: translateY(3px); box-shadow: 0 0 0 var(--ink); }
+.ldh-tm.lock, .ldh-tm.empty { background: linear-gradient(#5a5a5a, #343434); }
+.ldh-tm.lock { filter: grayscale(1); }
+.ldh-no { position: absolute; z-index: 2; left: 3px; top: 3px; min-width: 16px; height: 16px; box-sizing: border-box; padding: 0 3px; border: 2px solid var(--ink); border-radius: 8px; background: var(--gold); color: var(--ink); font: 900 12px/12px var(--ld-font); text-align: center; }
+.ldh-face { position: absolute; display: flex; align-items: center; justify-content: center; overflow: hidden; background-color: #e9d3a6; background-repeat: no-repeat; color: var(--ink); font: 900 20px/1 var(--ld-font); }
+.ldh-face.has { color: transparent; }
+.ldh-face.main, .ldh-face.lockf, .ldh-face.addf { left: 3px; top: 3px; width: 52px; height: 52px; clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); background-size: 220% auto; background-position: 50% 12%; }
+.ldh-face.lockf, .ldh-face.addf { background-color: #0005; color: #e9d3a6; font-size: 22px; }
+.ldh-face.sub { left: 58px; top: 24px; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--gold); box-sizing: border-box; font-size: 12px; background-size: 260% auto; background-position: 50% 10%; }
+.ldh-face.sub + .ldh-face.sub { left: 84px; }
+.ldh-face.sub.nul { background-color: #0004; border: 2px dashed #e9d3a688; }
+.ldh-tr { position: absolute; left: 58px; top: 3px; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border: 1.5px solid var(--ink); border-radius: 4px; background: var(--gold); color: var(--ink); font: 900 12px/1 var(--ld-font); }
+.ldh-tg { position: absolute; left: 79px; top: 3px; max-width: 28px; font: 900 12px/18px var(--ld-font); color: #ffd38a; white-space: nowrap; overflow: hidden; }
+.ldh-tm.st-trip .ldh-tg { color: #8fd0ff; }
+.ldh-tm.st-hurt .ldh-tg { color: #ff8a7a; }
+.ldh-hp { position: absolute; left: 3px; right: 3px; bottom: 4px; height: 8px; box-sizing: border-box; border: 1px solid #000a; border-radius: 4px; background: #0007; overflow: hidden; }
+.ldh-hp > i { display: block; height: 100%; background: #6fcf5a; }
+.ldh-hp.mid > i { background: #f0b45a; }
+.ldh-hp.lo > i { background: #e0463c; }
+.ldh-lkt { position: absolute; left: 4px; right: 4px; bottom: 4px; text-align: center; font: 900 12px/14px var(--ld-font); color: #e9d3a6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 圓鈕列(直式木條 + 兩顆圓鈕)與兩顆圓鈕 */
+.ldh-band { position: absolute; z-index: 2; left: 0; right: 0; bottom: calc(60px + env(safe-area-inset-bottom, 0px)); height: 64px; border-top: 3px solid var(--ink); background: linear-gradient(#9a6436, #5b3a1e); pointer-events: none; }
+.ldh-rb { position: absolute; z-index: 6; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; border: var(--line); border-radius: 50%; box-shadow: var(--drop2), inset 0 -4px 0 #0003; color: var(--ink); }
+.ldh-rb:active { transform: translateY(3px); box-shadow: 0 0 0 var(--ink); }
+.ldh-rg { width: 60px; height: 60px; left: calc(10px + env(safe-area-inset-left, 0px)); bottom: calc(62px + env(safe-area-inset-bottom, 0px)); background: radial-gradient(circle at 35% 30%, #fff1a8, var(--gold) 55%, #c98c1e); }
+.ldh-rn { width: 72px; height: 72px; right: calc(10px + env(safe-area-inset-right, 0px)); bottom: calc(56px + env(safe-area-inset-bottom, 0px)); background: radial-gradient(circle at 35% 30%, #c8f7a8, #3cb04a 55%, #1f7a2e); color: #fff; }
+.ldh-rb .ldh-ric { width: auto; height: auto; border: 0; background: none; box-shadow: none; font-size: 28px; color: inherit; text-shadow: 0 2px 0 #0004; }
+.ldh-rb .ldh-dot { right: 2px; top: 2px; }
+/* 底列:5 格等寬 */
+#shellRoot.sh-ld .sh-dock { height: calc(60px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(#7a4f2a, #4a2d18); border-top: 3px solid var(--ink); }
+#shellRoot.sh-ld .sh-dk { height: 60px; gap: 2px; color: #fbeed2; font-size: 12px; }
+#shellRoot.sh-ld .sh-dl { font: 900 12px/14px var(--ld-font); }
+#shellRoot.sh-ld .sh-dk .ldh-dic { width: 28px; height: 28px; font-size: 15px; border-radius: 8px; }
+#shellRoot.sh-ld .sh-dkdot { right: calc(50% - 22px); top: 4px; }
+/* 直式:場景讓出隊伍欄 + 圓鈕列(76 + 64) */
+#shellRoot.sh-ld.sh-p .sh-main { margin-bottom: 140px; }
+/* 橫式:場景滿版;隊伍欄右側直排;底列置中;圓鈕在左下 / 右下角 */
+#shellRoot.sh-ld.sh-l .ldh-band { display: none; }
+#shellRoot.sh-ld.sh-l .ldh-team { left: auto; right: calc(8px + env(safe-area-inset-right, 0px)); bottom: auto; top: 52px; width: 200px; height: auto; padding: 0; flex-direction: column; }
+#shellRoot.sh-ld.sh-l .ldh-tm { flex: 0 0 64px; height: 64px; width: 200px; }
+#shellRoot.sh-ld.sh-l .ldh-face.main, #shellRoot.sh-ld.sh-l .ldh-face.lockf, #shellRoot.sh-ld.sh-l .ldh-face.addf { top: 6px; width: 48px; height: 48px; }
+#shellRoot.sh-ld.sh-l .ldh-no { top: 6px; }
+#shellRoot.sh-ld.sh-l .ldh-tr, #shellRoot.sh-ld.sh-l .ldh-tg { top: 6px; left: 58px; }
+#shellRoot.sh-ld.sh-l .ldh-tg { left: 80px; max-width: 110px; }
+#shellRoot.sh-ld.sh-l .ldh-face.sub { left: 58px; top: 26px; }
+#shellRoot.sh-ld.sh-l .ldh-face.sub + .ldh-face.sub { left: 86px; }
+#shellRoot.sh-ld.sh-l .ldh-hp { left: 58px; top: auto; bottom: 5px; }
+#shellRoot.sh-ld.sh-l .ldh-lkt { left: 58px; bottom: 21px; text-align: left; }
+#shellRoot.sh-ld.sh-l .sh-main { margin-bottom: 0; }
+#shellRoot.sh-ld.sh-l .sh-dock { position: absolute; z-index: 5; left: 50%; bottom: 0; transform: translateX(-50%); width: 440px; height: calc(52px + env(safe-area-inset-bottom, 0px)); border-radius: 14px 14px 0 0; border-left: 3px solid var(--ink); border-right: 3px solid var(--ink); box-sizing: border-box; }
+#shellRoot.sh-ld.sh-l .sh-dk { height: 52px; }
+#shellRoot.sh-ld.sh-l .sh-dk .ldh-dic { width: 26px; height: 26px; font-size: 14px; }
+#shellRoot.sh-ld.sh-l .ldh-rg { width: 56px; height: 56px; left: calc(8px + env(safe-area-inset-left, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+#shellRoot.sh-ld.sh-l .ldh-rn { width: 64px; height: 64px; right: calc(8px + env(safe-area-inset-right, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+/* 活動頁 / 任務頁(堆疊頁內容) */
+.ldh-list { display: flex; flex-direction: column; gap: 8px; max-width: 560px; margin: 0 auto; }
+.ldh-row { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; box-sizing: border-box; padding: 6px 10px; text-align: left; cursor: pointer; border: var(--line2); border-radius: 12px; background: linear-gradient(var(--paper), var(--paper3)); color: var(--ink); box-shadow: var(--drop2); font-family: var(--ld-font); }
+.ldh-row:active { transform: translateY(3px); box-shadow: 0 0 0 var(--ink); }
+.ldh-row .ldh-rico { flex: 0 0 auto; width: 36px; height: 36px; }
+.ldh-rtx { display: flex; flex-direction: column; min-width: 0; }
+.ldh-rtx b { font: 900 15px/1.3 var(--ld-font); }
+.ldh-rtx small { font: 700 12px/1.3 var(--ld-font); color: #6b4a2a; }
+.ldh-row .ldh-dot.on { right: 6px; top: 6px; }
+@media (prefers-reduced-motion: reduce) {
+  .ldh-plq:active, .ldh-tm:active, .ldh-rb:active, .ldh-row:active { transform: none; }
+  .ldh-plq:active { transform: translate(-50%, -50%); }
+}
+/* ───── 真圖(2026-11-14 接圖;檔在 assets/ui2/,登記在 js/ld_art.js;圖載入失敗時退回上面的 CSS 佔位底色 / 墨線框) ───── */
+/* 疊了圖的佔位徽章(全頁面共用):去掉框、底、落影,讓透明背景的圖示直接站在畫面上 */
+.ld-ph.ld-ph:has(> .ld-ph-cell), .ld-ph.ld-ph:has(> img) { border: 0; background: none; box-shadow: none; overflow: visible; font-size: 0; color: transparent; }
+/* 建築木牌:u3_plaque 九宮格(ld_art 的 nine = 上44 右40 下42 左40,原檔 480x225;顯示邊寬 7/6/7/6 約縮 0.16 倍);底色只留在內框當退路 */
+.ldh-plq { border: 7px solid var(--ink); border-width: 7px 6px 7px 6px; border-image: url(../assets/ui2/u3_plaque.webp) 44 40 42 40 fill / 7px 6px 7px 6px stretch; background-clip: padding-box; box-shadow: none; }
+.ldh-plq:active { box-shadow: none; }
+.ldh-plq .ldh-md { width: 30px; height: 30px; margin-top: 0; }
+.ldh-plq .ldh-nm { color: var(--ink); }
+.ldh-plq .ldh-sub { text-shadow: 0 1px 0 var(--ink), 1px 0 0 var(--ink), -1px 0 0 var(--ink), 0 -1px 0 var(--ink); }
+/* 紅點:u2_parts 圖集第 2 欄第 2 列(2x2) */
+.ldh-dot { border: 0; border-radius: 0; background: url(../assets/ui2/u2_parts.webp) 100% 100% / 200% 200% no-repeat; }
+/* 圓鈕:u4_btn 圖集(3x2)第 1 欄金、第 2 欄綠;圖本身有墨線與金邊 */
+.ldh-rb { border: 0; box-shadow: none; background-repeat: no-repeat; background-size: 300% 200%; }
+.ldh-rg { background-image: url(../assets/ui2/u4_btn.webp); background-position: 0% 0%; }
+.ldh-rn { background-image: url(../assets/ui2/u4_btn.webp); background-position: 50% 0%; }
+.ldh-rb:active { box-shadow: none; }
+.ldh-rb .ldh-ric { width: 54%; height: 54%; }

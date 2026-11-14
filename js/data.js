@@ -59,7 +59,7 @@ const RESOURCES = {
   wood: { name: '木材', icon: '🪵' },
   stone: { name: '石材', icon: '🧱' }
 };
-const START_RES = { coin: 300, wood: 100, stone: 60 };
+const START_RES = { coin: 300, wood: 100, stone: 60, iron: 0, grain: 6000 };   // 鐵、糧不進 RESOURCES(A 包城市畫面會走訪它),經 res4.js 讀寫;新存檔送 6000 糧(補兵設計 0.3)
 const OFFLINE_CAP_SEC = 8 * 3600;
 const OFFLINE_RATE = 0.5;
 const REFUND_RATE = 0.5;

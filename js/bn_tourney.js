@@ -16,7 +16,7 @@ var BN_TOURNEY = {
       { k: 'mid', w: 6, lo: 0.85, hi: 1.00, gr: [2, 3], pFig: 0.2 },
       { k: 'weak', w: 5, lo: 0.65, hi: 0.85, gr: [1, 2], pFig: 0.1 }
     ],
-    capAbove: 1.10, capN: 2, tol: 0.05, exact: 0.03, tries: 30, archMax: 4, size: 5
+    capAbove: 1.10, capN: 2, tol: 0.05, exact: 0.03, tries: 30, archMax: 4, size: 3
   },
   // 名次獎勵(mat = 第 1 章貨物數量;shards = 碎片;coin = 金幣)。冠 > 亞 > 季 > 參加
   reward: {
@@ -49,13 +49,13 @@ function bnTourBandCounts(m) {
   for (k = 0; tot < m && k < rem.length; k++) { out[rem[k].i]++; tot++; }
   return out;
 }
-// 快照清單驗證:1~16 隊;每隊 1~5 人
+// 快照清單驗證:1~16 隊;每隊 1~3 人(3 人隊伍)
 function bnTourCheckSnaps(snaps) {
   var i, s;
   if (!Array.isArray(snaps) || snaps.length < 1 || snaps.length > BN_TOURNEY.n) return { ok: false, why: '隊伍數需 1~' + BN_TOURNEY.n + ' 隊' };
   for (i = 0; i < snaps.length; i++) {
     s = snaps[i];
-    if (!s || !Array.isArray(s.specs) || s.specs.length < 1 || s.specs.length > 5) return { ok: false, why: '第 ' + (i + 1) + ' 隊人數需 1~5 人' };
+    if (!s || !Array.isArray(s.specs) || s.specs.length < 1 || s.specs.length > 3) return { ok: false, why: '第 ' + (i + 1) + ' 隊人數需 1~3 人' };
   }
   return { ok: true };
 }
@@ -70,7 +70,9 @@ function bnTourCand(rng, size, b, figIds) {
     }
     figs.push(id);
   }
-  return bnRandomTeam(rng, size, function () { return b.gr[Math.floor(rng() * b.gr.length)]; }, figs);
+  var team = bnRandomTeam(rng, size, function () { return b.gr[Math.floor(rng() * b.gr.length)]; }, figs);
+  team.forEach(function (sp, k) { sp.row = [2, 1, 0][k]; sp.col = 0; });   // 3 人隊伍站位:主將 row 2 / 副將 row 1 / 副將 row 0,col 0
+  return team;
 }
 // 補位:snaps 為玩家隊伍,其餘依 BN_TOURNEY.npc 生成;回 {ok, entrants:[16 隊,已依種子洗牌], refP, size, stats}
 // entrants[i] = {id, name, owner:'me'|'npc', specs, power, ratio, band, inBand, arch}
@@ -85,7 +87,7 @@ function bnTourFill(seed, snaps) {
   });
   refP = refP / snaps.length;
   teams.forEach(function (x) { x.ratio = refP > 0 ? x.power / refP : 0; });
-  size = bnTourInt(Math.round(sizeSum / snaps.length), 1, 5, T.npc.size);
+  size = bnTourInt(Math.round(sizeSum / snaps.length), 1, 3, T.npc.size);
   cnt = bnTourBandCounts(m);
   rng = bnRng(bnHash('bntf', seed >>> 0));
   figIds = Object.keys(BN_FIG_SKILLS).sort();
@@ -150,7 +152,7 @@ function bnTourPlay(seed, mid, rk, unitsA, unitsB) {
   var bo = BN_TOURNEY.bo[rk] || 1, need = (bo >> 1) + 1, wins = { A: 0, B: 0 }, games = [], g, gs, S, w, rec;
   for (g = 0; g < bo && wins.A < need && wins.B < need; g++) {
     gs = bnHash('bntg', seed >>> 0, mid, g);
-    rec = { v: 1, seed: gs, teamA: JSON.parse(JSON.stringify(unitsA)), teamB: JSON.parse(JSON.stringify(unitsB)), opts: { events: false } };
+    rec = { v: BN_REC_VER, seed: gs,teamA: JSON.parse(JSON.stringify(unitsA)), teamB: JSON.parse(JSON.stringify(unitsB)), opts: { events: false } };
     S = bnRun(rec);
     w = S.result.winner;
     if (w === 'draw') w = (bnHash('bntd', gs) % 2 === 0) ? 'A' : 'B';

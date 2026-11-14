@@ -87,9 +87,11 @@ var CARD_POST_GROUP = { '農': '工', '工': '工', '商': '商', '文': '文', 
 // 2026-11-09 起酒館 / 縣試的節奏與每批張數改由 CARD_DRAW 決定(periodMs / cap / unit 只留給舊資料參考;batch = 一批最多張數)
 // 2026-11-11 卡池改為『小池』(T,最高紫)與『大池』(E,可出金);指名池 G 已刪除。小池 / 大池各自一個抽卡次數錢包(cs.pl.T / cs.pl.E)。
 var CARD_VENUE_ORDER = ['T', 'E'];
+var CARD_HIDDEN_VENUES = { T: 1 };   // 2026-11-13 小池 T 休眠:不累積、不顯示、次數恆 0(資料與存檔欄位保留)
+var CARD_VISIBLE_VENUES = ['E'];   // 目前可抽的卡池:S01卡池(E)
 var CARD_VENUES = {
   T: { id: 'T', name: '小池', alias: '招賢酒肆', periodMs: 3600000, cap: 48, batch: 7, gr: [60, 30, 7, 3, 0], floor: 1, upper: { gr: 3, zhuan: 0 }, gate: 'cardpack', org: 'bu', orgName: '布衣', bFig: 0, aFig: 0, theme: 'wind', unit: '1 歲' },
-  E: { id: 'E', name: '大池', alias: '九品中正考課', periodMs: 14400000, cap: 12, batch: 7, gr: [28, 38, 24, 7, 3], floor: 2, upper: { gr: 3, zhuan: 0 }, gate: 'exam', org: 'pin', orgName: '縣試', bFig: 0.16, aFig: 0, theme: 'subject', unit: '4 歲',
+  E: { id: 'E', name: 'S01卡池', alias: '第一季武將', periodMs: 14400000, cap: 12, batch: 7, gr: [28, 38, 24, 7, 3], floor: 2, upper: { gr: 3, zhuan: 0 }, gate: 'exam', org: 'pin', orgName: '縣試', bFig: 0.16, aFig: 0, theme: 'subject', unit: '4 歲',
        starGr: { 2: [23.6, 38, 27.6, 7.8, 3], 3: [17.2, 38, 31.2, 9.6, 4] } }
 };
 // 縣試科目(§2.3):依期輪替;該科職業權重 ×3(jobs 指定職業,rows 指定整行)
@@ -126,7 +128,7 @@ var CARD_DRAW = {
 var CARD_BOSS = { pulls: 10 };
 // 新手禮包(2026-11-11 使用者決議 v59;v60 起為道具『新手禮包』,數值皆 PLACEHOLDER):不需領取、不跳彈窗。發放由 items.js itemGiftGrant 以道具鍵的 gv 記版本;cs.gift200 為同步旗標。發出後到卡包道具頁籤點『使用』才入大池 pulls 抽(E 次數錢包,可超過上限)。
 //   第一次進入、被重啟(新建角色 / 重設存檔)、已在玩的帳號一律補;之後改版時改 ver 即會再補一次(重玩 / 重啟同樣會補)。
-var CARD_GIFT = { ver: 'v59', pulls: 2000, pool: 'E' };   // 2026-11-11 使用者決議:補償改 2000 抽(一次性、可超過上限;旗標 cs.gift200 = 已發)
+var CARD_GIFT = { ver: 'v59', pulls: 2000, pool: 'E', pullsNew: 100 };   // 2026-11-11 使用者決議:補償改 2000 抽(一次性、可超過上限;旗標 cs.gift200 = 已發)
 // 新手期(開局 / 重啟後的前 nbCards 張小池 / 大池卡;數值皆 PLACEHOLDER)。cards_starter.js cardsGiftCheck 發放禮包時重新開始計數(重玩 / 重啟才會重開新手期;已在玩的老帳號只保留既有計數)。
 //   新手期:改用 nbGr 品階機率,並有逐張保底:連續 nbPurple − 1 張沒有紫以上 → 下一張必紫(小池 / 大池);連續 nbGold − 1 張沒有金 → 下一張必金(只限大池,名人)。小池不出金,故不套金保底。
 var CARD_STARTER = {
@@ -135,7 +137,6 @@ var CARD_STARTER = {
 var CARD_CFG = {
   cap: 300,                // 名冊固定格數(2026-11-10 決議,不隨官階);滿了停止抽卡,先熔鍊或遣散。卡包 / 溢出區已移除
   waitSeats: 5,            // 待定席(卡包上線後任用不再進待定席;只保留舊存檔既有的待定席人物)
-  tokMax: 5,               // 名人信物上限
   paceMin: 10,             // 時鐘回撥容忍(分鐘)
   fameAfter: 20, fameStep: 0.2, goldMax: 8,   // 殿試名人緣(百分點);goldMax = 金階機率上限(基礎 6 + 最多再加 2,原 2 + 2 = 4 同幅度)
   pityBatches: 9,          // 連續 9 批無上等 → 第 10 批保底
@@ -354,6 +355,28 @@ var CARD_FIGS = [
   {id:"chendao",name:"陳到",zi:"叔至",fac:1,home:"汝南(推想)",st:[78,80,45,40,60],tai:303,tr:[["白毦",1,"(史)"],["忠義",0],["寡言",0]],bio:"先主帳下白毦兵之督,忠誠警覺;諸葛亮書中稱其所督為先帝帳下白毦",fb:"史",gr:3,birth:"?–?"},
   {id:"quyi",name:"麴義",zi:"",fac:4,home:"涼州(推想)",st:[80,84,52,30,40],tai:286,tr:[["先登",1,"(史)"],["破騎",0],["桀驁",0]],bio:"涼州豪強,習羌戰;界橋之戰以伏楯先登大破白馬義從,後為袁紹所殺",fb:"史",gr:3,birth:"?–191"},
   {id:"liuzhang",name:"劉璋",zi:"季玉",fac:4,home:"江夏竟陵",st:[50,40,55,60,60],tai:265,tr:[["東州",1,"(史)"],["闇弱",0],["守成",0]],bio:"劉焉之子,繼為益州牧;性闇弱守成,後為劉備所取",fb:"史",gr:3,birth:"?–219"},
+  // 2026-11-13 第一季新配 21 位武將(五維 / 詞條 / 出身為占位值,待使用者確認;戰法見 tools/battle_skills/facz_b13_q1.json + q1_kit.json + legacy.json)
+  {id:"caohong",name:"曹洪",zi:"子廉",fac:0,home:"沛國譙",st:[78,80,40,38,62],tai:298,tr:[["讓馬救主",1,"(史)"],["貨殖",0],["寬厚",0]],bio:"曹操從弟,滎陽之戰讓馬救曹操;家財豪富",fb:"史",gr:3,birth:"?–232"},
+  {id:"lidian",name:"李典",zi:"曼成",fac:0,home:"山陽鉅野",st:[76,70,62,46,56],tai:310,tr:[["博望識伏",1,"(史)"],["識破",0],["好學",0]],bio:"曹操部將,博望坡識破伏兵,合肥與張遼、樂進共守",fb:"史",gr:3,birth:"?–218"},
+  {id:"shihuan",name:"史渙",zi:"公劉",fac:0,home:"沛國(推想)",st:[72,80,48,38,58],tai:296,tr:[["督軍嚴整",1,"(史)"],["陷陣",0]],bio:"曹操宗族親信,掌軍法、領禁軍;官渡之戰與徐晃擊破袁紹運糧車",fb:"史",gr:3,birth:"?–204"},
+  {id:"hanhao",name:"韓浩",zi:"元嗣",fac:0,home:"河內",st:[74,68,60,62,46],tai:310,tr:[["屯田議",1,"(史)"],["治軍嚴整",0],["屯田",0]],bio:"曹操部將,提議屯田,典掌禁軍;以軍法處置劫持夏侯惇的叛兵",fb:"史",gr:3,birth:"?–?"},
+  {id:"weizi",name:"衛茲",zi:"子許",fac:0,home:"陳留襄邑",st:[58,40,66,74,62],tai:300,tr:[["散財起兵",1,"(史)"],["寬厚",0],["廉吏",0]],bio:"陳留豪族,散家財助曹操起兵,汴水之戰戰死",fb:"史",gr:3,birth:"?–190"},
+  {id:"renjun",name:"任峻",zi:"伯達",fac:0,home:"河南中牟",st:[52,32,68,86,58],tai:296,tr:[["典農",1,"(史)"],["屯田",0],["勤政",0]],bio:"典農中郎將,主屯田與軍糧轉運,使軍國饒足",fb:"史",gr:3,birth:"?–204"},
+  {id:"jianyong",name:"簡雍",zi:"憲和",fac:1,home:"涿郡",st:[40,28,82,70,92],tai:312,tr:[["談笑自若",1,"(史)"],["說客",0],["狂生",0]],bio:"劉備同鄉故舊,以談客從行;說降劉璋",fb:"史",gr:4,birth:"?–?"},
+  {id:"sunqian",name:"孫乾",zi:"公祐",fac:1,home:"北海",st:[46,30,74,76,74],tai:300,tr:[["使節調和",1,"(史)"],["經學",0],["說客",0]],bio:"鄭玄門下出身,從劉備,屢任使節,聯絡袁紹、劉表",fb:"史",gr:3,birth:"?–?"},
+  {id:"mifang",name:"糜芳",zi:"子方",fac:1,home:"東海朐縣",st:[68,70,46,48,52],tai:284,tr:[["守江陵",1,"(史)"],["反覆",0],["輕敵",0]],bio:"糜竺之弟,守南郡,後與傅士仁降吳",fb:"史",gr:3,birth:"?–?"},
+  {id:"liaohua",name:"廖化",zi:"元儉",fac:1,home:"襄陽",st:[72,80,52,44,58],tai:306,tr:[["蜀中先鋒",1,"(史)"],["先登",0],["堅守",0]],bio:"黃巾出身,歷事關羽、劉備、姜維;「蜀中無大將,廖化作先鋒」",fb:"史+演義",gr:3,birth:"?–?"},
+  {id:"zoujing",name:"鄒靖",zi:"",fac:4,home:"幽州",st:[72,78,46,42,56],tai:294,tr:[["羌戰宿將",1,"(史)"],["突擊",0],["先登",0]],bio:"幽州校尉,黃巾之亂率軍,與劉備、關羽、張飛合兵討賊",fb:"史+演義",gr:3,birth:"?–?"},
+  {id:"tianyu",name:"田豫",zi:"國讓",fac:0,home:"漁陽雍奴",st:[74,70,68,48,50],tai:310,tr:[["疑兵破敵",1,"(史)"],["疑兵",0],["廉吏",0]],bio:"先隨公孫瓚、劉備,後仕曹魏鎮北方;以少擊眾,屢破烏桓鮮卑;為官清儉",fb:"史",gr:3,birth:"?–252"},
+  {id:"handang",name:"韓當",zi:"義公",fac:2,home:"遼西令支",st:[80,85,56,45,70],tai:336,tr:[["弓馬嫻熟",1,"(史)"],["騎射",0],["先登",0]],bio:"歷事孫堅、孫策、孫權三代,弓馬嫻熟,膂力過人",fb:"史",gr:4,birth:"?–226"},
+  {id:"zumao",name:"祖茂",zi:"大榮",fac:2,home:"吳郡富春",st:[76,78,38,34,58],tai:284,tr:[["赤幘替身",1,"(演義)"],["忠義",0]],bio:"孫堅親將;演義載其戴孫堅赤幘引開華雄追兵而死",fb:"演義",gr:3,birth:"?–191"},
+  {id:"zhuzhi",name:"朱治",zi:"君理",fac:2,home:"丹楊故鄣",st:[58,44,64,72,66],tai:304,tr:[["舉孫權",1,"(史)"],["寬厚",0],["勤政",0]],bio:"孫堅舊將,輔孫策、孫權,舉孫權為孝廉,治吳郡多年",fb:"史",gr:3,birth:"156–224"},
+  {id:"wujing",name:"吳景",zi:"",fac:2,home:"丹楊",st:[68,70,52,56,60],tai:306,tr:[["孫氏外戚",1,"(史)"],["忠義",0]],bio:"孫堅妻吳夫人之弟,孫策之舅,任丹楊太守,助孫策平定江東",fb:"史",gr:3,birth:"?–203"},
+  {id:"sunben",name:"孫賁",zi:"伯陽",fac:2,home:"吳郡富春",st:[72,70,48,54,62],tai:306,tr:[["收攏殘部",1,"(史)"],["寬厚",0]],bio:"孫堅兄之子,孫堅戰死後收攏其部眾,後任豫州刺史",fb:"史",gr:3,birth:"?–?"},
+  {id:"sunjing",name:"孫靜",zi:"幼台",fac:2,home:"吳郡富春",st:[56,48,70,64,62],tai:300,tr:[["保境安民",1,"(史)"],["謹慎",0],["識破",0]],bio:"孫堅之弟,孫策渡江時守家鄉,獻策繞查瀆小道襲王朗",fb:"史",gr:3,birth:"?–?"},
+  {id:"lvfan",name:"呂範",zi:"子衡",fac:2,home:"汝南細陽",st:[58,38,74,76,58],tai:304,tr:[["性好威儀",1,"(史)"],["貨殖",0],["勤政",0]],bio:"孫策謀臣,後領財計,性好威儀、車服整麗",fb:"史",gr:3,birth:"?–228"},
+  {id:"lijue",name:"李傕",zi:"稚然",fac:4,home:"北地",st:[72,80,40,28,60],tai:280,tr:[["巫覡迷信",1,"(史)"],["暴躁",0],["突擊",0]],bio:"董卓部將,董卓死後與郭汜攻長安、把持朝政;信巫覡",fb:"史",gr:3,birth:"?–198"},
+  {id:"guosi",name:"郭汜",zi:"",fac:4,home:"張掖",st:[72,80,42,30,58],tai:282,tr:[["劫掠公卿",1,"(史)"],["貪財",0],["輕敵",0]],bio:"董卓部將,與李傕共亂長安,後與李傕相攻、劫持公卿",fb:"史",gr:3,birth:"?–197"},
 ];
 // 名人職業覆寫表(之後逐位手填;cards.js 的 cardFigJobs 優先讀此表,查無才由五維推導):{ 名人id: { ja: { 職業id: 階(1~4) }, main: '主職業id' } }。目前為空。
 var CARD_FIG_JOB_OVERRIDE = {};
@@ -375,7 +398,9 @@ var CARD_FIG_WEIGHT = {
   zhenji: 3, caiyan: 6, caozhi: 6, pangde: 6, zhanghe: 10, huangyueying: 10, sunshangxiang: 3, lingtong: 10, nanhua: 10, diaochan: 3, zuoci: 10,
   yangxiu: 6, ganfuren: 6, mifuren: 6, masu: 6, zhoucang: 6, yanyan: 6, daqiao: 6, xiaoqiao: 6, dingfeng: 6, kanze: 6, chengyuanzhi: 6, dengmao: 6, peiyuanshao: 6, heyi: 6, zhangkai: 6, panfeng: 6, caoxing: 6, huaxiong: 10, yuanshu: 10,
   // 2026-11-10 新名人 7 位(卡池權重:金 10 / 紫 6)
-  taoqian: 6, wangping: 6, gaoshun: 10, caochun: 6, chendao: 6, quyi: 6, liuzhang: 6
+  taoqian: 6, wangping: 6, gaoshun: 10, caochun: 6, chendao: 6, quyi: 6, liuzhang: 6,
+  // 2026-11-13 第一季新配 21 位(金 10 / 紫 6)
+  caohong: 6, lidian: 6, shihuan: 6, hanhao: 6, weizi: 6, renjun: 6, jianyong: 10, sunqian: 6, mifang: 6, liaohua: 6, zoujing: 6, tianyu: 6, handang: 10, zumao: 6, zhuzhi: 6, wujing: 6, sunben: 6, sunjing: 6, lvfan: 6, lijue: 6, guosi: 6
 };
 // 在野名人路過(js/npcvisit.js;使用者決議,數值皆 PLACEHOLDER)。名人來源 CARD_FIGS(金 / 紫階),依上面 CARD_FIG_WEIGHT 加權(缺項 金 10 / 紫 6),已在名冊 / 卡包的不來。
 //   countW = 每日 0 / 1 / 2 位的權重;startMin~endMin = 一天中可抵達的時段(分鐘,本機時間,白天);windowMin = 預定抵達後多久內才演(過了不補演);
@@ -389,22 +414,33 @@ var CARD_VISIT = {
 var CARD_BAG = {
   batchNeed: 7,                // 一批連抽需要的名冊空位上限(抽卡時取 min(所需張數, 空位))
   autoDefault: 2,              // 自動熔爐預設:開,門檻藍以下(2);-1 = 關;白青藍路人直接熔成碎片,名人不熔
-  autoMax: 2,                  // 自動熔爐最高可設到藍(紫以上不提供自動)
-  figDupShard: { 3: 8, 4: 16 } // 名人重複且信物已滿(CARD_CFG.tokMax)時轉成的碎片數
+  autoMax: 2                   // 自動熔爐最高可設到藍(紫以上不提供自動)
 };
 // 卡片熔爐(使用者決議;卡包的『分解』整合改名『卡片熔爐』,碎片可 (1)強化武將升星 (2)兌換指名券)。數字皆 PLACEHOLDER。
 //   shard[品階 0~3] = 路人熔鍊碎片(白青藍紫);zongBonus = 宗師型(learn 3)額外;starHalf = 帶星的卡額外 +星數 × 品階基礎 × 此值;fig[品階] = 手動熔名人(二次確認,不入一鍵 / 自動)
-//   starCost[品階][星 0→1 … 4→5] = 升星碎片;figMul = 名人 ×;tokOff = 每個信物抵費用比例,上限 tokOffMax(信物仍上限 CARD_CFG.tokMax、不可直接兌換)
+//   starCost[品階][星 0→1 … 4→5] = 升星碎片(純碎片;信物已取消 2026-11-11);figMul = 名人 ×
 //   starBonus = 每星攻 / 防 / HP 加成(乘算係數),skillStar 星起解鎖技能強化旗標,markStar 星 = 專屬標記;starMax 星上限
 //   exchange = 碎片換指名券:shards 碎 = 1 張,weekMax 張 / 週(週界線同既有 7 日週:cards.js cardsWeekNo)
 var CARD_FURNACE = {
   shard: [2, 4, 8, 16], zongBonus: 8, starHalf: 0.5, fig: { 3: 20, 4: 40 },
   starMax: 5,
   starCost: [[10, 20, 40, 80, 160], [15, 30, 60, 120, 240], [20, 40, 80, 160, 320], [30, 60, 120, 240, 480], [40, 80, 160, 320, 640]],   // 白 青 藍 紫 金(金 = 白 ×4)
-  figMul: 2, tokOff: 0.3, tokOffMax: 0.9,
+  figMul: 2,
   starBonus: { atk: 0.04, def: 0.04, hp: 0.04, skillStar: 3, markStar: 5 },
   exchange: { shards: 120, weekMax: 3 }
 };
 var CARD_FIG_BY_ID = {};
+// 2026-11-13 使用者決議:S01卡池(E)的名人只從第一季武將抽(CARD_S01_ONLY 開啟時,cards.js cardsFigSrc 過濾 CARD_FIGS);機率與品階分布不變。
+// (2026-11-13 後續:原本 CARD_FIGS 查無的第一季人物 21 位已補入 CARD_FIGS 與下表;既有 11 位的品質(gr)尚未依第一季戰法搭配調整,見 第一季戰法補寫與五隊測試報告_v2.md)
+var CARD_S01_ONLY = true;
+var CARD_S01_FIGS = [
+  'caocao', 'xiahoudun', 'xiahouyuan', 'caoren', 'dianwei', 'xunyu',   // 魏
+  'liubei', 'guanyu', 'zhangfei', 'zhaoyun', 'mizhu', 'zhoucang',   // 蜀
+  'sunjian', 'sunce', 'chengpu', 'huanggai', 'zhouyu',   // 吳
+  'zhangjiao', 'zhangbao', 'zhangyan', 'lvbu', 'dongzhuo', 'huangfusong', 'huaxiong', 'xurong', 'boca', 'zhangmancheng',   // 群
+  'chengyuanzhi', 'dengmao', 'peiyuanshao', 'heyi', 'caoxing', 'zhangkai',   // 藍將
+  // 2026-11-13 新增 21 位(原未列入的第一季人物,現已補 CARD_FIGS)
+  'caohong', 'lidian', 'shihuan', 'hanhao', 'weizi', 'renjun', 'jianyong', 'sunqian', 'mifang', 'liaohua', 'zoujing', 'tianyu', 'handang', 'zumao', 'zhuzhi', 'wujing', 'sunben', 'sunjing', 'lvfan', 'lijue', 'guosi'
+];
 CARD_FIGS.forEach(function (f) { CARD_FIG_BY_ID[f.id] = f; });
 if (typeof module !== 'undefined' && module.exports) module.exports = { CARD_GRADE: CARD_GRADE, CARD_JOBS: CARD_JOBS, CARD_TRAITS: CARD_TRAITS, CARD_FIGS: CARD_FIGS, CARD_VENUES: CARD_VENUES };

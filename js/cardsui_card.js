@@ -290,8 +290,19 @@ function cuPopBio(cs, f) {
 }
 
 // 傳承:規則 2 行 → 清單(階級 / 名 / 摘要 / 已擁有或未得 / 推薦 3 名)→ [傳承此卡] → 二次確認
+// 傳承預設對象(cardsLegacyPick):人物卡為名人主力且同名另有副卡 → 預設拆副卡(不額外確認);只剩主力才走原二次確認。回副卡 f 或 null
+function cuInhSpare(cs, e) {
+  var sp, c, sf;
+  if (!e || !e.fig || typeof cardsLegacyPick !== 'function') return null;
+  c = cardsFigCopies(cs, e.fig);
+  if (!c.main || c.main.id !== e.id) return null;
+  sp = cardsLegacyPick(cs, e.fig);
+  if (!sp || sp.id === e.id) return null;
+  sf = cardsFind(cs, sp.id);
+  return (sf && sf.list === 'roster' && cuInhState(cs, sf).ok) ? sf : null;
+}
 function cuPopInherit(cs, f, p) {
-  var e = f.e, fig = !!e.fig, st = cuInhState(cs, f), list = bnSkcInheritList(e), tiers = {}, fresh, frag, sum, h = '';
+  var e = f.e, fig = !!e.fig, spf = cuInhSpare(cs, e), st = cuInhState(cs, spf || f), list = bnSkcInheritList(e), tiers = {}, fresh, frag, sum, h = '';
   h += '<div class="cpl">傳承後此卡離開卡包(' + (fig ? '名人轉流浪,可花 ' + CARD_RECALL_COST + ' 碎片請回' : '路人消失') + '),以下戰法永久解鎖。同一戰法有同時裝備人數上限(見傳承頁『使用 n/上限』)。</div>';
   list.forEach(function (x) {
     var recs = cuRecommend(cs, x.id, e, 3), rh = '';
@@ -306,6 +317,7 @@ function cuPopInherit(cs, f, p) {
   });
   if (!list.length) h += '<div class="cpl">此人沒有可傳承的戰法。</div>';
   if (!st.ok) h += '<div class="cpwarn">' + cuEsc(st.reason) + '</div>';
+  else if (spf) h += '<div class="cpl">已為你選副卡(同名主力 ★' + cardsStarLv(e) + ' 不動)。</div><div class="cprow"><button class="cub warn" data-a="cpinhyes" data-eid="' + cuEsc(spf.e.id) + '">傳承此卡</button></div>';
   else if (!p.confirm) h += '<div class="cprow"><button class="cub warn" data-a="cpinh" data-eid="' + cuEsc(e.id) + '">傳承此卡</button></div>';
   else {
     fresh = list.filter(function (x) { return !x.owned; });
@@ -339,7 +351,7 @@ function cuBioText(c) {
     if (typeof FAMOUS_LINES !== 'undefined' && FAMOUS_LINES[c.fig]) FAMOUS_LINES[c.fig].slice(0, 2).forEach(function (x) { out.push('「' + x + '」'); });
   } else {
     fac = CARD_FAC[c.fac] || '';
-    org = (c.org && c.org.k === 'pin') ? '大池' : (c.pool === 'T' ? '小池' : '大池');
+    org = 'S01卡池';
     j = CARD_JOB_BY_ID[c.main];
     t = cuCTroop(c);
     out.push(cuCEndDot(c.name + ',' + fac + org + '出身'));
@@ -377,6 +389,15 @@ function cuRecScore(c, id) {
   return s;
 }
 function cuCRecSort(a, b) { return (b.score - a.score) || ((b.c.gr | 0) - (a.c.gr | 0)) || ((b.c.tai | 0) - (a.c.tai | 0)); }
+// 同名人副卡(同名多張並存,2026-11-11):主力 = 同名中星階最高(同星取品階高、再取 id 小),其餘為副卡。回 {main, spares[]};無此名人 main = null
+function cardsFigCopies(cs, fig) {
+  var lists = ['roster', 'wait', 'wander'], all = [], i, j, idn = function (e) { return parseInt(String(e.id).replace(/\D/g, ''), 10) || 0; };
+  for (i = 0; i < lists.length; i++) for (j = 0; j < (cs[lists[i]] || []).length; j++) if (cs[lists[i]][j].fig === fig) all.push(cs[lists[i]][j]);
+  all.sort(function (a, b) { return cardsStarLv(b) - cardsStarLv(a) || (b.gr | 0) - (a.gr | 0) || idn(a) - idn(b); });
+  return { main: all[0] || null, spares: all.slice(1) };
+}
+// 傳承預設拆副卡(拆副卡不需額外確認);只剩主力時回主力(仍走原二次確認)。無此名人回 null
+function cardsLegacyPick(cs, fig) { var c = cardsFigCopies(cs, fig); return c.spares[0] || c.main || null; }
 // 推薦 n 名:名冊人優先(可裝、依分數),不足再補名人(未擁有,灰字);兵種卡只列同兵種。結果依名冊變動(人數 / 順序 / 裝備表)快取
 function cuRecommend(cs, id, exclude, n) {
   var d = cuCSkill(id), L = !!(d && d.legion), troop = L ? d.troop : '', ex = exclude || {}, key, list = [], fills = [], src, ck;
@@ -391,6 +412,7 @@ function cuRecommend(cs, id, exclude, n) {
     list.push({ e: r, c: r, score: cuRecScore(r, id) });
   });
   list.sort(cuCRecSort);
+  list = list.filter(function (x, i, a) { return !x.c.fig || a.findIndex(function (y) { return y.c.fig === x.c.fig; }) === i; });   // 同名只推一張(副卡不重複推薦)
   if (list.length < n) {
     src = (typeof fxFigSrc === 'function' && fxFigSrc()) || (typeof CARD_FIGS !== 'undefined' ? CARD_FIGS : []);
     src.forEach(function (fg) {

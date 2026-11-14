@@ -12,6 +12,7 @@ let stBodyEl = null;
 let stVerText = '';
 let stVerEl = null;
 let stBgmOpen = false;
+let stCreditOpen = false;
 let stTabBarEl = null;
 let stCurTab = '';
 let stExtraRows = [];   // settingsAddRow 登記的列:{ label, onclick, group }
@@ -314,7 +315,7 @@ function stBgmRow(g) {
   row.appendChild(play);
   const hit = tracks.filter(function (t) { return t.id === cur; })[0];
   const shown = playing ? tracks.filter(function (t) { return t.id === aud.id; })[0] : hit;
-  const desc = shown ? shown.name + ':' + shown.desc + '(' + shown.bpm + ' BPM)' : '每次進入場景依序換一首,共 ' + tracks.length + ' 首';
+  const desc = shown ? shown.name + ':' + shown.desc + (shown.bpm ? '(' + shown.bpm + ' BPM)' : '') : '每次進入場景依序換一首,共 ' + tracks.length + ' 首';
   const wrap = stEl('div', '');
   wrap.appendChild(row);
   wrap.appendChild(stEl('div', 'st-bgm-d', desc));
@@ -330,6 +331,26 @@ function stBgmCard() {
   return stCard('🎼', '背景音樂曲目', '每個場景可選曲目,或自動輪播', 'fold', stBgmOpen, function () { stBgmOpen = !stBgmOpen; stRender(); }, stBgmOpen ? body : null);
 }
 
+// 音樂致謝:有標註需求的檔案曲(CC BY 等),檔案存在才列出
+function stCreditsCard() {
+  const list = typeof bgmCredits === 'function' ? bgmCredits() : [];
+  if (!list.length) return null;
+  const body = stEl('div', 'st-bgm');
+  if (stCreditOpen) {
+    list.forEach(function (c) {
+      const d = stEl('div', 'st-bgm-d', '「' + c.name + '」 — ' + c.author + ' — ' + c.license + ' — ');
+      const a = document.createElement('a');
+      a.href = c.url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = c.url;
+      d.appendChild(a);
+      body.appendChild(d);
+    });
+  }
+  return stCard('♪', '音樂致謝', '遊戲中使用的第三方音樂與授權', 'fold', stCreditOpen, function () { stCreditOpen = !stCreditOpen; stRender(); }, stCreditOpen ? body : null);
+}
+
 let stAcMsg = '';
 
 function stSoundSec() {
@@ -342,6 +363,8 @@ function stSoundSec() {
   nodes.push(stVolBlock('音樂', 'music'));
   nodes.push(stEl('p', 'st-hint st-note', '背景音樂的開關與音量;關掉就不再播放音樂。'));
   if (typeof bgmGroups === 'function' && typeof bgmAudition === 'function') nodes.push(stBgmCard());
+  const stCr = stCreditsCard();
+  if (stCr) nodes.push(stCr);
   nodes.push(stVolBlock('音效', 'sfx'));
   nodes.push(stEl('p', 'st-hint st-note', '蓋房子、點按鈕、戰鬥時的聲音;關掉後操作時不會有聲音。'));
   nodes.push(stVolBlock('環境音', 'amb'));

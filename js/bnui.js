@@ -7,9 +7,11 @@
 // 全域:BNUI bnUnlocked bnUiOpen bnUiLeave bnUiActive bnUiState bnUiLoad bnUiSave bnUiPref bnUiFoes bnUiAct bnUiBuild bnUiBonds bnUiStart bnUiResultData bnUiPause bnUiBack bnUiStats bnUiCutTap
 
 var BNUI = {
-  key: 'lorddomain.bn.v1', prefKey: 'lorddomain.bn.pref', fadeMs: 240, barH: 48, maxUnits: 5, stage: 'P', minRoster: 5, minRank: 2, dprMax: 2, pixMax: 3.6e6,
-  foeBase: ['bandit_chief', 'bandit_blade', 'bandit_hunter', 'bandit_blade', 'bandit_hunter'], foePos: [[0, 1], [0, 0], [2, 1], [0, 2], [2, 0]]
+  key: 'lorddomain.bn.v1', prefKey: 'lorddomain.bn.pref', fadeMs: 240, barH: 48, maxUnits: 3, stage: 'P', minRoster: 3, minRank: 2, dprMax: 2, pixMax: 3.6e6,
+  foeBase: ['bandit_chief', 'bandit_blade', 'bandit_hunter'], foePos: [[2, 0], [1, 0], [0, 0]]
 };
+// 3 人隊伍:主將 = row 2(主將位)、副將一 = row 1(中衛)、副將二 = row 0(前鋒),col 一律 0(2026-11-12 批次 1)
+var BNUI_ROWS = [2, 1, 0];
 var BNUI_FOE = {
   bandit_chief: { name: '寨主', troop: '槍', hpK: 1.25, atkK: 1.12, skills: ['g_chongfeng'], ult: 'u_inf' },
   bandit_blade: { name: '刀匪', troop: '槍', hpK: 1, atkK: 1, skills: ['g_zhan'], ult: 'u_inf' },
@@ -38,18 +40,46 @@ function bnUnlocked() {
 // ───────── 存檔 ─────────
 function bnUiLsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function bnUiLsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+// 布陣正規化。舊存檔(超過 3 人,或有 col ≠ 0 的 3×3 站位)一次性轉換:依戰力排序取前 3,最高者為主將(row 2),其餘依序副將一(row 1)、副將二(row 0);多的人下陣不刪卡。
+function bnUiPowerOf(id, troop) {
+  var e = bnUiEntry(id);
+  if (!e) return 0;
+  return bnPower(bnUiSpec(e, troop ? { troop: troop } : {}));
+}
 function bnUiNormForm(f, ids) {
-  var out = { slots: [] }, seen = {}, used = {}, i, s;
+  var out = { slots: [], samefig: 0 }, seen = {}, used = {}, figs = {}, cand = [], legacy = false, i, s, fg;
   if (!f || !Array.isArray(f.slots)) return out;
+  if (f.slots.length > BNUI.maxUnits) legacy = true;
+  for (i = 0; i < f.slots.length; i++) if (f.slots[i] && (f.slots[i].col | 0) !== 0) legacy = true;
+  if (legacy) {
+    for (i = 0; i < f.slots.length; i++) {
+      s = f.slots[i];
+      if (!s || typeof s.id !== 'string' || seen[s.id] || (ids && !ids[s.id])) continue;
+      seen[s.id] = 1;
+      cand.push({ id: s.id, troop: bnTroopNorm(s.troop), pw: bnUiPowerOf(s.id, bnTroopNorm(s.troop)), idx: cand.length });
+    }
+    cand.sort(function (a, b) { return b.pw - a.pw || a.idx - b.idx; });
+    for (i = 0; i < cand.length && out.slots.length < BNUI.maxUnits; i++) {
+      fg = bnUiFigOf(cand[i].id);
+      if (fg && figs[fg]) { out.samefig++; continue; }
+      if (fg) figs[fg] = 1;
+      out.slots.push({ id: cand[i].id, row: BNUI_ROWS[out.slots.length], col: 0, troop: cand[i].troop });
+    }
+    return out;
+  }
   for (i = 0; i < f.slots.length && out.slots.length < BNUI.maxUnits; i++) {
     s = f.slots[i];
     if (!s || typeof s.id !== 'string' || seen[s.id] || (ids && !ids[s.id])) continue;
-    if (!(s.row >= 0 && s.row <= 2 && s.col >= 0 && s.col <= 2) || used[s.row + ':' + s.col]) continue;
-    seen[s.id] = 1; used[s.row + ':' + s.col] = 1;
-    out.slots.push({ id: s.id, row: s.row | 0, col: s.col | 0, troop: bnTroopNorm(s.troop) });
+    if (!(s.row >= 0 && s.row <= 2) || used[s.row]) continue;
+    fg = bnUiFigOf(s.id);
+    if (fg && figs[fg]) { out.samefig++; continue; }   // 同名副卡不可同隊:只收第一張
+    if (fg) figs[fg] = 1;
+    seen[s.id] = 1; used[s.row] = 1;
+    out.slots.push({ id: s.id, row: s.row | 0, col: 0, troop: bnTroopNorm(s.troop) });
   }
   return out;
 }
+function bnUiFigOf(id) { var e = bnUiEntry(id); return (e && e.fig) || ''; }
 function bnUiRosterIds() {
   var ids = {};
   bnUiRosterList().forEach(function (e) { ids[e.id] = 1; });
@@ -123,20 +153,30 @@ function bnUiBuild() {
 function bnUiCheck() {
   var n = bnu.slots.length;
   if (n < 1) return '請先放入至少 1 人';
-  if (!bnu.slots.some(function (s) { return s.row === 0; })) return '前排至少要有 1 人';
   return '';
 }
 // 動作:place(id,r,c) remove(id) swap(r1,c1,r2,c2) auto troop(id,troop) saveP(i) loadP(i) clear
+// 套用陣容時逐人檢查占用(cardsUseBlock team):外勤中 / 委任中 / 駐派中略過;回 {keep, busy:[說明]}
+function bnUiTeamBusy(slots) {
+  var keep = [], busy = [];
+  (slots || []).forEach(function (s) {
+    var e = bnUiEntry(s.id), ub = (e && typeof cardsUseBlock === 'function') ? cardsUseBlock(e, 'team') : { ok: true };
+    if (ub.ok) keep.push(s); else busy.push((e.name || '(不明人物)') + '(' + ub.reason + ')');
+  });
+  return { keep: keep, busy: busy };
+}
 function bnUiAct(a, p1, p2, p3, p4) {
   var e, s, o, i, d, list;
   if (a === 'place') {
     e = bnUiEntry(p1);
-    if (!e || !(p2 >= 0 && p2 <= 2 && p3 >= 0 && p3 <= 2)) return false;
+    if (!e || !(p2 >= 0 && p2 <= 2) || p3 !== 0) return false;
     s = bnUiSlotOf(p1); o = bnUiSlotAt(p2, p3);
     if (s && o && o !== s) { o.row = s.row; o.col = s.col; s.row = p2; s.col = p3; }   // 已上陣者拖到有人的格 = 互換
     else if (s) { s.row = p2; s.col = p3; }
     else {
       if (!o && bnu.slots.length >= BNUI.maxUnits) { bnUiToast('最多上陣 ' + BNUI.maxUnits + ' 人'); return false; }
+      if (bnUiFigOf(p1) && bnu.slots.some(function (x) { return x.id !== p1 && bnUiFigOf(x.id) === bnUiFigOf(p1); })) { bnUiToast('同名名人不可同隊'); return false; }
+      if (typeof cardsUseBlock === 'function') { var ub = cardsUseBlock(e, 'team'); if (!ub.ok) { bnUiToast(ub.reason + ',不能上陣'); return false; } }   // 外勤中 / 委任中 / 駐派中不可上陣
       if (o) bnu.slots.splice(bnu.slots.indexOf(o), 1);
       bnu.slots.push({ id: p1, row: p2, col: p3, troop: bnu.tp[p1] || '' });
     }
@@ -161,9 +201,8 @@ function bnUiAct(a, p1, p2, p3, p4) {
   } else if (a === 'auto') {
     list = bnUiRosterList().map(function (x) { var sp = bnUiSpec(x, { troop: bnu.tp[x.id] || bnDefaultTroop(x) }); return { e: x, sp: sp, pw: bnPower(sp) }; });
     list.sort(function (x, y) { return y.pw - x.pw; });
-    list = list.slice(0, BNUI.maxUnits);
-    bnAutoLayout(list.map(function (x) { return x.sp; }), null);
-    bnu.slots = list.map(function (x) { return { id: x.e.id, row: x.sp.row, col: x.sp.col, troop: x.sp.troop }; });
+    list = list.filter(function (x, i, a) { return !x.e.fig || a.findIndex(function (y) { return y.e.fig === x.e.fig; }) === i; }).slice(0, BNUI.maxUnits);   // 同名副卡不自動上陣
+    bnu.slots = list.map(function (x, k) { return { id: x.e.id, row: BNUI_ROWS[k], col: 0, troop: x.sp.troop }; });   // 戰力最高 = 主將(row 2),其次副將一 / 副將二
     bnu.sel = null;
   } else if (a === 'clear') {
     bnu.slots = []; bnu.sel = null;
@@ -177,6 +216,9 @@ function bnUiAct(a, p1, p2, p3, p4) {
     d = bnu.data || bnUiLoad();
     if (!d.forms[p1] || !d.forms[p1].slots.length) { bnUiToast('預設陣容 ' + (p1 + 1) + ' 是空的'); return false; }
     bnu.slots = bnUiNormForm(d.forms[p1], bnUiRosterIds()).slots;
+    var lp = bnUiTeamBusy(bnu.slots);
+    bnu.slots = lp.keep;
+    if (lp.busy.length) bnUiToast(lp.busy.join('、') + ' 不能上陣,已略過');
     bnu.slots.forEach(function (x) { if (x.troop) bnu.tp[x.id] = x.troop; });
     bnu.sel = null;
   } else return false;
@@ -223,7 +265,7 @@ function bnUiFoeRaw(key, scale, pos) {
   return r;
 }
 function bnUiFoes(mySpecs) {
-  var n = Math.max(3, Math.min(5, (mySpecs && mySpecs.length) || 3)), base = [], i, mine = 0, foe = 0, s;
+  var n = BNUI.foeBase.length, base = [], i, mine = 0, foe = 0, s;
   for (i = 0; i < n; i++) base.push(bnUiFoeRaw(BNUI.foeBase[i], 1, BNUI.foePos[i]));
   base.forEach(function (x) { foe += bnPower(x); });
   (mySpecs || []).forEach(function (x) { mine += bnPower(x); });
@@ -239,16 +281,17 @@ function bnUiCurFoes(mySpecs) {
     return { specs: f.units, scale: 1, power: f.rec, label: '討伐 ' + st.id + ' ' + st.name, boss: st.boss, kind: 'stage' };
   }
   if (g.kind === 'bounty' && g.def) return { specs: g.def.units, scale: 1, power: g.def.rec, label: '每日流寇', kind: 'bounty' };
+  if (g.kind === 'custom' && typeof g.foes === 'function') return g.foes(mySpecs);   // 新介面骨架(百層塔等):呼叫端給對手,回傳格式同其他分支 { specs, scale, power, label, kind }
   f = bnUiFoes(mySpecs);
   f.label = '練兵'; f.kind = 'practice';
   return f;
 }
-function bnUiStageLabel() { var g = bnu.stg || {}; return g.kind === 'stage' ? '討伐 ' + g.id : (g.kind === 'bounty' ? '每日流寇' : (g.kind === 'tourney' ? '擂台' : '練兵')); }
+function bnUiStageLabel() { var g = bnu.stg || {}; if (g.kind === 'custom') return g.label || '挑戰'; return g.kind === 'stage' ? '討伐 ' + g.id : (g.kind === 'bounty' ? '每日流寇' : (g.kind === 'tourney' ? '擂台' : '練兵')); }
 function bnUiDayNo() { var d = new Date(); return d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate(); }
 function bnUiRec() {
   var b = bnUiBuild(), foes = bnUiCurFoes(b.team.units), cs = (typeof cardsGet === 'function') ? cardsGet() : null, fp = bnu.slots.map(function (s) { return s.id + ':' + s.row + s.col + (s.troop || bnu.tp[s.id] || ''); }).join(',');
   return {
-    v: 1, seed: bnHash('bn', (cs && cs.seed) | 0, BNUI.stage, bnUiDayNo(), fp), teamA: b.team.units, teamB: foes.specs, opts: { events: true, scene: '' },
+    v: BN_REC_VER, seed: bnHash('bn', (cs && cs.seed) | 0, BNUI.stage, bnUiDayNo(), fp), teamA: b.team.units, teamB: foes.specs, opts: { events: true, scene: '' },
     meta: { stage: BNUI.stage, kind: (bnu.stg && bnu.stg.kind) || 'practice', ch: (bnu.stg && bnu.stg.def && bnu.stg.def.ch) || 0, foePower: foes.power, scale: foes.scale, bonds: b.team.bonds, formation: b.team.formation }
   };
 }
@@ -278,8 +321,21 @@ function bnUiResize() {
     top = (bnu.top && bnu.top.offsetHeight) || BNUI.barH;
     bot = 30;
   }
-  bnu.L = bnDrLayout(vp.w, vp.h, top + 4, bot);
+  bnu.L = bnDrLayout(vp.w, vp.h, top + 4, bot, bnUiLayoutOpts());
   if (P) { bnPlRelayout(P, bnu.L); if (bnu.phase !== 'fight' || P.done) bnUiDrawOnce(); }
+}
+function bnUiStageBg(vw, vh) {   // 舞台背景:橫式 bg_stage_land、直式 bg_stage_port;uiAssetImg 首次回 null、載入後由 bnUiBgRefresh 補上;缺圖退回程序背景
+  var img = null;
+  if (typeof uiAssetImg === 'function') { try { img = uiAssetImg(vw > vh ? 'bg_stage_land' : 'bg_stage_port') || null; } catch (er) { img = null; } }
+  return img;
+}
+function bnUiBgRefresh() {   // 背景圖尚未載入時每幀查一次,載入後換上並重畫(bndraw 以 bgSrc 比對,自動重烘背景)
+  var L = bnu.L;
+  if (L && L.style === 'stage' && !L.bgImg) L.bgImg = bnUiStageBg(L.vw, L.vh);
+}
+function bnUiLayoutOpts() {   // 正式戰鬥(戰鬥 / 結算)用舞台樣式;布陣 / 練兵預覽維持 grid;BNDR.stage = false 可回 grid 比對
+  var fight = bnu.phase === 'fight' || bnu.phase === 'res';
+  return { style: fight && BNDR.stage !== false ? 'stage' : 'grid', bgImg: fight ? bnUiStageBg(bnu.vw || 0, bnu.vh || 0) : null };
 }
 function bnUiOnResize() {
   bnu.rz.forEach(function (h) { clearTimeout(h); });
@@ -303,6 +359,7 @@ function bnUiCss() {
     '#bnLayer.ph-fight #bnTop{position:absolute;left:0;right:0;top:auto;bottom:0;padding-top:0;padding-bottom:env(safe-area-inset-bottom);background:rgba(28,20,14,.82)}' +
     '#bnLayer.ph-fight #bnBar .bk{position:fixed;z-index:4;left:calc(6px + env(safe-area-inset-left));top:calc(4px + env(safe-area-inset-top));background:rgba(20,14,10,.6)}' +
     '#bnLayer.ph-fight #bnBar{justify-content:flex-end}' +
+    '#bnLayer.ph-fight #bnBar .ib{min-width:48px;min-height:48px}' +
     '#bnForm{position:relative;z-index:2;flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:8px calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));display:none}#bnLayer.ph-form #bnForm{display:block}' +
     '.bnf-foe,.bnf-bonds,.bnf-sel{font-size:13px;line-height:1.5;margin:0 0 6px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.07)}.bnf-foe i{font-style:normal;display:inline-block;margin:0 6px 0 0;padding:0 6px;border-radius:6px;background:rgba(168,74,58,.35)}' +
     '.bnf-bonds i{font-style:normal;display:inline-block;margin:2px 6px 2px 0;padding:0 8px;border-radius:10px;background:#c9892f;color:#1b1308;font-weight:bold}.bnf-bonds u{text-decoration:none;display:inline-block;margin:2px 6px 2px 0;opacity:.6}' +
@@ -437,8 +494,8 @@ function bnUiPreyChips(c) { return (c.up ? '<em class="py u">▲' + c.up + '</em
 function bnUiPreySwap(c) { return { up: c.down, down: c.up }; }
 function bnUiTroopsOf(list) { return (list || []).map(function (x) { return x.troop; }); }
 function bnUiFoeGridHtml(foes, mine) {
-  var h = '<div class="bnf-egrid"><div class="bnf-gh">敵 ◀ 前排</div><div class="bnf-gh">中排</div><div class="bnf-gh">後排</div>', r, c, x, i;
-  for (c = 0; c < 3; c++) for (r = 0; r < 3; r++) {
+  var h = '<div class="bnf-egrid"><div class="bnf-gh">敵主將</div><div class="bnf-gh">敵副將</div><div class="bnf-gh">敵副將</div>', r, c, x, i;
+  for (c = 0; c < 1; c++) for (r = 2; r >= 0; r--) {
     x = null;
     for (i = 0; i < foes.specs.length; i++) if (foes.specs[i].row === r && (foes.specs[i].col | 0) === c) x = foes.specs[i];
     h += x ? '<div class="bnf-cell foe"><span class="av">' + bnUiEsc(Array.from(String(x.name))[0] || '?') + '</span><b>' + bnUiEsc(x.name) + '</b><small>' + bnUiTI(x.troop) + bnUiEsc(x.troop) + bnUiPreyChips(typeof bnPreyCounts === 'function' ? bnUiPreySwap(bnPreyCounts(x.troop, bnUiTroopsOf(mine))) : { up: 0, down: 0 }) + ' · 兵力 ' + x.stats.hp + ' · 戰力 ' + bnPower(x) + '</small></div>' : '<div class="bnf-cell foe empty"></div>';
@@ -459,8 +516,8 @@ function bnUiRenderForm() {
   build.team.units.forEach(function (x) { mineP += bnPower(x); });
   // 上方黏頂:3×3 九宮格(拖曳上陣 / 移位 / 下陣的目標);下方是名冊選取區
   top = '<div class="bnf-top"><div class="bnf-sumline">上陣 <b>' + bnu.slots.length + '/' + BNUI.maxUnits + '</b> 人 · 戰力 <b>' + mineP + '</b></div>' +
-    '<div class="bnf-grid"><div class="bnf-gh">後排</div><div class="bnf-gh">中排</div><div class="bnf-gh">前排 ▶ 敵</div>';
-  for (c = 0; c < 3; c++) {
+    '<div class="bnf-grid"><div class="bnf-gh">主將</div><div class="bnf-gh">副將</div><div class="bnf-gh">副將</div>';
+  for (c = 0; c < 1; c++) {
     for (i = 0; i < 3; i++) {
       r = rows[i]; s = bnUiSlotAt(r, c); e = s ? bnUiEntry(s.id) : null;
       if (e) {
@@ -617,7 +674,7 @@ function bnUiPopRender() {
   tr = (s && s.troop) || bnUiTroopOf(e);
   sp = bnUiSpec(e, { troop: tr }); apt = bnAptOf(e).apt[tr] || 'C';
   cs = (typeof cardsGet === 'function') ? cardsGet() : null;
-  pos = s ? ['前', '中', '後'][s.row] + '排 ' + (s.col + 1) + ' 號' : '未上陣';
+  pos = s ? (s.row === 2 ? '主將' : '副將') + '(' + ['前', '中', '後'][s.row] + '排)' : '未上陣';
   fac = (typeof CARD_FAC !== 'undefined' && CARD_FAC[e.fac]) || '';
   h = '<div class="bnbox bninfo bnpop"><h2>' + bnUiEsc(e.name) + '</h2>' +
     '<p style="text-align:center">' + BNUI_GR[e.gr] + '階 · ' + bnUiEsc(fac) + ' · ' + (e.fig ? '名人' : '路人') + ' · 戰力 <b>' + bnPower(sp) + '</b> · ' + pos + '</p>' +
@@ -685,6 +742,7 @@ function bnUiDo(a, id, r, c, t, i) {
   else if (a === 'sbar') { o = bnUiPref(); o.sb = o.sb === false; bnUiPrefSave(); if (bnu.P) bnu.P.sb = o.sb; if (bnu.paused && !bnu.info) bnUiPause(true); bnUiDrawOnce(); }   // 戰鬥設定:顯示戰法條
   else if (a === 'retreat') bnUiRetreat();
   else if (a === 'log' && typeof bnLogOpen === 'function') bnLogOpen('recent');
+  else if (a === 'logview' && bnu.rec && typeof bnBattleShow === 'function') bnBattleShow(bnu.rec, { mode: 'report', mySide: 'A', logId: bnu.logId || '' });   // 查看戰報 → 新結果頁;頁內「文字戰報」開舊面板(含分享戰報碼)
   else if (a === 'logview' && typeof bnLogOpen === 'function') bnLogOpen('recent', bnu.logId || '');
   else if (a === 'logsave' && typeof bnLogSave === 'function') { o = bnu.logId ? bnLogSave(bnu.logId) : { ok: false, why: '這場沒有戰報' }; bnUiToast(o.ok ? '已儲存戰報' : o.why); }
 }
@@ -784,26 +842,22 @@ function bnUiCutRender(c) {
   p.nm.style.transform = 'translateX(' + ((c.side === 'A' ? 1 : -1) * sl * 30) + '%)';
 }
 function bnUiStart() {
-  var msg = bnUiCheck(), rec, S, L, P, pr;
+  var msg = bnUiCheck(), rec, S, pr;
   if (msg) { bnUiToast(msg); return false; }
   if (bnu.stg && bnu.stg.kind === 'stage' && typeof bnStgCanStart === 'function') { pr = bnStgCanStart(bnu.data || bnUiLoad(), bnu.stg.id, bnStgEnv(BNUI.env)); if (!pr.ok) { bnUiToast(pr.why); return false; } }
   // 流寇可重複討伐(無每日一次限制),開打不再檢查已討平
   rec = bnUiRec();
   bnu.rec = rec;
-  S = bnInit(rec);
+  // 不進 canvas 戰鬥:直接算到底 → 結算照舊 → 戲台播放(bnBattleShow,播完進結果頁)
+  S = bnInit(rec); bnRunToEnd(S);
   bnUiSetPhase('fight');
   bnUiShowRes(false); bnUiShowPause(false); bnUiCutRender(null);
-  bnUiResize();
-  L = bnu.L;
-  pr = bnUiPref();
-  P = bnPlNew(S, L, { speed: pr.spd, hooks: bnUiHooks(), powerSave: bnUiPs(), sfx: true });
-  P.sb = pr.sb !== false;   // 戰法條(我方)
+  bnu.P = null; bnu.result = null; bnu.info = null; bnu.paused = false; bnu.retreat = false; bnu.manual = false; bnu.logId = '';
   bnUiFeed(null);
-  bnu.P = P; bnu.result = null; bnu.info = null; bnu.paused = false; bnu.retreat = false; bnu.manual = false; bnu.logId = '';
   bnUiSyncBtns();
   if (bnu.roundEl) bnu.roundEl.textContent = '';
-  bnUiResize();
-  bnUiLoop(true);
+  bnUiShowResult(S);
+  bnBattleShow(rec, { mode: 'play', mySide: 'A' });
   return true;
 }
 function bnUiSyncBtns() {
@@ -833,6 +887,7 @@ function bnUiCutTap() {
   return bnPlCutSkip(bnu.P);
 }
 function bnUiDrawOnce() {
+  bnUiBgRefresh();
   if (bnu.P && bnu.ctx && bnu.L) bnDrFrame(bnu.ctx, bnu.P, bnu.dpr, (typeof performance !== 'undefined' ? performance.now() : 0) / 1000);
 }
 function bnUiLoop(start) {
@@ -842,10 +897,12 @@ function bnUiFrame(now) {
   var P = bnu.P, dt;
   bnu.raf = 0;
   if (!bnu.open || bnu.paused || !P || bnu.phase === 'form') return;
+  if (bnu.L && bnu.L.home && bnu.last && now - bnu.last < 33) { bnu.raf = requestAnimationFrame(bnUiFrame); return; }   // 主頁預留:30fps 上限
   if (typeof perfGateOk === 'function' && !perfGateOk(bnu.gate || (bnu.gate = perfGateNew()), now)) { bnu.raf = requestAnimationFrame(bnUiFrame); return; }
   dt = bnu.last ? (now - bnu.last) / 1000 : 0.016;
   bnu.last = now;
   bnPlTick(P, dt);
+  bnUiBgRefresh();
   bnDrFrame(bnu.ctx, P, bnu.dpr, now / 1000);
   bnu.frames++;
   if (P.done && !P.fx.some(function (f) { return f.on; })) return;   // 動畫空檔停止 RAF(0 fps)
@@ -871,9 +928,10 @@ function bnUiResultData(S) {
 }
 function bnUiShowRes(on) { if (bnu.resEl) bnu.resEl.classList.toggle('on', !!on); }
 function bnUiShowPause(on) { if (bnu.pauseEl) bnu.pauseEl.classList.toggle('on', !!on); }
-function bnUiShowResult() {
-  var S = bnu.P && bnu.P.S, d, h, w, d0, rep, g, lg;
+function bnUiShowResult(S0) {
+  var S = S0 || (bnu.P && bnu.P.S), d, h, w, d0, rep, g, lg;
   if (!S || !S.result || bnu.phase === 'res') return;
+  bnu.resS = S;
   d = bnUiResultData(S);
   bnu.result = d;
   bnUiSetPhase('res');
@@ -911,9 +969,10 @@ function bnUiShowResult() {
   bnUiCurSave(); bnUiSave();
   if (rep && rep.win && typeof saveWorld === 'function') { try { saveWorld(); } catch (e) { /* 略過 */ } }
   if (rep && rep.win && g.kind === 'stage' && typeof BNMAP !== 'undefined') { BNMAP.sel = null; BNMAP.ch = 0; }   // 勝利 → 回地圖時預設選下一關(bnMapRender 預設選第一個未通關的已解鎖關)
-  if (bnu.P) bnPlSfxEnd(d.winner);
+  bnPlSfxEnd(d.winner);
   bnUiDrawOnce();
   if (typeof bnsOnResult === 'function') bnsOnResult(d); if (typeof bnTourOnResult === 'function') bnTourOnResult(d);   // 對戰練習(js/bnshare.js):不計進度、改結算按鈕;擂台回播(js/bn_tourney_ui.js):改結算按鈕
+  if (bnu.stg && typeof bnu.stg.onEnd === 'function') { try { bnu.stg.onEnd(d.winner === 'A', S); } catch (e) { if (typeof console !== 'undefined' && console.error) console.error('bnu.stg.onEnd', e); } }   // 新介面骨架:呼叫端的結算回呼(win = 我方勝利);結果在開打時已算定,戲台播完前就會呼叫
 }
 function bnPlSfxEnd(w) { if (typeof bnSfxEnd === 'function') { try { bnSfxEnd(w); } catch (e) { /* 略過 */ } } else if (typeof sfxwPlay === 'function') { try { sfxwPlay(w === 'A' ? 'win' : (w === 'B' ? 'lose' : 'flag')); } catch (e) { /* 略過 */ } } }
 function bnUiToForm() {
@@ -930,21 +989,21 @@ function bnUiRenderEntry() {
   if (!el) return;
   d = bnu.data || bnUiLoad();
   if (typeof bnMapStageStats === 'function' && typeof BN_STAGES !== 'undefined') { done = bnMapStageStats(d).cleared; tot = BN_STAGES.length; }
-  stgOn = featureOn('stages');   // @DORMANT stages:副本休眠(v60)時入口不列副本鈕,摘要也不顯示討伐進度
+  stgOn = featureOn('stages') || featureOn('shell');   // @DORMANT stages:副本休眠(v60)時入口不列副本鈕,摘要也不顯示討伐進度;@DORMANT shell:外殼開啟時放行(戰役分頁)
   el.innerHTML = '<div class="bnen"><p class="bnen-sum">卡包 ' + bnUiRosterList().length + ' 人' + (stgOn ? ' · 討伐進度 ' + done + '/' + tot : '') + '</p>' +
     (stgOn ? '<button class="bnen-b" data-a="ent" data-t="stage"><b>副本</b><small>討伐地圖:選章節與關卡,首通有獎勵,可重複通關</small></button>' : '') +
     '<button class="bnen-b" data-a="ent" data-t="share"><b>對戰</b><small>對戰碼與擂台(不計進度、不給獎勵)</small></button>' +
     '<button class="bnen-b" data-a="ent" data-t="log"><b>戰報</b><small>最近的戰報,可查看與儲存</small></button>' +
     '<button class="bnen-b" data-a="ent" data-t="tourney"><b>擂台</b><small>16 隊單淘汰,比出前三名;系統隊伍自動補滿,每 2 小時一屆</small></button>' +
-    '<button class="bnen-b" data-a="ent" data-t="prac"><b>練兵</b><small>不計戰績、不給獎勵,敵將依我方戰力縮放,可自由試陣</small></button>' + (typeof featureOn === 'function' && featureOn('worldmap') ? '<button class="bnen-b" data-a="ent" data-t="wm"><b>外勤</b><small>派部隊出外採集或討伐據點;清單每格會刷新,離開時也會照算</small></button>' : '') + '</div>'; // @DORMANT worldmap
+    '<button class="bnen-b" data-a="ent" data-t="prac"><b>練兵</b><small>不計戰績、不給獎勵,敵將依我方戰力縮放,可自由試陣</small></button>' + (typeof featureOn === 'function' && featureOn('worldmap') ? (featureOn('world') ? '<button class="bnen-b" data-a="ent" data-t="wm"><b>地圖</b><small>派部隊占領資源點、討伐山寨野怪、集結攻城;離開時也會照算</small></button>' : '<button class="bnen-b" data-a="ent" data-t="wm"><b>外勤</b><small>派部隊出外採集或討伐據點;清單每格會刷新,離開時也會照算</small></button>') : '') + '</div>'; // @DORMANT worldmap @DORMANT world
 }
 function bnUiEntryDo(t) {
-  if (t === 'stage') { if (featureOn('stages')) bnUiToMap(); }   // @DORMANT stages:副本入口休眠(v60)
+  if (t === 'stage') { if (featureOn('stages') || featureOn('shell')) bnUiToMap(); }   // @DORMANT stages:副本入口休眠(v60);@DORMANT shell:外殼開啟時放行
   else if (t === 'share') { if (typeof bnsOpen === 'function') bnsOpen('share'); }
   else if (t === 'log') { if (typeof bnLogOpen === 'function') bnLogOpen('recent'); }
   else if (t === 'tourney') { if (typeof bnTourOpen === 'function') bnTourOpen(); }
   else if (t === 'prac') { if (typeof bnMapEnter === 'function') bnMapEnter('practice'); }
-  else if (t === 'wm') { if (typeof wmOpen === 'function') wmOpen(); }
+  else if (t === 'wm') { if (typeof featureOn === 'function' && featureOn('world') && typeof wdOpen === 'function') wdOpen(); else if (typeof wmOpen === 'function') wmOpen(); }   // @DORMANT world(旗標開 → 新地圖 wdOpen;關 → 舊外勤 wmOpen)
 }
 function bnUiToEntry() {
   if (bnu.P) { bnPlDispose(bnu.P); bnu.P = null; }
@@ -955,7 +1014,7 @@ function bnUiToEntry() {
   bnUiRenderEntry();
 }
 function bnUiToMap() {
-  if (!featureOn('stages')) { bnUiToEntry(); return; }   // @DORMANT stages:副本 / 流寇頁休眠(v60),回入口
+  if (!(featureOn('stages') || featureOn('shell'))) { bnUiToEntry(); return; }   // @DORMANT stages:副本 / 流寇頁休眠(v60),回入口;@DORMANT shell:外殼開啟時放行
   if (bnu.P) { bnPlDispose(bnu.P); bnu.P = null; }
   bnUiStopLoop();
   bnUiShowRes(false); bnUiShowPause(false); bnUiCutRender(null);
@@ -994,12 +1053,14 @@ function bnUiPause(on) {
 }
 function bnUiBack() {
   if (bnu.leaving || !bnu.open) return false;
+  if (typeof bnBattleBack === 'function' && bnBattleBack()) return true;   // 戲台 / 戰報結果頁開著:先關
   if (typeof bnTeamBack === 'function' && bnTeamBack()) return true;
   if (bnPopBack()) return true;   // 人物詳情開著:先關   // 戰法說明浮層開著:先關
   if (typeof BNMAP !== 'undefined' && BNMAP.det) { BNMAP.det = false; bnMapRender(); return true; }   // 副本關卡詳細說明開著:先關
   if (typeof bnLogBack === 'function' && bnLogBack()) return true;   // 戰報面板開著:先關面板
   if (typeof bnsBack === 'function' && bnsBack()) return true;   // 對戰練習面板開著:先關面板  |  擂台面板 / 擂台結算:先關或回擂台(js/bn_tourney_ui.js)
   if (typeof bnTourBack === 'function' && bnTourBack()) return true;
+  if (typeof wdBack === 'function' && wdBack()) return true;   // 地圖面板(js/wd_ui.js):先退子頁,再關地圖
   if (typeof wmBack === 'function' && wmBack()) return true;   // 外勤面板(js/wm_ui.js):先關派遣面板,再關外勤
   if (bnu.phase === 'fight') { bnUiPause(!bnu.paused); return true; }
   if (bnu.phase === 'res') { bnUiToForm(); return true; }
@@ -1040,7 +1101,7 @@ function bnUiOnPop() {
   if (!bnu.open) return;
   if (bnu.histSkip) { bnu.histSkip = false; return; }
   bnu.histOn = false;
-  if (bnPopIsOpen() || (typeof bnLogIsOpen === 'function' && bnLogIsOpen()) || (typeof bnTeamIsOpen === 'function' && bnTeamIsOpen()) || (typeof bnsIsOpen === 'function' && bnsIsOpen()) || (typeof BNMAP !== 'undefined' && BNMAP.det) || bnu.phase !== 'entry') {
+  if (bnPopIsOpen() || (typeof bncbIsOpen === 'function' && bncbIsOpen()) || (typeof bnRptIsOpen === 'function' && bnRptIsOpen()) || (typeof bnLogIsOpen === 'function' && bnLogIsOpen()) || (typeof bnTeamIsOpen === 'function' && bnTeamIsOpen()) || (typeof bnsIsOpen === 'function' && bnsIsOpen()) || (typeof BNMAP !== 'undefined' && BNMAP.det) || bnu.phase !== 'entry') {
     try { history.pushState({ bn: 1 }, ''); bnu.histOn = true; } catch (e) { /* 略過 */ }
     bnUiBack();
     return;
@@ -1092,12 +1153,25 @@ function bnUiOpen() {
   BNUI.enterMs = (typeof performance !== 'undefined') ? performance.now() - t0 : 0;
   return true;
 }
+// 新介面骨架入口:用指定隊伍與關卡設定直接開打。stg = { kind:'practice'|'custom', label, foes(mySpecs), onEnd(win, S) };不給 stg = 練兵。
+// 戰鬥層未開會先開(bnUiOpen);回 true = 已開打。
+function bnUiStartWith(slots, stg) {
+  if (!bnu.open && !bnUiOpen()) return false;
+  bnu.slots = (slots || []).map(function (s) { return { id: s.id, row: s.row, col: s.col, troop: s.troop || '' }; });
+  bnu.tp = {}; bnu.slots.forEach(function (s) { if (s.troop) bnu.tp[s.id] = s.troop; });
+  bnu.sel = null;
+  bnu.stg = stg || { kind: 'practice', id: 'P' };
+  if (!bnu.stg.id) bnu.stg.id = bnu.stg.kind === 'custom' ? 'C' : 'P';
+  BNUI.stage = bnu.stg.id;
+  return bnUiStart();
+}
 function bnUiLeave(immediate, fromPop) {
   var layer = bnu.layer;
   if (!bnu.open || bnu.leaving) return false;
   bnu.leaving = true;
   bnu.open = false;
   if (typeof bnLogClose === 'function') bnLogClose();
+  if (typeof bnBattleClose === 'function') bnBattleClose();
   if (typeof bnTeamInfoClose === 'function') bnTeamInfoClose();
   bnUiDragCancel(); bnu.pop = null;
   bnUiStopLoop();

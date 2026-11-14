@@ -2,7 +2,7 @@
 // 「分享我的隊伍」把目前布陣 5 人壓成一串挑戰碼(可複製 / 分享連結 #bn=碼);「挑戰別人的隊伍」貼上碼 → 對方隊伍的複本(電腦操控)當敵方,用現有引擎與戰鬥畫面打一場;
 // 「貼上戰報碼」用同一陣容與種子重打同一場,開啟現有文字戰報(bnlog.js)。練習戰不給獎勵、不計關卡進度、不改世界存檔(只多一筆「最近」戰報)。
 // 碼格式:LDB2.<種類 T 隊伍 / R 戰報>.<資料版本>.<z 壓縮 / j 未壓縮>.<base64url>.<檢查碼>;資料版本 = 戰法 / 數值表 / 規則雜湊,與本機不同 → 拒絕(舊版規則的碼不能用)。
-// 標準化模式(預設關,挑戰畫面開關):雙方品階倍率一律以紫階計、星等與信物歸零,只比配隊與戰法。偏好鍵 'lorddomain.bnshare.pref'(SAVE_PREF_KEYS,不隨世界)。
+// 標準化模式(預設關,挑戰畫面開關):雙方品階倍率一律以紫階計、星等歸零,只比配隊與戰法。偏好鍵 'lorddomain.bnshare.pref'(SAVE_PREF_KEYS,不隨世界)。
 // 面板掛在 bnui.js 的 #bnLayer 內(#bnShare);Esc / 返回鍵先關面板(bnUiBack 先問 bnLogBack、再問 bnsBack)。不發聲。ES2017;不用 ?. ??。
 // 我方快照:優先呼叫 bnteam.js 的 bnTeamSnapshot()(轉成碼格式的 U,順序仍依布陣 slots);缺或出錯時退回本檔依 bnu.slots + 名冊自行產生。
 // 全域:BNS bnsOpen bnsClose bnsIsOpen bnsBack bnsBarBtn bnsDo bnsRender bnsOnResult bnsEncode bnsDecode bnsMyTeam bnsPackTeam bnsSpecs bnsDuelRec bnsFight bnsReplay bnsReportData bnsDataVer bnsPref bnsCheckHash
@@ -10,7 +10,7 @@
 // LDB2(2026-11-06):單位陣列第 18 欄 = 研兵等級(兵書 / 傳授學到的戰法照舊在學習戰法欄);內層 v:2。
 // 2026-11-09 決議(回合上限 50 → 10、新增機率閃避):不保留舊碼。格式版本(LDB?)或資料 / 規則版本(dv)與目前不同 → 一律拒絕,不再嘗試重打。
 var BNS = {
-  magic: 'LDB2', oldMsg: '這是舊版規則的碼,已不能使用,請對方用新版重新產生', drillPer: 0.02, drillMax: 5, eng: 1, maxIn: 8000, maxRaw: 32768, maxTeam: 3000, maxRep: 6000, stdGr: 3, prefKey: 'lorddomain.bnshare.pref',
+  magic: 'LDB2', oldMsg: '這是舊版規則的碼,已不能使用,請對方用新版重新產生', drillPer: 0.02, drillMax: 5, eng: 2, maxIn: 8000, maxRaw: 32768, maxTeam: 3000, maxRep: 6000, stdGr: 3, prefKey: 'lorddomain.bnshare.pref',
   el: null, tab: 'share', inp: { chal: '', rep: '' }, msg: '', msgBad: false, busy: false, my: null, myCode: '', chk: null, last: null, rcode: '', duel: null, rep: null, dv: '', pref: null, n: 0, inv: null, invEl: null, invTry: 0
 };
 var BNS_GR = ['白', '青', '藍', '紫', '金'];
@@ -116,7 +116,7 @@ function bnsTeamFromSnap(snap, slots) {
     nat = c.fig ? [] : bnNativeSkills(c, tr);
     u.push({
       fig: c.fig || '', name: String(c.name || ''), gr: c.gr | 0, fac: c.fac | 0, st: c.st.slice(), ja: Object.assign({}, c.ja || {}), main: c.main || '', tr: (c.tr || []).slice(),
-      tok: c.tok | 0, up: c.up | 0, learn: c.learn | 0, star: c.starLv | 0, lr: c.fig ? [] : snap[j].skills.filter(function (id) { return nat.indexOf(id) < 0; }), troop: tr, row: s.row | 0, col: s.col | 0, sex: c.sex || '',
+      tok: 0, up: c.up | 0, learn: c.learn | 0, star: c.starLv | 0, lr: c.fig ? [] : snap[j].skills.filter(function (id) { return nat.indexOf(id) < 0; }), troop: tr, row: s.row | 0, col: s.col | 0, sex: c.sex || '',
       dr: snap[j].drillLv !== undefined ? snap[j].drillLv | 0 : bnsDrillLv(snap[j].spec)
     });
   }
@@ -134,7 +134,7 @@ function bnsMyTeam() {
     nat = e.fig ? [] : bnNativeSkills(e, tr);
     u.push({
       fig: e.fig || '', name: String(e.name || ''), gr: e.gr | 0, fac: e.fac | 0, st: e.st.slice(), ja: Object.assign({}, e.ja || {}), main: e.main || '', tr: (e.tr || []).slice(),
-      tok: e.tok | 0, up: e.up | 0, learn: e.learn | 0, star: e.starLv | 0, lr: e.fig ? [] : sp.skills.filter(function (id) { return nat.indexOf(id) < 0; }), troop: tr, row: s.row | 0, col: s.col | 0, sex: e.sex || '',
+      tok: 0, up: e.up | 0, learn: e.learn | 0, star: e.starLv | 0, lr: e.fig ? [] : sp.skills.filter(function (id) { return nat.indexOf(id) < 0; }), troop: tr, row: s.row | 0, col: s.col | 0, sex: e.sex || '',
       dr: bnsDrillLv(sp)
     });
   }
@@ -142,7 +142,6 @@ function bnsMyTeam() {
 }
 function bnsTeamCheck(t) {
   if (!t || !t.u.length) return '請先在布陣放好你的隊伍(至少 1 人)';
-  if (!t.u.some(function (x) { return x.row === 0; })) return '你的隊伍前排至少要有 1 人';
   return '';
 }
 function bnsPackTeam(t) {
@@ -155,7 +154,7 @@ function bnsNormUnit(a, warn) {
   st = a[4].map(function (v) { return bnsInt(v, 0, 130, -1); });
   if (st.some(function (v) { return v < 0; })) return null;
   nm = bnsStr(a[1], 12) || '無名';
-  U = { fig: bnsStr(a[0], 24), name: nm, gr: bnsInt(a[2], 0, 4, 0), fac: bnsInt(a[3], 0, 4, 4), st: st, ja: {}, main: '', tr: [], tok: bnsInt(a[8], 0, (typeof CARD_CFG !== 'undefined' && CARD_CFG.tokMax) || 5, 0),
+  U = { fig: bnsStr(a[0], 24), name: nm, gr: bnsInt(a[2], 0, 4, 0), fac: bnsInt(a[3], 0, 4, 4), st: st, ja: {}, main: '', tr: [], tok: 0,
     up: bnsInt(a[9], 0, (typeof CARD_CFG !== 'undefined' && CARD_CFG.upMax) || 2, 0), learn: bnsInt(a[10], 0, 3, 0), star: bnsInt(a[11], 0, (typeof CARD_FURNACE !== 'undefined' && CARD_FURNACE.starMax) || 5, 0),
     lr: [], troop: '', row: bnsInt(a[14], 0, 2, -1), col: bnsInt(a[15], 0, 2, -1), sex: a[16] === 'f' ? 'f' : 'm', dr: bnsInt(a[17], 0, (typeof BNBOOK !== 'undefined' && BNBOOK.drillMax) || BNS.drillMax, 0) };
   if (U.row < 0 || U.col < 0) return null;
@@ -177,7 +176,7 @@ function bnsNormUnit(a, warn) {
 function bnsNormTeam(o, warn) {
   var u = [], used = {}, i, U;
   if (!o || typeof o !== 'object' || o.v !== 2 || !Array.isArray(o.u)) return { ok: false, why: '隊伍資料不完整' };
-  if (o.u.length < 1 || o.u.length > 5) return { ok: false, why: '隊伍人數不對(要 1~5 人)' };
+  if (o.u.length < 1 || o.u.length > 3) return { ok: false, why: '隊伍人數不對(要 1~3 人)' };
   for (i = 0; i < o.u.length; i++) {
     U = bnsNormUnit(o.u[i], warn);
     if (!U) return { ok: false, why: '隊伍資料不完整(第 ' + (i + 1) + ' 人)' };
@@ -191,7 +190,7 @@ function bnsNormTeam(o, warn) {
 // ───────── U → 單位規格(std = 標準化模式) ─────────
 function bnsCard(U, std) {
   return { slot: 0, fig: U.fig || null, sex: U.sex, name: U.name, zi: '', fac: U.fac, gr: std ? BNS.stdGr : U.gr, st: U.st.slice(), ja: Object.assign({}, U.ja), main: U.main || null, learn: U.learn, tr: U.tr.slice(),
-    tok: std ? 0 : U.tok, up: U.up, starLv: std ? 0 : U.star, bnLearn: U.lr.slice() };
+    tok: 0, up: U.up, starLv: std ? 0 : U.star, bnLearn: U.lr.slice() };
 }
 function bnsSpecs(t, std) {
   return t.u.map(function (U) {
@@ -203,7 +202,7 @@ function bnsPower(specs) { var p = 0; specs.forEach(function (s) { p += bnPower(
 // 開戰紀錄(與 bnui.js bnUiRec 同形);A = 我方(挑戰者)、B = 對方複本
 function bnsDuelRec(A, B, std, seed) {
   var a = bnBuildTeam(bnsSpecs(A, std)), b = bnBuildTeam(bnsSpecs(B, std));
-  return { v: 1, seed: seed >>> 0, teamA: a.units, teamB: b.units, opts: { events: true, scene: '' },
+  return { v: BN_REC_VER, seed: seed >>> 0, teamA: a.units, teamB: b.units, opts: { events: true, scene: '' },
     meta: { stage: 'D', kind: 'duel', ch: 0, foePower: bnsPower(b.units), scale: 1, bonds: a.bonds, formation: a.formation, std: std ? 1 : 0 } };
 }
 
@@ -291,13 +290,13 @@ function bnsReplay(txt) {
     same = en.h === R.h && S.result.winner === R.w && S.result.rounds === R.r;
     lg = bnLogBuild(S, rec, { label: '戰報碼重播' + (R.m ? '(標準化)' : ''), kind: 'duel', sid: '對戰練習', stars: R.A.u.map(function (U) { return R.m ? 0 : U.star; }), res: { w: S.result.winner, why: S.result.reason, r: S.result.rounds, st: bnsStarsOf(S) } });
     bnLogRecord(lg, rec);
-    return { ok: true, same: same, id: lg.id, res: S.result, orig: { w: R.w, r: R.r }, warn: d.warn, sameVer: d.same };
+    return { ok: true, same: same, id: lg.id, rec: rec, res: S.result, orig: { w: R.w, r: R.r }, warn: d.warn, sameVer: d.same };
   });
 }
 
 // ───────── 開打(沿用 bnui.js 戰鬥畫面流程;練習戰 bnu.stg.kind = 'duel':不給獎勵、不計進度) ─────────
 function bnsFight(D) {
-  var rec, S, P, hk, d0;
+  var rec, S, d0;
   if (typeof bnu === 'undefined' || !bnu.open || !bnu.layer) return false;
   rec = bnsDuelRec(D.A, D.B, D.m, D.s);
   d0 = bnu.data || bnUiLoad();
@@ -308,25 +307,23 @@ function bnsFight(D) {
   BNS.duel = { A: D.A, B: D.B, m: D.m ? 1 : 0, s: D.s >>> 0, keepLast: d0.last ? JSON.parse(JSON.stringify(d0.last)) : null };
   bnu.stg = { kind: 'duel', id: 'D' }; BNUI.stage = 'D';
   bnu.rec = rec;
-  S = bnInit(rec);
+  // 不進 canvas:算到底 → 結算(bnsOnResult 改按鈕)→ 戲台播放(bnBattleShow,播完進結果頁)
+  S = bnInit(rec); bnRunToEnd(S);
   bnUiSetPhase('fight');
   if (bnu.titleEl) bnu.titleEl.textContent = '對戰練習' + (D.m ? '(標準化)' : '');
   bnUiShowRes(false); bnUiShowPause(false); bnUiCutRender(null);
-  bnUiResize();
-  hk = bnUiHooks();
-  P = bnPlNew(S, bnu.L, { speed: bnUiPref().spd, hooks: hk, powerSave: bnUiPs(), sfx: true });
-  bnu.P = P; bnu.result = null; bnu.paused = false; bnu.retreat = false; bnu.manual = false; bnu.logId = '';
+  bnu.P = null; bnu.result = null; bnu.paused = false; bnu.retreat = false; bnu.manual = false; bnu.logId = '';
   bnUiSyncBtns();
   if (bnu.roundEl) bnu.roundEl.textContent = '';
-  bnUiResize();
-  bnUiLoop(true);
+  bnUiShowResult(S);
+  bnBattleShow(rec, { mode: 'play', mySide: 'A' });
   return true;
 }
 // bnui.js bnUiShowResult 結尾呼叫:對戰練習才處理 —— 還原戰績欄、改戰報標籤、改結算按鈕、留下戰報碼資料
 function bnsOnResult(d) {
   var D = BNS.duel, g = (typeof bnu !== 'undefined') ? bnu.stg : null, S, d0, en = null, L, h, row, re;
   if (!D || !g || g.kind !== 'duel') return false;
-  S = bnu.P && bnu.P.S;
+  S = bnu.resS || (bnu.P && bnu.P.S);
   BNS.duel = null;
   d0 = bnu.data || bnUiLoad();
   d0.last = D.keepLast;
@@ -466,7 +463,7 @@ function bnsDo(a, t) {
   if (a === 'rcopy') return bnsCopy(BNS.rcode, 'bnsRCode');
   if (a === 'std') { pr = bnsPref(); pr.std = !pr.std; bnsPrefSave(); bnsRender(); return Promise.resolve(true); }
   if (a === 'clr') { BNS.inp.chal = ''; BNS.chk = null; bnsSay(''); bnsRender(); return Promise.resolve(true); }
-  if (a === 'relog') { if (BNS.rep && BNS.rep.ok && typeof bnLogOpen === 'function') bnLogOpen('recent', BNS.rep.id); return Promise.resolve(true); }
+  if (a === 'relog') { if (BNS.rep && BNS.rep.ok) { if (BNS.rep.rec && typeof bnBattleShow === 'function') bnBattleShow(BNS.rep.rec, { mode: 'play', mySide: 'A' }); else if (typeof bnLogOpen === 'function') bnLogOpen('recent', BNS.rep.id); } return Promise.resolve(true); }
   if (a === 'rclr') { BNS.inp.rep = ''; BNS.rep = null; bnsSay(''); bnsRender(); return Promise.resolve(true); }
   if (BNS.busy) return Promise.resolve(false);
   if (a === 'check') {
@@ -545,7 +542,7 @@ function bnsRender() {
       '<textarea id="bnsIn" rows="4" maxlength="' + BNS.maxIn + '" placeholder="把挑戰碼貼在這裡" aria-label="挑戰碼">' + bnsEsc(BNS.inp.chal) + '</textarea>' +
       '<div class="bs-row"><button data-s="check" class="pri">檢查</button><button data-s="clr">清除</button></div>' +
       '<button class="bs-tg' + (pr.std ? ' on' : '') + '" data-s="std" aria-pressed="' + (pr.std ? 'true' : 'false') + '">標準化模式:' + (pr.std ? '開' : '關') + '</button>' +
-      '<p class="bs-sm">開啟後,雙方的品階都當紫階算、星等和信物都歸零,只比配隊和戰法。</p></div><div>';
+      '<p class="bs-sm">開啟後,雙方的品階都當紫階算、星等都歸零,只比配隊和戰法。</p></div><div>';
     if (c && c.team) {
       h += c.warn.map(function (w) { return '<p class="bs-warn">' + bnsEsc(w) + '</p>'; }).join('') + '<p class="bs-p">對方隊伍(電腦操控):</p>' + bnsTeamHtml(c.team, pr.std) +
         '<p class="bs-p">我方:目前布陣 ' + my.u.length + ' 人' + (my.u.length ? ' · 戰力 ' + bnsPower(bnsSpecs(my, pr.std)) : '') + '</p>' + (why ? '<p class="bs-warn">' + bnsEsc(why) + '</p>' : '') +
@@ -593,7 +590,7 @@ function bnsInvShow() {
   el = document.createElement('div'); el.id = 'bnsInv';
   el.innerHTML = '<div class="box" role="dialog" aria-label="' + (isRep ? '收到戰報' : '收到挑戰隊伍') + '"><h2>' + (isRep ? '收到戰報' : '收到挑戰隊伍') + '</h2>' +
     '<p>' + (isRep ? '朋友傳來一場對戰練習的戰報,要打開來看嗎?' : '朋友傳來一支隊伍,要跟它打一場練習戰嗎?(不給獎勵、不影響進度)') + '</p>' +
-    (can ? '' : '<p class="bs-warn">戰鬥要卡包 5 人以上才開放。可以先複製碼留著,開放後到「戰鬥 → 對戰」貼上。</p><textarea id="bnsInvCode" readonly rows="3">' + bnsEsc(code) + '</textarea>') +
+    (can ? '' : '<p class="bs-warn">戰鬥要卡包 3 人以上才開放。可以先複製碼留著,開放後到「戰鬥 → 對戰」貼上。</p><textarea id="bnsInvCode" readonly rows="3">' + bnsEsc(code) + '</textarea>') +
     '<div class="row">' + (can ? '<button class="pri" data-v="go">' + (isRep ? '打開戰報' : '去挑戰') + '</button>' : '<button class="pri" data-v="copy">複製碼</button>') + '<button data-v="no">先不要</button></div></div>';
   el.addEventListener('click', bnsInvClick);
   document.body.appendChild(el);

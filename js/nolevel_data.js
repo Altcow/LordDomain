@@ -300,7 +300,7 @@ const NL_FEATURE_GATE = {
   decree: { type: 'open' },
   heatmap: { type: 'node', need: 'wr_shangji' },
   tavern: { type: 'node', need: 'ed_xiangyin', note: '場上有酒肆 / 客棧任一' },
-  cardpack: { type: 'open', note: '卡池(小池 T / 大池 E)開場就開放,不卡建築、科技、官階' },
+  cardpack: { type: 'open', note: '卡池(S01卡池 E)開場就開放,不卡建築、科技、官階' },
   exam: { type: 'open', note: 'v58-C:縣試池開場全開(原 node ed_xuexiao);考場建築仍依 NL_OBJ_TECH 研發' },
   dianshi: { type: 'open', note: '殿試台開場全開(原 node e_dongguan)' },
   academy: { type: 'node', need: 'ed_xuexiao' },

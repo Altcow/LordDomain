@@ -1,0 +1,103 @@
+/* css/ld_equip.css — 裝備 / 鍛造坊 / 書院 / 背包 介面(js/ld_equip_ui.js、ld_equip_forge_ui.js、ld_hunt_ui.js)。只加 .eq- / .hunt- 前綴零件,不影響其他頁面。顏色用 ld_theme.css 變數。
+   品質色:q0 白、q1 藍、q2 紫、q3 金(對應 --q1 ~ --q4)。 */
+.eq-page { display: flex; flex-direction: column; gap: 6px; padding: 8px; max-width: 640px; margin: 0 auto; box-sizing: border-box; color: #fbeed2; font-family: var(--ld-font); }
+.eq-head { font-size: 16px; font-weight: 900; color: var(--gold2); display: flex; align-items: center; gap: 8px; }
+.eq-head i { font-style: normal; font-size: 12px; padding: 0 6px; border: 1.5px solid var(--ink); border-radius: 8px; background: var(--paper2); color: var(--ink); }
+.eq-sec { font-size: 13px; font-weight: 900; color: #e9d3a6; border-bottom: 1.5px solid #e9d3a655; padding-bottom: 2px; margin-top: 4px; }
+.eq-none { padding: 14px 8px; text-align: center; font-size: 13px; font-weight: 900; color: #e9d3a6; opacity: .9; }
+.eq-note { font-size: 12px; line-height: 1.5; color: #e9d3a6; }
+.eq-warn { font-size: 13px; font-weight: 900; line-height: 1.5; padding: 6px 8px; border: var(--line2); border-radius: 10px; background: #fff0c8; color: var(--red-d); }
+.eq-kv { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; min-height: 26px; }
+.eq-kv span { color: #e9d3a6; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; flex: 0 0 auto; }
+.eq-kv b { min-width: 0; }
+.eq-kv .eq-b { min-height: 36px; margin-left: 6px; }
+.eq-kv b { font-weight: 900; text-align: right; }
+.eq-kv b.bad, .eq-at.bad, .bad { color: #ff8a70; }
+/* 裝備圖示:品質框 */
+.eq-ico { position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; box-sizing: border-box; border: 3px solid var(--q1); border-radius: 12px; background: #00000044; box-shadow: var(--drop2); }
+.eq-ico.big { width: 64px; height: 64px; }
+.eq-ico.q0 { border-color: var(--q1); } .eq-ico.q1 { border-color: var(--q2); background: #4aa3ff33; } .eq-ico.q2 { border-color: var(--q3); background: #b46cff33; } .eq-ico.q3 { border-color: var(--q4); background: #ffc94044; }
+.eq-ico .eq-ic { width: 100%; height: 100%; border: 0; box-shadow: none; background: none; color: #fbeed2; font-size: 22px; }
+.eq-ico em { position: absolute; right: -4px; bottom: -4px; font-style: normal; font-size: 11px; font-weight: 900; padding: 0 4px; border: 1.5px solid var(--ink); border-radius: 8px; background: var(--gold); color: var(--ink); }
+.eq-nm { font-size: 14px; font-weight: 900; }
+.eq-nm.q0 { color: #f2f2f2; } .eq-nm.q1 { color: #7fbfff; } .eq-nm.q2 { color: #cf9bff; } .eq-nm.q3 { color: var(--gold2); }
+.q0 { --qc: var(--q1); } .q1 { --qc: var(--q2); } .q2 { --qc: var(--q3); } .q3 { --qc: var(--q4); }
+/* 一列(一件裝備 / 一位名人) */
+.eq-row { display: flex; align-items: center; gap: 8px; padding: 6px; border: var(--line2); border-radius: 12px; background: #2b1a10a8; box-shadow: inset 0 0 0 1px #f5c54255; }
+.eq-row.cur { background: #3a2414dd; }
+.eq-row.lack { opacity: .7; }
+.eq-row.food { cursor: pointer; }
+.eq-row.food.on { box-shadow: inset 0 0 0 2px var(--gold); }
+.eq-bd { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.eq-at { font-size: 12px; color: #fbeed2; }
+.eq-at.main { font-weight: 900; color: var(--gold2); }
+.eq-tr { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #ffe9a8; line-height: 1.3; }
+.eq-tr b { font-weight: 900; color: var(--gold); white-space: nowrap; }
+.eq-tri { width: 20px; height: 20px; flex: 0 0 auto; border-radius: 6px; font-size: 11px; box-shadow: none; }
+.eq-own { font-size: 11px; color: #9ee6c0; }
+.eq-bt { flex: 0 0 auto; display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.eq-act { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.eq-need { font-size: 12px; font-weight: 900; color: #ff8a70; text-align: center; }
+.eq-pt { font-size: 12px; font-weight: 900; color: var(--gold2); text-align: center; }
+.eq-chk { min-height: 18px; text-align: center; font-weight: 900; color: var(--gold); }
+/* 按鈕(≥ 44px 觸控) */
+.eq-b { min-width: 44px; min-height: 44px; padding: 0 12px; font: 900 13px/1.2 var(--ld-font); color: var(--ink); border: var(--line2); border-radius: 12px; background: linear-gradient(var(--gold2), var(--gold)); box-shadow: var(--drop2); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.eq-b:active { transform: translateY(3px); box-shadow: none; }
+.eq-b.sub { background: linear-gradient(var(--wood2), var(--wood3)); color: #e9d3a6; }
+.eq-b.sub.on { background: linear-gradient(var(--gold2), var(--gold)); color: var(--ink); }
+.eq-b.warn { background: linear-gradient(#ef6a4c, var(--red)); color: #fff; }
+.eq-b.gold { background: linear-gradient(#ffd96a, #e8a21c); }
+.eq-b.big { min-height: 48px; font-size: 15px; width: 100%; margin-top: 4px; }
+.eq-b.off { opacity: .45; filter: grayscale(.6); }
+.eq-go { display: flex; gap: 8px; }
+.eq-go .eq-b { flex: 1 1 0; }
+.eq-chips, .eq-filter, .eq-intro { display: flex; flex-wrap: wrap; gap: 6px; }
+.eq-intro { padding: 4px; border: var(--line2); border-radius: 10px; background: #00000033; }
+.eq-intro .eq-b { min-height: 36px; padding: 0 8px; }
+.eq-chips .ld-tab.q0.on { background: linear-gradient(#fff, #cfcfcf); } .eq-chips .ld-tab.q1.on { background: linear-gradient(#cfe6ff, #6ea1dc); }
+.eq-chips .ld-tab.q2.on { background: linear-gradient(#e3cdfa, #9a6fd0); } .eq-chips .ld-tab.q3.on { background: linear-gradient(var(--gold2), var(--gold)); }
+.eq-chips .ld-tab, .eq-filter .ld-tab, .ldp-tabs .ld-tab { min-height: 36px; }
+.eq-soul { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #ffe9a8; min-height: 36px; }
+/* 格子(背包、配方) */
+.eq-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; }
+.eq-cell { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; border: var(--line2); border-radius: 10px; background: #2b1a10a8; cursor: pointer; min-height: 64px; }
+.eq-cell i { font-style: normal; font-size: 11px; color: #e9d3a6; }
+.eq-cell b { font-size: 12px; font-weight: 900; }
+.eq-cell u { position: absolute; left: 2px; top: 2px; text-decoration: none; font-size: 10px; font-weight: 900; padding: 0 4px; border-radius: 6px; background: var(--teal); color: #fff; border: 1.5px solid var(--ink); }
+.eq-cell.mat .eq-ic { width: 36px; height: 36px; }
+.eq-cell.lack b { color: #ff8a70; }
+.eq-recipe { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; }
+.eq-xf { width: 22px; height: 22px; border: 0; box-shadow: none; background: none; font-size: 0; vertical-align: middle; }
+.eq-xf:not(:has(> .ld-ph-cell)):not(:has(> img)) { font-size: 12px; background: var(--paper2); border-radius: 6px; }
+/* 結果面板與演出 */
+.eq-result { padding: 8px; border: var(--line); border-radius: 14px; background: var(--paper); color: var(--ink); box-shadow: var(--drop); display: flex; flex-direction: column; gap: 4px; animation: eqPop .35s ease-out; }
+.eq-result.bad { background: #ffe0d6; } .eq-result.ok { background: #fff3cf; }
+.eq-result b { font-size: 15px; font-weight: 900; }
+.eq-result span { font-size: 12px; }
+.eq-result .eq-row { background: #3a2414; color: #fbeed2; }
+.eq-brk { display: flex; align-items: center; gap: 8px; }
+.eq-stk { width: 56px; height: 56px; transform: rotate(-12deg); }
+.eq-smith { width: 72px; height: 112px; flex: 0 0 auto; font-size: 30px; }
+.eq-smithrow { display: flex; align-items: center; gap: 8px; }
+.eq-smithrow.hit .eq-smith { animation: eqHammer .5s ease-in-out; }
+.eq-bubble { flex: 1 1 auto; padding: 6px 10px; background: var(--white); color: var(--ink); border: var(--line2); border-radius: 12px; font-size: 13px; font-weight: 900; box-shadow: var(--drop2); }
+.hunt-scroll { padding: 8px; background: #fff8e6; border: var(--line2); border-radius: 10px; font-size: 14px; font-weight: 900; line-height: 1.6; }
+.hunt-gate { position: relative; display: flex; align-items: flex-end; justify-content: center; height: 120px; gap: 4px; }
+.eq-gate { width: 50%; height: 100%; font-size: 26px; }
+.eq-horse { width: 50%; height: 100%; font-size: 30px; animation: eqPop .4s ease-out; }
+.eq-horse.q0 { border-color: var(--q1); } .eq-horse.q1 { border-color: var(--q2); } .eq-horse.q2 { border-color: var(--q3); } .eq-horse.q3 { border-color: var(--q4); box-shadow: 0 0 14px var(--q4); }
+@keyframes eqPop { 0% { transform: scale(.85); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes eqHammer { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-14deg) translateY(-4px); } 50% { transform: rotate(10deg) translateY(2px); } 75% { transform: rotate(-6deg); } }
+/* 武將詳情 4 格:裝備圖示縮小塞進原 56px 格 */
+.ldh-eq .eq-ico { width: 34px; height: 34px; border-width: 2px; border-radius: 9px; box-shadow: none; }
+.ldh-eq .eq-ico em { font-size: 9px; right: -6px; bottom: -6px; padding: 0 3px; }
+.ldh-info .eq-at, .ldh-info .eq-tr { display: inline-block; margin-right: 8px; color: var(--ink); }
+.ldh-info .eq-at.main { color: var(--red-d); }
+.ldh-info .eq-tr b { color: var(--red-d); }
+.ldh-info .eq-act { display: block; margin-top: 2px; }
+.ldh-info .eq-act .ldh-mini { min-height: 36px; margin-right: 4px; }
+@media (prefers-reduced-motion: reduce) { .eq-result, .eq-horse, .eq-smithrow.hit .eq-smith { animation: none; } .eq-b:active { transform: none; } }
+@media (orientation: landscape) { .eq-page { padding: 6px 10px; } .eq-smith { width: 56px; height: 88px; } }
+.ld-tab.eq-tabi { display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px 3px 4px; flex: 0 0 auto; }
+.ld-tab.eq-tabi .eq-tabic { width: 20px; height: 20px; flex: 0 0 auto; font-size: 12px; }
+.ld-tab.eq-tabi:not(.on) { font-size: 0; padding: 3px 4px; }

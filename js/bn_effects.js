@@ -118,12 +118,24 @@ function bnTargetsFor(S, u, eff, res, o) {
 }
 
 // ───────── 是否值得發動(不抽亂數) ─────────
-function bnUseful(S, u, inst) {
-  var d = inst.def, P = d.params || {}, k = d.kind, al, i;
-  // S0 節奏 / 條件閘(不擲骰):phase = 第 from~to 回合才可發動;selfHpBelow = 自身兵力低於比例才可發動;needStatus = 有目標帶該狀態
+// S0 節奏 / 條件閘(不擲骰):phase = 第 from~to 回合才可發動;selfHpBelow = 自身兵力低於比例才可發動;needStatus = 有目標帶該狀態;onlyVs = 只對特定對象才發動。保底傷害戰法的主效果條件不成立時仍須通過這些閘
+function bnGateOk(S, u, inst) {
+  var d = inst.def, P = d.params || {};
   if (P.phase && !bnRoundIn(S.round, P.phase.from || 1, P.phase.to)) return false;
   if (P.selfHpBelow && bnHpPct(u) >= P.selfHpBelow) return false;
   if (P.needStatus && !bnEnemies(S, u).some(function (x) { return bnHas(x, P.needStatus); })) return false;
+  if (P.onlyVs && d.vs && !bnEnemies(S, u).some(function (x) { return bnVsMatch(S, d.vs, x); })) return false;
+  return true;
+}
+// 能否發動:主效果值得發動,或帶保底傷害(params.floor)且過閘、場上有敵人(此時 bnCast 改打保底傷害)
+function bnCanCast(S, u, inst) {
+  var P = inst.def.params || {};
+  if (bnUseful(S, u, inst)) return true;
+  return !!P.floor && bnGateOk(S, u, inst) && bnEnemies(S, u).length > 0;
+}
+function bnUseful(S, u, inst) {
+  var d = inst.def, P = d.params || {}, k = d.kind, al, i;
+  if (!bnGateOk(S, u, inst)) return false;
   if (P.cond === 'ally_below70') { if (!bnAllies(S, u, true).some(function (x) { return x.hp < x.maxHp * 0.7; })) return false; }
   if (P.cond === 'has_debuff') { if (!bnAllies(S, u, true).some(bnHasNeg)) return false; }
   if (k === 'heal_single' || k === 'heal_all' || k === 'heal_hot') {
@@ -149,7 +161,6 @@ function bnUseful(S, u, inst) {
   } else if (BN_ATTACK[k]) {
     if (!bnEnemies(S, u).length) return false;
   }
-  if (P.onlyVs && d.vs && !bnEnemies(S, u).some(function (x) { return bnVsMatch(S, d.vs, x); })) return false;   // 只對特定對象才發動(潘鳳遇布)
   return true;
 }
 var BN_BUFFS = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'dodge_rate', 'counter', 'ward', 'amp_atk', 'critdmg_up'];
@@ -178,7 +189,10 @@ function bnCast(S, u, inst, o) {
   var d = inst.def, P = d.params || {}, res = { main: null, kills: [], hits: 0, dmg: 0, targets: [] }, eff, mt, ex, i, e2, loss;
   o = o || {};
   eff = { kind: d.kind, power: d.power, dmg: d.dmg, params: P, target: d.target || 'enemy_one', sk: d };
-  if (d.kind === 'revive' && (!u.team.deadOrder.length || u.team.revived)) {
+  // S/A 保底傷害(params.floor,tools/bn_floor_gen.js 產生;非攻擊類名人戰法):主效果條件不成立(無可清除 / 無可治療 / 無增益可偷…)時改打保底傷害,條件成立時於主效果之後另打一次(見下 extra 之後)
+  var fo = !!P.floor && !bnUseful(S, u, inst);
+  if (fo) { eff = { kind: 'atk_single', power: 'S', dmg: d.dmg, params: { mulOverride: P.floor }, target: 'enemy_one', sk: d }; P = {}; }
+  else if (d.kind === 'revive' && (!u.team.deadOrder.length || u.team.revived)) {
     if (P.fallback) { eff = { kind: P.fallback.kind, power: P.fallback.power, params: {}, target: P.fallback.target, sk: d }; }
     else return false;
   }
@@ -208,6 +222,10 @@ function bnCast(S, u, inst, o) {
       if (ex.target === d.target && d.target !== 'self') e2.target = 'same';
       bnApplyEffect(S, u, e2, res, o);
     }
+  }
+  if (P.floor && !fo && !S.over) {   // 保底傷害:單體;主效果指定單一敵人時打同一目標,否則打 enemy_one 選出的敵人
+    e2 = { kind: 'atk_single', power: 'S', dmg: d.dmg, params: { mulOverride: P.floor }, target: /^enemy_(one|lowest|highest_atk|hpmax|fastest|prey|troop)$/.test(d.target || '') && res.main && res.main.length ? 'same' : 'enemy_one', sk: d, isExtra: true };
+    bnApplyEffect(S, u, e2, res, o);
   }
   if (P.leech && res.dmg > 0 && u.alive && !S.over) bnHeal(S, u, u, res.dmg * P.leech, {});   // 嗜血(S0):本戰法造成傷害的比例回復自身
   if (!S.over) bnAttachParams(S, u, eff, res, o);
@@ -869,7 +887,7 @@ function bnTryPursuit(S, u, target) {
   for (i = 0; i < u.act.length && u.alive && !S.over; i++) {
     inst = u.act[i]; d = inst.def;
     if (d.cat !== 'pursuit' || inst.cd > 0) continue;
-    if (!bnUseful(S, u, inst)) continue;
+    if (!bnCanCast(S, u, inst)) continue;
     rate = bnRateOf(S, u, inst); ok = S.rng() < rate;
     S.stats.rolls++; if (ok) S.stats.rollOk++;
     bnEv(S, 'roll', { u: u.id, id: d.id, p: Math.round(rate * 100), ok: ok ? 1 : 0 });
@@ -1287,6 +1305,7 @@ function bnSetupBattle(S) {
   bnVsSetup(S);
   for (i = 0; i < order.length; i++) {
     o = order[i];
+    if (o.mods.startWard) bnGrantWard(S, o, o, o.mods.startWard, 'any', BN_DATA.ward.dur);   // 裝備特性「靜心」:開戰得抵禦層(js/ld_equip.js)
     // 開場陣型 / 詞條:疑兵
     if (o.mods.opening === 'yibing') {
       bnApplyEffect(S, o, { kind: 'debuff_atk', power: 'S', params: { rounds: 1 }, target: 'enemy_all', sk: null }, { main: null, kills: [] }, { rounds: 1 });

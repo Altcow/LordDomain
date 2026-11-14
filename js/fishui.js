@@ -712,7 +712,7 @@ function fuMountButton() {
   btn.textContent = '🎣';
   btn.addEventListener('click', function () { fishEnter('top'); });
   top.insertBefore(btn, document.getElementById('btnClear'));
-  fuTopTimer = setInterval(fuSyncTop, 300);
+  if (!cityRuntimeOff()) fuTopTimer = setInterval(fuSyncTop, 300);
   fuSyncTop();
 }
 

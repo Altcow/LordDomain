@@ -340,7 +340,7 @@ function caravanUiInit() {
     if (typeof panelRegister === 'function') panelRegister('caravan', { kind: 'big', elId: 'caravanPanel', close: function () { caravanPanelToggle(false); } });
   } catch (e) { if (typeof console !== 'undefined') console.warn('[caravan] UI 初始化失敗', e); }
 }
-if (typeof document !== 'undefined' && document.readyState) {
+if (typeof document !== 'undefined' && document.readyState && !cityRuntimeOff()) {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', caravanUiInit);
   else caravanUiInit();
 }

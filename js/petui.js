@@ -1573,7 +1573,7 @@ function puMountButton() {
   if (idx >= 0) ref = kids[idx + 1] || null;
   else ref = document.getElementById('btnClear');
   top.insertBefore(btn, ref);
-  puTopTimer = setInterval(puSyncTop, 300);
+  if (!cityRuntimeOff()) puTopTimer = setInterval(puSyncTop, 300);
   puSyncTop();
 }
 

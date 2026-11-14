@@ -948,7 +948,7 @@ function goodsUiInit() {
     if (top) top.appendChild(btn);
     var sync = function () { if (!document.hidden) btn.hidden = !(typeof isCityOnly === 'function' && isCityOnly()); };
     sync();
-    setInterval(sync, 1000);
+    if (!cityRuntimeOff()) setInterval(sync, 1000);
     setInterval(function () { if (goodsPanelOpen && !document.hidden) goodsPanelRender(); }, 1000);
   } catch (e) { if (typeof console !== 'undefined') console.warn('[goods] UI 初始化失敗', e); }
 }

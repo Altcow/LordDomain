@@ -212,10 +212,10 @@ function bnStgMakeFoe(ent, v, ch, pos, st, sk) {
   return spec;
 }
 var BN_STG_FIG_LOOK = { '槍': 'bandit_chief', '盾': 'yt_brute', '騎': 'clan_retainer', '弓': 'hu_archer', '謀': 'yt_mystic' };
-// 依 roster 條目與基準 v 組成敵方隊伍。回 {units, power, list, bonds}
+// 依 roster 條目與基準 v 組成敵方隊伍(3 人隊伍:超過 3 人取前 3,依原順序,保持確定性)。回 {units, power, list, bonds}
 function bnStgBuildTeam(ents, v, ch, st, sk) {
-  var specs = ents.map(function (e, k) { return bnStgMakeFoe(e, v, ch, k, st, sk); }), team, power = 0;
-  bnAutoLayout(specs, null);
+  var specs = ents.slice(0, 3).map(function (e, k) { return bnStgMakeFoe(e, v, ch, k, st, sk); }), team, power = 0;
+  specs.forEach(function (sp, k) { sp.row = [2, 1, 0][k]; sp.col = 0; });   // 主將 row 2 / 副將 row 1 / 副將 row 0,col 0
   team = bnBuildTeam(specs);
   team.units.forEach(function (u) { power += bnPower(u); });
   return { units: team.units, power: power, rec: Math.round(power * bnStgRecK(st)), bonds: team.bonds.concat(team.formation), list: team.units.map(function (u) { return { name: u.name, title: u.title || '', troop: u.troop, look: u.look, fig: u.fig || '' }; }) };
@@ -251,7 +251,7 @@ function bnStgTx(s) { return (typeof fxText === 'function') ? fxText(s) : s; }  
 function bnStgBounty(worldSeed, dayNo, myPower, maxCh) {
   var rng = bnRng(bnHash('bnbounty', worldSeed | 0, dayNo | 0)), cn = 1 + Math.floor(rng() * Math.max(1, Math.min(6, maxCh || 1))), ch = bnStgChapter(cn), pool = [], ents = [], k, r, tgt, v, team, sk;
   for (k = 0; k < ch.roster.length; k++) if (!ch.roster[k].fig) pool.push(ch.roster[k]);
-  while (ents.length < 5 && pool.length) { k = Math.floor(rng() * pool.length); ents.push(pool.splice(k, 1)[0]); }
+  while (ents.length < 3 && pool.length) { k = Math.floor(rng() * pool.length); ents.push(pool.splice(k, 1)[0]); }
   r = rng();
   tgt = Math.max(300, (myPower || 1500)) * (BN_STG.bounty.lo + (BN_STG.bounty.hi - BN_STG.bounty.lo) * r) / BN_STG.bounty.k;
   sk = 'B:' + (worldSeed | 0) + ':' + (dayNo | 0);   // 流寇戰法種子 = 世界種子 + 日號(同日固定)

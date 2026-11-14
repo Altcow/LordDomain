@@ -1,0 +1,111 @@
+/* css/ld_hero.css — 武將詳情頁(第 2 階段,js/ld_hero.js)。只用 .ldh 前綴與 ld_theme.css 變數;橫式為基準(844x390),直式以 orientation 重排。
+   點擊區:真正的 button 一律 >= 44;膠囊 / 數值格 / 列用 div[role=button] + ::after 擴大命中區。 */
+.ldp-body.ldh-body { display: flex; overflow: hidden; padding-top: 4px; }
+.ldh-top { justify-content: center; overflow: hidden; }
+.ldh { flex: 1 1 auto; min-width: 0; min-height: 0; display: grid; gap: 6px; grid-template-columns: 34% minmax(0, 1fr) 44px; grid-template-rows: minmax(0, 1fr); }
+/* 頂列:‹ 名字牌 › */
+.ldh-pn { font-size: 26px; }
+.ldh-pn:disabled { opacity: .4; box-shadow: none; cursor: default; }
+.ldh-plate { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 100%; box-sizing: border-box; padding: 3px 14px; background: linear-gradient(#e0b27a, #b07642 70%, #8a5a32); border: var(--line2); border-radius: 12px; box-shadow: var(--drop2); color: var(--ink); }
+.ldh-plate b { font-size: 15px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ldh-plate i { font-style: normal; font-size: 12px; font-weight: 900; opacity: .75; white-space: nowrap; }
+/* 左欄:立繪 */
+.ldh-fig { position: relative; min-height: 0; overflow: hidden; border: var(--line2); border-radius: 14px; box-shadow: var(--drop2); background: radial-gradient(ellipse at 50% 70%, #6b4a2a 0%, #3a2414 75%); }
+.ldh-fig.q4 { box-shadow: inset 0 0 0 2px #f5c542aa, var(--drop2); }
+.ldh-fig.q3 { box-shadow: inset 0 0 0 2px #b46cffaa, var(--drop2); }
+.ldh-glow { position: absolute; left: 12%; right: 12%; bottom: 44px; height: 14%; border-radius: 50%; background: radial-gradient(ellipse, #ffe48acc 0%, #ffe48a00 70%); }
+.ldh-img { position: absolute; left: 50%; bottom: 48px; height: calc(100% - 52px); max-width: 96%; transform: translateX(-50%); object-fit: contain; object-position: 50% 100%; filter: drop-shadow(0 4px 0 #0006); }
+.ldh-name { position: absolute; left: 6px; top: 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; border: var(--line2); border-radius: 8px; background: linear-gradient(var(--paper), var(--paper3)); color: var(--ink); box-shadow: var(--drop2); max-height: 70%; overflow: hidden; }
+.ldh-name b { writing-mode: vertical-rl; font-size: 18px; font-weight: 900; letter-spacing: 2px; line-height: 1.1; }
+.ldh-name i { writing-mode: vertical-rl; font-style: normal; font-size: 12px; font-weight: 900; opacity: .75; }
+.ldh-stamp { position: absolute; left: 6px; bottom: 56px; width: 44px; height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border: 3px solid var(--red); border-radius: 50%; background: #fffaf0e6; color: var(--red); font: 900 17px/1 var(--ld-font); transform: rotate(-12deg); }
+.ldh-stk { position: absolute; right: 4px; top: 4px; min-width: 44px; min-height: 44px; padding: 0 10px; font: 900 12px/1.2 var(--ld-font); color: var(--ink); border: var(--line2); border-radius: 12px; background: linear-gradient(var(--gold2), var(--gold)); box-shadow: var(--drop2); cursor: pointer; }
+.ldh-ft { position: absolute; left: 0; right: 0; bottom: 0; height: 52px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 0 6px; background: linear-gradient(#0000, #1b0f08cc 40%); }
+.ldh-stars { display: flex; gap: 1px; font-size: 15px; line-height: 1; white-space: nowrap; }
+.ldh-stars .lit { color: var(--gold); text-shadow: 0 1px 0 var(--ink); }
+.ldh-stars .dim { color: #ffffff55; }
+.ldh-hexes { display: flex; gap: 4px; flex: 0 0 auto; }
+.ldh-hex { width: 44px; height: 44px; padding: 0; border: 0; color: var(--ink); font: 900 16px/1 var(--ld-font); cursor: pointer; clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%); background: linear-gradient(var(--gold2), var(--gold-d)); -webkit-tap-highlight-color: transparent; }
+.ldh-hex.bronze { background: linear-gradient(#e0b27a, #8a5a32); }
+.ldh-hex.bronze.on { background: linear-gradient(#ef6a4c, var(--red-d)); color: #fff; }
+.ldh-hex:active { filter: brightness(.85); }
+/* 右面板 */
+.ldh-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 6px; box-sizing: border-box; }
+.ldh-scroll { flex: 1 1 auto; min-height: 0; overflow: hidden auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 6px; }
+.ldh-scroll > * { flex: 0 0 auto; }
+.ldh-pick > * { flex: 0 0 auto; }
+.ldh-info { flex: 0 0 auto; box-sizing: border-box; height: 58px; overflow: hidden auto; padding: 4px 8px; border: var(--line2); border-radius: 10px; background: #fbf1dcee; color: var(--ink); font-size: 12px; line-height: 1.4; }
+.ldh-info b { display: block; font-size: 13px; font-weight: 900; }
+.ldh-info span { display: block; }
+/* 適性膠囊 */
+.ldh-apts { display: flex; gap: 6px; flex: 0 0 auto; }
+.ldh-cap { position: relative; flex: 1 1 0; height: 32px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 4px; border: var(--line2); border-radius: 16px; background: #fbf1dc; color: var(--ink); font-weight: 900; box-shadow: var(--drop2); cursor: pointer; }
+.ldh-cap i { font-style: normal; font-size: 14px; }
+.ldh-cap b { font-size: 14px; min-width: 14px; text-align: center; }
+.ldh-cap.gS b { color: var(--red); } .ldh-cap.gA b { color: #b46c00; } .ldh-cap.gB b { color: var(--blue); } .ldh-cap.gC b { color: #777; }
+.ldh-cap.main { background: linear-gradient(var(--gold2), var(--gold)); }
+.ldh-cap::after, .ldh-st::after { content: ''; position: absolute; left: -2px; right: -2px; top: -7px; bottom: -7px; }
+/* 數值格:2 欄 x 3 列 */
+.ldh-sts { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; flex: 0 0 auto; }
+.ldh-st { position: relative; height: 26px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 3px; border-radius: 8px; background: #fbf1dcdd; color: var(--ink); border: 1.5px solid var(--ink); cursor: pointer; }
+.ldh-st i { font-style: normal; font-size: 13px; font-weight: 900; }
+.ldh-st b { margin-left: auto; font-size: 14px; font-weight: 900; }
+.ldh-st.pow b { color: var(--red); }
+.ldh-ico { width: 20px; height: 20px; font-size: 12px; border-radius: 6px; border-width: 1.5px; box-shadow: none; flex: 0 0 auto; }
+/* 裝備格 */
+.ldh-eqs { display: flex; gap: 8px; flex: 0 0 auto; }
+.ldh-eq { width: 56px; height: 56px; padding: 0; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 2px dashed #e9d3a6aa; border-radius: 10px; background: #00000033; color: #e9d3a6; cursor: pointer; font-family: var(--ld-font); }
+.ldh-eq i { font-style: normal; font-size: 12px; font-weight: 900; }
+.ldh-eqi { width: 26px; height: 26px; font-size: 14px; opacity: .5; box-shadow: none; border-radius: 7px; }
+/* 技能槽 */
+.ldh-sks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; flex: 0 0 auto; }
+.ldh-sk { position: relative; height: 60px; padding: 4px 4px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: var(--line2); border-radius: 10px; background: linear-gradient(var(--paper), var(--paper3)); color: var(--ink); cursor: pointer; font-family: var(--ld-font); box-shadow: var(--drop2); }
+.ldh-sk.fx { border-color: var(--gold-d); background: linear-gradient(var(--gold2), var(--gold)); }
+.ldh-sk.lock, .ldh-sk.empty, .ldh-sk.none { background: #00000044; color: #e9d3a6; border-style: dashed; box-shadow: none; }
+.ldh-sk i { font-style: normal; font-size: 12px; font-weight: 900; opacity: .75; }
+.ldh-sk b { font-size: 13px; font-weight: 900; line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ldh-sk u { text-decoration: none; font-size: 12px; font-weight: 900; }
+.ldh-sk .lk { font-size: 15px; }
+.ldh-flag { position: absolute; right: 4px; top: 3px; width: 12px; height: 14px; background: var(--red); clip-path: polygon(0 0, 100% 0, 70% 50%, 100% 100%, 0 100%); }
+.ldh-sel, .sel { outline: 3px solid var(--gold); outline-offset: -1px; }
+/* 列(戰法 / 傳承 / 選擇頁) */
+.ldh-row { position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-height: 40px; box-sizing: border-box; padding: 4px 8px; border: var(--line2); border-radius: 10px; background: #fbf1dcee; color: var(--ink); cursor: pointer; font-size: 13px; }
+.ldh-row.off { background: #00000044; color: #e9d3a6; border-style: dashed; cursor: default; }
+.ldh-row.auto { opacity: .75; }
+.ldh-row b { font-weight: 900; }
+.ldh-row span { flex: 1 1 120px; min-width: 0; font-size: 12px; opacity: .85; }
+.ldh-row .tg { font-style: normal; font-size: 12px; font-weight: 900; padding: 0 6px; border: 1.5px solid var(--ink); border-radius: 8px; background: var(--paper2); white-space: nowrap; }
+.ldh-row .tg.tS { background: var(--q4); } .ldh-row .tg.tA { background: var(--q3); color: #fff; } .ldh-row .tg.tB { background: var(--q2); } .ldh-row .tg.tC { background: var(--q1); }
+.ldh-mini { min-width: 44px; min-height: 44px; padding: 0 12px; font: 900 13px/1.2 var(--ld-font); color: var(--ink); border: var(--line2); border-radius: 12px; background: linear-gradient(var(--gold2), var(--gold)); box-shadow: var(--drop2); cursor: pointer; }
+.ldh-mini.warn { background: linear-gradient(#ef6a4c, var(--red)); color: #fff; }
+.ldh-mini:active { transform: translateY(3px); box-shadow: none; }
+.ldh-acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.ldh-note { font-size: 12px; line-height: 1.5; color: #e9d3a6; }
+.ldh-warn { font-size: 13px; font-weight: 900; line-height: 1.5; padding: 6px 8px; border: var(--line2); border-radius: 10px; background: #fff0c8; color: var(--red-d); }
+.ldh-bio { font-size: 13px; line-height: 1.8; color: #fbeed2; }
+.ldh-bio p { margin: 0 0 .6em; }
+.ldh-pick { display: flex; flex-direction: column; gap: 6px; padding: 8px; }
+/* 書籤:橫式 = 右側直排 44x64;直式 = 立繪下一排橫向頁籤 */
+.ldh-tabs { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.ldh-bm { width: 44px; height: 64px; padding: 0; box-sizing: border-box; writing-mode: vertical-rl; letter-spacing: 3px; font: 900 14px/1 var(--ld-font); color: #e9d3a6; border: var(--line2); border-left: 0; border-radius: 0 10px 10px 0; background: linear-gradient(var(--wood2), var(--wood3)); box-shadow: inset 0 0 0 1px #f5c54255, 0 2px 0 #000a; cursor: pointer; }
+.ldh-bm.on { background: linear-gradient(var(--gold2), var(--gold)); color: var(--ink); }
+@media (orientation: portrait) {
+  .ldh { grid-template-columns: minmax(0, 1fr); grid-template-rows: 38% 44px minmax(0, 1fr); }
+  .ldh-fig { grid-row: 1; }
+  .ldh-tabs { grid-row: 2; flex-direction: row; }
+  .ldh-panel { grid-row: 3; }
+  .ldh-bm { flex: 1 1 0; width: auto; height: 44px; writing-mode: horizontal-tb; letter-spacing: 1px; border-left: var(--line2); border-radius: 10px; }
+  .ldh-fig { min-height: 0; }
+}
+@media (max-width: 480px) {
+  .ldp[data-ldp="hero"] .ldp-title { display: none; }
+  .ldh-plate i { display: none; }
+}
+@media (orientation: landscape) and (max-height: 400px) {
+  .ldh-name b { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .ldh-mini:active { transform: none; } }
+/* ───── 真圖(2026-11-14 接圖):升 / 鎖定六角鈕用 u4_btn 圖集(3x2)第 1 列的 金六角(0,1)、青銅六角(1,1);圖本身是深木底,字改淺色 ───── */
+.ldh-hex { clip-path: none; background: url(../assets/ui2/u4_btn.webp) 0% 100% / 300% 200% no-repeat; color: #fff3d0; text-shadow: 0 1px 0 var(--ink), 1px 0 0 var(--ink), -1px 0 0 var(--ink), 0 -1px 0 var(--ink); }
+.ldh-hex.bronze { background: url(../assets/ui2/u4_btn.webp) 50% 100% / 300% 200% no-repeat; }
+.ldh-hex.bronze.on { background: url(../assets/ui2/u4_btn.webp) 0% 100% / 300% 200% no-repeat; color: #fff3d0; }

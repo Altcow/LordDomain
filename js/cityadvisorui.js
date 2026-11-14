@@ -480,5 +480,5 @@ function advUiSprite(c) {
 }
 function advGetSec() { return (typeof advRt !== 'undefined') ? advRt.playSec : 0; }
 
-if (typeof document !== 'undefined' && document && document.body) initAdvUI();
-else if (typeof document !== 'undefined' && document && document.addEventListener) document.addEventListener('DOMContentLoaded', function () { initAdvUI(); });
+if (typeof document !== 'undefined' && document && document.body) { if (!cityRuntimeOff()) initAdvUI(); }
+else if (!cityRuntimeOff() && typeof document !== 'undefined' && document && document.addEventListener) document.addEventListener('DOMContentLoaded', function () { initAdvUI(); });

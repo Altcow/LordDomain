@@ -16,7 +16,7 @@ const BG_FADE_HARD = 0.6;
 const BG_MAX_VOICES = 8;
 const BG_MAX_VOICES_LITE = 4;
 // 省電模式(perf.js isPowerSave)避開的重音色曲目(預渲染樣本多、聲部密);只在選曲時換掉,不改玩家存的選曲設定
-const BG_HEAVY = { pozhen: 1, tieqi: 1, gongcheng: 1, fenghuo: 1, juezhan: 1, yexi: 1 };
+const BG_HEAVY = { redblood: 1, stormcloud: 1, surge: 1, pozhen: 1, tieqi: 1, gongcheng: 1, fenghuo: 1, juezhan: 1, yexi: 1 };
 const BG_PHRASE = 32;
 const BG_TRACK_GAIN = 0.8;
 const BG_WARM_MS = 6;
@@ -24,6 +24,13 @@ const BG_WARM_MAX = 8; // 快取命中很快,另限每 tick 建立的 AudioBuffe
 const BG_FADE_OUT_QUICK = 0.05;
 const BG_PICK_KEY = 'lorddomain.bgm.pick';
 const BG_ROT_KEY = 'lorddomain.bgm.rot';
+// 檔案曲(type:'file'):各群組的預設曲;預設曲檔案不存在時退回自動輪播(合成曲)。玩家選「自動輪播」會明確存成 'auto'
+const BG_DEFAULT = { estate_day: 'tea', estate_night: 'tea', battle: 'taiko' };
+// 自動輪播改為「隨機、不連兩首同曲」的群組(值 = 參與輪播的曲目 id);其餘群組仍依序輪播。手動選曲不受影響。
+const BG_RAND = {
+  estate_day: ['cheer', 'spring', 'temple', 'harvest'],
+  battle: ['redblood', 'stormcloud', 'surge', 'pozhen', 'tieqi', 'fenghuo', 'juezhan']
+};
 
 const BG_MODES = {
   gong: [0, 2, 4, 7, 9],
@@ -119,7 +126,31 @@ const BG_TRACKS = {
       id: 'summit', name: '登高遠眺', desc: '遠方號角與二胡,視野遼闊', bpm: 66, mode: 'shang', tonics: [55, 57],
       mel: [['erhu', 0.7], ['flute', 0.3]], dens: 0.45, rhythm: 'long', pad: 0.28, horn: 0.6, hornGap: 4, prog: [0, 7, 5, 0],
       percA: { taikoL: 'o...............' }, percB: { taikoL: 'o.......o.......', gongL: 'o...............' }
-    }
+    },
+    {
+      id: 'cheer', name: '歡慶佳節', desc: '琵琶與古箏明快對奏,木魚小鼓喜氣洋洋', bpm: 120, mode: 'zhi', tonics: [62, 67],
+      mel: [['pipa', 0.5], ['guz', 0.5]], dens: 0.9, rhythm: 'steady', pad: 0.1, horn: 0, prog: [0, 5, 7, 0],
+      percA: { wood: 'x.x.x.x.x.x.x.x.', taikoH: 'o...o...o...o...' },
+      percB: { wood: 'x.xxx.x.x.xxx.x.', taikoH: 'o.o.o.o.o.o.o.o.', woodH: '..o...o...o...o.' }
+    },
+    {
+      id: 'spring', name: '春風得意', desc: '長笛與琵琶輕快跳躍,像走在春日的街上', bpm: 116, mode: 'gong', modeB: 'zhi', tonics: [60, 65],
+      mel: [['flute', 0.6], ['pipa', 0.4]], dens: 0.85, rhythm: 'flow', pad: 0.1, horn: 0, prog: [0, 7, 5, 0],
+      percA: { woodH: 'x.x.x.x.x.x.x.x.', taikoH: 'o.......o.......' },
+      percB: { woodH: 'x.x.x.x.x.x.x.x.', taikoH: 'o...o...o...o...' }
+    },
+    {
+      id: 'temple', name: '廟會踏歌', desc: '二胡與古箏的熱鬧小調,鼓點蹦蹦跳跳', bpm: 126, mode: 'zhi', tonics: [62, 64],
+      mel: [['erhu', 0.5], ['guz', 0.5]], dens: 0.9, rhythm: 'drive', pad: 0.1, horn: 0, prog: [0, 0, 5, 7], dbl: ['flute', 5, 2],
+      percA: { wood: 'x.x.x.x.x.x.x.x.', taikoH: '.o.o.o.o.o.o.o.o' },
+      percB: { wood: 'x.xxx.xxx.xxx.x.', taikoH: 'o.o.o.o.o.o.o.oo', woodH: '..o...o...o...o.' }
+    },
+    {
+      id: 'harvest', name: '豐收歌舞', desc: '琵琶與笛子愉快對唱,節拍輕快的豐年舞曲', bpm: 112, mode: 'gong', tonics: [60, 62, 67],
+      mel: [['pipa', 0.6], ['flute', 0.4]], dens: 0.85, rhythm: 'steady', pad: 0.12, horn: 0, prog: [0, 5, 0, 7],
+      percA: { wood: 'x...x...x...x...', woodH: '..o...o...o...o.', taikoL: 'o.......o.......' },
+      percB: { wood: 'x.x.x.x.x.x.x.x.', woodH: '..o...o...o...o.', taikoL: 'o...o...o...o...' }
+    },
   ],
   estate_night: [
     bgClassic('estate_day', '夜色庭園', '原版夜間經營曲,極簡稀疏'),
@@ -214,9 +245,76 @@ const BG_TRACKS = {
       mel: [['erhu', 0.5], ['guz', 0.5]], dens: 0.6, rhythm: 'syncop', pad: 0.4, horn: 0.3, hornGap: 4, drumDur: 0.4,
       percA: { taikoL: 'X.......X.o.o.o.', woodL: '....x.......x.x.' },
       percB: { taikoL: 'X.o.X.o.X.xxxxxx', woodH: '.x..x..x..x..x..' }
+    },
+    {
+      id: 'redblood', name: '熱血衝鋒', desc: '大鼓重擊與號角齊鳴,琵琶二胡疊奏一路猛衝', bpm: 156, mode: 'yu', tonics: [57, 59],
+      mel: [['pipa', 0.6], ['erhu', 0.4]], dens: 1, rhythm: 'drive', pad: 0.2, horn: 0.85, hornGap: 2, fanfare: [[0, 0, 4], [4, 2, 4], [8, 4, 4], [12, 5, 4]],
+      prog: [0, 0, 5, 7], dbl: ['erhu', 5, 2], drumDur: 0.24,
+      percA: { taiko: 'X.x.X.x.X.x.X.xX', taikoH: '.o.o.o.o.o.o.o.o', gong: 'X...............' },
+      percB: { taiko: 'X.X.X.X.X.X.XXXX', taikoH: '.x.x.x.x.x.x.x.x', woodH: 'x.x.x.x.x.x.x.x.', gongH: 'X.......X.......' }
+    },
+    {
+      id: 'stormcloud', name: '戰雲狂飆', desc: '琵琶急掃疊低八度,馬蹄鼓點滾滾而來', bpm: 144, mode: 'shang', modeB: 'yu', tonics: [55, 57],
+      mel: [['pipa', 1]], dens: 1, rhythm: 'gallop', pad: 0.15, horn: 0.6, hornGap: 2, fanfare: [[0, 0, 6], [8, 3, 6]],
+      prog: [0, 5, 0, 7], dbl: ['pipa', -5, 2], drumDur: 0.22,
+      percA: { taikoH: 'x.xxx.xxx.xxx.xx', taikoL: 'X.......X.......', gongH: 'X...............' },
+      percB: { taikoH: 'xxxxxxxxxxxxxxxx', taikoL: 'X...X...X...X...', woodH: '..x...x...x...x.' }
+    },
+    {
+      id: 'surge', name: '乘勝追擊', desc: '明亮的二胡與琵琶高歌猛進,鑼鼓助威士氣如虹', bpm: 140, mode: 'gong', modeB: 'shang', tonics: [57, 60],
+      mel: [['erhu', 0.5], ['pipa', 0.5]], dens: 0.95, rhythm: 'drive', pad: 0.2, horn: 0.7, hornGap: 2, fanfare: [[0, 0, 4], [4, 2, 4], [8, 4, 8]],
+      prog: [0, 5, 7, 0], dbl: ['flute', 5, 2], drumDur: 0.26,
+      percA: { taiko: 'X...x...X...x.x.', woodH: 'x.x.x.x.x.x.x.x.', gong: 'X.......X.......' },
+      percB: { taiko: 'X.x.X.x.X.x.X.xx', taikoH: '.o.o.o.o.o.o.o.o', woodH: 'x.x.x.x.x.x.x.x.' }
     }
   ]
 };
+
+// ---- 檔案曲(真實音樂)----
+// type:'file';src 相對於 index.html;loop 預設 true;gain 為響度補償(乘上 BG_TRACK_GAIN);credit.required = true 者要在設定頁致謝。
+// 檔案不存在(HEAD 探測失敗且沒有快取)時,該曲在選單隱藏、不會被選中、不報錯。排在群組最前面。
+// 待下載檔名:taiko.m4a / lotus.m4a / cny_flute.m4a(放 assets/audio/bgm/,AAC 約 96 kbps 立體聲)
+const BG_FILE_DIR = 'assets/audio/bgm/';
+const BG_FILE_TRACKS = {
+  estate_day: [
+    {
+      id: 'tea', type: 'file', name: 'All The Tea In China', desc: '古箏與二胡的輕快國風(預設首頁曲)',
+      src: BG_FILE_DIR + 'tea.m4a', loop: true, gain: 1,
+      credit: {
+        title: 'All The Tea In China', author: 'Shane Ivers', license: 'CC BY 4.0', url: 'https://www.silvermansound.com', required: true,
+        text: 'All The Tea In China — Shane Ivers — https://www.silvermansound.com — Licensed under CC BY 4.0'
+      }
+    },
+    {
+      id: 'lotus', type: 'file', name: 'Lotus Pond', desc: '古箏與笛,柔和平靜', src: BG_FILE_DIR + 'lotus.m4a', loop: true, gain: 1,
+      credit: { title: 'Lotus Pond', author: 'BiteMe Games', license: 'CC0', url: 'https://bitemegames.itch.io/chinese-game-music', required: false }
+    },
+    {
+      id: 'cny', type: 'file', name: 'Chinese New Year Flute(年節限定)', desc: '竹笛與撥弦,年節喜氣,可選',
+      src: BG_FILE_DIR + 'cny_flute.m4a', loop: true, gain: 1,
+      credit: { title: 'Chinese New Year Flute', author: 'NourishedByMusic', license: 'Pixabay Content License', url: 'https://pixabay.com/music/china-chinese-new-year-flute-190421/', required: false }
+    }
+  ],
+  estate_night: [
+    // 與 estate_day 的 tea 同 id、同 src:共用探測結果與解碼緩衝(bgFileLoad 以 id 為鍵),致謝只在 estate_day 列一次
+    { id: 'tea', type: 'file', name: 'All The Tea In China', desc: '古箏與二胡的輕快國風(夜間同樣預設)', src: BG_FILE_DIR + 'tea.m4a', loop: true, gain: 1, credit: { title: 'All The Tea In China', author: 'Shane Ivers', license: 'CC BY 4.0', url: 'https://www.silvermansound.com', required: false } }
+  ],
+  battle: [
+    {
+      id: 'taiko', type: 'file', name: 'Cinematic Taiko No.1', desc: '電影感太鼓,鼓點強勁(預設戰鬥曲)',
+      src: BG_FILE_DIR + 'taiko.m4a', loop: true, gain: 1,
+      credit: { title: 'Cinematic Taiko No.1', author: 'Sonican', license: 'Pixabay Content License', url: 'https://pixabay.com/music/main-title-cinematic-taiko-no1-loop-317745/', required: false }
+    },
+    {
+      id: 'jrpg', type: 'file', name: 'JRPG Epic Rock Battle Theme #1', desc: '快節奏搖滾戰鬥曲,可選',
+      src: BG_FILE_DIR + 'jrpg.m4a', loop: true, gain: 1,
+      credit: { title: 'JRPG Epic Rock Battle Theme #1', author: 'OpenGameArt', license: 'CC0', url: 'https://opengameart.org/content/jrpg-epic-rock-battle-theme-1', required: false }
+    }
+  ]
+};
+Object.keys(BG_FILE_TRACKS).forEach(function (g) {
+  BG_TRACKS[g] = BG_FILE_TRACKS[g].concat(BG_TRACKS[g]);
+});
 
 const BG_GROUPS = [
   ['estate_day', '經營白天'], ['estate_night', '經營夜間'], ['design', '戰鬥布置'],
@@ -252,6 +350,9 @@ const BG = {
   stingerEnd: 0,
   stats: { played: {}, dropped: {}, peak: 0 },
   pick: null,
+  files: {},
+  fbuf: null,
+  floading: null,
   rot: null,
   audi: null,
   audiPrev: true,
@@ -842,13 +943,20 @@ function bgPicks() {
 // 玩家選的曲目 id;未選 / 已不存在的 id 一律視為 'auto'(自動輪播)
 function bgmPickGet(group) {
   const id = bgPicks()[group];
-  return bgTrackById(group, id) ? id : 'auto';
+  if (id === 'auto' && BG_DEFAULT[group]) return 'auto';
+  const t = bgTrackById(group, id);
+  if (t && bgAvail(t)) return id;
+  const d = BG_DEFAULT[group];
+  const dt = d ? bgTrackById(group, d) : null;
+  return dt && bgAvail(dt) ? d : 'auto';
 }
 
 function bgmPickSet(group, id) {
   if (!BG_TRACKS[group]) return false;
   const p = bgPicks();
-  if (id && id !== 'auto' && bgTrackById(group, id)) p[group] = id;
+  const t = id && id !== 'auto' ? bgTrackById(group, id) : null;
+  if (t && bgAvail(t)) p[group] = id;
+  else if (id === 'auto' && BG_DEFAULT[group]) p[group] = 'auto';
   else delete p[group];
   bgSaveJson(BG_PICK_KEY, p);
   return true;
@@ -859,8 +967,101 @@ function bgmGroups() {
 }
 
 function bgmTracks(group) {
-  return (BG_TRACKS[group] || []).map(function (t) {
-    return { id: t.id, name: t.name, desc: t.desc, bpm: t.bpm, mode: t.mode };
+  return (BG_TRACKS[group] || []).filter(bgAvail).map(function (t) {
+    return { id: t.id, name: t.name, desc: t.desc, bpm: t.bpm, mode: t.mode, file: t.type === 'file' };
+  });
+}
+
+// 需要在設定頁致謝的檔案曲(檔案存在才列出)
+function bgmCredits() {
+  const out = [];
+  Object.keys(BG_TRACKS).forEach(function (g) {
+    BG_TRACKS[g].forEach(function (t) {
+      if (t.type === 'file' && t.credit && t.credit.required && bgAvail(t)) {
+        out.push({ id: t.id, group: g, name: t.credit.title, author: t.credit.author, license: t.credit.license, url: t.credit.url, text: t.credit.text || '' });
+      }
+    });
+  });
+  return out;
+}
+
+// ---- 檔案曲:存在探測、解碼、播放 ----
+function bgAvail(t) {
+  return t.type !== 'file' || BG.files[t.id] === 'ok';
+}
+
+function bgFileProbe() {
+  Object.keys(BG_TRACKS).forEach(function (g) {
+    BG_TRACKS[g].forEach(function (t) {
+      if (t.type !== 'file' || BG.files[t.id]) return;
+      BG.files[t.id] = 'probing';
+      const done = function (ok) { BG.files[t.id] = ok ? 'ok' : 'missing'; };
+      const viaCache = function () {
+        if (typeof caches === 'undefined' || !caches.match) return Promise.resolve(false);
+        return caches.match(t.src).then(function (r) { return !!r; }, function () { return false; });
+      };
+      if (typeof fetch !== 'function') { done(false); return; }
+      let p;
+      try {
+        p = fetch(t.src, { method: 'HEAD' }).then(function (r) { return r.ok ? true : viaCache(); }, viaCache);
+      } catch (e) {
+        p = Promise.resolve(false);
+      }
+      p.then(done, function () { done(false); });
+    });
+  });
+}
+
+// 解碼一首檔案曲(同時只保留一首的 AudioBuffer;同曲進行中的請求共用)
+function bgFileLoad(t) {
+  if (BG.fbuf && BG.fbuf.id === t.id) return Promise.resolve(BG.fbuf.buf);
+  if (BG.floading && BG.floading.id === t.id) return BG.floading.p;
+  const p = fetch(t.src).then(function (r) {
+    if (!r.ok) throw new Error('http ' + r.status);
+    return r.arrayBuffer();
+  }).then(function (ab) {
+    return new Promise(function (res, rej) {
+      const q = AU.ctx.decodeAudioData(ab, res, rej);
+      if (q && typeof q.catch === 'function') q.catch(rej);
+    });
+  }).then(function (buf) {
+    BG.fbuf = { id: t.id, buf: buf };
+    BG.floading = null;
+    return buf;
+  }, function (e) {
+    BG.floading = null;
+    throw e;
+  });
+  BG.floading = { id: t.id, p: p };
+  return p;
+}
+
+function bgFileStart(tr, t) {
+  bgFileLoad(t).then(function (buf) {
+    if (tr.out || BG.tracks.indexOf(tr) < 0) return;
+    const ctx = AU.ctx;
+    const now = bgNow();
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = t.loop !== false;
+    src.connect(tr.gain);
+    src.start(now);
+    tr.fileSrc = src;
+    const g = tr.gain.gain;
+    try {
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(0, now);
+      g.linearRampToValueAtTime(BG_TRACK_GAIN * (t.gain || 1), now + BG_FADE_HARD);
+    } catch (e) {
+      g.value = BG_TRACK_GAIN * (t.gain || 1);
+    }
+  }).catch(function (e) {
+    console.warn('[au] bgm file failed', t.id, e);
+    BG.files[t.id] = 'missing';
+    if (tr.out || BG.cur !== tr || !BG.want) return;
+    // 退回合成曲:bgSelect 此時會跳過不可用的檔案曲
+    if (BG.audi && BG.audi.id === t.id) BG.audi.id = null;
+    bgSwitch(tr.scene, BG_FADE_HARD, bgNow());
   });
 }
 
@@ -904,15 +1105,35 @@ function bgChooseTrack(group) {
   }
   if (!BG.rot) BG.rot = bgLoadJson(BG_ROT_KEY);
   const last = typeof BG.rot[group] === 'number' ? BG.rot[group] : -1;
+  const pool = BG_RAND[group];
+  if (pool) {
+    let cand = [];
+    for (let i = 0; i < list.length; i++) if (pool.indexOf(list[i].id) >= 0 && i !== last) cand.push(i);
+    if (bgLite()) {
+      const light = cand.filter(function (i) { return !BG_HEAVY[list[i].id]; });
+      if (light.length) cand = light;
+    }
+    if (cand.length) {
+      BG.rnd = BG.rnd || bgRng((Date.now() ^ 0x5bd1e995) >>> 0);
+      const ri = cand[Math.floor(BG.rnd() * cand.length)];
+      BG.rot[group] = ri;
+      bgSaveJson(BG_ROT_KEY, BG.rot);
+      return list[ri].id;
+    }
+  }
   let idx = (((last + 1) % list.length) + list.length) % list.length;
-  if (bgLite()) for (let k = 0; k < list.length && BG_HEAVY[list[idx].id]; k++) idx = (idx + 1) % list.length;
+  for (let k = 0; k < list.length && (list[idx].type === 'file' || (bgLite() && BG_HEAVY[list[idx].id])); k++) idx = (idx + 1) % list.length;
   BG.rot[group] = idx;
   bgSaveJson(BG_ROT_KEY, BG.rot);
   return list[idx].id;
 }
 
 function bgSelect(scene) {
-  if (BG.audi && BG.audi.scene === scene) return { group: BG.audi.group, tid: BG.audi.id };
+  if (BG.audi && BG.audi.scene === scene && BG.audi.id) {
+    const at = bgTrackById(BG.audi.group, BG.audi.id);
+    if (at && bgAvail(at)) return { group: BG.audi.group, tid: BG.audi.id };
+    return { group: BG.audi.group, tid: bgChooseTrack(BG.audi.group) };
+  }
   const g = bgGroupOf(scene);
   return { group: g, tid: bgChooseTrack(g) };
 }
@@ -920,7 +1141,8 @@ function bgSelect(scene) {
 // 試聽:立即播指定群組的曲目(id 為 auto / 未知 = 依輪播挑一首);回傳實際曲目 id 或 false
 function bgmAudition(group, id) {
   if (!BG_TRACKS[group]) return false;
-  const tid = id && id !== 'auto' && bgTrackById(group, id) ? id : bgChooseTrack(group);
+  const at = id && id !== 'auto' ? bgTrackById(group, id) : null;
+  const tid = at && bgAvail(at) ? id : bgChooseTrack(group);
   const scene = group === 'estate_night' ? 'estate_day' : group;
   if (!BG.audi) BG.audiPrev = BG.enabled;
   BG.enabled = true;
@@ -984,7 +1206,7 @@ function bgNewTrack(scene, now, fade, sel) {
   const tr = {
     scene: scene, gain: gain, rng: bgRng(918273 + BG.seq * 7919), style: null, tonic: 62, motifs: null,
     phrase: null, pi: 0, step: 0, stepSec: 0.2, nextT: now + 0.05, out: false, done: false, fadeEnd: 0,
-    endT: 0, pad: null, nextWood: now + 3, stinger: false, score: null, len: 0, group: scene, tid: null
+    endT: 0, pad: null, file: null, fileSrc: null, nextWood: now + 3, stinger: false, score: null, len: 0, group: scene, tid: null
   };
   if (scene === 'win' || scene === 'lose') {
     const sc = bgStingerScore(scene);
@@ -996,6 +1218,13 @@ function bgNewTrack(scene, now, fade, sel) {
     const pick = sel || bgSelect(scene);
     tr.group = pick.group;
     tr.tid = pick.tid;
+    const ft = bgTrackById(tr.group, tr.tid);
+    if (ft && ft.type === 'file') {
+      tr.file = ft;
+      tr.style = { file: true, pad: 0, stream: 0, mel: [], tonics: [], bpm: 60 };
+      bgFileStart(tr, ft);
+      return tr;
+    }
     tr.style = bgStyleFor(scene, tr.tid, tr.group);
     tr.stepSec = 60 / tr.style.bpm / 4;
     if (tr.style.stream > 0) bgStartLoop(tr, 'stream', tr.style.stream, now);
@@ -1016,6 +1245,9 @@ function bgFadeOut(tr, now, sec) {
   }
   tr.out = true;
   tr.fadeEnd = now + sec + 0.05;
+  if (tr.fileSrc) {
+    try { tr.fileSrc.stop(tr.fadeEnd); } catch (err) { /* 已停止 */ }
+  }
   BG.live.forEach(function (e) {
     if (e.tr === tr && e.end === Infinity) {
       e.end = tr.fadeEnd;
@@ -1063,6 +1295,7 @@ function bgPcs(st) {
 }
 
 function bgQueueScene(scene, st, group) {
+  if (st && st.file) return;
   let insts = BG_SCENE_INST[scene] || [];
   if (st) {
     const set = {};
@@ -1257,7 +1490,7 @@ function bgmTick() {
   if (!BG.running) return;
   if (typeof document !== 'undefined' && document.hidden) return;
   BG.tracks.forEach(function (tr) {
-    if (tr.out || tr.done) return;
+    if (tr.out || tr.done || tr.file) return;
     if (tr.nextT < now) tr.nextT = now + 0.02;
     let guard = 0;
     while (tr.nextT < now + BG_LOOK && !tr.done && guard < 64) {
@@ -1322,7 +1555,7 @@ function bgmStats() {
   const now = bgNow();
   let lead = 0;
   BG.tracks.forEach(function (tr) {
-    if (!tr.out && !tr.done) lead = Math.max(lead, tr.nextT - now);
+    if (!tr.out && !tr.done && !tr.file) lead = Math.max(lead, tr.nextT - now);
   });
   return {
     scene: BG.scene,
@@ -1360,4 +1593,5 @@ function bgmOnVisibility() {
 if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', bgmOnVisibility, false);
 
 // 載入即啟動等待:音訊解鎖(第一次觸控)後,輪詢會自動開始播放
+bgFileProbe();
 bgmStart();

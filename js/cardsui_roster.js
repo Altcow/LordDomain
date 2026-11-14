@@ -1,18 +1,18 @@
-// js/cardsui_roster.js — 卡包頁(卡片面板 R 分頁主頁):卡包人數與格數、搜尋(名字 / 字 / 職業 / 陣營 / 兵種)、篩選(品質、陣營、兵種、名人或路人、已派駐)、
-// 排序(品質 / 名字 / 星數 / 新進)、列表分頁(每頁 CU_RO_PAGE 列,『顯示更多』累加;一列一行,點開才看人物卡)。
-// 熔鍊 / 一鍵熔爐 / 自動熔爐已移到熔爐分頁(cardsui_furnace.js);本檔只保留人物詳情內的單人熔鍊(名人二次確認)與共用的熔鍊確認流程(cuRosterAsk / cuRosterDo)。
-// 掛在 cardsui.js:cuRosterTabHtml → cuRosterPageHtml(cs);cuClick → cuRosterClick(a, b, cs);cuEnsure 的 input 事件 → cuRosterInput(ev)。
-// 篩選 / 搜尋狀態 cu.ro(cuRoState 惰性建立)。熔鍊規則(cards.js cardsBagDissolve):名人不入多選 / 一鍵(只能在人物詳情手動熔,二次確認);鎖定(🔒)與派駐中者略過。ES2017;不用 ?. ??。
+// js/cardsui_roster.js — 卡片面板 R 分頁主頁(卡包):2026-11-12 改為卡片網格(cardsui_grid.js 負責網格、篩選列、詳情底部面板與多選)。
+// 本檔保留:卡包頁組裝(cuRosterPageHtml)、搜尋框輸入(cuRosterInput)、卡包頁動作鏈的入口(cuRosterClick:先道具 cuItemsClick、再網格 cuGridClick,其餘為熔鍊確認)、人物詳情內的單人熔鍊(cuRosterMeltHtml)與共用的熔鍊確認流程(cuRosterAsk / cuRosterDo)。
+// 舊清單函式 cuRosterRowHtml / cuRosterListHtml / cuRosterFilterOf 已不在頁面使用,保留為相容包裝(直接呼叫者仍可得到文字清單)。
+// 篩選 / 搜尋狀態 cu.ro(cuRoState 惰性建立):q 搜尋字、troop 兵種、gr 品階(-1 全部 / 4 金 / 3 紫 / 2 藍以下)、only ''/fig/spare、sort def/gr/star/troop/new、open 下拉(null/troop/gr/sort)、srch 搜尋展開、sel 多選模式。
+// 熔鍊規則(cards.js cardsBagDissolve):名人不入多選 / 一鍵(只能在人物詳情手動熔,二次確認);鎖定(🔒)與派駐中者略過。ES2017;不用 ?. ??。
 // 全域名稱:CU_RO_PAGE CU_RO_GR CU_RO_LE CU_RO_TROOP CU_RO_KIND CU_RO_SORT cuRoState cuRoChips cuRoGrLabel cuRosterCss cuRosterSelIds cuRosterAsk cuRosterDo cuRosterMeltHtml cuRosterRowHtml cuRosterFilterOf cuRosterListHtml cuRosterPageHtml cuRosterInput cuRosterClick
-var CU_RO_PAGE = 40;   // 列表一頁筆數(『顯示更多』每次再加一頁)
-var CU_RO_GR = [[-1, '全'], [0, '白'], [1, '青'], [2, '藍'], [3, '紫'], [4, '金']];
+var CU_RO_PAGE = 40;   // 舊清單(cuRosterListHtml)一頁筆數
+var CU_RO_GR = [[-1, '全'], [0, '白'], [1, '青'], [2, '藍'], [3, '紫'], [4, '金']];   // 熔爐分頁清單篩選共用
 var CU_RO_LE = [[0, '白'], [1, '青'], [2, '藍'], [3, '紫']];
 var CU_RO_TROOP = [['', '全'], ['槍', '槍'], ['騎', '騎'], ['盾', '盾'], ['弓', '弓'], ['謀', '謀']];
 var CU_RO_KIND = [['', '全'], ['fig', '名人'], ['gen', '路人']];
 var CU_RO_SORT = [['gr', '品質'], ['name', '名字'], ['star', '星數'], ['new', '新進']];
 
 function cuRoState() {
-  if (!cu.ro) cu.ro = { q: '', gr: -1, fac: -1, troop: '', kind: '', dep: false, sort: 'gr', n: 1 };
+  if (!cu.ro) cu.ro = { q: '', gr: -1, troop: '', only: '', sort: 'def', open: null, srch: false, sel: false };
   return cu.ro;
 }
 function cuRosterCss() {
@@ -44,7 +44,7 @@ function cuRosterSelIds(cs) {
 function cuRosterAsk(cs, ids, figOk) {
   var s = cardsFurnaceSum(cs, ids, !!figOk), g;
   if (!s.n) { cu.msg = s.skippedFig ? CU_BAG_MSG.fig : (s.skippedLock ? CU_BAG_MSG.locked : '沒有可熔鍊的人'); return; }
-  if (s.figs) { cu.bpend = { ids: ids, figOk: true, text: '確定熔掉名人?熔鍊後該名人與信物一併消失(日後可能再抽到),可得 ' + s.shards + ' 碎片。熔鍊後無法復原。' }; return; }
+  if (s.figs) { cu.bpend = { ids: ids, figOk: true, text: '確定熔掉名人?熔鍊後該名人的所有張數一併消失(日後可能再抽到),可得 ' + s.shards + ' 碎片。熔鍊後無法復原。' }; return; }
   if (s.n > 1 || s.top >= 2) {
     g = CARD_GRADE[s.top] ? CARD_GRADE[s.top].name : '';
     cu.bpend = { ids: ids, figOk: false, text: '確定熔鍊 ' + s.n + ' 人(最高 ' + g + '階)?可得 ' + s.shards + ' 碎片。熔鍊後無法復原。' };
@@ -64,14 +64,19 @@ function cuRosterDo(cs, ids, figOk) {
 }
 // 人物詳情內的熔鍊區塊(卡包人員;cuDetailHtml 呼叫):派駐 / 鎖定者不給鈕
 function cuRosterMeltHtml(cs, e) {
-  var val = cardsFurnaceValue(e), h = '', pend = !!(cu.bpend && cu.bpend.ids && cu.bpend.ids.length === 1 && cu.bpend.ids[0] === e.id);
-  if (!cardsRosterMeltable(e)) return '<div class="cusub" style="opacity:1">' + (e.at ? '派駐中' : '鎖定中') + ',不能熔鍊(先' + (e.at ? '卸任' : '解除鎖定') + ')。</div>';
-  if (!e.fig) h += '<button class="cub warn" data-a="rdis" data-id="' + e.id + '">熔鍊(+' + val + ' 碎)</button>';
-  else h += '<button class="cub warn" data-a="rdis" data-id="' + e.id + '">熔鍊名人(+' + val + ' 碎,需確認)</button><div class="cusub">名人不在熔爐分頁的清單與一鍵熔範圍;重複抽到會化為信物,信物滿了轉碎片。</div>';
+  var tg = e, lp = null, val, h = '', pend;
+  // 名人同名還有副卡 → 熔鍊預設對象切到副卡(cardsLegacyPick),並標註『已為你選副卡』
+  if (e.fig && typeof cardsLegacyPick === 'function') { lp = cardsLegacyPick(cs, e.fig); if (lp && lp.id !== e.id && cardsRosterMeltable(lp)) tg = lp; else lp = null; }
+  val = cardsFurnaceValue(tg);
+  pend = !!(cu.bpend && cu.bpend.ids && cu.bpend.ids.length === 1 && cu.bpend.ids[0] === tg.id);
+  if (!cardsRosterMeltable(tg)) return '<div class="cusub" style="opacity:1">' + (tg.at ? '派駐中' : '鎖定中') + ',不能熔鍊(先' + (tg.at ? '卸任' : '解除鎖定') + ')。</div>';
+  if (lp) h += '<div class="cusub" style="opacity:1">已為你選副卡(同名主力 ★' + cardsStarLv(e) + ' 不動)。</div>';
+  if (!tg.fig) h += '<button class="cub warn" data-a="rdis" data-id="' + tg.id + '">熔鍊(+' + val + ' 碎)</button>';
+  else h += '<button class="cub warn" data-a="rdis" data-id="' + tg.id + '">熔鍊' + (lp ? '副卡' : '名人') + '(+' + val + ' 碎,需確認)</button><div class="cusub">名人不在熔爐分頁的清單與一鍵熔範圍;同名名人可有多張,多餘的可拿來傳承。</div>';
   if (pend) h += '<div class="cuwarn">' + cuEsc(cu.bpend.text) + '</div><button class="cub" data-a="rcfno">否</button><button class="cub warn" data-a="rcfyes">是,熔鍊</button>';
   return h;
 }
-// 列:一列一行,點列開人物詳情
+// 舊文字清單(相容包裝,頁面已不使用):一列一行,點列開人物詳情
 function cuRosterRowHtml(e) {
   var j = CARD_JOB_BY_ID[e.main];
   return '<div class="cur curow" style="border-left:5px solid var(--gr' + e.gr + ');padding-left:6px">' +
@@ -81,59 +86,50 @@ function cuRosterRowHtml(e) {
     '</div>';
 }
 function cuRosterFilterOf(R) { return { q: R.q, gr: R.gr, fac: R.fac, troop: R.troop, kind: R.kind, dep: R.dep, sort: R.sort }; }
-// 列表區(搜尋時只重畫這塊,輸入框保留焦點)
+// 舊文字清單(相容包裝,頁面已不使用)
 function cuRosterListHtml(cs) {
   var R = cuRoState(), list = cardsRosterList(cs, cuRosterFilterOf(R)), shown, h = '', i;
   h = '<div class="cusub" id="curcnt">符合 ' + list.length + ' / ' + cs.roster.length + ' 人</div>';
   if (!list.length) return h + '<div class="cusub">沒有符合條件的人。</div>';
-  shown = list.slice(0, R.n * CU_RO_PAGE);
+  shown = list.slice(0, (R.n || 1) * CU_RO_PAGE);
   for (i = 0; i < shown.length; i++) h += cuRosterRowHtml(shown[i]);
   if (shown.length < list.length) h += '<button class="cub" data-a="rmore">顯示更多(尚有 ' + (list.length - shown.length) + ' 人)</button>';
   return h;
 }
+// 卡包頁(R 分頁):道具子頁(若在道具子頁直接回道具內容)→ 卡包提示列 → 篩選列 + 網格(cardsui_grid.js)→ 待定席 / 流浪
 function cuRosterPageHtml(cs) {
-  var R = cuRoState(), h = '', cap = cardsCap(), n = cs.roster.length, f, bar = '';
+  var R = cuRoState(), h = '', cap = cardsCap(), n = cs.roster.length, bar = '';
   cuRosterCss();
+  if (typeof cuGridBind === 'function') cuGridBind();
   if (typeof itemsSubBarHtml === 'function') bar = itemsSubBarHtml();   // 卡包頁頂部『卡片 | 道具』子頁(items_ui.js)
   if (bar && IU.sub === 'item') return bar + itemsTabHtml() + itemsPopHtml();
-  if (cu.detail) { f = cardsFind(cs, cu.detail); if (f) return bar + cuDetailHtml(cs, f); cu.detail = null; }
-  h += bar + '<div class="cur"><span>卡包 <b>' + n + '/' + cap + '</b></span><span class="cusub">待定席 ' + cs.wait.length + '/' + CARD_CFG.waitSeats + '</span></div>';
+  h += bar;
   if (n >= cap) h += '<div class="cuwarn">卡包已滿(' + cap + ')、停止抽卡。先到『熔爐』熔鍊或遣散,騰出空位才能再抽。</div>';
   else if (n >= cap - 10) h += '<div class="cusub">卡包剩 ' + (cap - n) + ' 格。</div>';
   if (cs.lastRel) h += '<button class="cub" data-a="undo">復原最近遣散</button>';
   if (cu.msg) h += '<div class="cuwarn">' + cuEsc(cu.msg) + '</div>';
-  h += '<input class="curq" id="curq" type="search" placeholder="搜尋名字 / 職業 / 陣營 / 兵種" value="' + cuEsc(R.q) + '">';
-  h += '<div class="cusec">篩選 · 品質</div>' + cuRoChips(CU_RO_GR, R.gr, 'rgr');
-  h += '<div class="cusec">篩選 · 陣營</div>' + cuRoChips([[-1, '全']].concat(CARD_FAC.map(function (x, i) { return [i, x]; })), R.fac, 'rfac');
-  h += '<div class="cusec">篩選 · 兵種</div>' + cuRoChips(CU_RO_TROOP, R.troop, 'rtroop');
-  h += '<div class="cusec">篩選 · 名人 / 路人 / 派駐</div>' + cuRoChips(CU_RO_KIND, R.kind, 'rkind') + cuRoChips([['1', '只看已派駐']], R.dep ? '1' : '', 'rdep');
-  h += '<div class="cusec">排序</div>' + cuRoChips(CU_RO_SORT, R.sort, 'rsort');
-  h += '<div id="curlist">' + cuRosterListHtml(cs) + '</div>';
+  if (typeof cuGridBarInner !== 'function') h += cuRosterListHtml(cs);   // 未載入 cardsui_grid.js 時退回舊文字清單(相容)
+  else {
+    h += '<div id="cugbarw" class="cugbarw">' + cuGridBarInner(cs, R) + '</div>';
+    h += '<div id="cugridw">' + cuGridGridHtml(cs, R) + '</div>';
+  }
   if (cs.wait.length) { h += '<div class="cusec">待定席</div>'; cs.wait.forEach(function (e) { h += cuRowHtml(e, true); }); }
   if (cs.wander.length) { h += '<div class="cusec">故人(流浪)</div>'; cs.wander.forEach(function (e) { h += cuRowHtml(e, false, true); }); }
   return h;
 }
-// 搜尋框輸入:只重畫列表區(保留輸入焦點)
+// 搜尋框輸入:只重畫網格(保留輸入焦點與篩選列)
 function cuRosterInput(ev) {
-  var t = ev && ev.target, R = cuRoState(), box, cs;
+  var t = ev && ev.target, R = cuRoState();
   if (!t || t.id !== 'curq') return;
-  R.q = t.value; R.n = 1;
-  box = (cu.el && cu.el.querySelector) ? cu.el.querySelector('#curlist') : null;
-  cs = cardsGet();
-  if (box && cs) cuKeepScroll(function () { box.innerHTML = cuRosterListHtml(cs); });
-  else cardsUiRender();
+  R.q = t.value;
+  if (typeof cuGridPaintGrid === 'function' && cu.el && cu.el.querySelector && cu.el.querySelector('#cugridw')) { cuGridPaintGrid(); return; }
+  cardsUiRender();
 }
 // 卡包頁的點擊動作(cuClick 呼叫;不認得的動作回 false)
 function cuRosterClick(a, b, cs) {
-  var R = cuRoState(), v = b.getAttribute('data-v'), id = b.getAttribute('data-id'), f;
+  var id = b.getAttribute('data-id'), f;
   if (typeof cuItemsClick === 'function' && cuItemsClick(a, b, cs)) return true;   // 道具子頁 / 道具選單(items_ui.js)
-  if (a === 'rgr') { R.gr = +v; R.n = 1; return true; }
-  if (a === 'rfac') { R.fac = +v; R.n = 1; return true; }
-  if (a === 'rtroop') { R.troop = v || ''; R.n = 1; return true; }
-  if (a === 'rkind') { R.kind = v || ''; R.n = 1; return true; }
-  if (a === 'rdep') { R.dep = !R.dep; R.n = 1; return true; }
-  if (a === 'rsort') { R.sort = v || 'gr'; R.n = 1; return true; }
-  if (a === 'rmore') { R.n++; return true; }
+  if (typeof cuGridClick === 'function' && cuGridClick(a, b, cs)) return true;     // 卡片網格 / 篩選列 / 多選 / 詳情面板(cardsui_grid.js)
   if (a === 'rdis') {   // 人物詳情的單人熔鍊(名人需二次確認)
     f = cardsRosterFind(cs, id);
     if (!f) { cu.msg = CU_BAG_MSG.none; return true; }

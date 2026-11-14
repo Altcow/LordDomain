@@ -4,7 +4,8 @@
 // 全域:BN_DATA(係數)BN_TRAIT_MODS(詞條 → 戰鬥修正)BN_FIG_TRAIT(名人專屬詞條 → 戰鬥修正,B4)BN_FIG_TUNE(名人強度校正,B6)BN_BONDS(陣營 / 職業標籤 / 特殊組合羈絆)。僅純邏輯。
 var BN_DATA = {
   v: 1,
-  K: 1.0,                      // 傷害總係數(§3.4);B1 調參 1.6 → 1.73;戰鬥改版(多戰法同時發動 + 放完戰法仍普攻 + cdCut)1.73 → 1.0,維持 5~7 回合
+  K: 0.78,                     // 傷害總係數(§3.4);B1 調參 1.6 → 1.73;戰鬥改版(多戰法同時發動 + 放完戰法仍普攻 + cdCut)1.73 → 1.0,維持 5~7 回合;2026-11-13 戰法補強(通用 B 對齊揮砍標準 + S/A 補強,傷害變多)1.0 → 0.85,維持平均 5~6 回合;2026-11-14 B 非攻擊下修後五隊 3v3 平均回合約 5.0~5.16 < 5.5,0.85 → 0.78
+  reachMin: 1,                 // 射程下限(2026-11-12 使用者決定:每個人都能出手,後排近戰也能打到敵方前排);bnReach 回傳 max(reachMin, 原值)
   maxRound: 10,                // 回合上限(單一來源;2026-11-09 使用者決議 50 → 10:讓慢熱 / 爆發型戰法節奏都有空間;到上限依剩餘兵力比例判定,較高者勝)
   roundPhase: { earlyTo: 3, lateFrom: 7 },   // 節奏分段(前期 1~3、中期 4~6、後期 7~maxRound);之後加『第 N 回合起 / 前 N 回合』效果請走 bnRoundPhase / bnRoundIn
   critMul: 1.5,
@@ -222,8 +223,9 @@ var BN_FIG_TRAIT = {
 
 // 名人強度校正(B6;tools/bn_fig_tune.js 解出,--apply 只改下面標記之間的一行):名人 id → 兵力 / 攻擊 / 謀略 / 治療 / 護盾量係數(未列 = 1)。
 // 目的:三國 100 位名人(全名人隊隨機對打)勝率落在約 45~58%、新舊兩批平均相近;魔幻 42 位同法校正。卡面五維不變,只影響討伐戰鬥數值。
+// 2026-11-14 韓當 0.85(固定戰法每回合可發 + 再斬,單人傷害高於曹操;設計_數值小修方案.md);同日複測曹洪 / 廖化(同為固定戰法)仍偏強,各加 0.85
 // BN_FIG_TUNE-BEGIN
-var BN_FIG_TUNE = { caocao: 0.96, xunyu: 0.7, guojia: 1.16, jiaxu: 1.02, simayi: 1.03, dianwei: 1.09, xiahoudun: 0.89, zhangliao: 0.88, xunyou: 0.88, xuchu: 1.03, caoren: 0.8, xiahouyuan: 0.8, xuhuang: 0.8, zhongyao: 0.92, liubei: 0.94, guanyu: 0.8, zhangfei: 0.89, zhaoyun: 1.01, zhugeliang: 0.7, machao: 0.86, pangtong: 1.25, fazheng: 0.8, weiyan: 1.01, huangzhong: 0.8, mizhu: 0.82, maliang: 1.35, xushu: 1.25, shamoke: 1.16, sunjian: 1.02, sunce: 0.9, zhouyu: 0.89, lusu: 0.85, ganning: 0.91, sunquan: 0.99, lvmeng: 1.01, zhangzhao: 1.25, taishici: 0.8, huanggai: 1.14, zhoutai: 1.14, chengpu: 1.07, shixie: 0.84, zhangjiao: 0.8, zhangbao: 0.95, zhangliang: 0.93, zhangniujiao: 0.87, zhangmancheng: 0.8, mayuanyi: 1.25, guanhai: 0.85, zhanglu: 0.97, guotai: 0.98, boca: 1.01, zhangyan: 1.25, yudu: 1.22, yuji: 0.87, dongzhuo: 0.81, lvbu: 0.83, yuanshao: 1.01, huangfusong: 1.04, luzhi: 1.25, gongsunzan: 0.82, zhujun: 0.8, zhengxuan: 1.25, mateng: 0.89, xurong: 1.16, huatuo: 0.7, caiyong: 1.03, youtu: 1.18, yufuluo: 0.89, caiyan: 0.8, caozhi: 1.3, yangxiu: 1.35, pangde: 0.95, zhanghe: 0.8, ganfuren: 1.25, mifuren: 1.06, masu: 1.25, huangyueying: 1.12, zhoucang: 1.02, sunshangxiang: 0.8, lingtong: 0.91, daqiao: 1.11, xiaoqiao: 1.19, dingfeng: 0.85, kanze: 1.29, nanhua: 0.83, chengyuanzhi: 1.1, dengmao: 1.06, peiyuanshao: 1.08, heyi: 1.17, zhangkai: 1.02, diaochan: 1.25, zuoci: 1.19, panfeng: 1.11, caoxing: 0.8, huaxiong: 1.01, yuanshu: 1.25, elf_changqing: 0.85, elf_qinglan: 0.85, elf_baizhou: 0.98, elf_jiyu: 0.85, elf_tengluo: 1.25, elf_liguo: 1.35, elf_yueyao: 0.85, elf_shuanghua: 0.85, elf_luming: 0.81, elf_chenlu: 0.8, elf_hengzhi: 1.35, elf_xingchen: 0.8, elf_liuying: 1.23, elf_yedi: 1.06, dw_panshan: 0.85, dw_zhongyue: 0.94, dw_zaotian: 0.8, dw_heiyao: 0.81, dw_dengxin: 1.35, dw_qianchui: 0.88, dw_yinxu: 0.91, dw_duanlei: 0.9, dw_maoding: 1.15, dw_jincheng: 1.35, dw_lielu: 0.89, dw_kuangfu: 0.85, dw_rongxin: 0.8, dw_maiya: 1.11, kd_zhaoming: 0.85, kd_lingfeng: 0.85, kd_shoucheng: 0.92, kd_chuanyang: 0.88, kd_chenxing: 1.34, kd_wenyuan: 0.94, kd_xuandeng: 0.84, kd_suxin: 0.8, kd_jinghu: 1.33, kd_yushu: 1.35, kd_fengnian: 0.81, kd_wantong: 1.15, kd_heijing: 0.84, kd_xinghua: 1.05, liuzhang: 1.35, wangping: 1.12, yanyan: 0.93 };
+var BN_FIG_TUNE = { caocao: 0.96, xunyu: 0.7, guojia: 1.16, jiaxu: 1.02, simayi: 1.03, dianwei: 1.09, xiahoudun: 0.89, zhangliao: 0.88, xunyou: 0.88, xuchu: 1.03, caoren: 0.8, xiahouyuan: 0.8, xuhuang: 0.8, zhongyao: 0.92, liubei: 0.94, guanyu: 0.8, zhangfei: 0.89, zhaoyun: 1.01, zhugeliang: 0.7, machao: 0.86, pangtong: 1.25, fazheng: 0.8, weiyan: 1.01, huangzhong: 0.8, mizhu: 0.82, maliang: 1.35, xushu: 1.25, shamoke: 1.16, sunjian: 1.02, sunce: 0.9, zhouyu: 0.89, lusu: 0.85, ganning: 0.91, sunquan: 0.99, lvmeng: 1.01, zhangzhao: 1.25, taishici: 0.8, huanggai: 1.14, zhoutai: 1.14, chengpu: 1.07, shixie: 0.84, zhangjiao: 0.8, zhangbao: 0.95, zhangliang: 0.93, zhangniujiao: 0.87, zhangmancheng: 0.8, mayuanyi: 1.25, guanhai: 0.85, zhanglu: 0.97, guotai: 0.98, boca: 1.01, zhangyan: 1.25, yudu: 1.22, yuji: 0.87, dongzhuo: 0.81, lvbu: 0.83, yuanshao: 1.01, huangfusong: 1.04, luzhi: 1.25, gongsunzan: 0.82, zhujun: 0.8, zhengxuan: 1.25, mateng: 0.89, xurong: 1.16, huatuo: 0.7, caiyong: 1.03, youtu: 1.18, yufuluo: 0.89, caiyan: 0.8, caozhi: 1.3, yangxiu: 1.35, pangde: 0.95, zhanghe: 0.8, ganfuren: 1.25, mifuren: 1.06, masu: 1.25, huangyueying: 1.12, zhoucang: 1.02, sunshangxiang: 0.8, lingtong: 0.91, daqiao: 1.11, xiaoqiao: 1.19, dingfeng: 0.85, kanze: 1.29, nanhua: 0.83, chengyuanzhi: 1.1, dengmao: 1.06, peiyuanshao: 1.08, heyi: 1.17, zhangkai: 1.02, diaochan: 1.25, zuoci: 1.19, panfeng: 1.11, caoxing: 0.8, huaxiong: 1.01, yuanshu: 1.25, elf_changqing: 0.85, elf_qinglan: 0.85, elf_baizhou: 0.98, elf_jiyu: 0.85, elf_tengluo: 1.25, elf_liguo: 1.35, elf_yueyao: 0.85, elf_shuanghua: 0.85, elf_luming: 0.81, elf_chenlu: 0.8, elf_hengzhi: 1.35, elf_xingchen: 0.8, elf_liuying: 1.23, elf_yedi: 1.06, dw_panshan: 0.85, dw_zhongyue: 0.94, dw_zaotian: 0.8, dw_heiyao: 0.81, dw_dengxin: 1.35, dw_qianchui: 0.88, dw_yinxu: 0.91, dw_duanlei: 0.9, dw_maoding: 1.15, dw_jincheng: 1.35, dw_lielu: 0.89, dw_kuangfu: 0.85, dw_rongxin: 0.8, dw_maiya: 1.11, kd_zhaoming: 0.85, kd_lingfeng: 0.85, kd_shoucheng: 0.92, kd_chuanyang: 0.88, kd_chenxing: 1.34, kd_wenyuan: 0.94, kd_xuandeng: 0.84, kd_suxin: 0.8, kd_jinghu: 1.33, kd_yushu: 1.35, kd_fengnian: 0.81, kd_wantong: 1.15, kd_heijing: 0.84, kd_xinghua: 1.05, liuzhang: 1.35, wangping: 1.12, yanyan: 0.93, handang: 0.85, caohong: 0.85, liaohua: 0.85 };
 // BN_FIG_TUNE-END
 
 // 戰法平衡覆寫(B6):戰法 id → 要覆寫的欄位(rate 發動率 / power 檔位)。載入時由 bn_units.js 套到 BN_SKILLS(戰鬥與卡面文字一致);
@@ -231,9 +233,9 @@ var BN_FIG_TUNE = { caocao: 0.96, xunyu: 0.7, guojia: 1.16, jiaxu: 1.02, simayi:
 var BN_SKILL_TUNE = {
   p_zhangjiao: { power: 'S' }, s_zhangjiao_1: { rate: 0.2 }, s_zhangjiao_vs1: { rate: 0.16 }, u_zhangjiao: { rate: 0.08 }, s_zhangjiao_2: { rate: 0.28 }, s_zhangjiao_3: { rate: 0.22 }, s_zhugeliang_2: { rate: 0.25 }, s_zhugeliang_3: { rate: 0.3 },   // 張角:三個全隊治療太穩
   s_guanyu_1: { rate: 0.3 }, s_guanyu_vs1: { rate: 0.25 },
-  p_lusu: { power: 'S' }, s_lusu_1: { rate: 0.3 }, p_zhangmancheng: { power: 'S' },
+  p_lusu: { power: 'S' }, s_lusu_1: { rate: 0.3 }, p_xunyu_rn: { power: 'S' }, s_renjun_rn1: { rate: 0.3 }, p_zhangmancheng: { power: 'S' },
   s_lvbu_1: { rate: 0.38 }, s_zhangliao_2: { rate: 0.3 }, s_zhangliao_3: { rate: 0.45 },
-  s_peiyuanshao_1: { rate: 0.5 }, s_yuanshu_2: { rate: 0.45 }, s_zhengxuan_2: { rate: 0.45 }, s_zhengxuan_3: { rate: 0.4 },
+  s_peiyuanshao_1: { rate: 0.5 }, s_yuanshu_2: { rate: 0.45 }, s_zhengxuan_2: { rate: 0.4 }, s_zhengxuan_3: { rate: 0.4 },
   s_kanze_3: { rate: 0.45 }, s_caozhi_1: { rate: 0.5 }, u_caozhi: { rate: 0.2 }, s_zhangzhao_3: { rate: 0.4 }, s_maliang_2: { rate: 0.5 },
   s_dw_jincheng_1: { rate: 0.5 }, s_elf_liguo_1: { rate: 0.5 }, s_elf_liguo_2: { rate: 0.4 },
   s_dw_dengxin_1: { rate: 0.45 }, s_dw_dengxin_2: { rate: 0.45 }, s_elf_yedi_1: { rate: 0.5 }, s_elf_yedi_2: { rate: 0.5, power: 'M' },
@@ -268,7 +270,7 @@ var BN_KIT_CFG = {
   taughtRetired: true,              // 名人傳授退場旗標(B1 只留旗標,不刪 bn_book.js 的程式)
   autoFill: false                   // 名人空槽不自動配(B2 決定);路人空槽仍由 bnLearnMerge / autoLearn 補。本旗標目前未被讀取
 };
-// 發動率護欄(B1 只放資料,B2 接 bnRateOf):永久來源(羈絆 / 信物 / 被動 command / 本命 / 校正連動)合計 +15pp;永久 + rate_up 狀態合計 +25pp;rate_up 對大招只算一半
+// 發動率護欄(B1 只放資料,B2 接 bnRateOf):永久來源(羈絆 / 被動 command / 本命 / 校正連動)合計 +15pp;永久 + rate_up 狀態合計 +25pp;rate_up 對大招只算一半
 var BN_RATE_CAP = {
   permCap: 0.15, totalCap: 0.25, ultRateUpMul: 0.5,
   activeCap: 0.70, ultCap: 0.45,    // 主動 / 追擊上限、大招上限(與 BN_DATA.rate.cap / ultCap 一致)

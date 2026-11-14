@@ -299,6 +299,7 @@ function mmLoop() {
 }
 
 function mmInit() {
+  if (cityRuntimeOff()) return;   // shell:城市小地圖不建、不跑 rAF 迴圈
   if (MM.el || typeof document === 'undefined' || !document.body || !document.createElement) return;
   const el = document.createElement('div');
   el.id = 'miniMap';

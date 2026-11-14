@@ -532,6 +532,7 @@ function guideListOpen() {
 }
 
 function initGuide() {
+  if (cityRuntimeOff()) return;   // shell:舊城市引導不建、不跑計時器
   if (gd.timer || typeof document === 'undefined' || !document.body) return;
   gdLoad();
   gdBuild();

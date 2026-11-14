@@ -1,0 +1,68 @@
+/* css/bncardbattle.css — 卡牌戰鬥畫面(js/bncardbattle.js):直向 375×812 敵上我下、單列 前鋒/中衛/主將;橫向 844×390 我左敵右,前鋒靠中線、主將在外側。卡片為直立立繪卡(約 5:7),跳數字在卡片上緣外側往上飄淡出(只用 transform/opacity)。純 CSS;不水平溢出,字 ≥12px。 */
+#bnCB{position:fixed;left:0;top:0;right:0;bottom:0;z-index:80;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;background:#1b150f;color:#f4ead2;font-size:13px;line-height:1.35;padding:calc(6px + env(safe-area-inset-top)) calc(8px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left))}
+#bnCB *{box-sizing:border-box;min-width:0}
+#bnCB button:not(.ld-btn){min-height:36px;min-width:52px;border:none;border-radius:8px;background:rgba(255,255,255,.16);color:#f4ead2;font-size:13px;padding:0 8px;white-space:nowrap;cursor:pointer}
+#bnCB button.on:not(.ld-btn){background:#c9a24a;color:#1b150f;font-weight:bold}
+#bnCB .bcb-hd{display:flex;align-items:center;justify-content:space-between;gap:6px;flex:0 0 auto}
+#bnCB .bcb-rd{font-size:15px;color:#ffd25a}
+#bnCB .bcb-spd{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px}
+#bnCB .bcb-field{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:6px;margin-top:6px}
+#bnCB .bcb-side{flex:0 0 auto;min-height:0;display:flex;flex-direction:column;padding:6px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}
+#bnCB .bcb-side.mine{border-color:#4f8fdc}
+#bnCB .bcb-side.en{border-color:#d9534f}
+#bnCB .bcb-sh{font-size:13px;font-weight:bold;margin-bottom:4px}
+#bnCB .bcb-side.mine .bcb-sh{color:#9fc8ff}
+#bnCB .bcb-side.en .bcb-sh{color:#ff9d92}
+#bnCB .bcb-row{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-content:center;padding-top:22px}
+#bnCB .bcb-vs{display:none}
+#bnCB .bcb-cd{position:relative;align-self:start;display:flex;flex-direction:column;align-items:center;width:100%;min-width:0;min-height:0;aspect-ratio:5 / 7;padding:4px;border-radius:10px;background:rgba(0,0,0,.3);font-size:12px;text-align:center}
+#bnCB .bcb-cd.dead{filter:grayscale(1);opacity:.6}
+#bnCB .bcb-tag{position:absolute;top:8px;left:8px;z-index:2;padding:0 4px;border-radius:4px;background:#b8860b;color:#fff;font-size:12px;font-weight:bold}
+#bnCB .bcb-x{position:absolute;top:8px;right:8px;z-index:2;display:none;padding:0 4px;border-radius:4px;background:#8b1e1e;color:#fff;font-size:12px;font-weight:bold}
+#bnCB .bcb-cd.dead .bcb-x{display:block}
+#bnCB .bcb-pt{position:relative;display:flex;align-items:center;justify-content:center;flex:1 1 0;width:100%;min-height:0;border-radius:8px;overflow:hidden;color:#fff;font-size:22px;font-weight:bold}
+#bnCB .bcb-pt img{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;object-position:50% 18%;display:block}
+#bnCB .bcb-nm{flex:0 0 auto;margin-top:4px;font-size:13px;font-weight:bold;line-height:1.3;overflow-wrap:anywhere;max-width:100%}
+#bnCB .bcb-ps{flex:0 0 auto;font-size:12px;opacity:.85;overflow-wrap:anywhere;max-width:100%}
+#bnCB .bcb-bar{flex:0 0 auto;width:100%;height:8px;margin-top:4px;border-radius:4px;background:rgba(255,255,255,.14);overflow:hidden}
+#bnCB .bcb-bar i{display:block;height:100%}
+#bnCB .bcb-side.mine .bcb-bar i{background:#4f8fdc}
+#bnCB .bcb-side.en .bcb-bar i{background:#d9534f}
+#bnCB .bcb-hpt{flex:0 0 auto;margin-top:2px;font-size:12px}
+#bnCB .bcb-nums{position:absolute;left:0;right:0;bottom:calc(100% + 2px);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;pointer-events:none;z-index:3}
+#bnCB .bcb-n{font-size:18px;font-weight:bold;line-height:1.1;text-shadow:0 1px 2px #000;animation:bcbFloat .6s ease-out both}
+#bnCB .bcb-n.dmg{color:#ff6b5b}
+#bnCB .bcb-n.crit{color:#ffd25a}
+#bnCB .bcb-n.heal{color:#7be08a}
+@keyframes bcbFloat{0%{opacity:0;transform:translateY(6px)}15%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-16px)}}
+@media (prefers-reduced-motion:reduce){#bnCB .bcb-n{animation:none}}
+#bnCB .bcb-log{flex:0 0 auto;display:flex;flex-direction:column;margin-top:6px;border-radius:10px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.12);min-height:0}
+#bnCB .bcb-log:not(.collapsed){flex:0 1 38%}
+#bnCB .bcb-lh{display:flex;align-items:center;gap:6px;min-height:40px;padding:2px 6px;flex:0 0 auto}
+#bnCB .bcb-last{flex:1 1 auto;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#bnCB .bcb-log:not(.collapsed) .bcb-last{display:none}
+#bnCB .bcb-ll{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 8px 6px}
+#bnCB .bcb-log.collapsed .bcb-ll{display:none}
+#bnCB .bcb-ln{font-size:12px;line-height:1.45;overflow-wrap:anywhere;padding:1px 0}
+#bnCB .bcb-ln.c-rd{color:#ffd25a;font-weight:bold;margin-top:3px}
+#bnCB .bcb-ln.c-act{color:#9fc8ff;margin-top:3px}
+#bnCB .bcb-ln.c-dmg{color:#ffb0a0}
+#bnCB .bcb-ln.c-heal{color:#9be39b}
+#bnCB .bcb-ln.c-kill{color:#ff7a6a;font-weight:bold}
+#bnCB .bcb-ln.c-end{color:#ffd25a;font-weight:bold}
+#bnCB .bcb-ln.c-ef,#bnCB .bcb-ln.c-mo,#bnCB .bcb-ln.c-ro{opacity:.85}
+/* 橫向 844×390:我左敵右,VS 置中;我方由左到右 主將/中衛/前鋒(前鋒靠中線),敵方由左到右 前鋒/中衛/主將 */
+@media (orientation:landscape) and (min-width:700px){
+  #bnCB .bcb-field{flex-direction:row;justify-content:normal;align-items:stretch;gap:6px}
+  #bnCB .bcb-side{flex:1 1 0}
+  #bnCB .bcb-side.mine{order:1}
+  #bnCB .bcb-vs{display:flex;order:2;align-items:center;font-size:13px;font-weight:bold;color:#ffd25a}
+  #bnCB .bcb-side.en{order:3}
+  #bnCB .bcb-side.mine .bcb-cd:nth-child(1){order:3}
+  #bnCB .bcb-side.mine .bcb-cd:nth-child(2){order:2}
+  #bnCB .bcb-side.mine .bcb-cd:nth-child(3){order:1}
+  #bnCB .bcb-row{padding-top:20px;container-type:size}
+  #bnCB .bcb-cd{padding:4px 3px;width:min(100%,calc(100cqh * 5 / 7));justify-self:center}
+  #bnCB .bcb-n{font-size:16px}
+  #bnCB .bcb-log:not(.collapsed){flex:0 1 40%}
+}

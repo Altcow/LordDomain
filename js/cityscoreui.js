@@ -226,4 +226,4 @@ function initCityScoreUI() {
   csChipUpdate();
 }
 
-if (typeof document !== 'undefined' && document.body) initCityScoreUI();
+if (typeof document !== 'undefined' && document.body && !cityRuntimeOff()) initCityScoreUI();

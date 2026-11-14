@@ -4,7 +4,7 @@
 // 全域名稱:cuStarHtml cuBagClick CU_BAG_MSG
 var CU_BAG_MSG = { fig: '名人需在詳情頁手動熔鍊(二次確認)', locked: '派駐中或已鎖定的人員不能熔鍊,請先卸任或解除鎖定', none: '此人已不在卡包', full: '卡包已滿,先遣散一人' };
 
-// 名冊詳情『強化(升星)』區塊:星 0~5,花碎片;名人成本 ×2,每個信物抵 30 %;每星攻 / 防 / HP 加成、3 星技能強化、5 星專屬標記
+// 名冊詳情『強化(升星)』區塊:星 0~5,花碎片;名人成本 ×2;每星攻 / 防 / HP 加成、3 星技能強化、5 星專屬標記
 function cuStarHtml(cs, e) {
   var F = CARD_FURNACE, B = F.starBonus, c = cardsStarCost(e), lv = cardsStarLv(e), stars = '', i, h;
   for (i = 1; i <= F.starMax; i++) stars += i <= lv ? '★' : '☆';
@@ -12,7 +12,7 @@ function cuStarHtml(cs, e) {
     (lv >= B.skillStar ? ' · 技能強化' : '') + (lv >= B.markStar ? ' · 專屬標記' : '') + '<br>每星 +' + Math.round(B.atk * 100) + ' %;' + B.skillStar + ' 星起解鎖技能強化、' + B.markStar + ' 星專屬標記。碎片 ' + cs.shards + '。</div>';
   if (c.max) return h + '<div class="cusub">已達最高星。</div>';
   h += '<button class="cub" data-a="starup" data-id="' + e.id + '"' + (cs.shards >= c.cost ? '' : ' disabled') + '>升至 ' + (lv + 1) + ' 星(' + c.cost + ' 碎)</button>';
-  if (e.fig || e.tok) h += '<div class="cusub">' + (e.fig ? '名人成本 ×' + F.figMul : '') + (e.tok ? (e.fig ? ';' : '') + '信物 ' + e.tok + ' 個抵 ' + c.off + ' 碎(原價 ' + c.base + ')' : '') + '</div>';
+  if (e.fig) h += '<div class="cusub">名人成本 ×' + F.figMul + '</div>';
   return h;
 }
 function cuBagClick(a, b, cs) {

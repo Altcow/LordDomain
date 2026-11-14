@@ -15,9 +15,38 @@ var FEATURES = {
   caravan: false,      // 走鏢入口(側欄 🛻、走鏢面板)休眠(v60)
   stages: false,       // 副本(章節 36 關的 bnmap 章節地圖)入口與頭目首殺獎勵休眠;bn_stages 敵將 / 結算仍供外勤與擂台使用(v60)
   worldmap: true,      // 外勤(wm_core.js 外勤清單、戰鬥入口『外勤』鈕)預設開(v60;原為大地圖登錄用,大地圖改用 bigmap)
-  bigmap: false        // 大地圖(尚未接入;只登錄,無守衛)
+  world: true,         // 地圖(wd_core.js / wd_ui.js:資源採集 / 野怪集結 / 攻城;shell 的「地圖」入口);關閉時入口退回舊外勤 wmOpen(2026-11-13)
+  bigmap: false,       // 大地圖(尚未接入;只登錄,無守衛)
+  ldui: true,          // 新介面骨架(js/ld_nav.js 頁面堆疊 + 新首頁 / 武將詳情 / 整隊 / 百層塔 / 舊頁接入堆疊;設計_介面骨架實作計畫.md);第 6 階段整合完成後預設開(2026-11-14);網址 ?ldui=0 還原舊首頁、?ldui=1 開,或 localStorage lorddomain.feature.ldui 覆寫
+  shell: true          // 新主畫面外殼 App Shell(js/shell.js、css/shell.css;B 包 S0/S1)預設開(2026-11-12 純卡牌版);網址 ?shell=1 / ?shell=0 或 localStorage lorddomain.feature.shell 覆寫
 };
 var FEATURES_WARNED = {};
+// 外殼 shell 開啟 = 城市執行期全停(城市繪製、城市 tick、城市頂列與計時器);卡牌 / 道具 / 外勤 / 擂台 / 戰役不受影響。
+function cityRuntimeOff() { return featureOn('shell'); }
+// 瀏覽器載入時讀取覆寫:?shell=1|0 優先,其次 localStorage('1' / '0')。測試環境無 window 時不動作。讀寫失敗一律忽略。
+function featureLoadOverrides() {
+  var v = null, s = '', m, ls;
+  try { if (typeof window !== 'undefined' && window && window.location) s = String(window.location.search || ''); } catch (e) { s = ''; }
+  m = /[?&]shell=([01])/.exec(s);
+  if (m) v = m[1] === '1';
+  else {
+    try { ls = (typeof localStorage !== 'undefined' && localStorage && localStorage.getItem) ? localStorage.getItem('lorddomain.feature.shell') : null; } catch (e2) { ls = null; }
+    if (ls === '1' || ls === '0') v = ls === '1';
+  }
+  if (v !== null) FEATURES.shell = v;
+  featureLoadOverride2('ldui', s);
+}
+// 其他旗標覆寫(同 shell 的做法):?名稱=1|0 優先,其次 localStorage('lorddomain.feature.名稱' = '1' / '0')
+function featureLoadOverride2(name, search) {
+  var v = null, m = new RegExp('[?&]' + name + '=([01])').exec(search), ls;
+  if (m) v = m[1] === '1';
+  else {
+    try { ls = (typeof localStorage !== 'undefined' && localStorage && localStorage.getItem) ? localStorage.getItem('lorddomain.feature.' + name) : null; } catch (e) { ls = null; }
+    if (ls === '1' || ls === '0') v = ls === '1';
+  }
+  if (v !== null) FEATURES[name] = v;
+}
+if (typeof window !== 'undefined') featureLoadOverrides();
 // 未知名稱回 false 並只警告一次(避免拼錯名稱時靜默失效)
 function featureOn(name) {
   if (Object.prototype.hasOwnProperty.call(FEATURES, name)) return !!FEATURES[name];

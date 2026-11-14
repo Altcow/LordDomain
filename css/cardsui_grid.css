@@ -1,0 +1,88 @@
+/* css/cardsui_grid.css — 卡包卡片網格與極細篩選列(js/cardsui_grid.js)。
+   篩選列固定高度(36px),標籤不換行(橫向捲動),下拉與搜尋以覆蓋方式疊在網格上,不改變版面高度。 */
+
+#cardsPanel .cugbarw { position: sticky; top: 0; z-index: 4; background: #201e1a; }
+#cardsPanel .cugbar { position: relative; display: flex; align-items: center; gap: 4px; height: 36px; box-sizing: border-box; padding: 0 2px; font-size: 12px; }
+#cardsPanel .cugbar button { flex: none; min-height: 30px; margin: 0; padding: 0 6px; border: 1px solid rgba(255, 255, 255, .25); border-radius: 6px; background: #36332d; color: #eee; font-size: 12px; white-space: nowrap; }
+#cardsPanel .cugbar button.on { background: #f0b45a; color: #222; }
+#cardsPanel .cugbar button[disabled] { opacity: .4; }
+#cardsPanel .cugbar button.warn { background: #8a3a3a; color: #fff; }
+#cardsPanel .cugchips { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 4px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+#cardsPanel .cugchips::-webkit-scrollbar { display: none; }
+#cardsPanel .cugchip { flex: none; min-height: 26px; margin: 0; padding: 0 7px; border: 1px solid #f0b45a; border-radius: 13px; background: rgba(240, 180, 90, .15); color: #f5d9a8; font-size: 11px; white-space: nowrap; }
+#cardsPanel .cugcnt { flex: none; padding-left: 2px; font-size: 11px; opacity: .75; white-space: nowrap; }
+#cardsPanel .cugsel { flex: 1 1 auto; min-width: 0; }
+#cardsPanel .cugq { flex: 1 1 auto; min-width: 0; height: 30px; box-sizing: border-box; padding: 0 8px; border: 1px solid rgba(255, 255, 255, .4); border-radius: 6px; background: #14120f; color: #eee; font-size: 16px; }
+
+/* 下拉小清單:疊在網格上層(mask 點空白處關閉) */
+#cardsPanel .cugmask { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 3; background: transparent; }
+#cardsPanel .cugpop { position: absolute; left: 0; top: 100%; z-index: 5; display: flex; flex-direction: column; gap: 2px; min-width: 128px; max-width: 70%; box-sizing: border-box; padding: 4px; border-radius: 8px; background: #2a2722; box-shadow: 0 4px 14px rgba(0, 0, 0, .6); }
+#cardsPanel .cugpop-troop { flex-direction: row; flex-wrap: wrap; min-width: 0; max-width: 100%; }
+#cardsPanel .cugpop button { min-height: 40px; margin: 0; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: #eee; font-size: 14px; text-align: left; white-space: nowrap; }
+#cardsPanel .cugpop-troop button { min-width: 52px; text-align: center; }
+#cardsPanel .cugpop button.on { background: #f0b45a; color: #222; }
+#cardsPanel .cugsep { width: 100%; margin: 2px 0; border: 0; border-top: 1px solid rgba(255, 255, 255, .2); }
+
+/* 網格 */
+#cardsPanel .cugrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; padding: 6px 0 4px; }
+/* 堆疊外層:疊牌偏移(後層右上錯開 3px)、角標與陣中點;n = 1 時內層滿版 */
+#cardsPanel .cugw { position: relative; min-width: 0; aspect-ratio: 3 / 4; cursor: pointer; content-visibility: auto; contain-intrinsic-size: 88px 118px; -webkit-tap-highlight-color: transparent; }
+#cardsPanel .cugw.g0 { --g: var(--gr0); }
+#cardsPanel .cugw.g1 { --g: var(--gr1); }
+#cardsPanel .cugw.g2 { --g: var(--gr2); }
+#cardsPanel .cugw.g3 { --g: var(--gr3); }
+#cardsPanel .cugw.g4 { --g: var(--gr4); }
+#cardsPanel .cugw .cugc { position: absolute; left: 0; bottom: 0; width: calc(100% - 6px); height: calc(100% - 6px); }
+#cardsPanel .cugw.cugw1 .cugc { width: 100%; height: 100%; }
+#cardsPanel .cugc-back { position: absolute; left: 3px; bottom: 3px; width: calc(100% - 6px); height: calc(100% - 6px); box-sizing: border-box; border: 2px solid var(--g); border-radius: 8px; background: var(--cu-paper); }
+#cardsPanel .cugc-back.b2 { left: 6px; bottom: 6px; }
+#cardsPanel .cugc-badge { position: absolute; right: 0; top: 0; z-index: 4; min-width: 22px; height: 16px; line-height: 14px; padding: 0 4px; box-sizing: border-box; border: 1px solid #f0b45a; border-radius: 8px; background: #2a2722; color: #f0b45a; font-size: 10px; font-weight: bold; text-align: center; }
+#cardsPanel .cugc-ing { position: absolute; right: 3px; top: 20px; z-index: 4; width: 8px; height: 8px; border-radius: 50%; background: #5fb39a; box-shadow: 0 0 0 1px rgba(0, 0, 0, .5); }
+#cardsPanel .cugc { position: relative; display: flex; flex-direction: column; min-width: 0; margin: 0; padding: 0; border: 2px solid var(--g); border-radius: 8px; background: var(--cu-paper); color: var(--cu-ink); overflow: hidden; cursor: pointer; text-align: center; font: inherit; content-visibility: auto; contain-intrinsic-size: 88px 118px; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; touch-action: pan-y; box-sizing: border-box; }
+#cardsPanel .cugc.g0 { --g: var(--gr0); }
+#cardsPanel .cugc.g1 { --g: var(--gr1); }
+#cardsPanel .cugc.g2 { --g: var(--gr2); }
+#cardsPanel .cugc.g3 { --g: var(--gr3); }
+#cardsPanel .cugc.g4 { --g: var(--gr4); border-width: 3px; }
+#cardsPanel .cugc.sel { outline: 3px solid #f0b45a; outline-offset: -3px; }
+#cardsPanel .cugc-art { position: relative; flex: 1 1 auto; min-height: 0; background: rgba(128, 128, 128, .14); overflow: hidden; }
+#cardsPanel .cugc-art img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
+#cardsPanel .cugc-tl { position: absolute; left: 2px; top: 2px; z-index: 1; line-height: 0; padding: 1px 2px; border-radius: 4px; background: rgba(0, 0, 0, .5); }
+#cardsPanel .cugc-tl .tri { width: 14px !important; height: 14px !important; margin: 0 !important; vertical-align: top !important; }
+#cardsPanel .cugc-tr { position: absolute; right: 2px; top: 2px; z-index: 1; padding: 0 4px; border-radius: 4px; background: #8a3a3a; color: #fff; font-size: 10px; line-height: 16px; }
+#cardsPanel .cugc-dot { position: absolute; left: 4px; top: 22px; z-index: 1; width: 8px; height: 8px; border-radius: 50%; background: #5fb39a; box-shadow: 0 0 0 1px rgba(0, 0, 0, .5); }
+#cardsPanel .cugc-lk { position: absolute; right: 2px; top: 20px; z-index: 1; font-size: 11px; line-height: 14px; }
+#cardsPanel .cugc-ck { position: absolute; right: 3px; bottom: 26px; z-index: 1; width: 20px; height: 20px; border-radius: 50%; background: #f0b45a; color: #222; font-size: 13px; font-weight: bold; line-height: 20px; text-align: center; }
+#cardsPanel .cugc-st {flex: none; height: 10px; line-height: 10px; font-size: 9px; letter-spacing: 1px; color: var(--g); overflow: hidden; }
+#cardsPanel .cugc-nm { flex: none; height: 20px; padding: 0 3px; font-size: 12px; font-weight: bold; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cu-ink); }
+
+#cardsPanel .cugempty { padding: 18px 8px; text-align: center; font-size: 13px; line-height: 1.8; opacity: .9; }
+
+/* 人物卡詳情底部面板(P1 layer 3)疊在卡包之上;人物卡內的技能浮層需高於底部面板 */
+#cuCardPop { z-index: 80 !important; }
+
+/* 橫版大面板模式(style.css 1270 行把卡包 .cubd 切成多欄,網格只拿到半寬):卡包改為單欄,網格由 auto-fill 依寬度決定欄數 */
+body.panel-big-landscape #cardsPanel[data-tab=R] .cubd { column-width: auto; column-count: auto; column-gap: normal; columns: auto; }
+
+/* 詳情滿版(直立或窄橫向):底部詳情面板撐滿整個面板,網格仍在 DOM 中(不銷毀,關閉詳情即回到原捲動位置) */
+body.cu-detail-full #pf_cardsDetail.pf-sheet { top: 0 !important; height: 100% !important; max-height: none !important; border-radius: 0 !important; padding-bottom: env(safe-area-inset-bottom); }
+#cardsPanel .cugnav, #pf_cardsDetail .cugnav { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 0 0 6px; }
+#cardsPanel .cugnav button, #pf_cardsDetail .cugnav button { min-height: 40px; margin: 0; padding: 0 10px; border: 0; border-radius: 6px; background: #3a5a8a; color: #fff; font-size: 13px; }
+#cardsPanel .cugnav button[disabled], #pf_cardsDetail .cugnav button[disabled] { opacity: .35; }
+@media (prefers-reduced-motion: reduce) { #cardsPanel .cugc, #cardsPanel .cugw { transition: none !important; } }
+
+/* 橫向低矮螢幕(844×390 等,高度 < 500):卡包面板壓縮,網格至少露出 2 排 */
+@media (orientation: landscape) and (max-height: 499px) {
+  #cardsPanel .cuhd { height: 36px; min-height: 0; padding: 2px 6px; gap: 4px; box-sizing: border-box; overflow: hidden; }
+  #cardsPanel .cuhd > b { font-size: 13px; line-height: 30px; }
+  #cardsPanel .cutabs { height: 32px; align-items: center; }
+  #cardsPanel .cutab { min-height: 28px; height: 28px; padding: 0 8px; font-size: 12px; margin: 0; }
+  #cardsPanel .cuq { min-height: 28px; height: 28px; width: 28px; padding: 0; font-size: 12px; margin: 0; }
+  #cardsPanel .iusub { display: flex; gap: 2px; flex: none; }
+  #cardsPanel .iusub .cub { min-height: 28px; height: 28px; padding: 0 8px; font-size: 12px; margin: 0; }
+  #cardsPanel .cubd > div[style*="text-align:right"] { margin: 0; height: 0; overflow: visible; }
+  #cardsPanel .cubd > div[style*="text-align:right"] .cub { position: absolute; right: 8px; top: 2px; min-height: 26px; padding: 0 8px; font-size: 11px; }
+  #cardsPanel .cugbar { height: 32px; }
+  #cardsPanel .cugbar button { min-height: 26px; padding: 0 5px; font-size: 11px; }
+  #cardsPanel .cugrid { gap: 4px; padding: 4px 0 2px; }
+}

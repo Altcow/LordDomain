@@ -186,7 +186,7 @@ function cuSkFigEntry(cs, fig) {
 function cuSkDrillHtml() {
   var h = '', d, pct;
   if (typeof bnBookOpen !== 'function' || typeof bnBookLoad !== 'function' || typeof BNBOOK === 'undefined') return h;
-  if (!bnBookOpen()) return h + '<div class="cusk-empty">卡包至少 5 人後開放討伐,可研兵強化兵種。</div>';
+  if (!bnBookOpen()) return h + '<div class="cusk-empty">卡包至少 ' + BNUI.minRoster + ' 人後開放討伐,可研兵強化兵種。</div>';
   d = bnBookLoad();
   pct = Math.round(BNBOOK.drillPer * 100);
   h += '<div class="cusk-empty">卡包內同兵種共享;討伐中兵力 / 攻擊 / 謀略 / 治療每級 +' + pct + '%(敵人不吃)。</div>';

@@ -11,6 +11,12 @@ function progBoot() {
   return progMigrateReset();
 }
 
+// shell 開啟時不跑城市離線結算,並把 lastTs 推到現在,避免切回經營模式時補發外殼期間的生產
+function offlineGainsOrSkip() {
+  if (cityRuntimeOff()) { world.lastTs = Date.now(); return 0; }
+  return applyOfflineGains();
+}
+
 function boot() {
   canvas = document.getElementById('game');
   ctx = canvas.getContext('2d');
@@ -22,13 +28,14 @@ function boot() {
   const freshWorld = !loadWorld();
   worldReadyFlag = true;
   if (freshWorld) applyTemplate(DEFAULT_TEMPLATE);
-  if (freshWorld && typeof tutStartNew === 'function') { if (world && !world.city) world.city = {}; tutStartNew(); }   // 全新世界才開新手教學(舊存檔沒有 tut = 已畢業)
+  if (freshWorld && world && !world.city) world.city = {};   // 卡牌存檔容器 world.city.cards(shell 下仍需要)
+  if (freshWorld && !cityRuntimeOff() && typeof tutStartNew === 'function') tutStartNew();   // 全新世界才開新手教學(舊存檔沒有 tut = 已畢業)
   if (featureOn('multiworld') && typeof worldWizardBoot === 'function') worldWizardBoot(freshWorld);   // @DORMANT multiworld:精靈選的世界風格 / 起手範本(只在全新世界套用一次)
   initUI(canvas);
   if (migr.migrated && typeof showToast === 'function') showToast('舊領地已備份,從 1 級重新開始(設定可還原備份)');
   if (typeof initBattleUI === 'function') initBattleUI();
   const before = Object.assign({}, world.res);
-  const sec = applyOfflineGains();
+  const sec = offlineGainsOrSkip();
   if (!(typeof worldsArrivalToast === 'function' && worldsArrivalToast(sec, before)) && sec > 0) reportOffline(sec, before);   // 切換世界後:優先顯示「平行世界 NN 離開多久、補發了什麼」
   flushTechDone();
   updateResBar();
@@ -47,16 +54,27 @@ function boot() {
   });
   window.addEventListener('pagehide', () => saveWorld());
   lastFrameMs = performance.now();
-  requestAnimationFrame(frame);
+  scheduleFrame();
+}
+
+// shell 下沒有即時戰鬥時,主迴圈改每秒一次(卡牌補給 / 外勤 / 擂台倒數只需秒級),不再每幀跑
+function battleLoopOn() {
+  if (battle && ((game.mode === 'attack' && game.phase === 'march') || game.mode === 'replay')) return true;
+  return typeof game !== 'undefined' && (game.mode === 'bn' || game.mode === 'fishing' || game.mode === 'interior');
+}
+function scheduleFrame() {
+  if (cityRuntimeOff() && !battleLoopOn()) setTimeout(function () { requestAnimationFrame(frame); }, 1000);
+  else requestAnimationFrame(frame);
 }
 
 function frame(nowMs) {
-  const dt = Math.min(0.25, Math.max(0, (nowMs - lastFrameMs) / 1000));
+  const off = cityRuntimeOff();   // shell:城市經濟 / 研發 / 酒館 / 繪製全停
+  const dt = Math.min(off ? 2 : 0.25, Math.max(0, (nowMs - lastFrameMs) / 1000));
   lastFrameMs = nowMs;
   // 攻擊/沙盤/錄影期間不累積經濟(資源列改顯示掠奪);同步 lastTs 避免離線結算把戰鬥時間算進去
-  if (typeof lootMode === 'function' && lootMode()) world.lastTs = Date.now();
+  if (off || (typeof lootMode === 'function' && lootMode())) world.lastTs = Date.now();
   else { tickResources(dt); if (typeof techTick === 'function') techTick(dt); }
-  const td = tickResearch(dt);
+  const td = off ? null : tickResearch(dt);
   if (td) onTechDone(td, false);
   if (battle && ((game.mode === 'attack' && game.phase === 'march') || game.mode === 'replay')) {
     const sp = typeof game.simSpeed === 'number' ? game.simSpeed : 1;
@@ -81,17 +99,17 @@ function frame(nowMs) {
   }
   if (typeof battleUiTick === 'function') battleUiTick(dt);
   if (typeof cardsTick === 'function') cardsTick(dt);   // 卡片主迴圈掛點(cards.js,每 5 秒):人物互動 / 舊存檔提示
-  if (typeof tavernTick === 'function') tavernTick(dt);   // 酒館包間收益結算(tavern_i1.js,每 5 秒檢查、每遊戲小時入帳)
-  if (typeof game !== 'undefined' && game.mode === 'bn') { requestAnimationFrame(frame); return; }   // 戰鬥 A(js/bnui.js):全螢幕戰鬥畫面自己畫,不重畫城市
-  if (typeof game !== 'undefined' && (game.mode === 'fishing' || game.mode === 'interior')) { requestAnimationFrame(frame); return; }   // 釣魚 / 室內:全螢幕子畫面自己畫,不重畫城市
+  if (!off && typeof tavernTick === 'function') tavernTick(dt);   // 酒館包間收益結算(tavern_i1.js,每 5 秒檢查、每遊戲小時入帳)
+  if (typeof game !== 'undefined' && game.mode === 'bn') { scheduleFrame(); return; }   // 戰鬥 A(js/bnui.js):全螢幕戰鬥畫面自己畫,不重畫城市
+  if (typeof game !== 'undefined' && (game.mode === 'fishing' || game.mode === 'interior')) { scheduleFrame(); return; }   // 釣魚 / 室內:全螢幕子畫面自己畫,不重畫城市
   // 繪製幀率上限(動態:操作中用設定值 60/30,閒置 30;省電固定 30);未達間隔的 rAF 只跑上面的模擬 / tick,不畫
-  if (!pano.open && (typeof perfGateOk !== 'function' || perfGateOk(drawGate || (drawGate = perfGateNew()), nowMs))) draw(ctx, nowMs / 1000);
-  requestAnimationFrame(frame);
+  if (!off && !pano.open && (typeof perfGateOk !== 'function' || perfGateOk(drawGate || (drawGate = perfGateNew()), nowMs))) draw(ctx, nowMs / 1000);
+  scheduleFrame();
 }
 
 function handleResume() {
   const before = Object.assign({}, world.res);
-  const sec = applyOfflineGains();
+  const sec = offlineGainsOrSkip();
   if (sec > 0) reportOffline(sec, before);
   flushTechDone();
   updateResBar();

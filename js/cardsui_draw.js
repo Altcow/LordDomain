@@ -7,10 +7,10 @@
 // 全域名稱:CU_DRAW_POOLS CU_DRAW_TITLE CU_DRAW_LABEL CU_DRAW_DESC cuDrawCss cuDrawPool cuDrawGate cuDrawBtns cuDrawTabHtml cuDrawClick cuDrawInfoPop cuDrawPop cuPityLine cuNbLine cuBossHtml cuDrawScrollY cuDrawScrollSet cuDrawKeepInstall
 // 不發聲、不推播。ES2017;不用 ?. ??。
 
-var CU_DRAW_POOLS = ['T', 'E'];
-var CU_DRAW_TITLE = { T: '小池 · 招賢酒肆', E: '大池 · 九品中正考課' };
-var CU_DRAW_LABEL = { T: '小池', E: '大池' };
-var CU_DRAW_DESC = { T: '每抽 1 次出 1 張,白青藍為主,最高出紫卡,不出金卡。', E: '每抽 1 次出 1 張,白至金,科目逐期輪替;金卡皆為名人。' };
+var CU_DRAW_POOLS = ['E'];
+var CU_DRAW_TITLE = { E: 'S01卡池 · 第一季武將' };
+var CU_DRAW_LABEL = { E: 'S01卡池' };
+var CU_DRAW_DESC = { E: '每抽 1 次出 1 張,白至金,科目逐期輪替;金卡皆為第一季名人。' };
 
 function cuDrawDesc(v) { return CU_DRAW_DESC[v] || ''; }
 function cuDrawCss() {
@@ -29,10 +29,9 @@ function cuDrawCss() {
 function cuDrawGate(v) { return cuGateTxt(v); }
 // 目前單選的卡池(預設小池)
 function cuDrawPool() {
-  var v = (typeof cu !== 'undefined' && cu.dpool) || '', c;
-  if (!v && typeof cardsGet === 'function' && typeof cardsPulls === 'function') { try { c = cardsGet(); if (c && cardsPulls(c, 'E') > cardsPulls(c, 'T')) v = 'E'; } catch (e) { /* ignore */ } }
-  v = v || 'T';
-  return CU_DRAW_POOLS.indexOf(v) >= 0 ? v : 'T';
+  var v = (typeof cu !== 'undefined' && cu.dpool) || '';
+  v = v || 'E';
+  return CU_DRAW_POOLS.indexOf(v) >= 0 ? v : 'E';
 }
 // 三顆抽卡鈕(只作用於目前單選的池):單抽 1 次 / 10 抽 / 全抽(data-n = 1 / 10 / all,走 cuDoPull)。次數以該池持有抽數計
 function cuDrawBtns(cs, v) {
@@ -70,7 +69,7 @@ function cuDrawTabHtml(cs) {
 // 按鈕動作:卡池單選、卡池說明 pop 開關(其餘動作由 cuClick 其他分派處理)
 function cuDrawClick(a, b) {
   var v;
-  if (a === 'dpool') { v = b.getAttribute('data-v'); cu.dpool = CU_DRAW_POOLS.indexOf(v) >= 0 ? v : 'T'; cu.dpop = null; return true; }
+  if (a === 'dpool') { v = b.getAttribute('data-v'); cu.dpool = CU_DRAW_POOLS.indexOf(v) >= 0 ? v : 'E'; cu.dpop = null; return true; }
   if (a === 'dpop') { cu.dpop = b.getAttribute('data-k') || null; return true; }
   return false;
 }
@@ -97,12 +96,12 @@ function cuDrawInfoPop(cs) {
     h += cuNbLine(cs);
   }
   h += '<div class="cusec">持有抽數</div>';
-  h += '<div class="cuil">小池 <b>' + cardsPulls(cs, 'T') + ' / ' + D.cap + '</b>、大池 <b>' + cardsPulls(cs, 'E') + ' / ' + D.cap + '</b>。大池每 ' + D.gap.E + ' 小時 +' + D.size[0].n + ' 抽、小池每 ' + D.gap.T + ' 小時 +' + D.size[0].n + ' 抽(離線也會累積),各自存到 ' + D.cap + ' 為止;存滿後先抽才會繼續累積。</div>';
+  h += '<div class="cuil">S01卡池 <b>' + cardsPulls(cs, 'E') + ' / ' + D.cap + '</b>。每 ' + D.gap.E + ' 小時 +' + D.size[0].n + ' 抽(離線也會累積),存到 ' + D.cap + ' 為止;存滿後先抽才會繼續累積。</div>';
   nx = cardsNextIn(cs, v, cuNow());
   if (nx !== null) h += '<div class="cusub">' + cuEsc(CU_DRAW_LABEL[v]) + '下次 +' + T.n + ' 抽:<span data-cd="' + v + '">' + cardsUiFmtCd(nx) + '</span> 後</div>';
   h += '<div class="cusec">贈抽與補償</div>';
-  h += '<div class="cuil"><b>新手禮包</b> 新手禮包(道具)內含 ' + G.pulls + ' 抽,到卡包的道具頁籤使用(入大池,可超過上限 ' + D.cap + ')。' + (typeof itemCount === 'function' && itemCount('gift_newbie') > 0 ? '目前尚未使用。' : '') + '</div>';
-  h += '<div class="cuil"><b>頭目贈抽</b> 每章頭目首次通關 +' + CARD_BOSS.pulls + ' 抽(大池)。</div>';
+  h += '<div class="cuil"><b>新手禮包</b> 新手禮包(道具)內含 ' + G.pulls + ' 抽,到卡包的道具頁籤使用(入S01卡池,可超過上限 ' + D.cap + ')。' + (typeof itemCount === 'function' && itemCount('gift_newbie') > 0 ? '目前尚未使用。' : '') + '</div>';
+  h += '<div class="cuil"><b>頭目贈抽</b> 每章頭目首次通關 +' + CARD_BOSS.pulls + ' 抽(S01卡池)。</div>';
   h += cuBossHtml(cs, true);
   h += '<div class="cusec">卡包</div><div class="cuil">卡包滿了就停止抽卡(次數保留、不扣),遣散或熔鍊騰出空位後才能再抽。</div>';
   h += '<button class="cub" data-a="info" data-k="draw" data-key="" style="margin:0">補充節奏與升級</button> ';
@@ -121,15 +120,15 @@ function cuPityLine(cs, v) {
 function cuNbLine(cs) {
   var S = CARD_STARTER, left = (typeof cardsNbLeft === 'function') ? cardsNbLeft(cs) : 0, nb = cs.starter && cs.starter.nb;
   if (!left || !nb) return '';
-  return '<div class="cuov"><div class="cur"><b>新手期</b><span class="cusub">還剩 ' + left + ' 張</span></div><div class="cusub">小池、大池比較容易出紫卡:最多再 ' + Math.max(1, S.nbPurple - (nb.p | 0)) + ' 抽必出紫卡以上;大池最多再 ' + Math.max(1, S.nbGold - (nb.g | 0)) + ' 抽必出金卡。</div></div>';
+  return '<div class="cuov"><div class="cur"><b>新手期</b><span class="cusub">還剩 ' + left + ' 張</span></div><div class="cusub">S01卡池、S01卡池比較容易出紫卡:最多再 ' + Math.max(1, S.nbPurple - (nb.p | 0)) + ' 抽必出紫卡以上;S01卡池最多再 ' + Math.max(1, S.nbGold - (nb.g | 0)) + ' 抽必出金卡。</div></div>';
 }
 
 // 頭目首通贈抽任務:compact = 一行(只列下一個未領的);否則六章全列(領過打勾)
 function cuBossHtml(cs, compact) {
   var l = cuBossList(), P = CARD_BOSS.pulls, nx = cuBossNext(cs), h;
   if (!l.length) return '';
-  if (compact) return nx ? '<div class="cusub">任務:首次通關第 ' + nx.ch + ' 章頭目〈' + cuEsc(nx.name) + '〉→ 大池 +' + P + ' 抽</div>' : '<div class="cusub">各章頭目首通贈抽已全數領取</div>';
-  h = '<div class="cuov"><div class="cur"><b>任務 · 頭目贈抽</b><span class="cusub">每章頭目首次通關 +' + P + ' 抽(大池)</span></div>';
+  if (compact) return nx ? '<div class="cusub">任務:首次通關第 ' + nx.ch + ' 章頭目〈' + cuEsc(nx.name) + '〉→ S01卡池 +' + P + ' 抽</div>' : '<div class="cusub">各章頭目首通贈抽已全數領取</div>';
+  h = '<div class="cuov"><div class="cur"><b>任務 · 頭目贈抽</b><span class="cusub">每章頭目首次通關 +' + P + ' 抽(S01卡池)</span></div>';
   l.forEach(function (st) {
     var got = !!(cs.boss && cs.boss[st.id]);
     h += '<div class="cur"><span>' + (got ? '✅ ' : '⬜ ') + '第 ' + st.ch + ' 章頭目〈' + cuEsc(st.name) + '〉</span><span class="cusub">' + (got ? '已領 +' + P + ' 抽' : '+' + P + ' 抽') + '</span></div>';

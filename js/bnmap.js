@@ -180,7 +180,7 @@ function bnMapRender() {
 
 // 進入階段:地圖 → 布陣
 function bnMapEnter(kind, id) {
-  if (kind !== 'practice' && !featureOn('stages')) return false;   // @DORMANT stages:副本 / 流寇休眠(v60);練兵不受影響
+  if (kind !== 'practice' && !(featureOn('stages') || featureOn('shell'))) return false;   // @DORMANT stages:副本 / 流寇休眠(v60);練兵不受影響;@DORMANT shell:外殼開啟時放行
   var d = bnMapData(), env = bnMapEnv(), can, def;
   if (kind === 'stage') {
     can = bnStgCanStart(d, id, env);

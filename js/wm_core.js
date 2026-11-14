@@ -15,8 +15,10 @@ function wmGuardOff() { return typeof featureOn === 'function' && !featureOn('wo
 function wmHomeArmy(n) {
   return { n: n, st: 'home', tm: [], si: -1, it: '', kind: '', t0: 0, t1: 0, go: 0, rt: 0, cw: 0, cms: 0, tE: 0, auto: true, try: 0, qw: 0 };
 }
+// 外勤戰報重播:最近 WM_REC_MAX 場的開戰紀錄(rec)存進 W.rc(隨存檔);超過上限丟最舊
+var WM_REC_MAX = 10;
 function wmNew(seed, now) {
-  var W = { v: 1, seed: (seed >>> 0), now: now, sd: 0, sl: [], q: [], ar: [], hist: { last: {}, bl: [], fr: { d: -1, n: 0 } } }, i;
+  var W = { v: 1, seed: (seed >>> 0), now: now, sd: 0, rc: [], sl: [], q: [], ar: [], hist: { last: {}, bl: [], fr: { d: -1, n: 0 } } }, i;
   for (i = 0; i < WM_CFG.slotCount; i++) W.sl.push({ g: 0, it: null, nx: now });
   for (i = 0; i < WM_CFG.armyCap; i++) { W.ar.push(wmHomeArmy(i + 1)); W.q.push({ tm: [], cm: [], au: true }); }
   wmRun(W, null, now);   // 初始化:刷出 8 格(不走守衛,僅建立狀態)
@@ -33,8 +35,8 @@ function wmInt(x, lo, hi, dflt) {
   return Math.max(lo, Math.min(hi, x));
 }
 function wmCleanTm(list) {
-  return (Array.isArray(list) ? list : []).filter(function (m) { return m && typeof m.id === 'string'; }).slice(0, 5).map(function (m) {
-    return { id: m.id, row: wmInt(m.row, 0, 2, 0), col: wmInt(m.col, 0, 2, 0), troop: String(m.troop || '') };
+  return (Array.isArray(list) ? list : []).filter(function (m) { return m && typeof m.id === 'string'; }).slice(0, 3).map(function (m) {   // 3 人隊伍:超過取前 3;站位 col 一律 0
+    return { id: m.id, row: wmInt(m.row, 0, 2, 0), col: 0, troop: String(m.troop || '') };
   });
 }
 // 存檔正規化:壞檔 / 版本不符 → 全新;數值夾住;找不到的格子或人員 → 部隊回村
@@ -46,6 +48,7 @@ function wmNorm(raw, now, seed, cs) {
   W.seed = sd >>> 0;
   W.now = wmInt(raw.now, 0, now, now);
   W.sd = wmInt(raw.sd, 0, 1e9, 0);
+  if (Array.isArray(raw.rc)) W.rc = raw.rc.filter(function (x) { return x && typeof x.id === 'string' && x.rec && typeof x.rec === 'object'; }).slice(-WM_REC_MAX);
   for (i = 0; i < WM_CFG.slotCount; i++) {
     r = raw.sl && raw.sl[i];
     W.sl[i] = { g: 0, it: null, nx: now };
@@ -114,6 +117,10 @@ function wmNormCards(W, cs, now) {
   W.q.forEach(function (q) {
     if (q.tm.some(function (m) { return !wmCardOf(cs, m.id); })) { q.tm = []; q.cm = []; }
   });
+  if (typeof cardsUseClear === 'function' && typeof cardsUseBlock === 'function') {   // 占用狀態與部隊對齊:外勤中但不在任何部隊 → 解除;部隊中但未標外勤 → 補標(舊存檔)
+    cs.roster.forEach(function (e) { if (cardsUseGet(e).k === 'field' && !wmOutOf(W, e.id)) cardsUseClear(e, 'field'); });
+    W.ar.forEach(function (a, n) { if (a.st !== 'home') a.tm.forEach(function (m) { var e = wmCardOf(cs, m.id); if (e && cardsUseBlock(e, 'field').ok) cardsUseSet(e, 'field', n + 1); }); });
+  }
 }
 
 // ───────── 卡片狀態(惰性計算,離線照算) ─────────
@@ -330,6 +337,7 @@ function wmGoHome(W, cs, n, t, events) {
     if (!e) return;
     c = wmCardState(e, W, t);
     wmSetCard(e, c.h, c.s, t);
+    if (typeof cardsUseClear === 'function') cardsUseClear(e, 'field');   // 回城解除外勤中
   });
   a.st = 'home'; a.tm = []; a.it = ''; a.kind = ''; a.si = -1; a.qw = 0;
   events.push({ t: t, k: 'home', n: n });
@@ -368,13 +376,16 @@ function wmNpcLoot(W, it, a, t) {
 }
 // 一場自動快速戰鬥(bnRun,不記事件)→ 寫回每卡兵力 / 體力 → 勝則掉落並清除格子 → 部隊回村
 function wmFightInner(W, cs, n, t, events) {
-  var a = W.ar[n - 1], it = wmItemById(W, a.it), mine, foes, S, win, loot = null, seed, k, u, e, c, s, h;
+  var a = W.ar[n - 1], it = wmItemById(W, a.it), mine, foes, S, win, loot = null, seed, k, u, e, c, s, h, rid, rec;
   if (!it) return;
   mine = wmArmyUnits(W, cs, a, t);
   foes = wmFoes(W, it);
   seed = bnHash('wmb', W.seed, it.id, a.try);
-  S = bnRun({ v: 1, seed: seed, teamA: mine.units, teamB: foes.units, opts: { events: false } });
+  rec = { v: BN_REC_VER, seed: seed, teamA: JSON.parse(JSON.stringify(mine.units)), teamB: JSON.parse(JSON.stringify(foes.units)), opts: { events: false } };
+  S = bnRun(JSON.parse(JSON.stringify(rec)));
   W.sd++;
+  rid = 'f' + W.sd;
+  W.rc = (W.rc || []).concat([{ id: rid, n: n, si: a.si, t: t, rec: rec }]).slice(-WM_REC_MAX);
   win = S.result.winner === 'A';
   loot = win ? wmNpcLoot(W, it, a, t) : null;
   a.tm.forEach(function (m) {
@@ -395,22 +406,24 @@ function wmFightInner(W, cs, n, t, events) {
     W.sl[it.si].it = null; W.sl[it.si].nx = t + wmRespawnDelay(W, it.si, t);
   } else wmUnlock(W, it, t, events);
   a.st = 'back'; a.t0 = t; a.t1 = t + a.rt;
-  events.push({ t: t, k: 'fight', n: n, si: a.si, win: win, reason: S.result.reason, rounds: S.result.rounds, loot: loot });
+  events.push({ t: t, k: 'fight', n: n, si: a.si, win: win, reason: S.result.reason, rounds: S.result.rounds, loot: loot, rid: rid });
 }
 
 // ───────── 派遣 / 報價 ─────────
 // 報價(純讀取)。go、rt 為秒;cms 為採集毫秒;cw 為採集量(重);mats 為材料件數;gold 為文
 function wmQuote(W, cs, tm, si, now) {
-  var out = { ok: false, reason: '', go: 0, rt: 0, load: 0, rate: 0, cw: 0, cms: 0, sta: 0, mats: 0, gold: 0, lowSta: false }, it = wmItemAt(W, si), fac = 0, low = false, load = 0, rate = 0, ids = {}, k, e, c, slot, t, ld;
+  var out = { ok: false, reason: '', go: 0, rt: 0, load: 0, rate: 0, cw: 0, cms: 0, sta: 0, mats: 0, gold: 0, lowSta: false }, it = wmItemAt(W, si), fac = 0, low = false, load = 0, rate = 0, ids = {}, figs = {}, k, e, c, slot, t, ld, ub;
   if (!it) { out.reason = 'noitem'; return out; }
   if (it.lock) { out.reason = 'locked'; return out; }
-  if (!tm || !tm.length || tm.length > 5) { out.reason = 'size'; return out; }
+  if (!tm || !tm.length || tm.length > 3) { out.reason = 'size'; return out; }
   for (k = 0; k < tm.length; k++) {
     slot = tm[k];
     if (ids[slot.id]) { out.reason = 'dup'; return out; }
     ids[slot.id] = true;
     e = wmCardOf(cs, slot.id);
     if (!e) { out.reason = 'missing'; return out; }
+    if (typeof cardsUseBlock === 'function') { ub = cardsUseBlock(e, 'field'); if (!ub.ok && ub.k !== 'field') { out.reason = ub.k; return out; } }   // 委任中 / 駐派中不可派外勤(隊伍中可);外勤中以部隊狀態為準(下方 wmOutOf),不因 e.use 殘留誤擋
+    if (e.fig) { if (figs[e.fig]) { out.reason = 'samefig'; return out; } figs[e.fig] = true; }   // 同名副卡不可同隊
     if (wmOutOf(W, e.id)) { out.reason = 'busy'; return out; }
     c = wmCardState(e, W, now);
     if (c.h < WM_CFG.minHpDispatch) { out.reason = 'hp'; return out; }
@@ -451,6 +464,7 @@ function wmStartMarch(W, cs, n, tm, si, now, auto) {
     return { id: m.id, row: m.row | 0, col: m.col | 0, troop: wmTroopOf(wmCardOf(cs, m.id), m) };
   });
   it.lock = n;
+  if (typeof cardsUseSet === 'function') a.tm.forEach(function (m) { var e2 = wmCardOf(cs, m.id); if (e2) cardsUseSet(e2, 'field', n); });   // 隊員全部標外勤中(回城時解除)
   return out;
 }
 // 佇列就緒條件。cmd.rf > 0 且有人低於 rf% → 須補滿到 100% 才出;否則兵力 ≥ 300、體力 ≥ 10。

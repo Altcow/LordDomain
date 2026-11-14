@@ -13,7 +13,7 @@ var CUX_TIER_NAME = { S: '朱金', A: '紫', B: '青藍', C: '灰褐' };
 var CUX_TIER_COL = { S: '#b8432a', A: '#76489a', B: '#365fa3', C: '#7a6a58' };
 var CUX_TROOP_IMG = { '槍': 'spear', '騎': 'cav', '盾': 'shield', '弓': 'bow', '謀': 'cover' };   // 兵種卡插畫 assets/legion/legion_<代號>.webp
 var CUX_ROLE = { ult: '名人固有大招', passive: '名人固有被動', bond: '專屬聯動', slot: '選擇槽', learned: '選擇槽', legacy: '傳承', fixed: '固定' };
-var CUX_ROW = ['前排', '中排', '後排'];
+var CUX_ROW = ['前鋒', '中衛', '主將'], CUX_POS = ['前鋒', '中衛', '主將'];
 var CUX_SEL = ['fac', 'troop', 'gr', 'own', 'sown'];
 var CUX_RC = { key: '', rows: null };   // 戰法列快取(世界 / 紀錄 / 持有者變動時重算)
 var CUX_CSS = ':root{--cux-gold:#8a6a00;--cux-grey:#6b6b6b}@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--cux-gold:#e3c15a;--cux-grey:#8c8c8c}}:root[data-theme="dark"]{--cux-gold:#e3c15a;--cux-grey:#8c8c8c}' +
@@ -227,9 +227,9 @@ function cuCxTeamHtml(t) {
   var o = (typeof cxTeamOwn === 'function') ? cxTeamOwn(t) : { own: 0, roster: 0, n: t.slots.length }, om = cuCxOm(), why = t.whyOvr || t.intro || t.why || '', h;
   h = '<div class="cux-team"><div class="cux-th"><b>' + cuEsc(t.name) + '</b><span class="cux-tg ' + (o.own >= o.n ? 'on' : 'off') + '">已得 ' + o.own + ' / ' + o.n + '</span></div>';
   if (t.role) h += '<div class="cux-l cux-dim">' + cuEsc(t.role) + '</div>';
-  h += '<div class="cux-mem">' + t.slots.map(function (s) {
+  h += '<div class="cux-mem">' + t.slots.slice().sort(function (a, b) { return b.row - a.row; }).map(function (s) {
     var ow = !!om[s.fig];
-    return '<button type="button" class="cux-m' + (ow ? '' : ' off') + '" data-kx="open" data-kt="fig" data-id="' + cuEsc(s.fig) + '"><small>' + CUX_ROW[s.row] + '・' + cuEsc(s.troop) + '</small><b>' + cuEsc(cuCxFigName(s.fig)) + '</b><em>' + (ow ? '已得' : '未得') + '</em></button>';
+    return '<button type="button" class="cux-m' + (ow ? '' : ' off') + '" data-kx="open" data-kt="fig" data-id="' + cuEsc(s.fig) + '"><small>' + CUX_POS[s.row] + '・' + cuEsc(s.troop) + '</small><b>' + cuEsc(cuCxFigName(s.fig)) + '</b><em>' + (ow ? '已得' : '未得') + '</em></button>';
   }).join('') + '</div>';
   if (why) h += '<div class="cux-why"><b>為什麼推薦</b>' + cuEsc(why) + '</div>';
   if (t.bonds && t.bonds.length) h += '<div class="cux-l"><b>羈絆</b> ' + cuEsc(t.bonds.join('、')) + '</div>';
@@ -327,7 +327,7 @@ function cuCodexFigPop(cs, id) {
   h += '<div class="cux-dh">' + cuCxAv(id, !!ow, it.gr, false) + '<div class="cux-dm">' +
     '<b class="cux-big">' + cuEsc(it.name) + (it.zi ? '<small>(' + cuEsc(it.zi) + ')</small>' : '') + '</b>' +
     '<small>' + cuEsc(cuCxGrName(it.gr) + '階・' + cuCxFacName(it.fac) + (it.f.home ? '・' + it.f.home : '') + (it.f.birth ? '・' + it.f.birth : '')) + '</small>' +
-    '<small>擅長:' + cuEsc(it.troop) + '兵・預設' + CUX_ROW[it.row] + '</small>' +
+    '<small>擅長:' + cuEsc(it.troop) + '兵・適合' + CUX_ROW[it.row] + '</small>' +
     '<span class="cux-tg ' + (ow ? 'on' : 'off') + '" style="align-self:flex-start">' + (ow ? '已得(' + (lst[ow.list] || '') + ')' : '未得') + '</span>' +
     (ow ? '<button type="button" class="cux-go" data-kx="roster" data-id="' + cuEsc(id) + '">到卡包查看</button>' : '') + '</div></div>';
   if (c && typeof cardsStats === 'function' && typeof CARD_STATS !== 'undefined') {

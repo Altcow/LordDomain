@@ -1,11 +1,12 @@
 // js/panelmgr.js — 面板管理器(PLAN_NOLEVEL §7 / NL3a):同時最多 1 大面板 + 1 停靠面板 + 1 浮卡;互斥、單一 Esc、浮卡幾何、全螢幕隱藏、狀態還原。
+// 統一外框(js/panelui.js):panelOpen 接受物件參數時轉交 pfOpen;kind 'sheet' = 第 3 層底部面板(互斥只與 sheet 同類)。
 // 全域名稱:panelRegister panelOpen panelClose panelCloseAll panelIsOpen panelTopId panelPlaceCard panelMapInputBlocked panelNoteMapGesture
 //   panelFullscreen panelFsActive panelSyncFs panelBack panelSetStateHooks panelNoteIntentMove panelKindOpen;資料表 PANEL_Z PANEL_MUTEX PANEL_BLOCKED_BY PANEL_ESC_ORDER PANEL_FS_AUTO。 panelLsActive panelLsSet panelLsSync;常數 PANEL_LS。 panelCoverActive panelCoverSet(body.panel-cover)。
 // 漸進遷移:既有面板保留自己的 toggle 函式,只在開啟時呼叫 panelOpen(id)、關閉時呼叫 panelClose(id),並以 close 回呼讓管理器代為關閉互斥者。ES2017;不用 ?. ??。
-var PANEL_Z = { hud: 10, dock: 20, card: 30, bigMask: 40, big: 41, dlgMask: 50, dlg: 51, transient: 60, guide: 70, fullscreen: 80, photoBack: 90 };
-var PANEL_MUTEX = { big: ['big', 'card'], dock: ['dock'], card: ['card'] };      // 開啟某 kind 時,自動關閉這些 kind 的舊面板
+var PANEL_Z = { hud: 10, dock: 20, card: 30, bigMask: 40, big: 41, sheet: 72, dlgMask: 50, dlg: 51, transient: 60, guide: 70, fullscreen: 80, photoBack: 90 };
+var PANEL_MUTEX = { big: ['big', 'card'], dock: ['dock'], card: ['card'], sheet: ['sheet'] };      // 開啟某 kind 時,自動關閉這些 kind 的舊面板(sheet = 第 3 層底部面板,js/panelui.js)
 var PANEL_BLOCKED_BY = { card: ['big'] };                                         // 這些 kind 開著時,該 kind 不能開
-var PANEL_ESC_ORDER = ['big', 'card', 'dock'];                                    // Esc / 返回:由上而下關第一個
+var PANEL_ESC_ORDER = ['sheet', 'big', 'card', 'dock'];                           // Esc / 返回:由上而下關第一個
 var PANEL_FS_AUTO = true;                                                         // 是否自動偵測拍照 / 錄影 / 戰鬥 / 釣魚 / 仙獸
 var PANEL_CARD_LIMIT = { wFrac: 0.7, hFrac: 0.35 };
 var PANEL_CENTER = { x0: 0.25, x1: 0.75, y0: 0.2, y1: 0.8 };
@@ -37,12 +38,12 @@ function panelLsActive() {
   } catch (e) { return false; }
 }
 function panelLsSet(key, on) { if (on) { panelLsExtra[key] = 1; panelCloseCardsAny(); } else delete panelLsExtra[key]; panelLsSync(); }
-function panelLsWant() { return panelLsActive() && !panelFsActive() && (!!panelKindOpen('big') || Object.keys(panelLsExtra).length > 0); }
+function panelLsWant() { return panelLsActive() && !panelFsActive() && (!!panelKindOpen('big') || !!panelKindOpen('sheet') || Object.keys(panelLsExtra).length > 0); }
 // 「大面板蓋著城市」(直橫版都算):kind:'big' 開著、panelLsSet 登記者(城主府)、panelCoverSet 登記者(設定抽屜)。
 // body.panel-cover → CSS 收起建造相關浮層(底部選單 / 分類列 / 草稿浮動鈕 / 草稿列 / 預覽卡…),只隱藏不改狀態,面板全關後自動還原。
 var PANEL_COVER_CLS = 'panel-cover';
 var panelCoverExtra = {};
-function panelCoverActive() { return !panelFsActive() && (!!panelKindOpen('big') || Object.keys(panelLsExtra).length > 0 || Object.keys(panelCoverExtra).length > 0); }
+function panelCoverActive() { return !panelFsActive() && (!!panelKindOpen('big') || !!panelKindOpen('sheet') || Object.keys(panelLsExtra).length > 0 || Object.keys(panelCoverExtra).length > 0); }
 function panelCoverSet(key, on) { if (on) { panelCoverExtra[key] = 1; panelCloseCardsAny(); } else delete panelCoverExtra[key]; panelLsSync(); }
 function panelLsSync() {
   var on = panelLsWant();
@@ -105,7 +106,9 @@ function panelRemove(id) {
 }
 
 function panelOpen(id, opts) {
-  var d = panelDefs[id], o = opts || {}, k, i, other, list, blocked;
+  var d, o, k, i, other, list, blocked;
+  if (id && typeof id === 'object') return (typeof pfOpen === 'function') ? pfOpen(id) : false;   // 統一外框:panelOpen({id, layer, title, build, ...}) 轉交 js/panelui.js
+  d = panelDefs[id]; o = opts || {};
   if (!d) {
     if (!o.kind) return false;
     d = panelRegister(id, o);

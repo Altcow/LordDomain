@@ -51,7 +51,7 @@ function itemsTabHtml() {
     '<div class="iugrid">' + cells + '</div>';
 }
 function itemsEffectText(d) {
-  if (d.effect === 'pulls') return '大池 +' + CARD_GIFT.pulls + ' 抽(入大池,不受上限截斷)';
+  if (d.effect === 'pulls') return 'S01卡池 +' + CARD_GIFT.pulls + ' 抽(入S01卡池,不受上限截斷)';
   return '占位提示(效果尚未接上)';
 }
 // 選單(置中浮層):說明 / 詳情切換;『使用』只在可使用且持有時可按

@@ -4,7 +4,9 @@
 // 載入順序:bn_data.js → bn_skills_data.js → bn_units.js → bn_engine.js → bn_effects.js。全域一律 bn 前綴。
 //
 // 對外介面:
-//   bnInit(rec) → state        rec = {v:1, seed, teamA:[spec], teamB:[spec], opts:{events:true, scene:''}}(spec 由 bn_units.js 產生;舊紀錄的 opts.autoUlt 不再使用)
+//   bnInit(rec) → state        rec = {v:BN_REC_VER, seed, teamA:[spec], teamB:[spec], opts:{events:true, scene:''}}(spec 由 bn_units.js 產生;舊紀錄的 opts.autoUlt 不再使用)
+// 戰報版本 BN_REC_VER:2 = 普攻改「射程內隨機」(2026-11-13)。rec.v < BN_REC_VER 的舊戰報結果可能已不同,不可重播(只能看文字結果)。
+var BN_REC_VER = 2;
 //   bnStep(state) → events[]   推進一個「行動」(或回合結束)
 //   bnRunToEnd(state) → state          跑到結束;bnRun(rec) = bnInit + bnRunToEnd
 //   state.over / state.result = {winner:'A'|'B'|'draw', reason:'wipe'|'limit', rounds, hp:{A,B}}
@@ -84,7 +86,7 @@ function bnRankMax(S, side) {
 }
 function bnReach(S, u) {
   var T = BN_DATA.troops[u.troop];
-  return T.R + (u.mods.reach || 0) - bnRank(S, u) + 1;
+  return Math.max(BN_DATA.reachMin, T.R + (u.mods.reach || 0) - bnRank(S, u) + 1);
 }
 function bnHpPct(u) { return u.hp / u.maxHp; }
 function bnHas(u, id) { return !!u.st[BN_ALIAS[id] || id]; }
@@ -151,7 +153,7 @@ function bnLgExtra(S, u) {
   for (i = 0; i < L.length; i++) {
     e = L[i];
     if (e.k !== 'extraBasic' || !bnLgOn(S, u, e) || S.round % e.every !== 0) continue;
-    t = bnPickEnemy(S, u, 'one', 'basic');
+    t = bnPickEnemy(S, u, 'rand', 'basic');
     if (!t) return;
     u.lgxRound = S.round;
     bnHitWithRx(S, u, t, { ty: 'strat', mul: e.mul, basic: false, lgx: 1 });
@@ -234,10 +236,11 @@ var BN_PICK_TG = { enemy_hpmax: 'hpmax', enemy_fastest: 'spd', enemy_prey: 'prey
 // mode: one(受 reach、嘲諷)front back lowest(最低 HP%)atk(最高攻)deep(無視 reach 的單體);vs: 'single'|kind 用於隱匿
 // S0 新 mode:hpmax(現兵力最高)、spd(速度最快)— 受 reach;prey(我方兵種剋制者,無視 reach,無則退 one);troop(opt.troop 兵種,無則退 one)
 // opt.need:只選帶該狀態的敵人(無則回 null,不擲骰由 bnUseful 擋)
+// rand:同 one(射程 / 隱匿 / 嘲諷篩選),候選清單中用 S.rng() 隨機擇一(2026-11-13 普攻改射程內隨機;戰報版本 BN_REC_VER)
 function bnPickEnemy(S, a, mode, vsKind, opt) {
   var en = bnEnemies(S, a), list, i, t, tau, rk, tv, v, list2, pr;
   if (!en.length) return null;
-  if (mode === 'one') { rk = bnReach(S, a); list = en.filter(function (x) { return bnRank(S, x) <= rk; }); }
+  if (mode === 'one' || mode === 'rand') { rk = bnReach(S, a); list = en.filter(function (x) { return bnRank(S, x) <= rk; }); }
   else if (mode === 'front') list = en.filter(function (x) { return bnRank(S, x) === 1; });
   else if (mode === 'back') { rk = bnRankMax(S, bnOpp(a.side)); list = en.filter(function (x) { return bnRank(S, x) === rk; }); }
   else if (mode === 'hpmax' || mode === 'spd' || mode === 'troop') { rk = bnReach(S, a); list = en.filter(function (x) { return bnRank(S, x) <= rk; }); }
@@ -259,6 +262,7 @@ function bnPickEnemy(S, a, mode, vsKind, opt) {
     if (!list2.length) return bnPickEnemy(S, a, 'one', vsKind, opt);
     list = list2;
   }
+  if (mode === 'rand') return list.length === 1 ? list[0] : list[Math.floor(S.rng() * list.length)];
   if (mode === 'hpmax' || mode === 'spd') {
     t = null; tv = 0;
     for (i = 0; i < list.length; i++) {
@@ -321,6 +325,7 @@ function bnStatusApply(S, src, t, id, data, o) {
       if (fromHb) S.stats.hbBlockedByWard++;
       return false;
     }
+    if ((id === 'stun' || id === 'sleep') && t.mods.breakFree && !t.breakFreeUsed && !vsForce) { t.breakFreeUsed = true; bnEv(S, 'immune', { tgt: t.id, id: id }); S.stats.immuneBlock++; return false; }   // 裝備特性「脫韁」:每場 1 次,被暈眩 / 睡眠時立刻解除(等同當下免疫,不抽亂數)
     if ((cat === 'debuff' || cat === 'dot') && data.val !== undefined && !data.noRes && !vsForce) data.val *= (1 - t.base.res);
   }
   if (data.left !== undefined && !data.act && t.acted && !o.noExtend && data.left < 900) data.left += 1;   // 本回合已行動者:持續回合 +1,確保真的涵蓋其 N 次行動
@@ -439,6 +444,7 @@ function bnHit(S, a, t, h) {
   if (h.dot) {
     dmg = h.fixed;
     if (h.dot === 'burn') dmg *= (tm.burnTaken || 1) * ((tm.weakness && tm.weakness.burn) || 1);
+    if (a && a.mods.dotOut && (h.dot === 'burn' || h.dot === 'poison' || h.dot === 'bleed')) dmg *= 1 + a.mods.dotOut;   // 裝備特性「鎮魂」
     tk = 1 + bnTakenPct(S, a, t, h);
     dmg = Math.max(1, Math.round(dmg * tk));
     if (h.cap !== undefined) dmg = Math.min(dmg, h.cap);   // 持續傷害上限(S0:荊棘每擊 8% / 延遲爆發 burst cap)
@@ -446,10 +452,13 @@ function bnHit(S, a, t, h) {
     r1 = S.rng(); r2 = S.rng();   // 固定順序:先暴擊、再浮動
     if (ty === 'strat') base = bnMag(S, a) * (mo.magMul || 1); else base = bnAtk(S, a);
     defv = h.ignoreDef ? 0 : (ty === 'strat' ? bnSres(S, t) : bnDef(S, t));
+    if (ty === 'strat' ? mo.sresIgn : mo.defIgn) defv *= 1 - (ty === 'strat' ? mo.sresIgn : mo.defIgn);   // 裝備特性「破甲 / 文心」:無視目標部分防禦 / 謀防(js/ld_equip_data.js 第二批)
     h.pv = 0;   // 兵種克制旗標(事件 dmg.pv:1 克制 / −1 被克;僅物理傷害)
     if (ty === 'phys' && BN_DATA.prey[a.troop] && BN_DATA.prey[a.troop][t.troop]) { prey = BN_DATA.prey[a.troop][t.troop]; h.pv = prey > 1 ? 1 : (prey < 1 ? -1 : 0); }
     // 輸出端加成
     if (S.round === 1 && mo.r1Dmg) outM *= 1 + mo.r1Dmg;
+    if (mo.lowHpDmg && t.hp / t.maxHp < mo.lowHpDmg[0]) outM *= 1 + mo.lowHpDmg[1];   // 裝備特性「斬將」
+    if (mo.vsSlow && bnSpd(S, t) < bnSpd(S, a)) outM *= 1 + mo.vsSlow;                // 裝備特性「追風」
     if (mo.firstHit && !a.firstHitDone && (h.basic || h.sk)) { outM *= 1 + mo.firstHit; a.firstHitDone = true; }
     if (t.troop === '盾' && mo.vsShield) outM *= 1 + mo.vsShield;
     if (mo.vsFac && mo.vsFac[t.fac]) outM *= 1 + mo.vsFac[t.fac];            // 名人專屬詞條:對特定陣營 / 名人 / 兵種
@@ -472,7 +481,7 @@ function bnHit(S, a, t, h) {
     if (t.mods.weakness && h.sk && h.sk.tags && h.sk.tags.indexOf('fire') >= 0 && t.mods.weakness.burn) tk *= t.mods.weakness.burn;
     dmg = base * h.mul * 100 / (100 + defv) * prey * outM * tk * BN_DATA.K;
     crit = h.forceCrit || r1 < bnCrit(S, a) + (vx ? vx.crit : 0) + (h.critAdd || 0);
-    if (crit) dmg *= BN_DATA.critMul * (1 + (tm.critTaken || 0)) * (1 + (h.critDmg || 0) + (a && a.st.critdmg_up ? a.st.critdmg_up.val : 0));
+    if (crit) dmg *= BN_DATA.critMul * (1 + (tm.critTaken || 0)) * (1 + (h.critDmg || 0) + (a && a.st.critdmg_up ? a.st.critdmg_up.val : 0)) * (1 + (a && a.mods.critDmgUp || 0));   // critDmgUp:裝備暴擊傷害 %(js/ld_equip.js)
     dmg *= 0.95 + BN_DATA.jitter * r2;
     if (ty === 'phys' && t.troop === '盾' && !h.ignoreBlock) dmg -= Math.floor(BN_DATA.blockPct * bnDef(S, t));
     if (h.basic && t.troop === '弓' && bnRank(S, t) > 1 && BN_DATA.troops[a.troop].R <= 2) dmg *= BN_DATA.archerBackTaken;
@@ -516,7 +525,7 @@ function bnTakenPct(S, a, t, h) {
   // 宿衛:同排有前排宿衛者
   list = S.teams[t.side].units;
   for (i = 0; i < list.length; i++) { o = list[i]; if (o.alive && o !== t && o.mods.rowTakenFront && o.row === t.row && bnRank(S, o) === 1) x += o.mods.rowTakenFront; }
-  x += bnFatigue(S) * BN_DATA.fatigue.dmg * bnLgMul(S, t, 'fatigueMul');
+  x += bnFatigue(S) * BN_DATA.fatigue.dmg * bnLgMul(S, t, 'fatigueMul') * (tm.fatHalf ? 0.5 : 1);   // fatHalf = 裝備特性「長驅」:疲兵受傷加成減半
   return Math.max(-0.7, x);
 }
 // 真正扣血(含護盾、不倒、擊殺)
@@ -565,6 +574,11 @@ function bnApplyDmg(S, a, t, dmg, h, crit, viaOf) {
   // 反擊、被動
   if (t.alive && hpLost >= 0 && !h.dot) bnOnHit(S, a, t, h, hpLost);
   if (t.alive && t.st.sleep && hpLost > 0 && !h.dot) { S.stats.wakeRoll++; if (S.rng() < BN_DATA.sleep.wake) bnWake(S, t, 'wake'); }   // 沉睡受攻擊傷害:機率驚醒(持續傷害不會)
+  if (a && a.alive && a.mods.basicLeech && h.basic && hpLost > 0 && !h.dot) bnHeal(S, a, a, hpLost * a.mods.basicLeech, {});   // 裝備特性「嗜血」:普攻傷害 N% 回復自身
+  if (t.alive && t.mods.lastStand && !t.lastStandUsed && t.hp / t.maxHp < 0.25) { t.lastStandUsed = true; bnShield(S, t, t, t.maxHp * 0.10 * t.mods.lastStand, {}); }   // 裝備特性「不屈」:每場 1 次,兵力首次低於 25% 得 10% 兵力護盾
+  if (a && a.alive && t.mods.basicThorns && h.basic && a !== t && hpLost > 0 && !h.dot && !h.counter && a.side !== t.side) {   // 裝備特性「反甲」:受普攻反彈(走 dot,每擊上限 8% 攻擊者最大兵力,與荊棘同)
+    bnHit(S, t, a, { ty: 'dot', dot: 'thorns', fixed: hpLost * t.mods.basicThorns, cap: a.maxHp * 0.08, mul: 1, noGuard: true });
+  }
   if (a && a.alive && a.st.lifesteal && hpLost > 0 && !h.dot) {
     bnHeal(S, a, a, hpLost * a.st.lifesteal.val * (h.rx && h.rx.lifestealMult ? h.rx.lifestealMult : 1), {});
   }
@@ -725,6 +739,11 @@ function bnStartRound(S) {
     if (x.selfTimid && S.rng() < x.selfTimid) bnStatusApply(S, null, x, 'timid', { left: 1 }, { noExtend: true });
     if (x.suspect && bnAllies(S, x, false).some(function (y) { return y.fig === x.suspect.fig; }) && S.rng() < x.suspect.p) bnStatusApply(S, null, x, 'mark', { val: 0.2, left: 1, noRes: true }, { noExtend: true });
   });
+  S.units.forEach(function (x) {   // 裝備特性「回春」:每回合開始回 N% 最大兵力(不占當回合治療次數 / 單回合治療上限)
+    if (!x.alive || !x.mods.regen) return;
+    bnHeal(S, null, x, x.maxHp * x.mods.regen, {});
+    x.healCnt = 0; x.healRound = 0;
+  });
   bnFire(S, 'turn_start', {});
   S.units.forEach(function (x) { if (x.alive && x.st.fuse && x.st.fuse.at === S.round) bnFuseFire(S, x); });   // 延遲爆發(S0):依單位 id 順序結算
   bnBondEvent(S, 'round_start', {});
@@ -849,7 +868,7 @@ function bnAct(S, u, o) {
         if (inst.def.cat !== 'active' && inst.def.cat !== 'ult') continue;
         if (inst.cd > 0 || inst.prepLeft > 0 || inst.actNo === S.actNo) continue;
         if (inst.def.cat === 'ult' && (o.noUlt || u.st.ult_lock || S.round < BN_DATA.rate.ultFrom)) continue;
-        if (!bnUseful(S, u, inst)) continue;
+        if (!bnCanCast(S, u, inst)) continue;
         var forced = inst.def.params && inst.def.params.firstRoundForce && S.round === 1;
         var rate = bnRateOf(S, u, inst), ok = forced || S.rng() < rate;
         S.stats.rolls++; if (ok) S.stats.rollOk++;
@@ -943,7 +962,7 @@ function bnNormal(S, u) {
     return res && !res.evaded ? t : (res ? t : null);
   }
   if (rk <= 0) return 'idle';
-  t = bnPickEnemy(S, u, 'one', 'basic');
+  t = bnPickEnemy(S, u, 'rand', 'basic');
   if (!t) return 'idle';
   h = { ty: isMage ? 'strat' : 'phys', mul: isMage ? BN_DATA.normalMag : 1, basic: true };
   res = bnHitWithRx(S, u, t, h);

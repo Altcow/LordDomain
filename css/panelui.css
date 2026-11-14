@@ -1,0 +1,32 @@
+/* css/panelui.css — 統一面板外框(js/panelui.js):第 2 層主面板 .pf-l2、第 3 層底部面板 .pf-sheet。
+   幾何與 js/panelui.js 的 pfLayout() 一致(直橫依 orientation 判定);橫版大面板模式(style.css panel-big-landscape)對 #cardsPanel 的滿版規則在此覆寫。 */
+:root { --pf-top: 44px; --pf-rail: 64px; --pf-h: 40vh; --z-sheet: 72; }
+.pf-frame { position: fixed; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; z-index: var(--z-big); background: #1c1915; color: #eee; }
+.pf-frame[hidden] { display: none !important; }
+.pf-frame.pf-l2 { left: 0; right: 0; top: calc(var(--pf-top) + env(safe-area-inset-top)); bottom: 0; }
+.pf-frame.pf-sheet { left: 0; right: 0; top: auto; bottom: 0; height: var(--pf-h); max-height: 80vh; z-index: var(--z-sheet); border-radius: 12px 12px 0 0; box-shadow: 0 -4px 18px rgba(0, 0, 0, .5); padding-bottom: env(safe-area-inset-bottom); }
+.pf-hd { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; min-height: 44px; padding: 0 6px 0 10px; border-bottom: 1px solid rgba(255, 255, 255, .12); box-sizing: border-box; }
+.pf-title { flex: 1 1 auto; min-width: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-hd button { min-width: 44px; min-height: 44px; padding: 0 6px; border: 0; border-radius: 6px; background: none; color: #eee; font-size: 14px; }
+.pf-hd .pf-x { font-size: 22px; margin-left: auto; }
+.pf-hd .pf-w { display: none; }
+.pf-hd .pf-w[aria-pressed="true"] { background: #f0b45a; color: #222; }
+.pf-grip { display: flex; flex: 0 0 auto; height: 22px; touch-action: none; cursor: ns-resize; }
+.pf-grip::before { content: ''; display: block; width: 44px; height: 4px; margin: 9px auto 0; border-radius: 2px; background: rgba(255, 255, 255, .4); }
+.pf-bd { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.pf-bd > #cardsPanel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.pf-bd > #cardsPanel > .cubd { flex: 1 1 auto; min-height: 0; }
+.pf-bd > #wmBody { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+
+/* 橫版(寬 > 高):第 2 層靠左半(寬三檔,滿版讓出分頁軌);第 3 層在右半(扣分頁軌) */
+@media (orientation: landscape) {
+  .pf-frame.pf-l2 { top: 0; bottom: 0; right: auto; width: 50%; }
+  .pf-frame.pf-l2[data-w="67"] { width: 67%; }
+  .pf-frame.pf-l2[data-w="100"] { width: calc(100% - var(--pf-rail)); }
+  .pf-frame.pf-sheet { left: 50%; right: var(--pf-rail); top: 0; bottom: 0; height: auto; max-height: none; border-radius: 0; box-shadow: -4px 0 18px rgba(0, 0, 0, .5); padding-bottom: 0; }
+  .pf-hd .pf-w { display: inline-block; }
+  .pf-grip { display: none; }
+}
+/* 橫版大面板模式(style.css panel-big-landscape)會把 #cardsPanel 撐成滿版:外框接管時歸還給 .pf-bd */
+body.panel-big-landscape #cardsPanel#cardsPanel { position: static !important; top: auto !important; left: auto !important; right: auto !important; bottom: auto !important; width: auto !important; height: auto !important; max-width: none !important; max-height: none !important; margin: 0 !important; transform: none !important; border: 0 !important; border-radius: 0 !important; z-index: auto !important; padding: 0 !important; background: #141a24 !important; }
+body.panel-big-landscape .pf-frame.pf-l2 { background: #141a24; }

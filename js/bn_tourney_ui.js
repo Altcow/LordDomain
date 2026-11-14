@@ -60,7 +60,7 @@ function bnTourStart() {
   sel = list[BNT.pick] || list[0];
   if (!sel) { bnTourToast('先在布陣放好隊伍,或存入一組預設隊伍'); return false; }
   snaps = [{ name: sel.name, specs: sel.specs }];
-  if (!bnTourCheckSnaps(snaps).ok) { bnTourToast('隊伍人數需 1~5 人'); return false; }
+  if (!bnTourCheckSnaps(snaps).ok) { bnTourToast('隊伍人數需 1~3 人'); return false; }
   st.seq += 1;
   seed = bnHash('bntour', st.seq, now) >>> 0;
   r = bnTourRun(seed, snaps);
@@ -97,7 +97,7 @@ function bnTourLogMine(st, r) {
 // 一局的開戰紀錄(與 bnui bnUiRec 同形;種子取自該局)
 function bnTourRec(r, mt, gi) {
   var A = bnBuildTeam(r.entrants[mt.ea].specs), B = bnBuildTeam(r.entrants[mt.eb].specs);
-  return { v: 1, seed: mt.games[gi].seed, teamA: A.units, teamB: B.units, opts: { events: true, scene: '' }, meta: { stage: 'T', kind: 'tourney', ch: 0, foePower: 0, scale: 1, bonds: A.bonds, formation: A.formation } };
+  return { v: BN_REC_VER, seed: mt.games[gi].seed,teamA: A.units, teamB: B.units, opts: { events: true, scene: '' }, meta: { stage: 'T', kind: 'tourney', ch: 0, foePower: 0, scale: 1, bonds: A.bonds, formation: A.formation } };
 }
 function bnTourHistRec(st, r) {
   var mine = -1, i, best = 99, mineN = 0, champ = r.entrants[r.rank.indexOf(1)], run = r.entrants[r.rank.indexOf(2)], th = r.entrants[r.rank.indexOf(3)];
@@ -154,10 +154,11 @@ function bnTourReplay(mid, g) {
   if (!mt || !mt.games[g]) return false;
   rec = bnTourRec(r, mt, g);
   BNT.cur = { mid: mid, g: g };
-  return bnTourFight(rec);
+  return bnTourFight(rec, bnTourSideOf(r, mt));
 }
-function bnTourFight(rec) {
-  var S, P;
+// 擂台回播:玩家自己的局(mySide = 'A' | 'B')播舞台,播完進結果頁;其他局只出結算畫面(文字 / 結果,bnTourOnResult 改按鈕)
+function bnTourFight(rec, mySide) {
+  var S;
   if (typeof bnu === 'undefined' || !bnu.open || !bnu.layer) return false;
   bnTourClose();
   if (typeof bnLogClose === 'function') bnLogClose();
@@ -165,17 +166,21 @@ function bnTourFight(rec) {
   bnUiStopLoop();
   bnu.stg = { kind: 'tourney', id: 'T' }; BNUI.stage = 'T';
   bnu.rec = null;
-  S = bnInit(rec);
+  S = bnInit(rec); bnRunToEnd(S);
   bnUiSetPhase('fight');
   bnUiShowRes(false); bnUiShowPause(false); bnUiCutRender(null);
-  bnUiResize();
-  P = bnPlNew(S, bnu.L, { speed: bnUiPref().spd, hooks: bnUiHooks(), powerSave: bnUiPs(), sfx: true });
-  bnu.P = P; bnu.result = null; bnu.paused = false; bnu.retreat = false; bnu.manual = false; bnu.logId = '';
+  bnu.P = null; bnu.result = null; bnu.paused = false; bnu.retreat = false; bnu.manual = false; bnu.logId = '';
   bnUiSyncBtns();
   if (bnu.roundEl) bnu.roundEl.textContent = '';
-  bnUiResize();
-  bnUiLoop(true);
+  bnUiShowResult(S);
+  if (mySide) bnBattleShow(rec, { mode: 'play', mySide: mySide });
   return true;
+}
+// 玩家在這局的哪一側(A / B);不是玩家的局回 ''
+function bnTourSideOf(r, mt) {
+  var i;
+  for (i = 0; i < r.entrants.length; i++) if (r.entrants[i].owner === 'me') return mt.ea === i ? 'A' : (mt.eb === i ? 'B' : '');
+  return '';
 }
 // bnui.js bnUiShowResult 結尾呼叫:擂台回播 → 還原說明、改按鈕(查看戰報 / 回擂台),標記已看;全部看完就發獎勵
 function bnTourOnResult(d) {

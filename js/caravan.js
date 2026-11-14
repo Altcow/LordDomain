@@ -289,6 +289,6 @@ function caravanTick(now) {
   return out;
 }
 
-if (typeof setInterval === 'function' && typeof document !== 'undefined') {
+if (typeof setInterval === 'function' && typeof document !== 'undefined' && !cityRuntimeOff()) {
   setInterval(function () { try { caravanTick(); } catch (e) { console.warn('走鏢結算失敗', e); } }, 1000);
 }

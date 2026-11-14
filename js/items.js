@@ -12,7 +12,7 @@ var ITEMS_STACK_DEF = 99;   // 未設 max 的道具預設堆疊上限
 var ITEM_CATS = [['gift', '禮包'], ['quest', '任務'], ['event', '活動'], ['misc', '雜項']];
 // 道具資料表:cat 類別(ITEM_CATS)、max 堆疊上限、usable 可否使用、effect 使用效果型別(pulls 入大池抽數 / toast 占位提示)、color 稀有度顏色
 var ITEMS = {
-  gift_newbie: { id: 'gift_newbie', name: '新手禮包', cat: 'gift', desc: '內含大池 2000 抽。點『使用』後入大池,次數不受上限截斷。', max: 99, usable: true, effect: 'pulls', color: '#c39a2e', dotUntilUsed: true },
+  gift_newbie: { id: 'gift_newbie', name: '新手禮包', cat: 'gift', desc: '內含S01卡池 ' + CARD_GIFT.pulls + ' 抽。點『使用』後入S01卡池,次數不受上限截斷。', max: 99, usable: true, effect: 'pulls', color: '#c39a2e', dotUntilUsed: true },
   quest_token: { id: 'quest_token', name: '任務令', cat: 'quest', desc: '任務用道具(占位,尚未接任務)。使用後消耗,目前只顯示提示。', max: 99, usable: true, effect: 'toast', color: '#3e8a74' },
   event_ticket: { id: 'event_ticket', name: '活動券', cat: 'event', desc: '活動用道具(占位,尚未接活動)。使用後消耗,目前只顯示提示。', max: 99, usable: true, effect: 'toast', color: '#76489a' }
 };
@@ -37,6 +37,8 @@ function itemsNorm(v) {
   }
   if (v.notice) o.notice = 1;
   if (typeof v.gv === 'string' && v.gv.length <= 12) o.gv = v.gv;
+  x = Math.floor(Number(v.gp));
+  if (isFinite(x) && x > 0) o.gp = Math.min(1e6, x);   // 本存檔禮包內含抽數(新存檔 100,舊存檔沒有此欄 = CARD_GIFT.pulls)
   return o;
 }
 // 讀寫(localStorage 不可用 / 寫入失敗 → 不影響遊戲,只是不存)
@@ -68,16 +70,17 @@ function itemAdd(id, n) {
 }
 // 使用道具:回 {ok, effect, msg}。成功才扣數量;效果在這裡執行(新手禮包 → 大池抽數,並把自動熔爐的『關』恢復預設)
 function itemUse(id) {
-  var d = itemDef(id), st, cs = null, msg;
+  var d = itemDef(id), st, cs = null, msg, gpn = 0;
   if (!d) return { ok: false, effect: '', msg: '未知的道具' };
   if (itemCount(id) < 1) return { ok: false, effect: d.effect, msg: '沒有這個道具' };
   if (!d.usable) return { ok: false, effect: d.effect, msg: '這個道具不能使用' };
   if (d.effect === 'pulls') {
     cs = (typeof cardsGet === 'function') ? cardsGet() : null;
     if (!cs) return { ok: false, effect: d.effect, msg: '尚無城邦資料' };
-    cardsPullGrant(cs, CARD_GIFT.pulls, CARD_GIFT.pool);
+    gpn = itemsRead().gp || CARD_GIFT.pulls;   // 新存檔禮包只含 100 抽(其餘分七天發,js/ld_open_ev.js),沒有 gp = 2000
+    cardsPullGrant(cs, gpn, CARD_GIFT.pool);
     if (cs.bagAuto === -1) delete cs.bagAuto;   // 自動熔爐若為關(-1)改回預設(開,藍以下);使用者仍可在熔爐設定再關
-    msg = '使用『' + d.name + '』,大池 +' + CARD_GIFT.pulls + ' 抽';
+    msg = '使用『' + d.name + '』,S01卡池 +' + gpn + ' 抽';
   } else if (d.effect === 'toast') {
     msg = '使用『' + d.name + '』(占位,效果尚未接上)';
   } else {
@@ -85,8 +88,9 @@ function itemUse(id) {
   }
   st = itemsRead();
   st.n[id] = (st.n[id] | 0) - 1;
-  if (st.n[id] <= 0) { delete st.n[id]; delete st.seen[id]; } else st.seen[id] = 1;
+  if (st.n[id] <= 0) { delete st.n[id]; delete st.seen[id]; if (id === 'gift_newbie') delete st.gp; } else st.seen[id] = 1;
   itemsWrite(st);
+  if (d.effect === 'pulls' && typeof ldOpenNote === 'function') ldOpenNote('gift', { t: Date.now() });   // 主線 1:使用新手禮包
   if (cs && typeof saveWorld === 'function') { try { saveWorld(); } catch (e) { /* 存檔失敗不影響使用結果 */ } }
   return { ok: true, effect: d.effect, msg: msg };
 }
@@ -131,7 +135,7 @@ function itemsNoticeTake() {
 }
 // 新手禮包發放(原子):同一次 localStorage 寫入內加 1 個禮包、記下發放版本 gv、設進遊戲提示 notice。
 // 回 1 = 本次發出;0 = 此版本已發過(gv 已等於 ver,不重發);-1 = 寫入失敗(未發,呼叫端不設旗標,下次再試)
-function itemGiftGrant(ver) {
+function itemGiftGrant(ver, gp) {
   var st, d = ITEMS.gift_newbie;
   if (!ver) return -1;
   st = itemsRead();
@@ -139,5 +143,6 @@ function itemGiftGrant(ver) {
   st.n.gift_newbie = Math.min(d.max || ITEMS_STACK_DEF, (st.n.gift_newbie | 0) + 1);
   st.gv = ver;
   st.notice = 1;
+  if (gp > 0) st.gp = Math.floor(gp);   // 新存檔(ldui):禮包內含抽數 = pullsNew
   return itemsWrite(st) ? 1 : -1;
 }

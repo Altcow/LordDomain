@@ -17,7 +17,7 @@ var WMUI = { el: null, timer: 0, W: null, cs: null, css: false, sel: -1, popId: 
 var WMUI_ICON = { '林場': '🪵', '礦坑': '⛏️', '獵場': '🦌', '桑園': '🌿', '藥圃': '🌱', '玉坑': '💎', '古祠': '🏛️', '散銀': '🪙', '山賊營': '⚔️', '山寨': '🏰', '黃巾煽動點': '🔥', '名人據點': '👤' };
 var WMUI_RC = { '白': '#d8d2c4', '青': '#7fd69a', '藍': '#6fb3ff', '據點': '#f0a040' };
 var WMUI_ST = { home: '在家', march: '行軍中', camp: '採集中', ready: '待命', back: '回程中' };
-var WMUI_REASON = { noitem: '此格已沒有物件', locked: '此格已有部隊前往', size: '隊伍需 1~5 人', dup: '隊伍有重複人員', missing: '有人已不在名冊', busy: '有人外出中', hp: '有人兵力低於 ' + (WM_CFG.minHpDispatch / 10) + '%', sta: '有人體力低於 ' + WM_CFG.minStaDispatch, army: '沒有空閒部隊', frozen: '時鐘異常,暫不出發', off: '外勤未開啟', state: '部隊目前不能開戰' };
+var WMUI_REASON = { noitem: '此格已沒有物件', locked: '此格已有部隊前往', size: '隊伍需 1~3 人', dup: '隊伍有重複人員', samefig: '同名名人不可同隊',missing: '有人已不在名冊', busy: '有人外出中', hp: '有人兵力低於 ' + (WM_CFG.minHpDispatch / 10) + '%', sta: '有人體力低於 ' + WM_CFG.minStaDispatch, army: '沒有空閒部隊', frozen: '時鐘異常,暫不出發', off: '外勤未開啟', state: '部隊目前不能開戰', appoint: '有人委任中(內政官),先解除委任', garrison: '有人駐派中,先撤回駐派' };
 var WMUI_QKEYS = ['dep', 'arr', 'go', 'cms', 'gend', 'cw', 'load', 'left', 'gain', 'ret', 'home', 'sta', 'foe', 'warn'];
 
 // ───────── 小工具 ─────────
@@ -81,7 +81,7 @@ function wmUiConsume(evs, pre, boot) {
       a = W.ar[ev.n - 1];
       loss = 0;
       if (pre && a) a.tm.forEach(function (m) { var e = wmCardOf(WMUI.cs, m.id); if (e && typeof pre[m.id] === 'number') loss += Math.max(0, pre[m.id] - (e.wm ? e.wm.h : WM_CFG.hpMax)); });
-      WMUI.reps.unshift({ n: ev.n, name: name, win: ev.win, rounds: ev.rounds, loot: ev.loot, loss: Math.round(loss / 10), t: ev.t });
+      WMUI.reps.unshift({ n: ev.n, name: name, win: ev.win, rounds: ev.rounds, loot: ev.loot, loss: Math.round(loss / 10), t: ev.t, rid: ev.rid });
       WMUI.reps = WMUI.reps.slice(0, 10);
       msgs.push(ev.n + '隊' + (ev.win ? '勝' : '敗') + ' ' + name + '(' + ev.rounds + ' 回合)');
     } else if (ev.k === 'arrive') {
@@ -300,19 +300,22 @@ function wmUiPopAwayHtml(evs) {
     else if (ev.k === 'miss') txt = ev.n + '隊撲空,改為回程';
     else if (ev.k === 'dispatch') txt = ev.n + '隊自動出征';
     else if (ev.k === 'qskip') txt = ev.n + '隊預約跳過';
-    h += '<div class="wm-sm">' + t + ' ' + wmUiEsc(txt) + '</div>';
+    h += '<div class="wm-sm">' + t + ' ' + wmUiEsc(txt) + (ev.k === 'fight' && wmUiRecOf(ev.rid) ? ' <button data-wm="rep" data-rid="' + wmUiEsc(ev.rid) + '">看戰報</button>' : '') + '</div>';
   });
   if (rows.length > 10) h += '<p class="wm-sm">其餘 ' + (rows.length - 10) + ' 條未列出。</p>';
   h += '<button class="pri" data-wm="pclose">知道了</button>';
   return h;
 }
+// 外勤戰報的開戰紀錄(W.rc,隨存檔);找不到回 null
+function wmUiRecOf(rid) { var l = WMUI.W && WMUI.W.rc ? WMUI.W.rc : [], i; for (i = 0; i < l.length; i++) if (l[i].id === rid) return l[i].rec; return null; }
+function wmUiReplay(rid) { var rec = wmUiRecOf(rid); if (rec && typeof bnBattleShow === 'function') bnBattleShow(rec, { mode: 'report', mySide: 'A' }); else wmUiToast('這場戰報已不在最近記錄內'); }
 function wmUiPopRepsHtml() {
   var h = '<div class="wm-ph"><b>最近戰報</b><button data-wm="pclose">✕</button></div>';
   if (!WMUI.reps.length) h += '<p>還沒有戰報。</p>';
   WMUI.reps.forEach(function (r) {
-    h += '<div class="wm-rep"><b>' + r.n + ' 隊' + (r.win ? '勝' : '敗') + '</b> ' + wmUiEsc(r.name) + ' · ' + r.rounds + ' 回合 · 兵力損失約 ' + r.loss + '%<br><small>' + wmUiEsc(wmUiLootTxt(r.loot)) + '</small></div>';
+    h += '<div class="wm-rep"><b>' + r.n + ' 隊' + (r.win ? '勝' : '敗') + '</b> ' + wmUiEsc(r.name) + ' · ' + r.rounds + ' 回合 · 兵力損失約 ' + r.loss + '%<br><small>' + wmUiEsc(wmUiLootTxt(r.loot)) + '</small>' + (wmUiRecOf(r.rid) ? ' <button data-wm="rep" data-rid="' + wmUiEsc(r.rid) + '">看戰報</button>' : '') + '</div>';
   });
-  h += '<p class="wm-sm">回播未接(R1b 只給摘要)。</p>';
+  h += '<p class="wm-sm">「看戰報」開結果頁,結果頁可重播(最近 10 場)。</p>';
   return h;
 }
 
@@ -456,6 +459,7 @@ function wmUiOnClick(e) {
   if (a === 'rush') { wmUiRush(i); return; }
   if (a === 'qcancel') { wmUiQCancel(i); return; }
   if (a === 'reps') { WMUI.pop = 'reps'; wmUiPopShow(wmUiPopRepsHtml()); return; }
+  if (a === 'rep') { wmUiReplay(b.getAttribute('data-rid')); return; }
   if (a === 'edit') { wmClose(); if (typeof bnUiToForm === 'function') bnUiToForm(); return; }
 }
 function wmUiOnChange(e) {
@@ -480,13 +484,15 @@ function wmOpen() {
   if (!wmIsOpen()) {
     el = document.createElement('div');
     el.id = 'wmPanel';
-    el.innerHTML = '<div id="wmBody"><div class="wm-top"><b class="wm-h">外勤</b><button data-wm="close">← 返回</button></div><p class="wm-sm">清單每格會刷新;離開時也會照算,回來時結算</p>' +
+    el.innerHTML = '<div id="wmBody"><p class="wm-sm">清單每格會刷新;離開時也會照算,回來時結算</p>' +
       '<div class="wm-sec">清單(採集 5 格 · 據點 3 格)</div><div id="wmList"></div>' +
       '<div class="wm-sec">出外部隊</div><div id="wmArmy"></div></div><div id="wmPop"></div>';
     el.addEventListener('click', wmUiOnClick);
     el.addEventListener('change', wmUiOnChange);
     bnu.layer.appendChild(el);
     WMUI.el = el;
+    // 統一外框(panelui.js):標題列(外勤 / 寬三檔 / ×)由外框提供;關閉經 panelmgr → onClose(wmTeardown)
+    if (typeof pfOpen === 'function') pfOpen({ id: 'wm', layer: 2, title: '外勤', root: el, scrollSel: '#wmBody', onClose: wmTeardown });
   }
   wmUiBoot(cs, now);
   wmUiPopClose();
@@ -499,6 +505,12 @@ function wmClose() {
   var el = WMUI.el;
   if (WMUI.timer && typeof clearInterval === 'function') clearInterval(WMUI.timer);
   WMUI.timer = 0;
+  if (!el) return false;
+  if (typeof panelIsOpen === 'function' && panelIsOpen('wm')) return panelClose('wm') ? true : wmTeardown();   // 外框關閉 → onClose 呼叫 wmTeardown
+  return wmTeardown();
+}
+function wmTeardown() {
+  var el = WMUI.el;
   if (!el) return false;
   el.removeEventListener('click', wmUiOnClick);
   el.removeEventListener('change', wmUiOnChange);
@@ -522,7 +534,7 @@ function wmUiCss() {
   WMUI.css = true;
   s = document.createElement('style');
   s.id = 'wmUiCss';
-  s.textContent = '#wmPanel{position:absolute;left:0;top:0;right:0;bottom:0;z-index:9;overflow:hidden;background:#1b150f;color:#f4ead2;font-size:13px;box-sizing:border-box}' +
+  s.textContent = '#wmPanel{overflow:hidden;background:#1b150f;color:#f4ead2;font-size:13px;box-sizing:border-box}' +
     '#wmBody{position:absolute;left:0;top:0;right:0;bottom:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px calc(12px + env(safe-area-inset-right)) 24px calc(12px + env(safe-area-inset-left));box-sizing:border-box}' +
     '#wmPanel .wm-top{display:flex;align-items:center;justify-content:space-between;gap:8px}#wmPanel .wm-h{font-size:17px;color:#ffd25a}#wmPanel p{margin:4px 0 0}' +
     '#wmPanel .wm-sec{margin:10px 0 4px;font-size:12px;color:#ffd25a}' +

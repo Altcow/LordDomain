@@ -1,0 +1,73 @@
+/* css/ld_team.css — 整隊頁(設計_介面骨架實作計畫.md §3-6)。只用 .ldt 前綴;顏色一律取 ld_theme.css 變數。
+   直式:站位列 → 排序篩選 → 卡片橫列 → 按鈕列 → 資訊條;橫式:左 55% 站位 + 資訊、右 45% 排序 + 卡片網格 + 按鈕。所有按鈕 >= 44。 */
+.ldt { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; gap: 6px; font-family: var(--ld-font); color: var(--white); }
+.ldt button { font-family: var(--ld-font); -webkit-tap-highlight-color: transparent; cursor: pointer; }
+.ldt-slots { flex: 1 1 178px; min-height: 150px; max-height: 214px; display: flex; gap: 6px; align-items: stretch; justify-content: center; }
+.ldt-slot { position: relative; display: flex; flex-direction: column; min-width: 0; flex: 104 1 0; max-width: 150px; }
+.ldt-slot.r2 { flex: 120 1 0; max-width: 174px; }
+.ldt-flag { position: absolute; left: 50%; top: -9px; transform: translateX(-50%); z-index: 3; pointer-events: none; }
+.ldt-ico { width: 24px; height: 24px; font-size: 13px; border-radius: 7px; }
+.ldt-flag .ldt-ico { width: 26px; height: 26px; background: linear-gradient(#6fd2e0, var(--mine)); color: var(--ink); }
+.ldt-cell { position: relative; flex: 1 1 auto; min-height: 100px; padding: 0; overflow: hidden; border: 3px solid #8a8a8a; border-radius: 12px; background: linear-gradient(#4a2f1a, var(--wood3)); color: var(--white); box-shadow: var(--drop2); text-align: center; }
+.ldt-cell:active { transform: translateY(2px); }
+.ldt-cell.g1 { border-color: var(--teal); } .ldt-cell.g2 { border-color: var(--q2); } .ldt-cell.g3 { border-color: var(--q3); } .ldt-cell.g4 { border-color: var(--q4); }
+.ldt-slot.sel .ldt-cell { box-shadow: 0 0 0 3px var(--gold), var(--drop2); }
+.ldt-cell.em { border-style: dashed; border-color: #f5c54299; background: #2b1a10a8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #e9d3a6; }
+.ldt-add { font-size: 30px; font-weight: 900; line-height: 1; } .ldt-emt { font-size: 13px; font-weight: 900; }
+.ldt-pt { position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .25); }
+.ldt-pt img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 15%; }
+.ldt-pt svg { width: 70%; height: 70%; fill: #cdbba0; }
+.ldt-pt b { font-size: 40px; opacity: .8; }
+.ldt-gr { position: absolute; left: 3px; top: 3px; padding: 0 5px; border-radius: 6px; background: #000a; font-size: 12px; font-weight: 900; color: var(--gold2); }
+.ldt-tr { position: absolute; right: 3px; top: 3px; padding: 0 5px; border-radius: 6px; background: #000a; font-size: 12px; font-weight: 900; }
+.ldt-tr.bad { color: #ff9a8a; }
+.ldt-busy { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); padding: 2px 0; background: #d9452bcc; font-size: 13px; font-weight: 900; }
+.ldt-nm { position: absolute; left: 0; right: 0; bottom: 17px; padding: 0 3px; font-size: 14px; font-weight: 900; text-shadow: 0 1px 2px #000, 0 0 3px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ldt-pw { position: absolute; left: 0; right: 0; bottom: 0; padding: 1px 3px; background: #000b; font-size: 12px; font-weight: 900; color: var(--gold2); white-space: nowrap; }
+.ldt-cell.busy .ldt-pt { filter: grayscale(.7); }
+.ldt-pos { flex: 0 0 28px; display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 3px; border: var(--line2); border-radius: 8px; background: linear-gradient(#e0b27a, #b07642 70%, #8a5a32); color: var(--ink); font-size: 13px; font-weight: 900; }
+.ldt-pos .ldt-ico { width: 20px; height: 20px; font-size: 12px; border-radius: 6px; box-shadow: none; }
+.ldt-sact { position: absolute; left: 3px; right: 3px; bottom: 66px; z-index: 4; display: flex; gap: 4px; justify-content: center; }
+.ldt-sact button { flex: 0 1 50px; min-width: 44px; height: 44px; padding: 0; border: var(--line2); border-radius: 12px; background: linear-gradient(var(--gold2), var(--gold)); color: var(--ink); font-size: 14px; font-weight: 900; box-shadow: var(--drop2); }
+.ldt-sact button[data-ldt="drop"] { background: linear-gradient(#ef6a4c, var(--red)); color: #fff; }
+.ldt-tools { flex: 0 0 auto; display: flex; gap: 6px; }
+.ldt-tools button { flex: 1 1 0; max-width: 130px; min-width: 44px; height: 44px; padding: 0 4px; border: var(--line2); border-radius: 12px; background: linear-gradient(var(--wood2), var(--wood3)); color: #e9d3a6; font-size: 13px; font-weight: 900; box-shadow: inset 0 0 0 1px #f5c54255, var(--drop2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ldt-tools button:active { transform: translateY(2px); }
+.ldt-cards { flex: 0 0 104px; display: flex; gap: 6px; align-items: center; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.ldt-cards::-webkit-scrollbar { display: none; }
+.ldt-none { margin: auto; font-size: 14px; font-weight: 900; color: #e9d3a6; opacity: .85; }
+.ldt-card { position: relative; flex: 0 0 66px; width: 66px; height: 92px; padding: 0; overflow: hidden; border: 2px solid #8a8a8a; border-radius: 10px; background: linear-gradient(#4a2f1a, var(--wood3)); color: var(--white); text-align: center; box-shadow: var(--drop2); }
+.ldt-card.g1 { border-color: var(--teal); } .ldt-card.g2 { border-color: var(--q2); } .ldt-card.g3 { border-color: var(--q3); } .ldt-card.g4 { border-color: var(--q4); }
+.ldt-card .ldt-pt { bottom: 32px; }
+.ldt-card .ldt-pt svg { width: 80%; height: 80%; } .ldt-card .ldt-pt b { font-size: 26px; }
+.ldt-cn { position: absolute; left: 0; right: 0; bottom: 17px; padding: 0 2px; font-size: 12px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #000a; }
+.ldt-ct { position: absolute; left: 0; right: 0; bottom: 0; padding: 1px 0; font-size: 12px; font-weight: 900; color: var(--gold2); background: #000c; white-space: nowrap; overflow: hidden; }
+.ldt-tag { position: absolute; left: 2px; top: 2px; padding: 0 4px; border-radius: 5px; background: var(--mine); color: var(--ink); font-size: 12px; font-weight: 900; }
+.ldt-tag.lk { background: var(--red); color: #fff; }
+.ldt-card.on { opacity: .55; } .ldt-card.busy { filter: grayscale(.8); opacity: .6; }
+.ldt-acts { flex: 0 0 auto; display: flex; gap: 8px; align-items: center; }
+.ldt-rec, .ldt-go { border: var(--line2); border-radius: 16px; font-size: 16px; font-weight: 900; box-shadow: var(--drop2); }
+.ldt-rec { flex: 40 1 0; min-width: 44px; height: 52px; background: linear-gradient(#cf9460, #9a6436); color: var(--ink); }
+.ldt-go { flex: 56 1 0; min-width: 44px; height: 60px; background: linear-gradient(var(--gold2), var(--gold)); color: var(--ink); font-size: 18px; }
+.ldt-rec:active, .ldt-go:active { transform: translateY(3px); box-shadow: 0 0 0 var(--ink); }
+.ldt-info { flex: 0 0 36px; display: flex; align-items: center; justify-content: center; gap: 6px; box-sizing: border-box; border: var(--line2); border-radius: 12px; background: #2b1a10a8; box-shadow: inset 0 0 0 1px #f5c54288; font-size: 13px; font-weight: 900; white-space: nowrap; overflow: hidden; }
+.ldt-info b { color: var(--gold2); font-size: 15px; } .ldt-info i { font-style: normal; opacity: .5; } .ldt-info em { font-style: normal; } .ldt-info em.u { color: #8fe0a0; } .ldt-info em.d { color: #ff9a8a; }
+@media (orientation: landscape) {
+  .ldt { display: grid; grid-template-columns: 55fr 45fr; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "slots tools" "slots cards" "info acts"; column-gap: 10px; row-gap: 6px; }
+  .ldt-slots { grid-area: slots; flex: none; min-height: 0; max-height: none; align-self: stretch; padding-top: 10px; }
+  .ldt-tools { grid-area: tools; }
+  .ldt-cards { grid-area: cards; display: grid; grid-template-columns: repeat(auto-fill, 66px); grid-auto-rows: 92px; justify-content: space-between; align-content: start; gap: 6px; overflow-x: hidden; overflow-y: auto; min-height: 0; }
+  .ldt-card { flex: none; }
+  .ldt-acts { grid-area: acts; }
+  .ldt-info { grid-area: info; align-self: end; }
+  .ldt-sact { bottom: 62px; }
+}
+@media (max-height: 400px) and (orientation: landscape) {
+  .ldt-go { height: 52px; font-size: 16px; } .ldt-rec { height: 48px; font-size: 15px; }
+  .ldt-pos { flex-basis: 24px; margin-top: 2px; }
+  .ldt-cell { min-height: 80px; }
+}
+@media (max-height: 700px) and (orientation: portrait) {
+  .ldt-cards { flex-basis: 90px; } .ldt-card { flex-basis: 58px; width: 58px; height: 80px; } .ldt-card .ldt-pt { bottom: 30px; }
+}
+@media (prefers-reduced-motion: reduce) { .ldt-cell:active, .ldt-tools button:active, .ldt-rec:active, .ldt-go:active { transform: none; } }

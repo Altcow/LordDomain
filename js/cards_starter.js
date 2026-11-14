@@ -20,9 +20,9 @@ function cardsGiftCheck(cs) {
   if (!cs || cs.gift200 === G.ver) return 0;
   if (typeof worldReadyFlag === 'undefined' || !worldReadyFlag) return 0;   // 世界尚未載入(開機前的占位狀態):不發、不存檔,免得把占位狀態寫進 save.v1 蓋掉真存檔
   if (typeof itemGiftGrant !== 'function') return 0;
-  got = itemGiftGrant(G.ver);
-  if (got < 0) return 0;
   fresh = !(cs.seq | 0) && !(cs.roster && cs.roster.length);
+  got = itemGiftGrant(G.ver, (fresh && typeof unlockOn === 'function' && unlockOn() && G.pullsNew > 0) ? G.pullsNew : 0);   // ldui 新存檔:禮包只含 pullsNew 抽,其餘由新手七日分天發
+  if (got < 0) return 0;
   cs.gift200 = G.ver;
   if (fresh || !cs.starter) cs.starter = { done: 1, at: (cs.clock && cs.clock.maxSeen) || 0, nb: { n: 0, p: 0, g: 0 } };
   else cs.starter.done = 1;

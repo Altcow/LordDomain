@@ -1,0 +1,45 @@
+/* css/ld_theme.css — 共用主題「貼紙戲班」(設計線① 首頁草稿定調;設計線② 戰鬥畫面共用)
+   粗墨線 + 實色落影 + 朱紅 / 金黃 / 米紙。只有 :root 變數與 ld- 前綴零件,加了 class 才生效,不影響舊頁面。
+   要改數值或加零件:直接改這裡,並通知另一條線。 */
+:root {
+  --ink: #2b1a10; --paper: #fbf1dc; --paper2: #efdcb4; --paper3: #e3c993;
+  --gold: #f5c542; --gold2: #ffe48a; --red: #d9452b; --wood: #9a6436; --wood2: #5b3a1e; --wood3: #3a2414; --white: #fffaf0;
+  --line: 3px solid var(--ink); --line2: 2px solid var(--ink);
+  --drop: 0 4px 0 var(--ink); --drop2: 0 3px 0 var(--ink);
+  --q1: #d9d9d9; --q2: #4aa3ff; --q3: #b46cff; --q4: #ffc940;
+  --mine: #3fb4c9; --foe: #e0553c;
+  --red-d: #a92f1c; --gold-d: #d49a1e; --teal: #2f8f86; --wood-d: #6b3f1c; --blue: #3a78c2;
+  --qbg4: linear-gradient(160deg, #ffe9a8, #f0b84a); --qbg3: linear-gradient(160deg, #e3cdfa, #9a6fd0); --qbg2: linear-gradient(160deg, #cfe6ff, #6ea1dc);
+  --ld-font: "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+  /* 內頁場景層(.ldp-scene 的圖):模糊 px 與亮度(1=不壓暗)。各頁可在自己的 .ldp 覆寫;首頁背景與戰鬥戲台不使用 */
+  --ld-scene-blur: 2px; --ld-scene-dim: .75;
+}
+/* 不可選字、點了不出游標、手機不出灰框 */
+.ld-noselect, .ld-noselect * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; caret-color: transparent; }
+.ld-noselect img { -webkit-user-drag: none; pointer-events: none; }
+/* 金黃貼紙鈕;.sub = 木色;.red = 朱紅 */
+.ld-btn { font-family: var(--ld-font); border: var(--line2); border-radius: 14px; box-shadow: var(--drop2); padding: 6px 14px; font-size: 14px; font-weight: 900; color: var(--ink); background: linear-gradient(var(--gold2), var(--gold)); cursor: pointer; text-align: center; line-height: 1.2; transition: transform .08s, box-shadow .08s; }
+.ld-btn:active { transform: translateY(3px); box-shadow: 0 0 0 var(--ink); }
+.ld-btn.sub { background: linear-gradient(var(--wood2), var(--wood3)); color: #e9d3a6; box-shadow: inset 0 0 0 1px #f5c54255, var(--drop2); }
+.ld-btn.red { background: linear-gradient(#ef6a4c, var(--red)); color: #fff; }
+.ld-btn.on { background: linear-gradient(var(--gold2), var(--gold)); color: var(--ink); }
+/* 頁籤 */
+.ld-tab { font-family: var(--ld-font); background: linear-gradient(var(--wood2), var(--wood3)); border: var(--line2); border-radius: 9px; padding: 3px 12px; font-size: 12px; font-weight: 900; color: #e9d3a6; cursor: pointer; box-shadow: inset 0 0 0 1px #f5c54255, 0 2px 0 #000a; white-space: nowrap; }
+.ld-tab.on { background: linear-gradient(var(--gold2), var(--gold)); color: var(--ink); }
+/* 半透明木框面板 */
+.ld-panel { border: var(--line2); border-radius: 14px; background: #2b1a10a8; box-shadow: inset 0 0 0 1px #f5c54288, 0 4px 0 #0007; padding: 6px; color: #fbeed2; -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+/* 貼紙底(草稿 .stk):米紙 + 3px 墨線 + 實色落影 + 圓角 14 */
+.ld-stk { background: var(--paper); color: var(--ink); border: var(--line); border-radius: 14px; box-shadow: var(--drop); }
+/* 米紙卡 */
+.ld-paper { background: var(--paper); color: var(--ink); border: var(--line2); border-radius: 12px; box-shadow: var(--drop2); }
+/* 標題木牌(貼左緣) */
+.ld-plaque { font-family: var(--ld-font); display: inline-flex; align-items: center; gap: 6px; padding: 3px 14px; background: linear-gradient(#e0b27a, #b07642 70%, #8a5a32); border: var(--line2); border-radius: 0 12px 12px 0; box-shadow: var(--drop2); font-size: 14px; font-weight: 900; color: var(--ink); }
+/* 吐槽泡泡 */
+.ld-bubble { font-family: var(--ld-font); position: relative; background: var(--white); color: var(--ink); border: var(--line); border-radius: 14px; box-shadow: var(--drop2); font-size: 12px; font-weight: 900; padding: 6px 9px; line-height: 1.35; }
+/* 紅章 */
+.ld-stamp { font-family: var(--ld-font); display: inline-block; border: 3px solid var(--red); color: var(--red); font-weight: 900; padding: 0 6px; border-radius: 6px; background: #fff8; transform: rotate(-12deg); white-space: nowrap; }
+/* 小膠囊(次數、戰法名標籤);.gold = 金黃 */
+.ld-pill { font-family: var(--ld-font); display: inline-block; padding: 0 7px; border: 1.5px solid var(--ink); border-radius: 10px; background: #fbeed233; color: inherit; font-size: 11px; font-weight: 900; font-style: normal; line-height: 1.5; white-space: nowrap; }
+.ld-pill.gold { background: linear-gradient(var(--gold2), var(--gold)); color: var(--ink); }
+/* 描邊大字(勝敗、數字) */
+.ld-outline { font-family: var(--ld-font); font-weight: 900; color: #fff; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; text-shadow: 0 3px 0 var(--ink); }

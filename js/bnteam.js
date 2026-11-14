@@ -1,11 +1,11 @@
 // js/bnteam.js — 戰鬥 A:武將戰法卡(布陣 / 討伐地圖 / 結算中我方隊伍一律用卡片顯示:頭像、品階、星等、兵種、戰力、兵力條、戰法清單)、名冊搜尋 / 排序、隊伍預設 3 組(可命名、一鍵套用)。
 // 掛在 bnui.js 的全螢幕 layer 內;卡片 / 預設的點擊經 bnUiDo → bnTeamDo。戰法清單一律取自 bn_text.js 的 bnCardSkillRows(card, {troop})(唯讀;含被動與大招)。戰法名可點 → 戰法說明浮層(內容 = bnSkillInfo,同名冊卡的 bnskill 說明)。
 // 存檔:世界內 'lorddomain.bnteam.v1' = {v:1, p:[3 組 {name, slots:[{id,row,col,troop,nm}]} | null]}(有值才寫;壞檔 / 舊檔 = 空;沒有此鍵時沿用 bn.v1 的舊 forms 當初值,不改舊鍵)。
-// 對外(給「對戰練習」等其他模組):bnTeamPresetGet(n) n=1..3 → {n, name, slots:[…], empty};bnTeamSnapshot() → 目前隊伍 ≤5 人快照。
+// 對外(給「對戰練習」等其他模組):bnTeamPresetGet(n) n=1..3 → {n, name, slots:[…], empty};bnTeamSnapshot() → 目前隊伍 ≤3 人快照(3 人隊伍)。
 // 依賴:bnui.js(bnu BNUI bnUiEntry bnUiSpec bnUiTroopOf bnUiEsc bnUiLsGet bnUiLsSet bnUiNormForm bnUiRosterIds bnUiCurSave bnUiRenderForm bnUiToast)、bn_units.js;bn_text.js / cardsui.js 可缺。ES2017;不用 ?. ??。
-// 全域:BNTEAM bnTeamLoad bnTeamSave bnTeamPresetGet bnTeamPresetSave bnTeamPresetApply bnTeamPresetRename bnTeamSnapshot bnTeamSkillRows bnTeamCardHtml bnTeamStripHtml bnTeamRosterHtml bnTeamPresetHtml bnTeamSkillLinksHtml bnTeamDo bnTeamBack bnTeamIsOpen bnTeamInfoOpen bnTeamInfoClose bnTeamCss
+// 全域:BNTEAM bnTeamLoad bnTeamSave bnTeamPresetGet bnTeamPresetSave bnTeamPresetApply bnTeamPresetRename bnTeamPresetSet bnTeamSnapshot bnTeamSkillRows bnTeamCardHtml bnTeamStripHtml bnTeamRosterHtml bnTeamPresetHtml bnTeamSkillLinksHtml bnTeamDo bnTeamBack bnTeamIsOpen bnTeamInfoOpen bnTeamInfoClose bnTeamCss
 
-var BNTEAM = { key: 'lorddomain.bnteam.v1', n: 3, show: 3, nameMax: 12, qMax: 20, rawMax: 200000, sort: 'pw', q: '', exp: {}, data: null, raw: undefined, info: '', infoEl: null, per: 40, pg: 0, fac: '', gr: '' };
+var BNTEAM = { key: 'lorddomain.bnteam.v1', n: 3, max: 5, show: 3, nameMax: 12, qMax: 20, rawMax: 200000, sort: 'pw', q: '', exp: {}, data: null, raw: undefined, info: '', infoEl: null, per: 40, pg: 0, fac: '', gr: '' };
 var BNTEAM_SORT = [['pw', '戰力'], ['gr', '品階'], ['tr', '兵種']];
 var BNTEAM_GR = ['白', '青', '藍', '紫', '金'];
 var BNTEAM_CAT = { command: '指', active: '主', pursuit: '追', passive: '被', ult: '大' };
@@ -16,6 +16,13 @@ function bnTeamToast(m) { if (typeof bnUiToast === 'function') bnUiToast(m); }
 
 // ───────── 隊伍預設(存檔)─────────
 function bnTeamDefName(i) { return '隊伍 ' + (i + 1); }
+// 可用隊數:fame.js 存在時讀 fameTeamCap()(名聲開放,2~5;舊存檔已在用的隊不被鎖),否則維持 BNTEAM.n;存檔空間在名聲存在時一律留到 BNTEAM.max
+function bnTeamN() {
+  var c;
+  if (typeof fameTeamCap === 'function') { c = fameTeamCap(); if (typeof c === 'number' && isFinite(c)) return Math.max(1, Math.min(BNTEAM.max, Math.floor(c))); }
+  return BNTEAM.n;
+}
+function bnTeamStoreN() { return typeof fameTeamCap === 'function' ? Math.max(BNTEAM.n, BNTEAM.max) : BNTEAM.n; }
 function bnTeamNormName(s, i) {
   var t = typeof s === 'string' ? s.replace(/[\u0000-\u001f<>"&]/g, '').trim() : '';
   t = Array.from(t).slice(0, BNTEAM.nameMax).join('');
@@ -28,11 +35,11 @@ function bnTeamNormSlots(a) {
   return out;
 }
 function bnTeamLoad() {
-  var raw = bnUiLsGet(BNTEAM.key), o = null, d = { v: 1, p: [] }, i, f, s, old;
-  for (i = 0; i < BNTEAM.n; i++) d.p.push(null);
+  var raw = bnUiLsGet(BNTEAM.key), o = null, d = { v: 1, p: [] }, i, f, s, old, nS = bnTeamStoreN();
+  for (i = 0; i < nS; i++) d.p.push(null);
   if (raw && raw.length < BNTEAM.rawMax) { try { o = JSON.parse(raw); } catch (e) { o = null; } }
   if (o && typeof o === 'object' && Array.isArray(o.p)) {
-    for (i = 0; i < BNTEAM.n; i++) {
+    for (i = 0; i < nS; i++) {
       f = o.p[i];
       if (!f || typeof f !== 'object') continue;
       s = bnTeamNormSlots(f.slots);
@@ -40,7 +47,7 @@ function bnTeamLoad() {
     }
   } else if (raw === null) {   // 舊存檔:沿用 bn.v1 的 3 套預設陣容當初值(只讀,不改舊鍵)
     old = ((typeof bnu !== 'undefined' && bnu.data) || (typeof bnUiLoad === 'function' ? bnUiLoad() : null) || {}).forms || [];
-    for (i = 0; i < BNTEAM.n; i++) {
+    for (i = 0; i < nS; i++) {
       if (!old[i] || !old[i].slots || !old[i].slots.length) continue;
       s = bnTeamNormSlots(old[i].slots);
       s.forEach(function (x) { var e = bnUiEntry(x.id); if (e) x.nm = Array.from(String(e.name)).slice(0, 12).join(''); });
@@ -65,7 +72,7 @@ function bnTeamSave() {
   BNTEAM.raw = s;
   return true;
 }
-function bnTeamIdx(n) { n = n | 0; return (n >= 1 && n <= BNTEAM.n) ? n - 1 : -1; }
+function bnTeamIdx(n) { n = n | 0; return (n >= 1 && n <= bnTeamN()) ? n - 1 : -1; }
 // n = 1..3(隊伍 n)→ {n, name, slots:[{id,row,col,troop,nm}], empty};n 不合法回 null
 function bnTeamPresetGet(n) {
   var i = bnTeamIdx(n), p;
@@ -86,19 +93,21 @@ function bnTeamPresetSave(n) {
 }
 // 套用:名冊已沒有的人(遣散 / 卸任)留空並提示。回 {ok, placed, missing:[姓名]}
 function bnTeamPresetApply(n) {
-  var p = bnTeamPresetGet(n), ids, miss, keep;
+  var p = bnTeamPresetGet(n), ids, miss, keep, nf;
   if (!p) return { ok: false, placed: 0, missing: [] };
   if (p.empty) { bnTeamToast('「' + p.name + '」是空的,先按「存入」'); return { ok: false, placed: 0, missing: [] }; }
   ids = bnUiRosterIds();
   miss = p.slots.filter(function (s) { return !ids[s.id]; }).map(function (s) { return s.nm || '(不明人物)'; });
-  keep = bnUiNormForm({ slots: p.slots }, ids).slots;
+  nf = bnUiNormForm({ slots: p.slots }, ids);
+  var bz = bnUiTeamBusy(nf.slots);
+  keep = bz.keep;
   bnu.slots = keep.map(function (s) { return { id: s.id, row: s.row, col: s.col, troop: s.troop }; });
   bnu.slots.forEach(function (x) { if (x.troop) bnu.tp[x.id] = x.troop; });
   bnu.sel = null;
   if (typeof bnUiCurSave === 'function') bnUiCurSave();
   if (bnu.open && bnu.phase === 'form' && typeof bnUiRenderForm === 'function') bnUiRenderForm();
-  bnTeamToast(miss.length ? '已套用「' + p.name + '」;' + miss.join('、') + ' 已不在卡包,該位置留空' : '已套用「' + p.name + '」');
-  return { ok: true, placed: keep.length, missing: miss };
+  bnTeamToast((miss.length ? '已套用「' + p.name + '」;' + miss.join('、') + ' 已不在卡包,該位置留空' : '已套用「' + p.name + '」') + (nf.samefig ? ';同名副卡不可同隊,已略過 ' + nf.samefig + ' 人' : '') + (bz.busy.length ? ';' + bz.busy.join('、') + ' 占用中,已略過' : ''));
+  return { ok: true, placed: keep.length, missing: miss, busy: bz.busy };
 }
 function bnTeamPresetRename(n, name) {
   var i = bnTeamIdx(n), d, v;
@@ -115,6 +124,18 @@ function bnTeamPresetRename(n, name) {
   bnTeamSave();
   if (bnu.open && bnu.phase === 'form' && typeof bnUiRenderForm === 'function') bnUiRenderForm();
   return true;
+}
+
+// 直接寫入第 n 隊的陣容(新整隊頁用):正規化(最多 3 人、row 0/1/2 各 1、col 0、同名去重)後存檔。slots 可為空陣列 = 清空該隊。回 true/false
+function bnTeamPresetSet(n, slots) {
+  var i = bnTeamIdx(n), d, p, src, s, ok;
+  if (i < 0 || !Array.isArray(slots)) return false;
+  src = slots.filter(function (x) { return x && bnUiEntry(x.id); }).map(function (x) { var e = bnUiEntry(x.id); return { id: x.id, row: x.row, col: 0, troop: x.troop, nm: String(e.name) }; });   // 名冊沒有的人不寫
+  s = bnTeamNormSlots(src);
+  d = bnTeamData(); p = d.p[i];
+  d.p[i] = s.length ? { name: p ? p.name : bnTeamDefName(i), slots: s } : null;
+  ok = bnTeamSave();
+  return ok || s.length === 0;
 }
 
 // ───────── 目前隊伍快照(給對戰練習等模組;純 JSON)─────────
@@ -184,7 +205,7 @@ function bnTeamCardHtml(e, o) {
     (o.mini && rows.length > n ? '<span class="bntc-m2">＋' + (rows.length - n) + '</span>' : '') + '</div></div>';
   return h;
 }
-// 整隊 5 人並排。o: {mini, title, S(戰後狀態:兵力條顯示剩餘)}
+// 整隊 3 人橫排(主將 / 副將 / 副將)。o: {mini, title, S(戰後狀態:兵力條顯示剩餘)}
 function bnTeamStripHtml(o) {
   o = o || {};
   bnTeamCss();
@@ -193,7 +214,7 @@ function bnTeamStripHtml(o) {
     var e = bnUiEntry(s.id), tr = s.troop || bnUiTroopOf(e), sp = bnUiSpec(e, { troop: tr, row: s.row, col: s.col }), u = null, k, op;
     tot += bnPower(sp);
     for (k = 0; k < uA.length; k++) if (uA[k].row === s.row && uA[k].col === s.col && uA[k].name === sp.name) { u = uA[k]; break; }
-    op = { troop: tr, mini: !!o.mini, act: o.mini ? '' : 'tcard', sel: !o.mini && bnu.sel === e.id, pos: BNTEAM_ROW[s.row] + (s.col + 1) };
+    op = { troop: tr, mini: !!o.mini, act: o.mini ? '' : 'tcard', sel: !o.mini && bnu.sel === e.id, pos: s.row === 2 ? '主將' : '副將' };
     if (u) { op.hp = Math.max(0, u.hp); op.hpBar = u.maxHp > 0 ? u.hp / u.maxHp : 0; }
     cards.push(bnTeamCardHtml(e, op));
   });
@@ -275,11 +296,12 @@ function bnTeamBindForm(el) {
 function bnTeamPresetHtml() {
   bnTeamCss();
   var h = '<div class="bntm-pre"><div class="bntm-h">隊伍預設 <small>存入目前陣容,之後一鍵套用</small></div><div class="bntm-pl">', i, p;
-  for (i = 1; i <= BNTEAM.n; i++) {
+  for (i = 1; i <= bnTeamN(); i++) {
     p = bnTeamPresetGet(i);
     h += '<div class="bntm-p' + (p.empty ? ' emp' : '') + '"><button class="bntm-pn" data-a="tren" data-i="' + (i - 1) + '" aria-label="改名">' + bnTeamEsc(p.name) + (p.empty ? '' : ' ✎') + '</button><small>' + (p.empty ? '空' : p.slots.length + ' 人') + '</small>' +
       '<div class="bntm-pb"><button data-a="tload" data-i="' + (i - 1) + '"' + (p.empty ? ' disabled' : '') + '>套用</button><button data-a="tsave" data-i="' + (i - 1) + '">存入</button></div></div>';
   }
+  if (typeof fameTeamLockText === 'function') for (i = bnTeamN() + 1; i <= BNTEAM.max; i++) h += '<div class="bntm-p emp"><span class="bntm-pn">🔒 ' + bnTeamEsc(bnTeamDefName(i - 1)) + '</span><small>' + bnTeamEsc(fameTeamLockText(i)) + '</small></div>';   // 未開放的隊伍欄:鎖頭 + 「名聲 800 開放」
   return h + '</div></div>';
 }
 
@@ -344,7 +366,7 @@ function bnTeamCss() {
   st = document.createElement('style');
   st.id = 'bnTeamStyle';
   st.textContent = '.bntm-strip{margin:4px 0 6px}.bntm-h{font-size:13px;margin:2px 0 4px;opacity:.95}.bntm-h b{color:#ffd25a}.bntm-h small{opacity:.7;font-size:12px}' +
-    '.bntm-row{display:grid;grid-template-columns:repeat(5,minmax(74px,1fr));gap:4px;align-items:start;overflow-x:auto;scrollbar-width:none}.bntm-row::-webkit-scrollbar{display:none}' +
+    '.bntm-row{display:grid;grid-template-columns:repeat(3,minmax(74px,1fr));gap:4px;align-items:start;overflow-x:auto;scrollbar-width:none}.bntm-row::-webkit-scrollbar{display:none}' +
     '.bntc{position:relative;min-width:0;border-radius:8px;border:2px solid #8a8a8a;background:rgba(255,255,255,.07);color:#f4ead2;padding:3px;display:flex;flex-direction:column;gap:1px;font-size:12px;line-height:1.25;text-align:left;cursor:pointer;overflow:hidden}' +
     '.bntc.g1{border-color:#5fb878}.bntc.g2{border-color:#4f86d6}.bntc.g3{border-color:#a464d8}.bntc.g4{border-color:#e0b030}.bntc.sel{box-shadow:0 0 0 3px #ffd25a}.bntc.on{opacity:.55}' +
     '.bntc.empty{border-style:dashed;border-color:rgba(255,255,255,.28);align-items:center;justify-content:center;min-height:120px;opacity:.6;cursor:default}' +
@@ -366,8 +388,8 @@ function bnTeamCss() {
     '#bnForm .bnf-chips button{min-height:44px}.bntm-pre{margin:6px 0}.bntm-pl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.bntm-p{display:flex;flex-direction:column;gap:2px;padding:3px;border-radius:8px;background:rgba(255,255,255,.08);border:1px solid rgba(201,137,47,.6);min-width:0}.bntm-p.emp{border-color:rgba(255,255,255,.2)}' +
     '.bntm-p small{font-size:11px;opacity:.75;text-align:center}.bntm-pn{min-height:44px;border:none;border-radius:6px;background:none;color:#ffd25a;font-size:14px;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bntm-p.emp .bntm-pn{color:#f4ead2;opacity:.75}' +
     '.bntm-pb{display:flex;gap:3px}.bntm-pb button{flex:1;min-width:0;min-height:44px;border:none;border-radius:6px;background:rgba(255,255,255,.14);color:#f4ead2;font-size:13px;padding:0}.bntm-pb button[disabled]{opacity:.35}' +
-    '.bntm-strip.mini .bntc-hd{height:40px}.bntm-strip.mini .bntc.empty{min-height:80px}.bnbox .bntm-strip{text-align:left}.bnbox .bntm-row{grid-template-columns:repeat(5,minmax(60px,1fr))}' +
-    '@media (orientation:landscape) and (min-width:700px){.bntm-ro{flex-wrap:wrap}.bntm-row{grid-template-columns:repeat(5,minmax(0,1fr))}}' +
+    '.bntm-strip.mini .bntc-hd{height:40px}.bntm-strip.mini .bntc.empty{min-height:80px}.bnbox .bntm-strip{text-align:left}.bnbox .bntm-row{grid-template-columns:repeat(3,minmax(60px,1fr))}' +
+    '@media (orientation:landscape) and (min-width:700px){.bntm-ro{flex-wrap:wrap}.bntm-row{grid-template-columns:repeat(3,minmax(0,1fr))}}' +
     '#bnSkInfo{position:absolute;left:0;top:0;right:0;bottom:0;z-index:7;display:flex;align-items:center;justify-content:center;background:rgba(10,8,6,.6)}' +
     '.bnsi-box{width:min(92vw,400px);max-height:86vh;overflow:auto;box-sizing:border-box;border-radius:12px;background:#2a2118;border:2px solid #c9892f;padding:12px 14px;color:#f4ead2}.bnsi-box h4{margin:0 0 6px;font-size:18px}.bnsi-box p{margin:5px 0;font-size:14px;line-height:1.5}.bnsi-box p b{color:#f0b45a}' +
     '.bnsi-tags span{display:inline-block;margin:0 4px 4px 0;padding:0 6px;border:1px solid rgba(255,255,255,.4);border-radius:4px;font-size:12px}.bnsi-box .bnbtn{display:block;width:100%;margin-top:8px}' +

@@ -1,17 +1,33 @@
-const VERSION = 'v61';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v62';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
-const RUNTIME_PATHS = ['/assets/buildings/', '/assets/portraits/', '/assets/ui/', '/assets/terrain/', '/assets/fullbody/', '/assets/bnfx/', '/assets/furnace/', '/assets/traffic/', '/assets/card/', '/assets/statusicon/', '/assets/troopicon/', '/assets/skillcat/', '/assets/legion/'];
+const RUNTIME_PATHS = ['/assets/buildings/', '/assets/portraits/', '/assets/ui/', '/assets/ui2/', '/assets/terrain/', '/assets/fullbody/', '/assets/bnfx/', '/assets/furnace/', '/assets/traffic/', '/assets/card/', '/assets/statusicon/', '/assets/troopicon/', '/assets/skillcat/', '/assets/legion/', '/assets/audio/'];
 const PRECACHE = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './css/ld_theme.css',
   './css/style.css',
   './css/cardsreveal.css',
   './css/search.css',
   './css/codex.css',
+  './css/panelui.css',
+  './css/cardsui_grid.css',
   './css/bnshare.css',
+  './css/bnreport.css',
+  './css/bncardbattle.css',
+  './css/bnstage.css',
+  './css/shell.css',
+  './css/ld_page.css',
+  './css/ld_home.css',
+  './css/ld_open.css',
+  './css/ld_hero.css',
+  './css/ld_team.css',
+  './css/ld_tower.css',
+  './css/ld_equip.css',
+  './css/title_cover.css',
+  './js/ui_assets.js',
   './js/features.js',
   './js/data.js',
   './js/units.js',
@@ -113,6 +129,7 @@ const PRECACHE = [
   './js/art_furnace.js',
   './js/art_gather.js',
   './js/panelmgr.js',
+  './js/panelui.js',
   './js/caravan_goods.js',
   './js/caravan.js',
   './js/caravanui.js',
@@ -138,6 +155,7 @@ const PRECACHE = [
   './js/cardsui_named.js',
   './js/cardsui_bag.js',
   './js/cardsui_roster.js',
+  './js/cardsui_grid.js',
   './js/items_ui.js',
   './js/cardsui_furnace.js',
   './js/cardsui_starter.js',
@@ -184,6 +202,25 @@ const PRECACHE = [
   './js/wm_data.js',
   './js/wm_core.js',
   './js/wm_ui.js',
+  './js/res4.js',
+  './js/rsv.js',
+  './js/fame.js',
+  './js/mat.js',
+  './js/rsvui.js',
+  './js/wd_data.js',
+  './js/wd_core.js',
+  './js/wd_ui.js',
+  './js/ld_open_data.js',
+  './js/ld_open_unlock.js',
+  './js/season_data.js',
+  './js/season.js',
+  './js/ld_open_ev.js',
+  './js/ld_open_wd.js',
+  './js/ld_open_cards.js',
+  './js/ld_equip_data.js',
+  './js/ld_equip.js',
+  './js/ld_equip_forge.js',
+  './js/ld_hunt.js',
   './js/bn_effects.js',
   './js/bn_book.js',
   './js/bn_skcard.js',
@@ -191,6 +228,9 @@ const PRECACHE = [
   './js/bnsfx.js',
   './js/bnui.js',
   './js/bnlog.js',
+  './js/bnreport.js',
+  './js/bnstage.js',
+  './js/bncardbattle.js',
   './js/bnmap.js',
   './js/bnshare.js',
   './js/bnteam.js',
@@ -202,6 +242,19 @@ const PRECACHE = [
   './js/fx_text_data.js',
   './js/fx_stages_data.js',
   './js/fx_text.js',
+  './js/ld_art.js',
+  './js/ld_nav.js',
+  './js/tower.js',
+  './js/ld_hero.js',
+  './js/ld_team.js',
+  './js/ld_tower.js',
+  './js/ld_equip_ui.js',
+  './js/ld_equip_forge_ui.js',
+  './js/ld_hunt_ui.js',
+  './js/ld_home.js',
+  './js/ld_open_ui.js',
+  './js/shell.js',
+  './js/title_cover.js',
   './js/main.js',
   './js/installtip.js',
   './js/pwa.js',
@@ -233,6 +286,11 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
+// 先精確比對(約 12ms),未命中才用 ignoreSearch(會逐筆掃描整個快取,實測每次約 3 秒)
+function cacheMatchFast(cache, req) {
+  return cache.match(req).then((hit) => hit || cache.match(req, { ignoreSearch: true }));
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
@@ -241,7 +299,7 @@ self.addEventListener('fetch', (event) => {
   if (req.mode === 'navigate') {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>
-        cache.match(req, { ignoreSearch: true }).then((hit) =>
+        cacheMatchFast(cache, req).then((hit) =>
           hit || fetch(req).catch(() => cache.match('./index.html'))
         )
       )
@@ -261,7 +319,7 @@ self.addEventListener('fetch', (event) => {
   }
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) =>
-      cache.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req))
+      cacheMatchFast(cache, req).then((hit) => hit || fetch(req))
     )
   );
 });

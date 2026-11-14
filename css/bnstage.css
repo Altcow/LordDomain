@@ -1,0 +1,146 @@
+/* css/bnstage.css — 戰鬥舞台(js/bnstage.js):戲台風格,844×390 基準由 JS 等比縮放置中;純 CSS transform / opacity;不用 canvas。
+   疊在 css/bncardbattle.css 之後(overlay #bnCB、戰報樣式沿用該檔);舊的卡片版面(.bcb-field / .bcb-cd 等)已不再使用。字 ≥ 12px。 */
+#bnCB{padding:0}
+#bnCB .bst-stage{position:absolute;left:50%;top:50%;width:844px;height:390px;overflow:hidden;background:#1a1118;color:#f3e7cf;font-family:var(--ld-font);font-size:13px;transform-origin:center center;transform:translate(-50%,-50%)}
+#bnCB .bst-world{position:absolute;left:0;top:0;width:844px;height:390px;overflow:hidden}
+#bnCB .bst-scene{position:absolute;left:-12px;top:-12px;width:868px;height:414px;background:url(../assets/ui/bg_home_land.webp) center/cover;filter:blur(5px) brightness(.6) saturate(1.1)}
+#bnCB .bst-backdrop{position:absolute;left:0;top:0;width:100%;height:250px;background:radial-gradient(ellipse 70% 60% at 50% 70%,transparent,#1a0d05aa)}
+#bnCB .bst-floor{position:absolute;left:0;top:236px;width:100%;height:154px;border-top:3px solid #8a6238;background:linear-gradient(180deg,rgba(0,0,0,.45),rgba(0,0,0,0) 30%),repeating-linear-gradient(90deg,#6b4526 0 70px,#5d3b20 70px 72px,#74502e 72px 140px,#5d3b20 140px 142px)}
+#bnCB .bst-units{position:absolute;left:0;top:0;width:100%;height:100%}
+#bnCB .bst-valance{position:absolute;left:0;top:0;width:100%;height:34px;z-index:40;background:radial-gradient(circle at 21px -6px,#b3262c 22px,transparent 23px) 0 0/42px 34px repeat-x,linear-gradient(#8e1b22,#8e1b22) 0 0/100% 12px no-repeat;filter:drop-shadow(0 3px 0 var(--ink))}
+#bnCB .bst-valance:after{content:"";position:absolute;left:0;right:0;top:10px;height:3px;background:repeating-linear-gradient(90deg,#e5b74a 0 6px,transparent 6px 10px)}
+#bnCB .bst-curtain{position:absolute;top:0;width:51%;height:100%;z-index:45;background:repeating-linear-gradient(90deg,#7d1219 0 18px,#a8222a 18px 30px,#8d1820 30px 42px);border:var(--line);box-shadow:inset 0 -30px 40px rgba(0,0,0,.5),var(--drop);transition:transform .8s cubic-bezier(.6,0,.3,1)}
+#bnCB .bst-curtain.l{left:0}
+#bnCB .bst-curtain.r{right:0}
+#bnCB .bst-world.open .bst-curtain.l{transform:translateX(-96%)}
+#bnCB .bst-world.open .bst-curtain.r{transform:translateX(96%)}
+#bnCB .bst-dim{position:absolute;inset:0;background:rgba(5,3,8,.78);opacity:0;z-index:20;pointer-events:none;transition:opacity .25s}
+#bnCB .bst-dim.on{opacity:1}
+#bnCB .bst-spot{position:absolute;top:0;width:260px;height:340px;margin-left:-130px;z-index:4;pointer-events:none;opacity:0;background:radial-gradient(ellipse 50% 22% at 50% 92%,rgba(255,240,190,.4),transparent 70%),linear-gradient(180deg,rgba(255,240,190,0),rgba(255,240,190,.1) 40%,rgba(255,240,190,0));clip-path:polygon(44% 0,56% 0,100% 100%,0 100%);transition:left .18s,opacity .2s}
+#bnCB .bst-spot.on{opacity:1}
+/* 單位:腳底 y / x / 縮放 --sc 由 JS 依排號設定(前 322 ×1、中 312 ×1、主將 302 ×1.3;主將身高約 159,頭頂約 y143,低於頂列 36 與回合木牌);z 由 JS 動態(待機 13/12/11、受擊 16、出手 18、陣亡 9) */
+#bnCB .bst-u{position:absolute;top:318px;width:0;height:0;z-index:10;opacity:1}
+#bnCB .bst-act{position:absolute;left:0;top:0;transition-property:transform;transition-timing-function:ease-in}
+#bnCB .bst-body{position:absolute;bottom:0;left:50%;height:calc(122px*var(--sc,1));width:auto;max-width:none;transform:translateX(-50%);filter:drop-shadow(0 4px 2px rgba(0,0,0,.5));display:block}
+#bnCB .bst-u.foe .bst-body{transform:translateX(-50%) scaleX(-1)}
+#bnCB .bst-body.bst-flash{animation:bstFlash .18s}
+#bnCB .bst-act.bst-shake{animation:bstShake .22s}
+#bnCB .bst-anim{position:absolute;bottom:-29px;left:50%;height:calc(131px*var(--sc,1));width:auto;max-width:none;transform:translateX(-50%);object-fit:contain;display:none}
+#bnCB .bst-u.foe .bst-anim{transform:translateX(-50%) scaleX(-1)}
+#bnCB .bst-u.anim-on .bst-anim{display:block}
+#bnCB .bst-u.anim-on .bst-body{visibility:hidden}
+#bnCB .bst-fb{display:none;position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:64px;height:110px;align-items:center;justify-content:center;border-radius:8px;color:#fff;font-size:24px;font-weight:900}
+/* 品質光圈(金色加流動光) */
+#bnCB .bst-ring{position:absolute;left:calc(-42px*var(--sc,1));top:-12px;width:calc(84px*var(--sc,1));height:24px;border-radius:50%;border:3px solid var(--qc);box-shadow:0 0 10px var(--qc),inset 0 0 8px var(--qc);opacity:.85}
+#bnCB .bst-ring.gold{overflow:hidden}
+#bnCB .bst-ring.gold:before{content:"";position:absolute;left:50%;top:50%;width:140px;height:140px;margin:-70px 0 0 -70px;background:conic-gradient(transparent 0 70%,rgba(255,255,220,.95) 80%,transparent 90%);animation:bstSpin 1.8s linear infinite}
+#bnCB .bst-u.dead .bst-ring{opacity:.15}
+/* 大招準備:橘色脈動 */
+#bnCB .bst-u.prep .bst-ring{border-color:#ffb347;box-shadow:0 0 18px #ff9a2e,inset 0 0 12px #ff9a2e;animation:bstPulse .7s ease-in-out infinite alternate}
+/* 大招放大:原地 1.3 倍的感覺以高度與光暈表現(避開 inline transform) */
+#bnCB .bst-u.ult-big .bst-body{height:calc(159px*var(--sc,1))}
+#bnCB .bst-u.ult-big .bst-ring{box-shadow:0 0 26px var(--qc),inset 0 0 12px var(--qc)}
+#bnCB .bst-u.ult-big .bst-act:before{content:"";position:absolute;left:-90px;top:-150px;width:180px;height:200px;border-radius:50%;background:radial-gradient(ellipse at center,var(--qc) 0,transparent 70%);opacity:.45;z-index:-1}
+/* 帥旗:主將手持(旗桿在身體外側、蓋過身體,握手點在桿上;旗面朝外飄;高度、位置、旗面都乘 --sc) */
+#bnCB .bst-flag{position:absolute;left:calc(-42px*var(--sc,1));top:calc(-150px*var(--sc,1));width:5px;height:calc(150px*var(--sc,1));background:linear-gradient(90deg,#8a5a2b,#5a3b1d);border-radius:2px;box-shadow:0 0 0 1px #2a1a0e;z-index:2;transform-origin:bottom center;transition:transform .5s ease-in,height .2s,top .2s}
+#bnCB .bst-u.foe .bst-flag{left:calc(39px*var(--sc,1))}
+#bnCB .bst-flag:before{content:"";position:absolute;left:-4px;top:calc(62px*var(--sc,1));width:9px;height:9px;border-radius:50%;background:#f0c08a;border:2px solid var(--ink,#2a1a0e)}
+#bnCB .bst-flag span{position:absolute;top:0;right:5px;width:calc(26px*var(--sc,1));height:calc(34px*var(--sc,1));background:var(--fc);color:#fff;font-weight:900;font-size:calc(16px*var(--sc,1));display:flex;align-items:center;justify-content:center;clip-path:polygon(0 0,100% 0,100% 82%,50% 100%,0 82%);animation:bstWave 2.2s ease-in-out infinite}
+#bnCB .bst-u.foe .bst-flag span{right:auto;left:5px}
+#bnCB .bst-u.dead .bst-flag{transform:rotate(-80deg)}
+#bnCB .bst-u.foe.dead .bst-flag{transform:rotate(80deg)}
+#bnCB .bst-u.dead .bst-act{transition:transform .5s,opacity .5s!important;transform:translateY(8px) rotate(-8deg)!important;opacity:.35;filter:grayscale(1)}
+/* 名牌 */
+#bnCB .bst-plate{position:absolute;left:calc(-46px*var(--sc,1));top:calc(-38px - 122px*var(--sc,1));width:calc(92px*var(--sc,1));padding:2px 4px 3px;border:var(--line);border-left:6px solid var(--qc);border-radius:8px;font-size:12px;line-height:1.25;z-index:12}
+#bnCB .bst-plate b{display:block;font-weight:900;white-space:nowrap;overflow:hidden}
+#bnCB .bst-plate{transition:opacity .12s}
+#bnCB .bst-u.acting .bst-plate{opacity:0}   /* 出手者衝出去期間隱藏自己的名牌(含兵力條),回位恢復;大招放大時名牌 / 狀態字 / 帥旗不避讓 */
+#bnCB .bst-pos{float:right;font-size:10px;opacity:.7;font-weight:400;color:var(--ink)}
+#bnCB .bst-bar{height:8px;background:#5a3b1d;margin-top:2px;border:var(--line2);border-radius:4px;overflow:hidden}
+#bnCB .bst-bar i{display:block;height:100%;width:100%;transition:width .3s}
+#bnCB .bst-u.mine .bst-bar i{background:linear-gradient(90deg,#2d8fa0,#3fb4c9)}
+#bnCB .bst-u.foe .bst-bar i{background:linear-gradient(90deg,#a8382a,#e0553c)}
+#bnCB .bst-hpt{font-size:10px;font-weight:700;color:var(--ink);white-space:nowrap}
+/* 狀態字 */
+#bnCB .bst-tag{position:absolute;left:-75px;top:calc(-58px - 122px*var(--sc,1));width:150px;white-space:nowrap;text-align:center;font-size:12px;font-weight:700;color:#e6d6ff;text-shadow:0 0 4px #000,0 0 8px #000;z-index:13;opacity:0;transition:opacity .2s}
+#bnCB .bst-tag.on{opacity:1}
+/* 戰法名牌 */
+#bnCB .bst-skill{position:absolute;top:38px;z-index:30;padding:3px 16px 4px;font-size:18px;letter-spacing:4px;background:linear-gradient(#ef6a4c,var(--red));border:var(--line);border-radius:10px;box-shadow:var(--drop);white-space:nowrap;transform:translate(-50%,0) scale(.6);opacity:0;transition:transform .15s,opacity .15s;pointer-events:none}
+#bnCB .bst-skill.on{transform:translate(-50%,0) scale(1);opacity:1}
+/* 被動小圓牌 */
+#bnCB .bst-pas{position:absolute;top:205px;z-index:31;width:42px;height:42px;margin-left:-21px;border-radius:50%;background:var(--paper);border:var(--line);box-shadow:var(--drop2);color:var(--ink);font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;animation:bstPop .5s;pointer-events:none}
+/* 數字 */
+#bnCB .bst-num{position:absolute;top:150px;z-index:35;transform:translate(-50%,0);font-size:20px;line-height:1;animation:bstRise .9s ease-out forwards;pointer-events:none;white-space:nowrap}
+#bnCB .bst-num.crit{font-size:30px;color:#ffd84a}
+#bnCB .bst-num.heal{color:#6dff8e}
+/* 特效(黑底圖用 screen 疊) */
+#bnCB .bst-fx{position:absolute;z-index:25;pointer-events:none;mix-blend-mode:screen;transform:translate(-50%,-50%);animation:bstFxA .45s ease-out forwards}
+/* 大招中央演出 */
+#bnCB .bst-show{position:absolute;left:422px;top:340px;width:0;height:0;z-index:22;display:none}
+#bnCB .bst-show.foe img{transform:scaleX(-1)}
+#bnCB .bst-show img{position:absolute;bottom:0;left:-170px;width:340px;height:277px;object-fit:contain;object-position:bottom}
+#bnCB .bst-ultname{position:absolute;left:50%;top:70px;z-index:23;font-size:46px;font-weight:900;letter-spacing:14px;color:#fff3c4;text-shadow:0 0 12px #ffc940,0 0 30px #c87d00,3px 3px 0 #000;transform:translateX(-50%) translateX(-120px);opacity:0;transition:transform .3s,opacity .3s;white-space:nowrap}
+#bnCB .bst-ultname.on{transform:translateX(-50%);opacity:1}
+#bnCB .bst-ultline{position:absolute;left:50%;top:132px;z-index:23;font-size:17px;color:#fff;background:rgba(0,0,0,.55);padding:3px 14px;border-radius:2px;transform:translateX(-50%);opacity:0;transition:opacity .3s;white-space:nowrap}
+#bnCB .bst-ultline.on{opacity:1}
+#bnCB .bst-world.bst-quake{animation:bstQuake .35s}
+/* 回合木牌 */
+#bnCB .bst-round{position:absolute;left:8px;top:4px;z-index:50;min-width:84px;box-sizing:border-box;text-align:center;font-size:14px;letter-spacing:2px;padding:3px 14px;border-radius:16px;white-space:nowrap}
+#bnCB .bst-round.drop{animation:bstDrop .5s}
+/* 勝負 / 開鑼大字牌 */
+#bnCB .bst-banner{position:absolute;left:50%;top:150px;z-index:60;transform:translate(-50%,-50%) scale(.4);opacity:0;transition:transform .35s cubic-bezier(.3,1.6,.5,1),opacity .25s;text-align:center;pointer-events:none}
+#bnCB .bst-banner.on{transform:translate(-50%,-50%) scale(1);opacity:1}
+#bnCB .bst-banner b{display:inline-block;position:relative;z-index:0;padding:2px 34px 4px;font-size:38px;letter-spacing:10px;line-height:1.25;background:linear-gradient(#ef6a4c,var(--red));border:var(--line);border-radius:10px;box-shadow:var(--drop)}
+#bnCB .bst-banner b:before,#bnCB .bst-banner b:after{content:"";position:absolute;top:10px;width:26px;height:32px;background:#b3321c;border:var(--line2);z-index:-1}
+#bnCB .bst-banner b:before{left:-18px;clip-path:polygon(0 0,100% 0,100% 100%,0 100%,30% 50%)}
+#bnCB .bst-banner b:after{right:-18px;clip-path:polygon(0 0,100% 0,70% 50%,100% 100%,0 100%)}
+#bnCB .bst-banner.lose b,#bnCB .bst-banner.draw b{background:linear-gradient(#9a9a9a,#6b6b6b)}
+#bnCB .bst-banner.lose b:before,#bnCB .bst-banner.lose b:after,#bnCB .bst-banner.draw b:before,#bnCB .bst-banner.draw b:after{background:#4d4d4d}
+#bnCB .bst-banner div{margin-top:8px;font-size:13px;font-weight:900;color:#fff;text-shadow:0 2px 0 #000;white-space:nowrap}
+#bnCB .bst-endbtns{position:absolute;left:50%;top:262px;z-index:61;transform:translateX(-50%);display:none;white-space:nowrap}
+#bnCB .bst-endbtns button{margin:0 6px;min-height:36px}
+/* 頂列:左上回合徽章(.bst-round,在舞台層)、正中戰鬥名稱橫條、右上 44px「離」鈕;離開 → 變暗 + 確認視窗 → 確認再全黑淡出 */
+#bnCB .bst-top{position:absolute;left:0;top:0;width:100%;height:36px;z-index:70;pointer-events:none}
+#bnCB .bst-ttl{position:absolute;left:50%;top:3px;transform:translateX(-50%);max-width:340px;box-sizing:border-box;padding:2px 22px;height:28px;line-height:22px;border:var(--line);border-radius:8px;background:linear-gradient(#f6e6bf,#e4c88b);color:var(--ink);box-shadow:var(--drop2);font-size:15px;font-weight:900;letter-spacing:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#bnCB .bcb-exit{position:absolute;right:6px;top:2px;width:58px;height:58px;min-width:58px;min-height:58px;padding:0;border-radius:50%;pointer-events:auto;cursor:pointer;font:900 24px/1 var(--ld-font,inherit);color:var(--ink);border:var(--line);background:linear-gradient(#f6e6bf,#e4c88b);box-shadow:var(--drop2)}
+/* 倍速:底部右側三顆 58px 圓鈕(舞台縮放後實際 ≥44px;與離鈕同尺寸;左緣 650 > 戰報條右緣 514,不擠壓) */
+#bnCB .bst-spd{position:absolute;right:8px;bottom:2px;z-index:70;display:flex;align-items:center;gap:6px}
+#bnCB .bst-spd button{width:58px;height:58px;min-width:58px;min-height:58px;padding:0;border-radius:50%;font-size:20px;font-weight:900;letter-spacing:0}
+#bnCB .bst-spd button.on{color:var(--ink)}
+/* 離開確認:半透明遮罩 + 視窗(淡入淡出);確認後全黑層淡出;凍結期間動畫暫停 */
+#bnCB .bcb-dim,#bnCB .bcb-black{position:absolute;left:0;top:0;right:0;bottom:0;opacity:0;visibility:hidden;transition:opacity .25s,visibility 0s .25s}
+#bnCB .bcb-dim{z-index:80;background:rgba(10,6,10,.55)}
+#bnCB .bcb-black{z-index:95;background:#000;pointer-events:none}
+#bnCB .bcb-dlg{position:absolute;left:50%;top:50%;z-index:85;transform:translate(-50%,-50%);min-width:300px;box-sizing:border-box;padding:18px 22px;text-align:center;border:var(--line);border-radius:12px;background:linear-gradient(#f6e6bf,#e4c88b);color:var(--ink);box-shadow:var(--drop);opacity:0;visibility:hidden;transition:opacity .25s,visibility 0s .25s}
+#bnCB .bcb-dlg b{font-size:20px}
+#bnCB .bcb-db{display:flex;justify-content:center;gap:14px;margin-top:14px}
+#bnCB .bcb-db button{min-height:58px;min-width:110px;font-size:18px}
+#bnCB .bst-stage.bcb-ask .bcb-dim,#bnCB .bst-stage.bcb-ask .bcb-dlg{opacity:1;visibility:visible;transition:opacity .25s}
+#bnCB .bst-stage.bcb-out .bcb-black{opacity:1;visibility:visible;transition:opacity .33s}
+#bnCB .bst-stage.bcb-out .bcb-dlg{opacity:0;visibility:hidden}
+#bnCB .bst-stage.bst-paused *{animation-play-state:paused!important}
+/* 底部戰報條(寬約 3/5、可收合,收合 34px;展開 220px 往上拉出;定位在舞台內;右側留給倍速圓鈕) */
+#bnCB .bst-stage .bcb-log{position:absolute;left:8px;right:auto;width:506px;bottom:0;height:34px;margin:0;padding:0;border-radius:14px 14px 0 0;border-bottom:none;background:#2b1a10dd;z-index:48;flex:none;display:flex;flex-direction:column;overflow:hidden}
+#bnCB .bst-stage .bcb-log:not(.collapsed){height:220px;background:#2b1a10f2}
+#bnCB .bst-stage .bcb-lh{min-height:34px;padding:0 8px;gap:8px;flex:0 0 34px}
+#bnCB .bst-stage .bcb-log button{min-height:24px;min-width:0;padding:1px 10px;font-size:12px;flex:none}
+#bnCB .bst-stage .bcb-last{font-size:13px}
+#bnCB .bst-stage .bcb-ll{padding:0 12px 6px}
+#bnCB .bst-stage .bcb-ln[data-act="from"]{cursor:pointer;text-decoration:underline dotted}
+/* 直向:請將手機轉橫 */
+#bnCB .bst-rot{display:none;font-family:var(--ld-font)}
+@media (orientation:portrait) and (max-width:600px){
+  #bnCB .bst-stage{display:none}
+  #bnCB .bst-rot{display:flex;position:absolute;left:0;top:0;right:0;bottom:0;z-index:99;background:#120d12;color:#ffe9a8;align-items:center;justify-content:center;font-size:18px}
+}
+@keyframes bstFlash{0%{filter:brightness(3.2) saturate(0)}100%{filter:none}}
+@keyframes bstShake{0%,100%{margin-left:0}25%{margin-left:-6px}50%{margin-left:5px}75%{margin-left:-3px}}
+@keyframes bstSpin{to{transform:rotate(360deg)}}
+@keyframes bstPulse{to{transform:scale(1.12)}}
+@keyframes bstWave{50%{transform:skewY(4deg)}}
+@keyframes bstPop{0%{transform:scale(.3);opacity:0}40%{transform:scale(1.2);opacity:1}100%{transform:scale(1)}}
+@keyframes bstRise{0%{transform:translate(-50%,6px) scale(.6);opacity:0}15%{transform:translate(-50%,-6px) scale(1.15);opacity:1}100%{transform:translate(-50%,-48px) scale(1);opacity:0}}
+@keyframes bstFxA{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}25%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(1.25)}}
+@keyframes bstDrop{0%{transform:translateY(-50px)}70%{transform:translateY(5px)}100%{transform:translateY(0)}}
+@keyframes bstQuake{0%,100%{transform:translate(0,0)}20%{transform:translate(-6px,3px)}40%{transform:translate(5px,-4px)}60%{transform:translate(-4px,2px)}80%{transform:translate(3px,-2px)}}
+@media (prefers-reduced-motion:reduce){#bnCB .bst-num,#bnCB .bst-pas{animation:none}}

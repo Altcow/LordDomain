@@ -12,7 +12,7 @@ var CX = { pageFig: 20, pageSk: 30, srMax: 10, debounce: 150, catOrder: ['comman
 var CX_TABS = [['team', '配隊']];
 var CX_CAT = { command: '指揮', active: '主動', pursuit: '追擊', passive: '被動', ult: '大招' };
 var CX_SRC = { fig: '名人專屬', teach: '名人戰法・可傳承', generic: '通用戰法', ult: '兵種大招(路人)', bond: '專屬聯動' };
-var CX_ROW = ['前排', '中排', '後排'];
+var CX_POS = ['副將(前鋒)', '副將(中衛)', '主將'];   // 3 人制站位 row 0 / 1 / 2
 var CX_RACE = { elf: '精靈', dwarf: '矮人', kingdom: '王國' };
 var cx = { el: null, tool: null, list: null, ov: null, title: null, open: false, tab: 'team', stack: [], ovId: '', q: '', fac: -1, troop: '', gr: -1, own: '', skq: '', cat: '', src: '', tfac: -1,
   page: 0, timer: 0, idx: null, key: '', cards: {}, rec: null, msg: '', scroll: {} };
@@ -44,7 +44,7 @@ function cxIndex() {
   cxSrcFigs().forEach(function (f) {
     var fs = (typeof BN_FIG_SKILLS !== 'undefined') ? BN_FIG_SKILLS[f.id] : null, sk, it;
     if (!fs) return;
-    sk = [fs.passive].concat(Object.keys(bondSet).filter(function (k) { return bondSet[k] === f.id; })).concat(fs.skills || []).concat(fs.ult ? [fs.ult] : []).filter(function (k) { return k && typeof BN_SKILLS !== 'undefined' && BN_SKILLS[k]; });
+    sk = [fs.passive].concat(Object.keys(bondSet).filter(function (k) { return bondSet[k] === f.id; })).concat(fs.skills || []).concat(fs.ult ? [fs.ult] : []).concat((typeof BN_KIT_BY !== 'undefined' && BN_KIT_BY.figs && BN_KIT_BY.figs[f.id] && BN_KIT_BY.figs[f.id].legacy) ? [BN_KIT_BY.figs[f.id].legacy] : []).filter(function (k, i, a) { return k && typeof BN_SKILLS !== 'undefined' && BN_SKILLS[k] && a.indexOf(k) === i; });   // 2026-11-13 第一季:併入傳承(新配武將戰法池為空,固定 + 被動 + 傳承)
     it = { id: f.id, f: f, name: String(f.name), zi: f.zi && f.zi !== '新' ? String(f.zi) : '', fac: f.fac, gr: f.gr, troop: fs.troop, row: fs.row === '前' ? 0 : fs.row === '中' ? 1 : 2, sk: sk, race: f.race || '' };
     it.nn = cxNorm(it.name + it.zi); it.idn = cxNorm(f.id);
     figs.push(it); byId[f.id] = it;
@@ -53,7 +53,7 @@ function cxIndex() {
   if (typeof BN_SKILLS !== 'undefined') Object.keys(BN_SKILLS).forEach(function (k) {
     var d = BN_SKILLS[k], it;
     if (d.fig && !own[k]) return;              // 他世界名人的戰法不列
-    if (!d.fig && !d.generic && !ultBy[k]) return;
+    if (!d.fig && !d.generic && !ultBy[k] && !own[k]) return;   // own[k]:被名人當固定 / 被動 / 傳承用的通用戰法(2026-11-13 第一季借用)
     it = { id: k, d: d, name: String(d.name), cat: d.cat, src: cxSkSrc(d, ultBy, bondSet), owners: own[k] || [], troops: ultBy[k] || [], nn: cxNorm(d.name) };
     skills.push(it); skById[k] = it;
     if (d.vs && d.vs.fig && own[k]) d.vs.fig.forEach(function (t) { (vsBy[t] = vsBy[t] || []).push({ sk: k, by: own[k][0] }); });
@@ -260,7 +260,7 @@ function cxSkillsOfEntry(e, troop) {
 function cxIsSupport(rows) {
   return rows.some(function (r) { var d = BN_SKILLS[r.id], ex = ((d.params || {}).extra || []).map(function (x) { return x.kind; }); return /^(heal_|revive|cleanse|shield_)/.test(d.kind) || ex.some(function (k) { return /^(heal_|shield_)/.test(k); }); });
 }
-// 依目前名冊挑 5 人:前排盾 / 槍 2 人、1 位治療或護盾輔助、後排弓 / 謀 2 人;同陣營(3 人以上有加成)與羈絆優先。回 {picks:[{e,troop,row,col,why}], fac, reasons, slots}
+// 依目前名冊挑 3 人(主將 + 2 副將):盾 / 槍 1 人、治療或護盾輔助 1 人、弓 / 謀 1 人,盾 / 槍副將守前鋒(row 0)、其餘戰力最高者當主將(主將 row 2)、另一位中衛(row 1);同陣營(3 人有加成)與羈絆優先。回 {picks:[{e,troop,row,col,why}], fac, reasons, slots}
 function cxRecommend() {
   var cs = (typeof cardsGet === 'function') ? cardsGet() : null, list, facSum = {}, best = -1, bestV = 0, picks = [], used = {}, reasons = [], specs, bondNames = [];
   list = ((cs && cs.roster) || []).map(function (e) {
@@ -271,7 +271,7 @@ function cxRecommend() {
   }).filter(function (x) { return x.sp; });
   if (!list.length) return { picks: [], fac: -1, reasons: ['卡包還沒有可上陣的人。'], slots: [] };
   list.forEach(function (x) { var f = x.e.fac; if (f === 4 || f === undefined) return; (facSum[f] = facSum[f] || []).push(x.pw); });
-  Object.keys(facSum).forEach(function (f) { var a = facSum[f].sort(function (p, q) { return q - p; }); if (a.length >= 3) { var v = a.slice(0, 5).reduce(function (s, n) { return s + n; }, 0) * (1 + 0.02 * Math.min(5, a.length)); if (v > bestV) { bestV = v; best = +f; } } });
+  Object.keys(facSum).forEach(function (f) { var a = facSum[f].sort(function (p, q) { return q - p; }); if (a.length >= 3) { var v = a.slice(0, 3).reduce(function (s, n) { return s + n; }, 0) * (1 + 0.02 * Math.min(3, a.length)); if (v > bestV) { bestV = v; best = +f; } } });
   function sc(x) {
     var s = x.pw * (best >= 0 && x.e.fac === best ? 1.15 : 1), k;
     for (k = 0; k < picks.length; k++) if (x.e.fig && picks[k].e.fig && cxBondPair(x.e.fig, picks[k].e.fig)) s *= 1.08;
@@ -279,23 +279,27 @@ function cxRecommend() {
   }
   function take(pred, why) {
     var c = list.filter(function (x) { return !used[x.e.id] && pred(x); }).sort(function (a, b) { return sc(b) - sc(a); })[0];
-    if (!c || picks.length >= 5) return false;
-    used[c.e.id] = 1; picks.push({ e: c.e, troop: c.troop, sp: c.sp, why: why });
+    if (!c || picks.length >= 3) return false;
+    used[c.e.id] = 1; picks.push({ e: c.e, troop: c.troop, sp: c.sp, pw: c.pw, why: why });
     return true;
   }
-  take(function (x) { return x.troop === '盾' || x.troop === '槍'; }, '前排擋傷害(' + '盾 / 槍兵)');
-  take(function (x) { return x.troop === '盾' || x.troop === '槍'; }, '前排擋傷害(盾 / 槍兵)');
+  take(function (x) { return x.troop === '盾' || x.troop === '槍'; }, '守前鋒擋傷害(盾 / 槍兵)');
   take(function (x) { return x.sup; }, '帶治療或護盾,讓隊伍撐得久');
-  take(function (x) { return x.troop === '弓' || x.troop === '謀'; }, '後排輸出(弓 / 謀)');
-  take(function (x) { return x.troop === '弓' || x.troop === '謀'; }, '後排輸出(弓 / 謀)');
-  while (picks.length < 5 && take(function () { return true; }, '戰力高,補滿隊伍')) { /* 補滿 */ }
-  specs = picks.map(function (p) { return p.sp; });
-  if (typeof bnAutoLayout === 'function') bnAutoLayout(specs, null);
-  picks.forEach(function (p) { p.row = p.sp.row; p.col = p.sp.col; delete p.sp; });
+  take(function (x) { return x.troop === '弓' || x.troop === '謀'; }, '後方輸出(弓 / 謀)');
+  while (picks.length < 3 && take(function () { return true; }, '戰力高,補滿隊伍')) { /* 補滿 */ }
+  // 站位:盾 / 槍兵(先挑到的那位)守前鋒(row 0),其餘戰力最高者當主將(主將 row 2),剩下中衛(row 1);無盾槍則戰力最高者當主將
+  if (picks.length > 1) {
+    var front = null, k2, rest;
+    for (k2 = 0; k2 < picks.length; k2++) if (picks[k2].troop === '盾' || picks[k2].troop === '槍') { front = picks[k2]; break; }
+    rest = picks.filter(function (x) { return x !== front; }).sort(function (a, b) { return b.pw - a.pw; });
+    picks = (front ? [rest[0], front] : [rest[0]]).concat(rest.slice(1));
+    picks[0].row = 2; picks[1].row = 0; if (picks[2]) picks[2].row = 1;
+  } else if (picks.length) picks[0].row = 2;
+  picks.forEach(function (p) { p.col = 0; delete p.sp; delete p.pw; });
   if (best >= 0) {
     var n = picks.filter(function (p) { return p.e.fac === best; }).length;
     reasons.push(n >= 3 ? '同為' + cxFacName(best) + ' ' + n + ' 人:觸發陣營加成(' + cxFacBonusTxt(n) + ')。' : '卡包中' + cxFacName(best) + '人數最多,可再補同陣營的人觸發加成。');
-  } else reasons.push('卡包中沒有 3 位以上同陣營(中立不算),以戰力與定位為主。');
+  } else reasons.push('卡包中沒有 3 位同陣營(中立不算),以戰力與定位為主。');
   if (!picks.some(function (p) { return list.some(function (x) { return x.e.id === p.e.id && x.sup; }); })) reasons.push('卡包沒有會治療 / 護盾的人,建議抽一位補上(看「戰法」分頁搜尋「回復」)。');
   if (typeof BN_BONDS !== 'undefined') BN_BONDS.special.forEach(function (b) { var c = picks.filter(function (p) { return p.e.fig && b.members.indexOf(p.e.fig) >= 0; }).length; if (c >= b.need) bondNames.push(b.name); });
   if (bondNames.length) reasons.push('觸發羈絆:' + bondNames.join('、') + '。');
@@ -339,12 +343,11 @@ function cxRulesHtml() {
   Object.keys(B.fac).forEach(function (n) { fac.push(n + ' 人:' + cxFacBonusTxt(+n)); });
   Object.keys(B.tag).forEach(function (t) { tag.push(t); });
   h += '<details class="cx-rules" open><summary>基本原則(先看這裡)</summary>';
-  h += '<div class="cx-l"><b class="cx-k">站位</b>前排(盾、槍)最先被打,要放兵力高、防禦好的人;中排適合騎兵,速度快能先出手;後排(弓、謀)打得遠但不耐打,放輸出與治療。弓兵站後排時受到近戰普攻傷害 −' + cxPct(1 - D.archerBackTaken) + '。</div>';
+  h += '<div class="cx-l"><b class="cx-k">站位</b>一隊 3 人:主將守後方,副將一在中衛、副將二在前鋒,前鋒最先被打,適合兵力高、防禦好的盾 / 槍兵;弓、謀打得遠但不耐打,放中衛或主將。弓兵站後方時受到近戰普攻傷害 −' + cxPct(1 - D.archerBackTaken) + '。</div>';
   h += '<div class="cx-l"><b class="cx-k">兵種相剋</b>' + prey.join(';') + '。' + (preyRows ? '<br>' + preyRows + '<br>' : '') + '騎兵每場第一次普攻 ×' + D.cavCharge + ';謀士主動戰法發動率 +' + cxPct(D.mageRateBonus) + '。</div>';
   h += '<div class="cx-l"><b class="cx-k">治療與禁療</b>單次治療最多回復兵力上限的 ' + cxPct(D.healCap.single) + ';敵人的「禁療」會讓治療變少。第 ' + D.fatigue.start + ' 回合起雙方疲兵:每回合受到傷害 +' + cxPct(D.fatigue.dmg) + '、受到治療 −' + cxPct(D.fatigue.heal) + ',所以隊伍至少帶 1 位治療或護盾。</div>';
   h += '<div class="cx-l"><b class="cx-k">陣營加成</b>同一陣營上陣 ' + fac.join(';') + '(取人數最多的陣營;中立不計,加成上限 攻擊 ' + cxPct((B.cap || D.bondCap).atk) + '、兵力 ' + cxPct((B.cap || D.bondCap).hp) + ')。</div>';
   h += '<div class="cx-l"><b class="cx-k">職業羈絆</b>主職業同標籤 2 人生效:' + tag.join('、') + '(例如 2 位醫者 → 治療 +' + cxPct((B.tag['醫者'] || {}).heal || 0) + ')。</div>';
-  h += '<div class="cx-l"><b class="cx-k">陣型</b>前排 3 人以上「鋒矢」前排攻擊 +' + cxPct(D.formation.fengshi) + ';前排 2 + 中排 1「圓陣」全隊防禦 +' + cxPct(D.formation.yuanzhen) + ';後排 2 人以上「雁行」後排攻擊 +' + cxPct(D.formation.yanxing) + '。</div>';
   sp = B.special.filter(function (b) { return b.members.every(function (m) { return !!cxIndex().byId[m]; }); });   // 只列目前世界的人
   if (sp.length) h += '<div class="cx-l"><b class="cx-k">名人組合</b>' + sp.map(function (b) { return b.name + '(' + b.members.map(function (m) { return (CARD_FIG_BY_ID[m] || {}).name || m; }).join('、') + ',' + b.need + ' 人)'; }).join(';') + '。另外很多名人有自己的羈絆,在「武將」頁的「羈絆」欄可看到夥伴。</div>';
   if (typeof BN_COMBOS !== 'undefined' && BN_COMBOS.reactions) h += '<details class="cx-rx"><summary>組合技(' + BN_COMBOS.reactions.length + ' 種,先上狀態再打會觸發)</summary>' + BN_COMBOS.reactions.map(function (x) { return '<div class="cx-l">' + cxEsc(cxRxTxt(x)) + '</div>'; }).join('') + '</details>';
@@ -354,8 +357,8 @@ function cxTeamHtml(t) {
   var o = cxTeamOwn(t), h;
   h = '<div class="cx-team"><div class="cx-th"><b>' + cxEsc(t.name) + '</b><span class="cx-own' + (o.roster >= o.n ? ' on' : '') + '">我已擁有 ' + o.own + '/' + o.n + '</span></div>';
   h += '<div class="cx-l cx-dim">' + cxEsc(t.role) + '</div><div class="cx-slots">';
-  t.slots.forEach(function (s) {
-    h += '<div class="cx-slot"><small>' + CX_ROW[s.row] + '・' + cxEsc(s.troop) + '</small>' + cxFigLink(s.fig) + (s.alt && s.alt.length ? '<small>替代:' + s.alt.map(cxFigLink).join('、') + '</small>' : '') + '</div>';
+  t.slots.slice().sort(function (a, b) { return b.row - a.row; }).forEach(function (s) {
+    h += '<div class="cx-slot"><small>' + CX_POS[s.row] + '・' + cxEsc(s.troop) + '</small>' + cxFigLink(s.fig) + (s.alt && s.alt.length ? '<small>替代:' + s.alt.map(cxFigLink).join('、') + '</small>' : '') + '</div>';
   });
   h += '</div><div class="cx-l">' + cxEsc(t.why) + '</div>';
   if (t.bonds && t.bonds.length) h += '<div class="cx-l"><b class="cx-k">羈絆</b>' + cxEsc(t.bonds.join('、')) + '</div>';
@@ -368,7 +371,7 @@ function cxRecHtml() {
   if (!r) return '';
   h = '<div class="cx-team cx-rec"><div class="cx-th"><b>依我的卡包推薦</b></div>';
   if (!r.picks.length) return h + '<div class="cx-l">' + cxEsc(r.reasons.join('')) + '</div></div>';
-  h += '<div class="cx-slots">' + r.picks.map(function (p) { return '<div class="cx-slot"><small>' + CX_ROW[p.row] + '・' + cxEsc(p.troop) + '</small><b>' + cxEsc(p.e.name) + '</b><small>' + cxEsc(p.why) + '</small></div>'; }).join('') + '</div>';
+  h += '<div class="cx-slots">' + r.picks.map(function (p) { return '<div class="cx-slot"><small>' + CX_POS[p.row] + '・' + cxEsc(p.troop) + '</small><b>' + cxEsc(p.e.name) + '</b><small>' + cxEsc(p.why) + '</small></div>'; }).join('') + '</div>';
   h += r.reasons.map(function (s) { return '<div class="cx-l">' + cxEsc(s) + '</div>'; }).join('');
   return h + '<div class="cx-l"><button type="button" data-cx="applyrec">一鍵套用到布陣</button></div></div>';
 }

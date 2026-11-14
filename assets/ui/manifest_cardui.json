@@ -1,0 +1,664 @@
+{
+ "files": {
+  "nav_march": {
+   "kind": "icon",
+   "src": "sheet01b_navicons_redo.webp",
+   "cell": 1,
+   "w": 128,
+   "h": 128,
+   "bytes": 5322
+  },
+  "nav_team": {
+   "kind": "icon",
+   "src": "sheet01b_navicons_redo.webp",
+   "cell": 2,
+   "w": 128,
+   "h": 128,
+   "bytes": 6008
+  },
+  "nav_pack": {
+   "kind": "icon",
+   "src": "sheet01b_navicons_redo.webp",
+   "cell": 3,
+   "w": 128,
+   "h": 128,
+   "bytes": 9004
+  },
+  "nav_draw": {
+   "kind": "icon",
+   "src": "sheet01b_navicons_redo.webp",
+   "cell": 4,
+   "w": 128,
+   "h": 128,
+   "bytes": 5752
+  },
+  "nav_event": {
+   "kind": "icon",
+   "src": "sheet01b_navicons_redo.webp",
+   "cell": 5,
+   "w": 128,
+   "h": 128,
+   "bytes": 5732
+  },
+  "nav_more": {
+   "kind": "icon",
+   "src": "sheet01b_navicons_redo.webp",
+   "cell": 6,
+   "w": 128,
+   "h": 128,
+   "bytes": 4640
+  },
+  "short_field": {
+   "kind": "icon",
+   "src": "sheet02_shortcuts.webp",
+   "cell": 1,
+   "w": 128,
+   "h": 128,
+   "bytes": 6466
+  },
+  "short_arena": {
+   "kind": "icon",
+   "src": "sheet02_shortcuts.webp",
+   "cell": 2,
+   "w": 128,
+   "h": 128,
+   "bytes": 6332
+  },
+  "short_tower": {
+   "kind": "icon",
+   "src": "sheet02_shortcuts.webp",
+   "cell": 3,
+   "w": 128,
+   "h": 128,
+   "bytes": 9032
+  },
+  "short_quest": {
+   "kind": "icon",
+   "src": "sheet02_shortcuts.webp",
+   "cell": 4,
+   "w": 128,
+   "h": 128,
+   "bytes": 6096
+  },
+  "short_mail": {
+   "kind": "icon",
+   "src": "sheet02_shortcuts.webp",
+   "cell": 5,
+   "w": 128,
+   "h": 128,
+   "bytes": 5542
+  },
+  "short_settings": {
+   "kind": "icon",
+   "src": "sheet02_shortcuts.webp",
+   "cell": 6,
+   "w": 128,
+   "h": 128,
+   "bytes": 4676
+  },
+  "item_newbie_pack": {
+   "kind": "icon",
+   "src": "sheet03_items.webp",
+   "cell": 1,
+   "w": 128,
+   "h": 128,
+   "bytes": 6338
+  },
+  "item_quest_token": {
+   "kind": "icon",
+   "src": "sheet03_items.webp",
+   "cell": 2,
+   "w": 128,
+   "h": 128,
+   "bytes": 6322
+  },
+  "item_event_ticket": {
+   "kind": "icon",
+   "src": "sheet03_items.webp",
+   "cell": 3,
+   "w": 128,
+   "h": 128,
+   "bytes": 5506
+  },
+  "item_supply_pack": {
+   "kind": "icon",
+   "src": "sheet03_items.webp",
+   "cell": 4,
+   "w": 128,
+   "h": 128,
+   "bytes": 6630
+  },
+  "item_forge_charm": {
+   "kind": "icon",
+   "src": "sheet03_items.webp",
+   "cell": 5,
+   "w": 128,
+   "h": 128,
+   "bytes": 6028
+  },
+  "item_pass": {
+   "kind": "icon",
+   "src": "sheet03_items.webp",
+   "cell": 6,
+   "w": 128,
+   "h": 128,
+   "bytes": 5938
+  },
+  "pp_spear_1": {
+   "kind": "portrait",
+   "troop": "spear",
+   "src": "sheet04_spear_v2.webp",
+   "cell": 1,
+   "w": 265,
+   "h": 360,
+   "bytes": 25976
+  },
+  "pp_spear_2": {
+   "kind": "portrait",
+   "troop": "spear",
+   "src": "sheet04_spear_v2.webp",
+   "cell": 2,
+   "w": 197,
+   "h": 360,
+   "bytes": 22996
+  },
+  "pp_spear_3": {
+   "kind": "portrait",
+   "troop": "spear",
+   "src": "sheet04_spear_v2.webp",
+   "cell": 3,
+   "w": 188,
+   "h": 360,
+   "bytes": 23646
+  },
+  "pp_spear_4": {
+   "kind": "portrait",
+   "troop": "spear",
+   "src": "sheet04_spear_v2.webp",
+   "cell": 4,
+   "w": 221,
+   "h": 360,
+   "bytes": 27458
+  },
+  "pp_spear_5": {
+   "kind": "portrait",
+   "troop": "spear",
+   "src": "sheet04_spear_v2.webp",
+   "cell": 5,
+   "w": 201,
+   "h": 360,
+   "bytes": 27212
+  },
+  "pp_spear_6": {
+   "kind": "portrait",
+   "troop": "spear",
+   "src": "sheet04_spear_v2.webp",
+   "cell": 6,
+   "w": 224,
+   "h": 360,
+   "bytes": 26580
+  },
+  "pp_cav_1": {
+   "kind": "portrait",
+   "troop": "cav",
+   "src": "sheet05_cav.webp",
+   "cell": 1,
+   "w": 228,
+   "h": 360,
+   "bytes": 27132
+  },
+  "pp_cav_2": {
+   "kind": "portrait",
+   "troop": "cav",
+   "src": "sheet05_cav.webp",
+   "cell": 2,
+   "w": 246,
+   "h": 360,
+   "bytes": 27424
+  },
+  "pp_cav_3": {
+   "kind": "portrait",
+   "troop": "cav",
+   "src": "sheet05_cav.webp",
+   "cell": 3,
+   "w": 222,
+   "h": 360,
+   "bytes": 29240
+  },
+  "pp_cav_4": {
+   "kind": "portrait",
+   "troop": "cav",
+   "src": "sheet05_cav.webp",
+   "cell": 4,
+   "w": 243,
+   "h": 360,
+   "bytes": 29280
+  },
+  "pp_cav_5": {
+   "kind": "portrait",
+   "troop": "cav",
+   "src": "sheet05_cav.webp",
+   "cell": 5,
+   "w": 235,
+   "h": 360,
+   "bytes": 28874
+  },
+  "pp_cav_6": {
+   "kind": "portrait",
+   "troop": "cav",
+   "src": "sheet05_cav.webp",
+   "cell": 6,
+   "w": 230,
+   "h": 360,
+   "bytes": 30146
+  },
+  "pp_shield_1": {
+   "kind": "portrait",
+   "troop": "shield",
+   "src": "sheet06_shield.webp",
+   "cell": 1,
+   "w": 232,
+   "h": 360,
+   "bytes": 23138
+  },
+  "pp_shield_2": {
+   "kind": "portrait",
+   "troop": "shield",
+   "src": "sheet06_shield.webp",
+   "cell": 2,
+   "w": 232,
+   "h": 360,
+   "bytes": 24428
+  },
+  "pp_shield_3": {
+   "kind": "portrait",
+   "troop": "shield",
+   "src": "sheet06_shield.webp",
+   "cell": 3,
+   "w": 219,
+   "h": 360,
+   "bytes": 24230
+  },
+  "pp_shield_4": {
+   "kind": "portrait",
+   "troop": "shield",
+   "src": "sheet06_shield.webp",
+   "cell": 4,
+   "w": 253,
+   "h": 360,
+   "bytes": 21866
+  },
+  "pp_shield_5": {
+   "kind": "portrait",
+   "troop": "shield",
+   "src": "sheet06_shield.webp",
+   "cell": 5,
+   "w": 216,
+   "h": 360,
+   "bytes": 24044
+  },
+  "pp_shield_6": {
+   "kind": "portrait",
+   "troop": "shield",
+   "src": "sheet06_shield.webp",
+   "cell": 6,
+   "w": 230,
+   "h": 360,
+   "bytes": 24384
+  },
+  "pp_bow_1": {
+   "kind": "portrait",
+   "troop": "bow",
+   "src": "sheet07_bow.webp",
+   "cell": 1,
+   "w": 220,
+   "h": 360,
+   "bytes": 27272
+  },
+  "pp_bow_2": {
+   "kind": "portrait",
+   "troop": "bow",
+   "src": "sheet07_bow.webp",
+   "cell": 2,
+   "w": 231,
+   "h": 360,
+   "bytes": 27356
+  },
+  "pp_bow_3": {
+   "kind": "portrait",
+   "troop": "bow",
+   "src": "sheet07_bow.webp",
+   "cell": 3,
+   "w": 231,
+   "h": 360,
+   "bytes": 29454
+  },
+  "pp_bow_4": {
+   "kind": "portrait",
+   "troop": "bow",
+   "src": "sheet07_bow.webp",
+   "cell": 4,
+   "w": 219,
+   "h": 360,
+   "bytes": 29080
+  },
+  "pp_bow_5": {
+   "kind": "portrait",
+   "troop": "bow",
+   "src": "sheet07_bow.webp",
+   "cell": 5,
+   "w": 242,
+   "h": 360,
+   "bytes": 27524
+  },
+  "pp_bow_6": {
+   "kind": "portrait",
+   "troop": "bow",
+   "src": "sheet07_bow.webp",
+   "cell": 6,
+   "w": 236,
+   "h": 360,
+   "bytes": 27738
+  },
+  "pp_strat_1": {
+   "kind": "portrait",
+   "troop": "strat",
+   "src": "sheet08_strat.webp",
+   "cell": 1,
+   "w": 188,
+   "h": 360,
+   "bytes": 23360
+  },
+  "pp_strat_2": {
+   "kind": "portrait",
+   "troop": "strat",
+   "src": "sheet08_strat.webp",
+   "cell": 2,
+   "w": 175,
+   "h": 360,
+   "bytes": 21420
+  },
+  "pp_strat_3": {
+   "kind": "portrait",
+   "troop": "strat",
+   "src": "sheet08_strat.webp",
+   "cell": 3,
+   "w": 216,
+   "h": 360,
+   "bytes": 24722
+  },
+  "pp_strat_4": {
+   "kind": "portrait",
+   "troop": "strat",
+   "src": "sheet08_strat.webp",
+   "cell": 4,
+   "w": 202,
+   "h": 360,
+   "bytes": 26752
+  },
+  "pp_strat_5": {
+   "kind": "portrait",
+   "troop": "strat",
+   "src": "sheet08_strat.webp",
+   "cell": 5,
+   "w": 173,
+   "h": 360,
+   "bytes": 19674
+  },
+  "pp_strat_6": {
+   "kind": "portrait",
+   "troop": "strat",
+   "src": "sheet08_strat.webp",
+   "cell": 6,
+   "w": 168,
+   "h": 360,
+   "bytes": 23182
+  },
+  "bg_stage_land": {
+   "kind": "bg",
+   "src": "sheet10_bg_land_clean.webp",
+   "w": 1280,
+   "h": 720,
+   "bytes": 118852
+  },
+  "bg_stage_port": {
+   "kind": "bg",
+   "src": "sheet10_bg_port.webp",
+   "w": 720,
+   "h": 1280,
+   "bytes": 104596
+  },
+  "bigmap": {
+   "kind": "bg",
+   "src": "sheet11_bigmap.webp",
+   "w": 1448,
+   "h": 1086,
+   "bytes": 254210
+  }
+ },
+ "troops": {
+  "spear": {
+   "label": "槍兵",
+   "ids": [
+    "pp_spear_1",
+    "pp_spear_2",
+    "pp_spear_3",
+    "pp_spear_4",
+    "pp_spear_5",
+    "pp_spear_6"
+   ],
+   "foot": [
+    [
+     0.615,
+     0.994
+    ],
+    [
+     0.619,
+     0.994
+    ],
+    [
+     0.722,
+     0.992
+    ],
+    [
+     0.715,
+     0.994
+    ],
+    [
+     0.785,
+     0.994
+    ],
+    [
+     0.736,
+     0.994
+    ]
+   ]
+  },
+  "cav": {
+   "label": "騎兵",
+   "ids": [
+    "pp_cav_1",
+    "pp_cav_2",
+    "pp_cav_3",
+    "pp_cav_4",
+    "pp_cav_5",
+    "pp_cav_6"
+   ],
+   "foot": [
+    [
+     0.5,
+     0.994
+    ],
+    [
+     0.483,
+     0.992
+    ],
+    [
+     0.462,
+     0.994
+    ],
+    [
+     0.438,
+     0.994
+    ],
+    [
+     0.471,
+     0.994
+    ],
+    [
+     0.461,
+     0.994
+    ]
+   ]
+  },
+  "shield": {
+   "label": "盾兵",
+   "ids": [
+    "pp_shield_1",
+    "pp_shield_2",
+    "pp_shield_3",
+    "pp_shield_4",
+    "pp_shield_5",
+    "pp_shield_6"
+   ],
+   "foot": [
+    [
+     0.683,
+     0.994
+    ],
+    [
+     0.626,
+     0.992
+    ],
+    [
+     0.709,
+     0.994
+    ],
+    [
+     0.629,
+     0.994
+    ],
+    [
+     0.75,
+     0.994
+    ],
+    [
+     0.772,
+     0.994
+    ]
+   ]
+  },
+  "bow": {
+   "label": "弓兵",
+   "ids": [
+    "pp_bow_1",
+    "pp_bow_2",
+    "pp_bow_3",
+    "pp_bow_4",
+    "pp_bow_5",
+    "pp_bow_6"
+   ],
+   "foot": [
+    [
+     0.586,
+     0.994
+    ],
+    [
+     0.562,
+     0.994
+    ],
+    [
+     0.656,
+     0.994
+    ],
+    [
+     0.668,
+     0.994
+    ],
+    [
+     0.637,
+     0.994
+    ],
+    [
+     0.576,
+     0.992
+    ]
+   ]
+  },
+  "strat": {
+   "label": "謀士",
+   "ids": [
+    "pp_strat_1",
+    "pp_strat_2",
+    "pp_strat_3",
+    "pp_strat_4",
+    "pp_strat_5",
+    "pp_strat_6"
+   ],
+   "foot": [
+    [
+     0.599,
+     0.994
+    ],
+    [
+     0.602,
+     0.994
+    ],
+    [
+     0.534,
+     0.994
+    ],
+    [
+     0.516,
+     0.994
+    ],
+    [
+     0.607,
+     0.994
+    ],
+    [
+     0.593,
+     0.994
+    ]
+   ]
+  }
+ },
+ "warnings": [
+  "sheet01b_navicons_redo.webp#2(nav_team): 貼近格緣(距邊 16px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet01b_navicons_redo.webp#4(nav_draw): 貼近格緣(距邊 15px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet01b_navicons_redo.webp#5(nav_event): 貼近格緣(距邊 14px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet02_shortcuts.webp#1(short_field): 內容越過格線(與鄰格相連或被切,請目視)",
+  "sheet02_shortcuts.webp#1(short_field): 貼近格緣(距邊 -8px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet02_shortcuts.webp#2(short_arena): 貼近格緣(距邊 14px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet02_shortcuts.webp#3(short_tower): 貼近格緣(距邊 14px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet02_shortcuts.webp#4(short_quest): 貼近格緣(距邊 15px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet02_shortcuts.webp#5(short_mail): 貼近格緣(距邊 15px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet02_shortcuts.webp#6(short_settings): 貼近格緣(距邊 14px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet03_items.webp#1(item_newbie_pack): 貼近格緣(距邊 16px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet03_items.webp#2(item_quest_token): 貼近格緣(距邊 16px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet03_items.webp#3(item_event_ticket): 貼近格緣(距邊 16px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet03_items.webp#4(item_supply_pack): 貼近格緣(距邊 16px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet03_items.webp#5(item_forge_charm): 貼近格緣(距邊 16px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet03_items.webp#6(item_pass): 貼近格緣(距邊 15px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet04_spear_v2.webp#1(pp_spear_1): 貼近格緣(距邊 3px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet04_spear_v2.webp#4(pp_spear_4): 貼近格緣(距邊 7px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet04_spear_v2.webp#5(pp_spear_5): 貼近格緣(距邊 12px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet05_cav.webp#1(pp_cav_1): 貼近格緣(距邊 21px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet05_cav.webp#2(pp_cav_2): 貼近格緣(距邊 12px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet05_cav.webp#3(pp_cav_3): 貼近格緣(距邊 20px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet05_cav.webp#4(pp_cav_4): 貼近格緣(距邊 9px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet05_cav.webp#5(pp_cav_5): 貼近格緣(距邊 1px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet05_cav.webp#6(pp_cav_6): 貼近格緣(距邊 16px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet06_shield.webp#1(pp_shield_1): 貼近格緣(距邊 12px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet06_shield.webp#2(pp_shield_2): 貼近格緣(距邊 6px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet06_shield.webp#3(pp_shield_3): 貼近格緣(距邊 21px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet06_shield.webp#4(pp_shield_4): 內容越過格線(與鄰格相連或被切,請目視)",
+  "sheet06_shield.webp#4(pp_shield_4): 貼近格緣(距邊 -2px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet07_bow.webp#5(pp_bow_5): 貼近格緣(距邊 15px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet07_bow.webp#6(pp_bow_6): 貼近格緣(距邊 6px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet08_strat.webp#5(pp_strat_5): 貼近格緣(距邊 18px,4% 邊距 17/25px,未切到,請目視)",
+  "sheet08_strat.webp#6(pp_strat_6): 貼近格緣(距邊 16px,4% 邊距 17/25px,未切到,請目視)"
+ ],
+ "total_bytes": 1572830,
+ "budget_bytes": 4194304
+}

@@ -3,6 +3,7 @@
 // 2026-11-09 再改『抽卡次數制』:全域次數錢包 cs.pl = {n 可抽次數, t 下次補充時間戳, tot 累計抽數}(酒館 / 縣試池共用),依 CARD_DRAW 階梯每 8~24 小時 +10 抽(離線補算),累積上限 CARD_DRAW.cap;單抽 / 連抽走 cardsPullStage;頭目首通贈抽 cardsBossGive(cs.boss 防重領);cs.v 3。
 // 2026-11-11(v59):指名池 G / 指名券 nameTokens / 指名批次已刪除;卡池為小池 T(最高紫)與大池 E(可出金);次數錢包拆成 cs.pl.T / cs.pl.E(各自 n / t / tot,各上限 CARD_DRAW.cap);
 //   新手禮包(道具,CARD_GIFT 2000 抽)由 cardsGiftCheck 發放(cardsGet 內觸發,不需領取),到道具頁籤使用才入大池;舊存檔 cs.v < 6 的單一錢包 pl.n 併入大池、tot 兩池共用起點。
+//   2026-11-13(cs.v 8):只留 S01卡池(E);小池 T 休眠(CARD_HIDDEN_VENUES:不累積、cardsPulls 恆 0、不可開批),T 剩餘抽數併入 E;名人只抽 CARD_S01_FIGS(CARD_S01_ONLY)。
 // 純資料邏輯,不寫 DOM;時間一律由呼叫端傳入 now(毫秒),模擬層不讀 Date.now()。資料表在 js/carddata.js,介面在 js/cardsui.js。
 // 存檔:world.city.cards(goods.js goodsNormCity 帶過 cardsNormSave);名冊 roster 即派工用的 world.city.talents(同一批物件,不可列舉,不重複存檔)。
 // 第一階段刻意未做:名冊人物/小兵卡/人物圈、取捨詞條 §4.4A、戰場技能內容(只記數量 skn)、記名簿、快速模式、文鬥小遊戲(星數固定 1)、結義。
@@ -49,7 +50,7 @@ function cardWPick(r, items, wf) {
 function cardsStateNew(seed) {
   var s = (typeof seed === 'number' && isFinite(seed)) ? (seed >>> 0) : ((Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0);
   return {
-    v: 6, pl: { T: { n: 0, t: 0, tot: 0 }, E: { n: 0, t: 0, tot: 0 } }, boss: {}, seed: s, seq: 0, shards: 0, dr: {},
+    v: 8, pl: { T: { n: 0, t: 0, tot: 0 }, E: { n: 0, t: 0, tot: 0 } }, boss: {}, seed: s, seq: 0, shards: 0, dr: {},
     clock: { maxSeen: 0 }, tokenGiven: {}, last: { T: -1, E: -1 }, acc: { T: [], E: [] }, cur: { T: null, E: null },
     pity: { T: 0, E: 0 }, fame: { E: 0 }, stars: { E: 1 }, roster: [], wait: [], wander: [], lastRel: null, starter: { done: 0 }
   };
@@ -107,7 +108,7 @@ function cardsMigNoteTake(cs) {
   var m = cs && cs.migNote;
   if (!m) return '';
   delete cs.migNote;
-  return '卡片改版:改為抽卡次數制,依時間累積(上限 ' + CARD_DRAW.cap + ' 抽)' + (m.pl ? ';原有待抽批次已換成 ' + m.pl + ' 抽' : '') + (m.sh ? ';酒令已換成碎片 ' + m.sh : '') + '。';
+  return '卡片改版:改為抽卡次數制,依時間累積(上限 ' + CARD_DRAW.cap + ' 抽)' + (m.pl ? ';原有待抽批次已換成 ' + m.pl + ' 抽' : '') + (m.sh ? ';酒令已換成碎片 ' + m.sh : '') + (m.hid ? ';小池剩餘 ' + m.hid + ' 抽已併入 S01卡池' : '') + '。';
 }
 
 // ───────── 招募歲鐘(§2.4) ─────────
@@ -135,6 +136,7 @@ function cardsSync(cs, now, isOpen) {
   if (now > cs.clock.maxSeen) cs.clock.maxSeen = now;
   for (i = 0; i < CARD_VENUE_ORDER.length; i++) {   // 各池各自計時:每 gap 小時各 +size 抽(離線補算)
     v = CARD_VENUE_ORDER[i];
+    if (CARD_HIDDEN_VENUES[v]) continue;
     T = cardsDrawTier(v);
     pl = cardsPl(cs, v);
     if (!(pl.t > 0)) { pl.t = now + T.ms; continue; }
@@ -167,7 +169,7 @@ function cardsNextIn(cs, venue, now) {
   return Math.max(0, Math.min(pl.t - now, cardsDrawTier(venue).ms));
 }
 // 某池的持有抽數(venue 省略 = 大池 E,舊呼叫端相容)
-function cardsPulls(cs, venue) { return (cs && cs.pl) ? Math.max(0, cardsPl(cs, venue).n | 0) : 0; }
+function cardsPulls(cs, venue) { return (cs && cs.pl && !(venue && CARD_HIDDEN_VENUES[venue])) ? Math.max(0, cardsPl(cs, venue).n | 0) : 0; }
 // 贈抽(新手禮 / 頭目首通 / 補償):直接加該池次數(venue 省略 = 大池),不受累積上限截斷。回加了多少
 function cardsPullGrant(cs, n, venue) {
   var pl = cardsPl(cs, venue);
@@ -198,7 +200,11 @@ function cardsVenueTheme(venue, no) {
   var s = CARD_EXAM_SUBJECTS[no % CARD_EXAM_SUBJECTS.length]; return { kind: 'subject', subject: s, text: '科目:' + s.name };   // 大池(指名池已刪除,其餘代號一律視為大池)
 }
 // 世界的名人來源與陣營(js/fx_cards.js:魔幻世界 = 42 位傳說英雄與 9 個魔幻陣營;歷史世界 = CARD_FIGS 與 0~4,行為不變)
-function cardsFigSrc() { return (typeof fxFigSrc === 'function' && fxFigSrc()) || CARD_FIGS; }
+function cardsFigSrc() {
+  var fx = (typeof fxFigSrc === 'function') ? fxFigSrc() : null;
+  if (fx) return fx;
+  return CARD_S01_ONLY ? CARD_FIGS.filter(function (x) { return CARD_S01_FIGS.indexOf(x.id) >= 0; }) : CARD_FIGS;
+}
 function cardsFacList() { return (typeof fxFacList === 'function' && fxFacList()) || [0, 1, 2, 3, 4]; }   // 指名可選陣營
 function cardsFacGen() { return (typeof fxFacGen === 'function' && fxFacGen()) || [0, 1, 2, 3, 4]; }     // 路人卡陣營 / 殿試本日陣營
 function cardsFigPool(gr, fac) {
@@ -382,12 +388,13 @@ function cardRollGr(cs, venue, key, slot, star) {
 // 生成一次抽卡結果(酒館 / 縣試池 = size 張,size 預設一階的次數;含逐張保底與連抽底線);不改 cs,只讀 cs.pity/fame/seed。回 {key, venue, cands, hasUpper, pityHit, pityEnd}
 // 逐張保底:cs.pity[v] = 連續沒出上等(V.upper)的張數,達 CARD_DRAW.pity 後下一張必出上等;連抽 ≥ floorMin 張才套用批內底線(V.floor)。舊殿試池(G)沿用整批規則
 function cardsGenBatch(cs, venue, key, size) {
-  var V = CARD_VENUES[venue], cands = [], i, star = cs.stars[venue] || 1, pityHit = false, best, rep = [], p, pityN, nb = (typeof cardsNbOn === 'function' && cardsNbOn(cs, venue)), c;
+  var V = CARD_VENUES[venue], cands = [], i, star = cs.stars[venue] || 1, pityHit = false, best, rep = [], p, pityN, nb = (typeof cardsNbOn === 'function' && cardsNbOn(cs, venue)), c, ft = false;
   function highest() { var b = 0, k; for (k = 1; k < cands.length; k++) if (cands[k].tai > cands[b].tai) b = k; return b; }
   size = Math.max(1, Math.min((size | 0) || cardsDrawSize(), CARD_DRAW.maxOne));
   pityN = CARD_DRAW.pity;
   for (i = 0; i < size; i++) cands.push(cardGen(cs, venue, key, i, cardRollGr(cs, venue, key, i, star)));
   if (nb) cardsNbPity(cs, venue, key, cands);   // 新手期逐張保底(紫 / 金)
+  ft = (typeof cardsFirstTen === 'function') ? cardsFirstTen(cs, venue, key, size, cands) : false;   // 開場:存檔第一次十連固定含 1 金 2 紫(js/ld_open_cards.js;ldui)
   p = cs.pity[venue] | 0;
   for (i = 0; i < cands.length; i++) {   // 連續保底(逐張)
     if (p >= pityN && !cardIsUpper(cands[i], V)) { cands[i] = cardGen(cs, venue, key, i, V.upper.gr, 'pity', { zhuan: !!V.upper.zhuan }); pityHit = true; rep.push(i); }
@@ -398,7 +405,7 @@ function cardsGenBatch(cs, venue, key, size) {
   }
   p = cs.pity[venue] | 0;
   cands.forEach(function (x) { p = cardIsUpper(x, V) ? 0 : p + 1; });
-  return { key: key, venue: venue, cands: cands, hasUpper: cands.some(function (x) { return cardIsUpper(x, V); }), pityHit: pityHit, pityEnd: p, nb: nb ? cardsNbCount(cs, cands) : undefined };
+  return { key: key, venue: venue, cands: cands, hasUpper: cands.some(function (x) { return cardIsUpper(x, V); }), pityHit: pityHit, pityEnd: p, nb: nb ? cardsNbCount(cs, cands) : undefined, ft: ft || undefined };
 }
 // 抽 n 次:扣該池次數、依該池 pl.tot 起算期鍵生成結果、更新保底計數、成為 cs.cur[v](= 『待入包批次』,隨後由 cardsBagCommit 放進名冊 / 卡包)。已有待入包批次就回它(不扣)
 function cardsOpenBatch(cs, venue, n) {
@@ -413,6 +420,8 @@ function cardsOpenBatch(cs, venue, n) {
   cs.pity[venue] = b.pityEnd | 0;
   if (venue === 'E') cs.fame.E = b.cands.some(function (c) { return !!c.fig; }) ? 0 : cs.fame.E + 1;
   if (b.nb) { cs.starter.nb = b.nb; delete b.nb; }   // 新手期計數(張數 / 距上次紫以上 / 距上次金)
+  if (b.ft) { cs.starter.ft = 1; delete b.ft; }      // 首抽保底已用掉
+  if (typeof ldOpenNote === 'function') ldOpenNote('pull', { n: b.cands.length, t: Date.now() });   // 主線 2:十連一次
   delete b.pityEnd;
   b.taken = b.cands.map(function () { return 0; });
   cs.cur[venue] = b;
@@ -461,10 +470,15 @@ function cardsFind(cs, id) {
   for (i = 0; i < lists.length; i++) for (j = 0; j < cs[lists[i]].length; j++) if (cs[lists[i]][j].id === id) return { e: cs[lists[i]][j], list: lists[i], idx: j };
   return null;
 }
-function cardsFindFig(cs, fig) {   // 名冊 / 待定席 / 流浪:名人同時只會有一份(重複抽到轉信物 / 碎片)
+function cardsFindFig(cs, fig) {   // 名冊 / 待定席 / 流浪:回第一張同名人(同名可多張並存;主力 / 副卡見 cardsFigCopies,cardsui_card.js)
   var lists = ['roster', 'wait', 'wander'], i, j;
   for (i = 0; i < lists.length; i++) for (j = 0; j < cs[lists[i]].length; j++) if (cs[lists[i]][j].fig === fig) return cs[lists[i]][j];
   return null;
+}
+function cardsFigCount(cs, fig) {   // 同名人在名冊 / 待定席 / 流浪的張數(同名多張並存)
+  var lists = ['roster', 'wait', 'wander'], i, j, n = 0;
+  for (i = 0; i < lists.length; i++) for (j = 0; j < cs[lists[i]].length; j++) if (cs[lists[i]][j].fig === fig) n++;
+  return n;
 }
 function cardsJobLine(c) {
   return Object.keys(c.ja || {}).map(function (id) { var j = CARD_JOB_BY_ID[id]; return j ? j.t[Math.max(0, c.ja[id] - 1)] : id; }).join('、');
@@ -486,14 +500,14 @@ function cardsSkillList(c) {
   }
   return out;
 }
-function cardsStats(e) { var t = e.tok || 0; return e.st.map(function (v) { return v + t; }); }
+function cardsStats(e) { return e.st.slice(); }   // 信物已取消(2026-11-11),五維即基礎值
 function cardsJobSlots(e) {
   var used = 0, k;
   for (k in e.ja) used += e.ja[k];
   return { used: used, cap: Math.max(used, CARD_GRADE[e.gr].jobSlots[1]) };
 }
 // ───────── 抽卡入冊 / 熔鍊 / 自動熔爐(2026-11-10:卡包 cs.bag 與溢出區 cs.bagOver 已移除;抽到的卡直接進名冊,名冊滿 CARD_CFG.cap 停止抽卡) ─────────
-// 流程:cardsBagStage(開批,批次暫放 cs.cur[v];名冊無空位回 bagfull、不扣次數)→(可選)抽卡特效→ cardsBagCommit(進名冊;重複名人轉信物 / 碎片;白階依設定自動熔爐)。cardsBagOpen = 兩步連做。
+// 流程:cardsBagStage(開批,批次暫放 cs.cur[v];名冊無空位回 bagfull、不扣次數)→(可選)抽卡特效→ cardsBagCommit(進名冊;同名多張並存,不轉信物;白階依設定自動熔爐)。cardsBagOpen = 兩步連做。
 function cardsBagAutoLv(cs) {   // 自動熔爐門檻:-1 = 關,0~autoMax = 品階 ≤ 此值的路人自動熔爐(未設定 = autoDefault)
   var a = cs.bagAuto;
   return (typeof a !== 'number' || !isFinite(a)) ? CARD_BAG.autoDefault : Math.max(-1, Math.min(CARD_BAG.autoMax, a | 0));
@@ -585,7 +599,7 @@ function cardsBagPick(cs, maxGr) {
 // 開批(抽卡):n 次(受次數與名冊空位限制;空位不足回 bagfull,不扣次數)。reason none 次數不足 busy 上一批尚未入冊 bagfull 名冊已滿 closed 卡池未開放 bad 參數錯
 function cardsBagStage(cs, venue, n) {
   var b, room;
-  if (venue !== 'T' && venue !== 'E') return { ok: false, reason: 'bad' };
+  if (CARD_VISIBLE_VENUES.indexOf(venue) < 0) return { ok: false, reason: 'bad' };
   if (!cardsVenueOpen(venue)) return { ok: false, reason: 'closed' };
   if (cs.cur[venue]) return { ok: false, reason: 'busy' };
   n = Math.max(1, Math.min(n | 0 || 1, CARD_DRAW.maxOne));
@@ -598,27 +612,24 @@ function cardsBagStage(cs, venue, n) {
   return { ok: true, batch: b, cards: b.cands };
 }
 // 把待入冊批次放進名冊。o {now, noAuto, noSync(讀檔正規化時不同步派工接口)}。
-// 每張的去向 how:roster 入名冊 / auto 白階依設定自動熔爐 / token 名人重複 → 信物 +1 / shard 名人重複且信物已滿 → 碎片 / full 名冊已滿(舊批次極少見)→ 碎片 / skip 舊批次已處理
+// 每張的去向 how:roster 入名冊(同名多張並存:dup = 同名已有、n = 第幾張)/ auto 白階依設定自動熔爐 / full 名冊已滿(舊批次極少見)→ 碎片 / skip 舊批次已處理
 function cardsBagCommit(cs, venue, o) {
   var b = cs.cur[venue], opt = o || {}, auto = (opt.noAuto || (b && b.noAuto)) ? -1 : cardsBagAutoLv(cs), res, raw = 0, g;   // b.noAuto:新手禮包批次不自動熔爐
   if (!b) return { ok: false, reason: 'none' };
   cs.cur[venue] = null;
-  res = { ok: true, venue: venue, key: b.key, items: [], roster: 0, added: 0, over: 0, full: 0, dissolved: 0, tokenN: 0, shardN: 0, shards: 0, tokens: 0, lost: 0 };
+  res = { ok: true, venue: venue, key: b.key, items: [], roster: 0, added: 0, over: 0, full: 0, dissolved: 0, dupN: 0, shards: 0, tokens: 0, lost: 0 };
   b.cands.forEach(function (c, i) {
-    var owner, sh, e;
+    var sh, e, dn;
     if (b.taken && b.taken[i]) { res.items.push({ c: c, how: 'skip' }); return; }
-    owner = c.fig ? cardsFindFig(cs, c.fig) : null;
-    if (owner) {   // 名人重複:信物未滿 → 信物 +1;信物已滿 → 碎片
-      if ((owner.tok || 0) < CARD_CFG.tokMax) { owner.tok = (owner.tok || 0) + 1; res.tokenN++; res.items.push({ c: c, how: 'token' }); }
-      else { sh = CARD_BAG.figDupShard[c.gr] || CARD_BAG.figDupShard[4]; raw += sh; res.shardN++; res.items.push({ c: c, how: 'shard', shards: sh }); }
-      return;
-    }
     if (!c.fig && auto >= 0 && c.gr <= auto) { sh = cardsFurnaceValue(c); raw += sh; res.dissolved++; res.items.push({ c: c, how: 'auto', shards: sh }); return; }
+    if (c.fig && typeof cardsOpenMeltFig === 'function' && cardsOpenMeltFig(cs, c)) { sh = cardsFurnaceValue(c); raw += sh; res.dissolved++; res.items.push({ c: c, how: 'auto', shards: sh }); return; }   // 白 / 藍名人同名第 3 張起自動熔;紫金永不(js/ld_open_cards.js;ldui)
     if (cardsRosterRoom(cs) > 0) {   // 抽到就是自己的:名冊有空位直接加入
+      dn = c.fig ? cardsFigCount(cs, c.fig) : 0;   // 同名已有 dn 張 → 本張為第 dn + 1 張(並存,不轉信物 / 碎片)
       e = cardsMakeEntry(cs, c, venue, b.key, cardsCost(c));
       cs.roster.push(e);
       res.roster++;
-      res.items.push({ c: c, how: 'roster', id: e.id });
+      if (dn) res.dupN++;
+      res.items.push({ c: c, how: 'roster', id: e.id, dup: dn > 0, n: dn + 1 });
       return;
     }
     sh = cardsFurnaceValue(c); raw += sh; res.full++; res.items.push({ c: c, how: 'full', shards: sh });   // 名冊已滿(舊批次 / 讀檔殘留):轉碎片,不丟失
@@ -661,10 +672,9 @@ function cardsMakeEntry(cs, c, pool, key, cost) {
   var e = {
     id: 'r' + (++cs.seq), no: cs.seq, name: c.name, zi: c.zi, fig: c.fig, fac: c.fac, gr: c.gr, st: c.st.slice(), tai: c.tai, ja: JSON.parse(JSON.stringify(c.ja)), main: c.main,
     learn: c.learn, tr: c.tr.slice(), trn: c.trn ? c.trn.map(function (t) { return t.slice(); }) : null, skn: c.skn, org: { k: c.org.k, v: c.org.v }, pool: pool, key: key,
-    at: null, star: 0, tok: 0, up: 0, cost: cost
+    at: null, star: 0, up: 0, cost: cost
   };
   if (c.sex) e.sex = c.sex;
-  if (c.tok) e.tok = c.tok | 0;
   cardsRefreshEntry(e);
   return e;
 }
@@ -678,11 +688,13 @@ function cardsAccept(cs, id) {
 }
 // 遣散:opts {unassign}。路人換碎片 cardsRelShards(白1 青2 藍4 紫8,無每週上限);名人轉流浪不給碎片(可花碎片請回)。回 {ok, reason?, shards?, tokens?}
 function cardsRelease(cs, id, opts) {
-  var f = cardsFind(cs, id), e, o = opts || {}, shards, snapS;
+  var f = cardsFind(cs, id), e, o = opts || {}, shards, snapS, ub;
   if (!f || f.list === 'wander') return { ok: false, reason: 'none' };
   e = f.e;
   if (e.star) return { ok: false, reason: 'locked' };
   if (e.at && !o.unassign) return { ok: false, reason: 'busy' };
+  ub = cardsUseBlock(e, 'release');   // 外勤中 / 委任中 / 駐派中不可遣散(原因放 why,呼叫端顯示)
+  if (!ub.ok) return { ok: false, reason: 'use', why: ub.reason };
   cs[f.list].splice(f.idx, 1);
   e.at = null;
   if (f.list === 'roster' && typeof bnSkcOnLeave === 'function') bnSkcOnLeave(e.id);   // 離開名冊:清掉其戰法裝備(bn_skcard.js)
@@ -715,19 +727,50 @@ function cardsRecall(cs, id) {
   return { ok: true, entry: f.e };
 }
 
+// ───────── 卡片占用狀態(2026-11-12,首頁設計 §3.4.1 / §3.4.2:一張卡同時只能做一件事)─────────
+// 狀態:閒置 / 隊伍中(預備隊)/ 外勤中 / 委任中(內政官)/ 駐派中(採集點)。
+// 存放:roster entry 的 e.use = {k:'team'|'field'|'garrison', ref}(有值才寫);無欄位 = 閒置(舊存檔相容,不需 migration)。
+// 委任沿用既有 e.at(建築站點字串,lordhallAssign 寫入),不另存 e.use;cardsUseGet 會把 e.at 讀成「委任中」。
+// 「隊伍中」尚未自動寫入:預設陣容(bnteam)是布陣設定、非互斥占用,是否要互斥待確認。
+var CARD_USE_K = { idle: '閒置', team: '隊伍中', field: '外勤中', appoint: '委任中', garrison: '駐派中' };
+var CARD_USE_STORE = ['team', 'field', 'garrison'];
+var CARD_USE_BLOCK = { team: ['field', 'appoint', 'garrison'], field: ['field', 'appoint', 'garrison'], appoint: ['field', 'garrison'], garrison: ['field', 'appoint', 'garrison'], release: ['field', 'appoint', 'garrison'] };   // 想做 want 時,卡目前狀態在此表內即擋(同狀態換站點 appoint→appoint 放行)
+function cardsUseGet(e) {
+  if (e && e.use && CARD_USE_STORE.indexOf(e.use.k) >= 0) return { k: e.use.k, ref: e.use.ref };
+  if (e && e.at) return { k: 'appoint', ref: e.at };
+  return { k: 'idle', ref: null };
+}
+function cardsUseFree(e) { return cardsUseGet(e).k === 'idle'; }
+function cardsListFree(cs) { return ((cs && cs.roster) || []).filter(function (e) { return cardsUseFree(e); }); }
+function cardsUseBlock(e, want) {   // 回 {ok, k, reason};ok 為 false 時 reason 為原因字串(例「外勤中」「委任中」),ok 時 reason = ''
+  var k = cardsUseGet(e).k, blk = CARD_USE_BLOCK[want] || [];
+  if (blk.indexOf(k) >= 0) return { ok: false, k: k, reason: CARD_USE_K[k] };
+  return { ok: true, k: k, reason: '' };
+}
+function cardsUseSet(e, k, ref) {   // 只寫 team / field / garrison;委任請走 lordhallAssign(寫 e.at)。回是否寫入
+  if (!e || CARD_USE_STORE.indexOf(k) < 0) return false;
+  e.use = { k: k, ref: (ref === undefined) ? null : ref };
+  return true;
+}
+function cardsUseClear(e, k) {   // k 有給時只在狀態吻合才清;回是否清除
+  if (!e || !e.use) return false;
+  if (k && e.use.k !== k) return false;
+  delete e.use;
+  return true;
+}
+
 
 // ───────── 卡片熔爐:強化武將(升星)與碎片兌換指名券(數值在 carddata.js CARD_FURNACE,PLACEHOLDER) ─────────
 // 星等欄位 = entry.starLv(0~5,有值才寫);注意 entry.star 是『鎖定防誤遣散』旗標(PLAN_BATTLE_A §2),兩者無關、不可混用。
 function cardsWeekNo(now) { return Math.floor(((now || 0) - cardsTz(now || 0)) / (7 * 86400000)); }
 function cardsStarLv(e) { return Math.max(0, Math.min(CARD_FURNACE.starMax, (e && e.starLv) | 0)); }
-// 下一星花費:base = 表值(名人 × figMul)、off = 信物折抵(每個 tokOff,上限 tokOffMax)、cost = 實付(至少 1)。滿星回 {max: true}
+// 下一星花費(純碎片;信物已取消):base = 表值(名人 × figMul)、cost = 實付(至少 1)。滿星回 {max: true}
 function cardsStarCost(e) {
-  var F = CARD_FURNACE, lv = cardsStarLv(e), base, pct, cost;
+  var F = CARD_FURNACE, lv = cardsStarLv(e), base, cost;
   if (lv >= F.starMax) return { max: true, lv: lv, cost: 0, base: 0, off: 0 };
   base = F.starCost[Math.min(e.gr, F.starCost.length - 1)][lv] * (e.fig ? F.figMul : 1);
-  pct = Math.min(F.tokOffMax, Math.max(0, (e.tok | 0) * F.tokOff));
-  cost = Math.max(1, Math.ceil(base * (1 - pct) - 1e-9));
-  return { max: false, lv: lv, base: base, off: base - cost, cost: cost };
+  cost = Math.max(1, Math.ceil(base - 1e-9));
+  return { max: false, lv: lv, base: base, off: 0, cost: cost };
 }
 // 升星(名冊 / 待定席皆可,流浪不可)。reason:none 查無 / max 已滿星 / shards 碎片不足。成功回 {ok, lv, cost}
 function cardsStarUp(cs, id) {
@@ -778,18 +821,10 @@ function cardsPatrolTalents() {
 }
 
 // ───────── 存讀檔(goods.js goodsNormCity 呼叫) ─────────
-// 舊卡包併入名冊(讀檔用,cs.v ≤ 4 遷移):list 為正規化後的卡包卡;依名人 > 品階 > 才排序;名人重複 → 信物 / 碎片;名冊滿 → 碎片(不丟失)
+// 舊卡包併入名冊(讀檔用,cs.v ≤ 4 遷移):list 為正規化後的卡包卡;依名人 > 品階 > 才排序;同名名人一律入冊(同名多張並存);名冊滿 → 碎片(不丟失)
 function cardsLegacyBagMerge(n, list) {
-  var ord = list.slice().sort(function (a, b) { return (b.fig ? 1 : 0) - (a.fig ? 1 : 0) || b.gr - a.gr || b.tai - a.tai || (a.bid < b.bid ? -1 : 1); }), shards = 0, owner;
+  var ord = list.slice().sort(function (a, b) { return (b.fig ? 1 : 0) - (a.fig ? 1 : 0) || b.gr - a.gr || b.tai - a.tai || (a.bid < b.bid ? -1 : 1); }), shards = 0;
   ord.forEach(function (c) {
-    if (c.fig) {
-      owner = cardsFindFig(n, c.fig);
-      if (owner) {
-        if ((owner.tok || 0) < CARD_CFG.tokMax) owner.tok = (owner.tok || 0) + 1;
-        else shards += CARD_BAG.figDupShard[c.gr] || CARD_BAG.figDupShard[4];
-        return;
-      }
-    }
     if (cardsRosterRoom(n) > 0) { n.roster.push(cardsMakeEntry(n, c, c.pool || 'T', c.key || '', cardsCost(c))); return; }
     shards += cardsFurnaceValue(c);
   });
@@ -812,15 +847,15 @@ function cardNormCard(c, isEntry, isBag) {
   if (isEntry) {
     o.id = String(c.id || ''); if (!o.id) return null;
     o.no = cardNum(c.no, 0, 1e9, 0) | 0; o.pool = (c.pool === 'E' || c.pool === 'G') ? 'E' : 'T'; o.key = String(c.key || '').slice(0, 20);   // 出身池:舊指名池 G 的人併入大池 E
-    o.at = (typeof c.at === 'string' && c.at) ? c.at.slice(0, 40) : null; o.star = c.star ? 1 : 0; if (cardNum(c.starLv, 0, CARD_FURNACE.starMax, 0) | 0) o.starLv = cardNum(c.starLv, 0, CARD_FURNACE.starMax, 0) | 0; o.tok = cardNum(c.tok, 0, CARD_CFG.tokMax, 0) | 0;
+    o.at = (typeof c.at === 'string' && c.at) ? c.at.slice(0, 40) : null; o.star = c.star ? 1 : 0; if (cardNum(c.starLv, 0, CARD_FURNACE.starMax, 0) | 0) o.starLv = cardNum(c.starLv, 0, CARD_FURNACE.starMax, 0) | 0;
     o.up = cardNum(c.up, 0, CARD_CFG.upMax, 0) | 0; o.cost = cardNum(c.cost, 0, 99, CARD_GRADE[o.gr].cost) | 0;
     if (cardNum(c.fav, 0, 5, 0) | 0) o.fav = cardNum(c.fav, 0, 5, 0) | 0; if (c.gift) o.gift = 1; if (typeof c.favDay === 'number' && isFinite(c.favDay)) o.favDay = c.favDay | 0; if (typeof c.since === 'number' && isFinite(c.since)) o.since = c.since | 0;   // 人物互動(npcinteract.js):親近 / 小禮旗標 / 最近加親近日 / 派駐起始日
+    if (c.use && typeof c.use === 'object' && CARD_USE_STORE.indexOf(c.use.k) >= 0) o.use = { k: c.use.k, ref: (typeof c.use.ref === 'number' && isFinite(c.use.ref)) ? (c.use.ref | 0) : (typeof c.use.ref === 'string' ? c.use.ref.slice(0, 40) : null) };   // 占用狀態(cardsUseSet);無效值丟棄 = 閒置
     cardsRefreshEntry(o);
   } else o.slot = cardNum(c.slot, 0, 6, 0) | 0;
-  if (isBag) {   // 卡包卡:bid(b + 序號)、出身池 / 期鍵、信物數(有值才寫)
+  if (isBag) {   // 卡包卡:bid(b + 序號)、出身池 / 期鍵
     if (!/^b\d{1,9}$/.test(String(c.bid))) return null;
     o.bid = String(c.bid); o.pool = (c.pool === 'E' || c.pool === 'G') ? 'E' : 'T'; o.key = String(c.key || '').slice(0, 20);
-    if (cardNum(c.tok, 0, CARD_CFG.tokMax, 0) | 0) o.tok = cardNum(c.tok, 0, CARD_CFG.tokMax, 0) | 0;
   }
   j = 0;
   // 性別:名人固定查表;路人有值才採用,舊存檔沒有時依其目前頭像查表補上(頭像不變)
@@ -829,12 +864,24 @@ function cardNormCard(c, isEntry, isBag) {
   else if (typeof cardsUiPortraitJob === 'function' && typeof cardsUiAvatarVar === 'function' && typeof portraitGenderOf === 'function' && (j = cardsUiPortraitJob(o))) { k = portraitGenderOf('generic/' + j + '_' + cardsUiAvatarVar(o)); if (k) o.sex = k; }
   return o;
 }
+// 信物取消(cs.v 7):舊存檔每枚信物折碎片補償 = 原 figDupShard 該品階值的 50%(紫 4、金 8,即原表 8 / 16 的一半);讀 roster / wait / wander / 舊卡包的原始 tok。
+// 遷移後 tok 不再寫入(cardNormCard 丟棄),再次讀取不會重複補償(冪等)
+var CARD_TOK_COMP = { 3: 4, 4: 8 };
+function cardsTokCompensate(v) {
+  var sh = 0;
+  ['roster', 'wait', 'wander', 'bag', 'bagOver'].forEach(function (k) {
+    if (!Array.isArray(v[k])) return;
+    v[k].forEach(function (c) { var t = cardNum(c && c.tok, 0, 5, 0) | 0; if (t > 0) sh += t * (CARD_TOK_COMP[(c.gr | 0)] || CARD_TOK_COMP[4]); });
+  });
+  return sh;
+}
 function cardsNormSave(v, now) {
   var n, k, tNow = (typeof now === 'number' && isFinite(now)) ? now : Date.now(), legacyPl, tierN, tmin, dn, legacyG = null, vv;
   if (!v || typeof v !== 'object') return null;
   n = cardsStateNew(typeof v.seed === 'number' ? v.seed : undefined);
   vv = cardNum(v.v, 0, 99, 1) | 0;
   n.seq = cardNum(v.seq, 0, 1e9, 0) | 0; n.shards = cardNum(v.shards, 0, 1e7, 0) | 0;
+  if (vv < 7) n.shards = Math.min(1e7, n.shards + cardsTokCompensate(v));   // 信物取消(cs.v 7):舊信物折碎片補償,一次性
   if (vv < 2) {   // 舊存檔(v 1)一次性遷移:酒令 → 碎片(× CARD_DRAW.wineShard),記 migNote 供提示一次。舊的每日小禮(gift)欄位丟棄
     k = (cardNum(v.tok, 0, 1e6, 0) | 0) * CARD_DRAW.wineShard;
     n.shards = Math.min(1e7, n.shards + k);
@@ -862,6 +909,11 @@ function cardsNormSave(v, now) {
     n.pl.T = { n: 0, t: n.pl.E.t, tot: n.pl.E.tot };
     if (k > 0) n.migNote = { sh: n.migNote ? n.migNote.sh : 0, pl: n.pl.E.n };
   }
+  if (v.migNote && typeof v.migNote === 'object' && (cardNum(v.migNote.hid, 0, 1e6, 0) | 0) > 0) { n.migNote = n.migNote || { sh: 0 }; n.migNote.hid = cardNum(v.migNote.hid, 0, 1e6, 0) | 0; }
+  // 2026-11-13(cs.v 8):小池 T 休眠 → 剩餘抽數併入 S01卡池 E(直接加、不受上限截斷,不損失);T 錢包歸零
+  k = (n.pl.T.n | 0);
+  if (k > 0) { n.pl.E.n = Math.min(1e6, (n.pl.E.n | 0) + k); n.migNote = n.migNote || { sh: 0 }; n.migNote.hid = (n.migNote.hid | 0) + k; }
+  n.pl.T.n = 0; delete n.pl.T.w;
   if (v.boss && typeof v.boss === 'object') Object.keys(v.boss).slice(0, 200).forEach(function (id) { if (v.boss[id] && id.length <= 12) n.boss[id] = 1; });
   if (v.clock) n.clock.maxSeen = cardNum(v.clock.maxSeen, 0, 1e15, 0);
   if (v.tokenGiven && typeof v.tokenGiven === 'object') Object.keys(v.tokenGiven).slice(0, 600).forEach(function (key) {

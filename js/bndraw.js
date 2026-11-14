@@ -15,7 +15,7 @@ var BNPL_T = {
 };
 var BNPL_PACE = 0.8;   // 基礎節奏:模擬秒 = 實際秒 × 倍速 × 0.8(1× 比改前慢 25%:出手間隔、動畫、浮字停留一併拉長)
 var BNDR = {
-  imgs: {}, tint: {}, white: {}, glow: {}, bgKey: '', bg: null, dprMax: 2, whiteMax: 20, whiteN: 0, low: false, lowMs: 8,
+  imgs: {}, tint: {}, white: {}, glow: {}, bgKey: '', bg: null, bgSrc: null, stage: true, names: null, dprMax: 2, whiteMax: 20, whiteN: 0, low: false, lowMs: 8,
   stats: { frames: 0, lastMs: 0, sumMs: 0, maxMs: 0, samples: [] }
 };
 var BN_NUM_N = 28, BN_FX_N = 64, BN_PT_N = 48;
@@ -172,7 +172,8 @@ function bnDrLook(u) {
 // 回 L:{vw,vh,top,bot,colW,pitch,sh,pos:{A:[[{x,y}×3]×3],B:...},fs,gap,bt,labY,labH,labX0,banY}。x = 腳底中心,y = 腳底。我方在左、前排靠中央。
 // 每方 3×3 九宮格:排(row 0 前 1 中 2 後)= 橫向,列(col)= 縱向;雙方中間留 gap。每格垂直佔用 = 頭上 head(血條 + 狀態圖示)+ 立繪 sh + 腳下 foot(名字),列距 pitch ≥ 這三者,立繪不互相蓋住血條。
 // 技能名標籤(bnDrLabels)放在各自陣營上方天空的牆角:區塊上方有空間就放 top 下方,否則放在頂端帶(左方讓出左上返回鈕 labX0)。
-function bnDrLayout(vw, vh, top, bot) {
+function bnDrLayout(vw, vh, top, bot, opts) {
+  if (opts && opts.style === 'stage') return bnDrLayoutStage(vw, vh, top, bot, opts);
   var gap = Math.max(28, vw * 0.07), side = (vw - gap) / 2 - 10, colW = Math.max(30, side / 3), fh = Math.max(80, vh - top - bot), head = 34, foot = 28, sh, pitch, bt, L = { vw: vw, vh: vh, top: top, bot: bot, pos: { A: [], B: [] } }, r, c, x, y, fs, labH, room, stag;
   pitch = Math.max(30, (fh - head - foot) / 3);
   sh = Math.max(40, Math.min(colW * 1.35, pitch - 18, 170));
@@ -202,16 +203,50 @@ function bnDrLayout(vw, vh, top, bot) {
   L.colW = colW; L.pitch = pitch; L.sh = sh; L.fs = fs; L.gap = gap; L.bt = bt; L.labH = labH;
   if (room >= labH * 2 + 12) { L.labY = top + 2; L.labX0 = 6; L.banY = top + labH + 8 + (room - labH - 8) / 2; }
   else { L.labY = Math.max(4, top - labH - 6); L.labX0 = 60; L.banY = L.labY + labH / 2; }
+  L.style = 'grid'; L.bgImg = opts && opts.bgImg || null; L.home = !!(opts && opts.home);
   return L;
 }
 
+// 戰鬥舞台版面:橫式 §6.1(sh = 0.30H、斜排「/」「\」、允許上下重疊);直式 §6.2(sh ≈ 0.2~0.3×vw、舞台帶取可用高的約 55%、同排不互疊,各排縱深拉開)。
+// 雙方中線留 gap;B 為 A 的左右鏡像。L.barTop = 最上排血條頂(技能名標籤需在它之上)。
+function bnDrLayoutStage(vw, vh, top, bot, opts) {
+  var portrait = vw < vh, sh, gap, colW, sx, dstep = 0, yOff = 0, fh, BH, bandTop = 0, fs, labH, L, r, c, x, y, barTop = 1e9;
+  if (!portrait) {
+    gap = Math.max(0, vw * 0.1); colW = vw * 0.11; sh = 0.3 * vh;
+    var halfW = 0.36 * sh, avail = vw / 2 - halfW - 4, k;
+    if (gap / 2 + colW * 3.3 > avail) { k = Math.max(0.3, avail / (gap / 2 + colW * 3.3)); gap *= k; colW *= k; }
+    sx = 0.35 * colW; dstep = 0.15 * vh; yOff = 0;
+  } else {
+    fh = vh - top - bot;
+    BH = 0.55 * fh;
+    sh = Math.min(110, 0.27 * vw, (vw / 2 - 2 - 0.05 * vw) / 1.84, (BH - 11) / 2.6);   // 寬度限制:左右兩側 3 排不出畫面;高度限制:3 排 + 血條放進舞台帶
+    gap = 0.1 * vw; colW = 0.56 * sh; sx = 0;
+    dstep = (BH - 11 - sh) / 2;   // 縱深步距 ≥ 0.8sh → 同欄上下相鄰列重疊面積 ≤ 20%
+    bandTop = top + (fh - BH) / 2;
+  }
+  fs = Math.max(11, Math.min(21, colW / 4.6, sh / 4)); labH = Math.max(22, Math.min(30, fs * 1.9));
+  L = { vw: vw, vh: vh, top: top, bot: bot, pos: { A: [], B: [] }, style: 'stage', colW: colW, pitch: dstep || 0.15 * vh, sh: sh, fs: fs, gap: gap, bt: portrait ? bandTop + 11 + sh : yOff + 0.52 * vh, labH: labH, labY: top + 2, labX0: 6, bgImg: opts && opts.bgImg || null, home: !!(opts && opts.home) };
+  for (r = 0; r < 3; r++) {
+    L.pos.A[r] = []; L.pos.B[r] = [];
+    for (c = 0; c < 3; c++) {
+      if (portrait) { x = vw / 2 - gap / 2 - 0.36 * sh - colW * r; y = bandTop + 11 + sh + c * dstep; }
+      else { x = vw / 2 - gap / 2 - colW * (0.6 + r) - c * sx; y = yOff + 0.52 * vh + c * dstep; }
+      L.pos.A[r][c] = { x: x, y: y }; L.pos.B[r][c] = { x: vw - x, y: y };
+      barTop = Math.min(barTop, y - sh - 11);
+    }
+  }
+  L.barTop = barTop;
+  L.labH = Math.max(14, Math.min(labH, barTop - 4 - (top + 2)));   // 標籤不壓到最上排血條
+  L.banY = top + L.labH + 10;
+  return L;
+}
 // ───────── 播放器 ─────────
 function bnPlNewVu(u, L) {
   var lk = bnDrLook(u), p = L ? L.pos[u.side][u.row][u.col] : { x: 0, y: 0 };
   return {
     id: u.id, side: u.side, name: u.name, troop: u.troop, fig: u.fig, row: u.row, col: u.col, px: p.x, py: p.y, tx: p.x, ty: p.y, dx: 0, dy: 0, hp: u.hp, mx: u.maxHp, hpShow: u.hp, hpLag: u.hp, lagHold: 0, hitGlow: 0,
     alive: u.alive !== false, fade: 1, rot: 0, flash: 0, cast: 0, kb: 0, scale: 1, lunge: null, dying: -1, st: {}, shield: 0, look: lk, phase: (u.id * 1.713) % 6.28, sx: 1, sy: 1, sh: L ? L.sh : 100, nn: 0, hitAt: 0, ultReady: false, tone: '',
-    lean: 0, ev: 0, stp: {}, ibr: 1, itl: 0, isw: 0
+    lean: 0, ev: 0, stp: {}, ibr: 1, itl: 0, isw: 0, zt: 0
   };
 }
 function bnPlNew(S, L, o) {
@@ -227,6 +262,7 @@ function bnPlNew(S, L, o) {
   P.pt = [];
   for (i = 0; i < (P.ps ? BN_PT_N / 3 : BN_PT_N); i++) P.pt.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, g: 0, t: 0, dur: 0.5, col: '#fff', sh: 0, sz: 4 });
   for (i = 0; i < S.units.length; i++) { u = S.units[i]; P.vu[u.id] = bnPlNewVu(u, L); }
+  if (L && L.home) P.sfx = false;   // 主頁預留:無音效
   if (P.sfx && typeof bnSfxBattle === 'function') { try { bnSfxBattle(true); } catch (e) { /* 略過 */ } }
   return P;
 }
@@ -293,10 +329,10 @@ var BNLAB = { dur: 1.1, min: 0.45, fade: 0.15, qMax: 3 };
 // 陣營旗色(CARD_FAC 順序:魏 蜀 吳 黃巾 中立);無陣營 / 敵方小怪 = 中性色
 var BN_FAC_COL = ['#3a6ec8', '#2f9a5a', '#c8443a', '#d8b23a', '#8a8a8a'];
 var BN_FAC_NEUTRAL = '#8a8a8a';
-function bnPlLabel(P, v, text, sub) {
+function bnPlLabel(P, v, text, sub, ult) {
   var u = P.S && P.S.units[v.id], fac = u && u.fac >= 0 && BN_FAC_COL[u.fac] ? u.fac : -1, lb = P.lab[v.side], it;
   if (!text || !lb) return;
-  it = { text: text, sub: sub || '', col: fac >= 0 ? BN_FAC_COL[fac] : BN_FAC_NEUTRAL, t: 0, out: -1 };
+  it = { text: text, sub: sub || '', col: fac >= 0 ? BN_FAC_COL[fac] : BN_FAC_NEUTRAL, t: 0, out: -1, ult: !!ult };
   if (!lb.cur) lb.cur = it;
   else { lb.q.push(it); if (lb.q.length > BNLAB.qMax) lb.q.shift(); }
 }
@@ -440,13 +476,15 @@ function bnPlHit(P, e, vt) {
     col = BN_NUM_DMG;   // 扣血一律紅字黑框(攻擊 / 謀略 / 持續傷害皆同);暴擊更大(浮字放大彈出 + 畫面微震 + 火花)
     if (e.crit) { bnPlText(P, vt, '-' + v + '!', BN_NUM_DMG, 1.4, 1, 0.95); P.shake = 0.16; bnPlBurst(P, vt, 'crit'); }
     else bnPlText(P, vt, '-' + v, col, 1, 0, 0.8);
-    if (ty !== 'dot') { vt.flash = 1; vt.kb = 1; bnPlSfx(P, e.crit ? 'crit' : 'hit'); }
+    if (ty !== 'dot') { vt.flash = 1; vt.zt = 0.3; vt.kb = 1; bnPlSfx(P, e.crit ? 'crit' : 'hit'); }
   }
   if (e.ctr) bnPlText(P, vt, '反擊', '#ffb36a', 0.75, 2, 0.7);
   else if (e.pv && v > 0 && e.basic) bnPlText(P, vt, e.pv > 0 ? '克制↑' : '被克↓', e.pv > 0 ? '#a6e58f' : '#a9bdd2', 0.7, 2, 0.7);   // 兵種克制:只標普攻(每次行動最多一個),不吵
   if (e.via !== undefined && P.vu[e.via]) bnPlText(P, P.vu[e.via], '援護', '#8ec7ff', 0.75, 2, 0.7);
 }
+function bnPlAnimOf(v) { return BNDR.anim && v && v.fig && BNDR.anim[v.fig] && BNDR.anim[v.fig].atkDur ? BNDR.anim[v.fig] : null; }   // 有逐格出手動畫的名人(拉長出手時間、依路徑位移)
 function bnPlStartLunge(P, vs, vt, dur) {
+  var an = bnPlAnimOf(vs); if (an) dur = an.atkDur;
   vs.lunge = { t: 0, dur: dur || 0.5, tx: vt.px - vs.px, ty: vt.py - vs.py };
 }
 function bnPlDmg(P, e) {
@@ -456,9 +494,9 @@ function bnPlDmg(P, e) {
   if (dot || self) { delay = 0; wait = BNPL_T.dot; }
   else if (first) {
     if (vs && basic) {
-      if (bnPlIsMelee(vs, null)) { delay = BNPL_T.lunge; bnPlStartLunge(P, vs, vt, 0.52); }
+      if (bnPlIsMelee(vs, null)) { delay = bnPlAnimOf(vs) ? bnPlAnimOf(vs).atkDur * bnPlAnimOf(vs).hitAt : BNPL_T.lunge; bnPlStartLunge(P, vs, vt, 0.52); }
       else { delay = BNPL_T.proj; bnPlProj(P, vs, vt, e, delay); }
-      wait = BNPL_T.basicWait;
+      wait = bnPlAnimOf(vs) ? bnPlAnimOf(vs).atkDur : BNPL_T.basicWait;
       bnPlSfx(P, BN_ATK_SFX[vs.troop] || 'atk_blade');   // 出手音依兵種:盾刀、槍、騎、弓、謀略
     } else if (vs) {
       delay = BNPL_T.skillHit; wait = BNPL_T.skillWait;
@@ -537,7 +575,7 @@ function bnPlCutin(P, e) {
   v.tone = tone;
   dur = (full ? BNPL_T.cutFull : BNPL_T.cutSmall) * bnPlStK(P);   // 倍速時 cut-in 不縮成一閃(3× 實際約 0.7 秒)
   P.cut = { full: full, t: 0, dur: dur, side: v.side, name: v.name, fig: v.fig, skill: d ? d.name : '', tone: tone, uid: e.u, path: v.look.paths[0], big: !!v.fig };
-  if (!full) { bnPlFx(P, 'morale_burst', v.px, v.py - P.L.sh * 0.5, { size: P.L.sh * 1.3, dur: 0.5, delay: 0 }); bnPlLabel(P, v, '大招·' + (d ? d.name : ''), bnPlSkShort(e.id)); }
+  if (!full) { bnPlFx(P, 'morale_burst', v.px, v.py - P.L.sh * 0.5, { size: P.L.sh * 1.3, dur: 0.5, delay: 0 }); bnPlLabel(P, v, '大招·' + (d ? d.name : ''), bnPlSkShort(e.id), true); }
   bnPlHeroFx(P, v, e.id);
   bnPlSfx(P, 'ult');
   bnPlHook(P, 'cut', P.cut);
@@ -572,7 +610,7 @@ function bnPlEvent(P, e) {
       return 0.15;
     case 'prep':
       v = P.vu[e.u];
-      if (v) { v.cast = 1; bnPlText(P, v, '蓄力…', '#ffd25a', 0.8, 2, 0.8); }
+      if (v) { v.cast = 1; v.zt = 0.3; bnPlText(P, v, '蓄力…', '#ffd25a', 0.8, 2, 0.8); }
       return t.txt;
     case 'ult':
       P.ultOn = true;   // 大招期間(到下一次 act 為止)
@@ -581,7 +619,7 @@ function bnPlEvent(P, e) {
       v = P.vu[e.u];
       P.sk = { id: e.id, kind: e.kind, cat: e.cat, tags: (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[e.id] && BN_SKILLS[e.id].tags) || [], name: e.name, theme: e.th || (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[e.id] && BN_SKILLS[e.id].theme) || '', u: e.u };
       if (!v) return 0;
-      v.cast = 1;
+      v.cast = 1; v.zt = 0.3;
       if (e.cat !== 'ult') bnPlLabel(P, v, (e.rc ? '再放·' : (e.as !== undefined ? '補刀·' : '')) + (e.name || ''), bnPlSkShort(e.id));   // 技能名 → 己方天空角落標籤(下附白話效果)
       bnPlFeedStart(P, e);
       if (/^(heal|shield|buff|rate_up|cleanse|revive|guard|evade|reorder|taunt)/.test(e.kind || '')) { c = bnPlCenter(v); bnPlFx(P, 'morale_burst', c.x, c.y, { size: L.sh * 0.9, dur: 0.4, delay: BNPL_POSE.delay * bnPlStK(P) }); }
@@ -704,6 +742,7 @@ function bnPlAnim(P, dt) {
     if (v.kb > 0) v.kb = Math.max(0, v.kb - dv / 0.25);
     if (v.ev > 0) v.ev = Math.max(0, v.ev - dv / 0.3);
     if (v.cast > 0) v.cast = Math.max(0, v.cast - dt / 0.32);
+    if (v.zt > 0) v.zt = Math.max(0, v.zt - dt / 0.3);
     if (v.stp) for (k in v.stp) { v.stp[k] -= dv / 0.3; if (v.stp[k] <= 0) delete v.stp[k]; }
     v.dx = 0; v.dy = 0; v.scale = 1; v.sx = 1; v.sy = 1; v.lean = 0;
     l = v.lunge;
@@ -711,7 +750,10 @@ function bnPlAnim(P, dt) {
       l.t += dt;
       i = l.t / l.dur;
       if (i >= 1) v.lunge = null;
-      else {
+      else if (bnPlAnimOf(v)) {
+        n = bnPlAnimPath(BNDR.anim[v.fig].path, i);
+        v.dx = l.tx * 0.8 * n[0]; v.dy = l.ty * 0.8 * n[0] - n[1] * P.L.sh;
+      } else {
         n = i < 0.4 ? i / 0.4 : (i < 0.55 ? 1 : 1 - (i - 0.55) / 0.45);
         n = n * n * (3 - 2 * n);
         v.dx = l.tx * 0.38 * n; v.dy = l.ty * 0.38 * n;
@@ -835,18 +877,20 @@ function bnDrResize(vw, vh, dpr, top, bot) {
 }
 // 背景:程式繪製的野外(漸層天空 + 地面帶 + 暈角),依尺寸烘進離屏一次
 function bnDrBgFor(L, dpr, ps) {
-  var key = L.vw + 'x' + L.vh + '@' + dpr + (ps ? 'p' : ''), cv, c, g, i, hz = L.top + (L.vh - L.top - L.bot) * 0.22;
-  if (BNDR.bgKey === key && BNDR.bg) return BNDR.bg;
+  var key = L.vw + 'x' + L.vh + '@' + dpr + (ps ? 'p' : ''), cv, c, g, i, s, hz = L.top + (L.vh - L.top - L.bot) * 0.22;
+  if (BNDR.bgKey === key && BNDR.bg && BNDR.bgSrc === (L.bgImg || null)) return BNDR.bg;
   cv = bnDrNew(L.vw * dpr, L.vh * dpr);
   if (!cv) return null;
   c = cv.getContext('2d');
   if (!c) return null;
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
-  if (c.createLinearGradient) {
+  if (L.bgImg && L.bgImg.width > 0) {   // 場景背景圖(cover 縮放);缺圖時退回下方程序繪製
+    s = Math.max(L.vw / L.bgImg.width, L.vh / L.bgImg.height); c.drawImage(L.bgImg, (L.vw - L.bgImg.width * s) / 2, (L.vh - L.bgImg.height * s) / 2, L.bgImg.width * s, L.bgImg.height * s);
+  } else if (c.createLinearGradient) {
     g = c.createLinearGradient(0, 0, 0, hz + 30); g.addColorStop(0, '#26324a'); g.addColorStop(1, '#8a7a62'); c.fillStyle = g; c.fillRect(0, 0, L.vw, hz + 30);
     g = c.createLinearGradient(0, hz, 0, L.vh); g.addColorStop(0, '#6f6a45'); g.addColorStop(0.5, '#4f5636'); g.addColorStop(1, '#2d3322'); c.fillStyle = g; c.fillRect(0, hz, L.vw, L.vh - hz);
   } else { c.fillStyle = '#4f5636'; c.fillRect(0, 0, L.vw, L.vh); }
-  if (!ps) {
+  if (!ps && !(L.bgImg && L.bgImg.width > 0)) {
     c.strokeStyle = 'rgba(0,0,0,.12)'; c.lineWidth = 1;
     for (i = 0; i < 7; i++) { c.beginPath(); c.moveTo(0, hz + (L.vh - hz) * (i / 7) * (i / 7) + 6); c.lineTo(L.vw, hz + (L.vh - hz) * (i / 7) * (i / 7) + 6); c.stroke(); }
     c.fillStyle = 'rgba(20,24,16,.55)'; c.beginPath(); c.moveTo(0, hz + 6);
@@ -857,7 +901,7 @@ function bnDrBgFor(L, dpr, ps) {
     g = c.createRadialGradient(L.vw / 2, L.vh * 0.5, Math.min(L.vw, L.vh) * 0.3, L.vw / 2, L.vh * 0.5, Math.max(L.vw, L.vh) * 0.75);
     g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.5)'); c.fillStyle = g; c.fillRect(0, 0, L.vw, L.vh);
   }
-  BNDR.bg = cv; BNDR.bgKey = key;
+  BNDR.bg = cv; BNDR.bgKey = key; BNDR.bgSrc = L.bgImg || null;
   return cv;
 }
 function bnDrFallbackBody(ctx, v, h) {
@@ -893,6 +937,35 @@ function bnDrIdle(P, v, t) {
   v.isw = Math.sin(t * 1.1 + v.phase * 1.3) * (v.sh || 100) * 0.012;
   return v;
 }
+// 名人逐格動畫:BNDR.anim[fig] = { dir:'assets/fullbody/anim/', pre:'guanyu_', w, h, ax, ay, idle:[格…], idleMs, spin:[…], dying:格, charge:格, atk:[{to:進度上限,f:[格…]}…] }
+// 畫格面向右(B 方由外層 scale 翻面)。狀態:衝刺中(v.lunge)依進度換格、技能施放(v.cast)轉刀格、倒下定格、其餘待機循環。回 true = 已畫
+// 路徑 [[進度, 前進比例, 抬升(×立繪高)]…] 線性內插後平滑
+function bnPlAnimPath(pt, i) {
+  var k, a, b, u;
+  for (k = 1; k < pt.length; k++) if (i <= pt[k][0]) { a = pt[k - 1]; b = pt[k]; u = (i - a[0]) / (b[0] - a[0]); u = u * u * (3 - 2 * u); return [a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u]; }
+  return [pt[pt.length - 1][1], pt[pt.length - 1][2]];
+}
+function bnDrAnimPick(a, v, t) {
+  var l = v.lunge, i, k, f;
+  if (v.dying >= 0) return a.dying;
+  if (l) {
+    i = l.t / l.dur;
+    for (k = 0; k < a.atk.length; k++) if (i < a.atk[k].to) { f = a.atk[k].f; return f[Math.floor(l.t * 1000 / (a.atk[k].ms || 90)) % f.length]; }
+    return a.atk[a.atk.length - 1].f[0];
+  }
+  if (v.cast > 0 && a.spin) return a.spin[Math.floor(t * 1000 / 70) % a.spin.length];
+  return a.idle[Math.floor((t + v.phase) * 1000 / (a.idleMs || 150)) % a.idle.length];
+}
+function bnDrAnimDraw(ctx, P, v, t, h) {
+  var a = BNDR.anim[v.fig], n, e, w, hh, x, y, fs, nm;
+  if (!a.pre_) { a.pre_ = 1; ['a1','a2','a3','a4','a5','a6','a7','a8','b1','b2','b3','b4','b5','b6','c1','c2','c3','c4','c5','c6','c7','c8','c9','c10','c11','c12'].forEach(function (k) { bnDrImg(a.dir + a.pre + k + '.webp'); }); }   // 全部畫格先載入,避免首次使用時閃回舊立繪
+  n = bnDrAnimPick(a, v, t); e = bnDrImg(a.dir + a.pre + n + '.webp');
+  if (!e.ok) { e = bnDrImg(a.dir + a.pre + a.idle[0] + '.webp'); if (!e.ok) return false; }   // 該格尚未載入:先用待機格,不閃回舊立繪
+  w = h * (a.sc || 1.3); hh = w * a.h / a.w; x = -w * a.ax; y = h * 0.1 - hh * a.ay;
+  ctx.drawImage(e.img, x, y, w, hh);
+  if (v.flash > 0) { fs = bnDrWhite(e); if (fs) { ctx.globalAlpha = v.fade * v.flash * 0.85; ctx.drawImage(fs, x, y, w, hh); ctx.globalAlpha = v.fade; } }
+  return true;
+}
 function bnDrUnit(ctx, P, v, t, L, pw) {
   var h = L.sh, lk = v.look, i, e, src = null, bust = false, w, dir = v.side === 'A' ? 1 : -1, br, tilt, flashSrc = null, pend = false, tinted, g, stc = '', ov;
   if (v.fade <= 0.01) return;
@@ -913,6 +986,7 @@ function bnDrUnit(ctx, P, v, t, L, pw) {
   ctx.fill();
   ctx.rotate(tilt);
   ctx.scale(dir * v.sx * (1 + (br - 1) * 0.5), v.sy * br * (1 + v.cast * 0.06));
+  if (BNDR.anim && v.fig && BNDR.anim[v.fig] && bnDrAnimDraw(ctx, P, v, t, h)) { ctx.restore(); return; }   // 名人逐格動畫(選配;未註冊 / 圖未載入 → 走原立繪)
   if (src) {
     if (bust) {
       w = h * 0.7; ctx.drawImage(src.img, -w / 2, -h * 0.78, w, w * bnDrIh(src) / bnDrIw(src));
@@ -937,9 +1011,11 @@ function bnDrUnit(ctx, P, v, t, L, pw) {
 }
 // 兵力條幾何(測試也用):頭頂上方、不遮臉;粗 7~10px + 黑框
 function bnDrBarBox(v, L) {
+  if (L.style === 'stage') { var sw = Math.min(L.sh * 0.55, L.colW * 0.9); return { x: v.px + v.dx - sw / 2, y: v.py + v.dy - L.sh - 11, w: sw, h: 5 }; }   // 舞台細條(§6.1):寬 0.55sh(同排太窄時不超過 0.9 欄寬,免得同排血條互蓋)、高 5px、頭頂上方 6px
   var w = Math.max(32, Math.min(L.colW * 0.86, L.sh * 0.72)), bh = Math.max(7, Math.min(10, Math.round(L.sh * 0.075)));
   return { x: v.px + v.dx - w / 2, y: v.py + v.dy - L.sh - bh - 6, w: w, h: bh };
 }
+function bnDrNamesOn(L) { return BNDR.names === null || BNDR.names === undefined ? !(L && L.style === 'stage') : !!BNDR.names; }   // 名字:stage 預設隱藏;BNDR.names 可強制開 / 關
 function bnDrBars(ctx, P, v, t, L) {
   var bb = bnDrBarBox(v, L), w = bb.w, x = bb.x, y = bb.y, bh = bb.h, hp = Math.max(0, Math.min(1, v.hpShow / v.mx)), lag = Math.max(hp, Math.min(1, (v.hpLag || 0) / v.mx)), keys, n = 0, i, ic, k, sz = Math.max(11, L.fs * 0.95), ex, iy, pp;
   if (v.fade <= 0.05) return;
@@ -947,7 +1023,7 @@ function bnDrBars(ctx, P, v, t, L) {
   ctx.fillStyle = '#000'; ctx.fillRect(x - 2, y - 2, w + 4, bh + 4);                         // 黑框
   ctx.fillStyle = 'rgba(70,24,20,.9)'; ctx.fillRect(x, y, w, bh);                              // 空槽
   if (lag > hp) { ctx.fillStyle = 'rgba(255,140,120,.85)'; ctx.fillRect(x + w * hp, y, w * (lag - hp), bh); }   // 殘影(舊血量淡紅段)
-  ctx.fillStyle = hp > 0.5 ? '#5ed05e' : (hp > 0.25 ? '#e0b43a' : '#e0503a'); ctx.fillRect(x, y, w * hp, bh);
+  ctx.fillStyle = L.style === 'stage' ? (v.side === 'A' ? '#5ed05e' : '#e0503a') : (hp > 0.5 ? '#5ed05e' : (hp > 0.25 ? '#e0b43a' : '#e0503a')); ctx.fillRect(x, y, w * hp, bh);
   if (v.hitGlow > 0) { ctx.globalAlpha = v.fade * v.hitGlow * 0.7; ctx.fillStyle = '#fff'; ctx.fillRect(x, y, w * lag, bh); ctx.globalAlpha = v.fade; ctx.strokeStyle = 'rgba(255,240,200,' + (0.9 * v.hitGlow) + ')'; ctx.lineWidth = 2; ctx.strokeRect(x - 2, y - 2, w + 4, bh + 4); }   // 受擊加亮
   if (v.shield > 0) { ctx.fillStyle = 'rgba(142,199,255,.95)'; ctx.fillRect(x, y, Math.min(w, w * v.shield / v.mx), 2); }
   keys = Object.keys(v.st).filter(function (kk) { return kk !== 'chill'; }); iy = y - sz - 3;   // chill 只是附體視覺標記,不佔狀態圖示格
@@ -961,8 +1037,10 @@ function bnDrBars(ctx, P, v, t, L) {
   }
   if (keys.length > 3) { ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.round(sz * 0.7) + 'px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('+' + (keys.length - 3), x + 3 * (sz + 1), iy + sz / 2); }
   ctx.fillStyle = '#f0e6cf'; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 3; ctx.font = Math.round(L.fs * 0.82) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.strokeText(v.name, v.px + v.dx, v.py + v.dy + 2); ctx.fillText(v.name, v.px + v.dx, v.py + v.dy + 2);
-  if (v.side === 'A' && P.sb !== false && v.alive) bnDrSkillBar(ctx, P, v, L, v.py + v.dy + 4 + Math.round(L.fs * 0.82));
+  if (bnDrNamesOn(L)) {
+    ctx.strokeText(v.name, v.px + v.dx, v.py + v.dy + 2); ctx.fillText(v.name, v.px + v.dx, v.py + v.dy + 2);
+    if (v.side === 'A' && P.sb !== false && v.alive) bnDrSkillBar(ctx, P, v, L, v.py + v.dy + 4 + Math.round(L.fs * 0.82));
+  }
   ctx.globalAlpha = 1;
 }
 // 戰法條(我方):名字下方最多 3 個戰法短名;被動 / 指揮淡色,主動 / 追擊 / 大招顯示剩餘冷卻(「火 2」= 還要 2 回合),可用就亮
@@ -1233,7 +1311,7 @@ function bnDrLabels(ctx, P, L) {
   if (!P.lab) return;
   for (k = 0; k < 2; k++) {
     sd = sides[k]; c = P.lab[sd].cur;
-    if (!c) continue;
+    if (!c || (L.home && !c.ult)) continue;
     a = Math.min(1, c.t / 0.12); if (c.out >= 0) a = Math.max(0, 1 - c.out / BNLAB.fade);
     slide = (1 - Math.min(1, c.t / 0.15)) * 14 * (sd === 'A' ? -1 : 1);
     fz = Math.round(h * 0.62);
@@ -1258,6 +1336,18 @@ function bnDrLabels(ctx, P, L) {
     ctx.restore();
   }
 }
+// 繪製順序:依腳底 y 由小到大(遠的先畫);stage 下受擊 / 施放中(zt > 0)的單位提到最上層
+function bnDrOrder(list, L) {
+  var stg = !!(L && L.style === 'stage');
+  return list.slice().sort(function (a, c) { return (a.py + a.dy + (stg && a.zt > 0 ? 1e5 : 0)) - (c.py + c.dy + (stg && c.zt > 0 ? 1e5 : 0)); });
+}
+// 主頁預留:只顯示爆擊與 ≥10% 最大血量的傷害數字(其餘數字照常)
+function bnDrHomeNum(P, n) {
+  var v, val;
+  if (n.kind === 1 || n.col !== BN_NUM_DMG) return true;
+  v = P.vu[n.uid]; val = parseInt(String(n.text).replace(/[^0-9]/g, ''), 10) || 0;
+  return !!v && val >= 0.1 * v.mx;
+}
 function bnDrFrame(ctx, P, dpr, nowSec) {
   var L = P.L, S0 = (typeof performance !== 'undefined') ? performance.now() : 0, list = [], id, i, v, n, bg, sx = 0, sy = 0, b, by, fz, ps = P.ps, cut = P.cut, sb;
   bg = bnDrBgFor(L, dpr, ps);
@@ -1266,19 +1356,19 @@ function bnDrFrame(ctx, P, dpr, nowSec) {
   if (P.shake > 0 && !ps) { b = Math.min(1.3, P.shake / 0.12); sx = Math.sin(nowSec * 90) * 3 * b; sy = Math.cos(nowSec * 73) * 2.2 * b; }   // 暴擊微震(省電不震)
   ctx.setTransform(dpr, 0, 0, dpr, sx * dpr, sy * dpr);
   for (id in P.vu) list.push(P.vu[id]);
-  list.sort(function (a, c) { return (a.py + a.dy) - (c.py + c.dy); });
+  list = bnDrOrder(list, L);
   for (i = 0; i < P.fx.length; i++) if (P.fx[i].on && (P.fx[i].mode === 6 || P.fx[i].under)) bnDrFx(ctx, P, P.fx[i], L);   // 輔助虛影畫在人物後面
-  for (i = 0; i < list.length; i++) bnDrUnit(ctx, P, list[i], nowSec, L);
+  for (i = 0; i < list.length; i++) { bnDrUnit(ctx, P, list[i], nowSec, L); if (L.style === 'stage') bnDrBars(ctx, P, list[i], nowSec, L); }   // 舞台:血條跟著人走,遮擋順序與人一致
   sb = { n: 0, max: BNDR.low ? BN_ST_BUDGET / 2 : BN_ST_BUDGET }; BNDR.stN = 0;
   if (!ps) for (i = 0; i < list.length; i++) bnStDraw(ctx, P, list[i], nowSec, L, sb);   // 狀態附體(粒子上限 40 / 低階 20;省電關)
   BNDR.stN = sb.n;
   for (i = 0; i < P.fx.length; i++) if (P.fx[i].on && P.fx[i].mode !== 6 && !P.fx[i].under) bnDrFx(ctx, P, P.fx[i], L);
   bnDrPts(ctx, P);
-  for (i = 0; i < list.length; i++) bnDrBars(ctx, P, list[i], nowSec, L);
+  if (L.style !== 'stage') for (i = 0; i < list.length; i++) bnDrBars(ctx, P, list[i], nowSec, L);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
   for (i = 0; i < P.nums.length; i++) {
     n = P.nums[i];
-    if (!n.on) continue;
+    if (!n.on || (L.home && !bnDrHomeNum(P, n))) continue;
     ctx.globalAlpha = Math.max(0, Math.min(1, (n.dur - n.t) / 0.25));
     fz = Math.round(Math.max(BN_NUM_MIN * (n.size < 1 ? 0.9 : 1), L.fs * 1.25) * n.size * (n.kind === 2 ? 1 : 1 + (n.kind === 1 ? 0.6 : 0.18) * Math.max(0, 1 - n.t / (0.16 * (n.pk || 1)))));   // 彈出:暴擊先放大 1.6 倍再縮回
     ctx.font = 'bold ' + fz + 'px sans-serif';

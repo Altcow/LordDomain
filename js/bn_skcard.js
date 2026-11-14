@@ -155,6 +155,7 @@ function bnSkcUnequip(entryId, slot) {
 function bnSkcOnLeave(entryId) {
   var d = bnSkcLoad();
   if (d.eq[entryId]) { delete d.eq[entryId]; bnSkcSave(d); }
+  if (typeof gearOnCardLeave === 'function') { try { gearOnCardLeave(entryId); } catch (e) { /* 略過 */ } }   // 離開名冊:身上裝備退回背包(js/ld_equip.js;熔鍊 / 遣散 / 傳承拆解都經這裡)
   return true;
 }
 // 路人的卡面戰法(固定大招與被動除外;不含學習欄裝備,避免裝備內容反過來變成可傳承)
@@ -219,12 +220,12 @@ function bnSkcGrant(id) {
 function bnSkcRecommend(id, n, cs) {
   var c = bnSkcCs(cs), roster = c && Array.isArray(c.roster) ? c.roster : [], d = bnSkcLoad(), out = [], i, slot, cur;
   roster.forEach(function (r) {
-    if (out.length >= (n | 0) && n) return;
     cur = d.eq[r.id] || [null, null];
     for (slot = 0; slot < bnSkcSlots(r); slot++) if (!cur[slot]) break;
     if (slot < bnSkcSlots(r) && bnSkcCanEquip(c, r, slot, id).ok) out.push(r);
   });
   out.sort(function (a, b) { return (b.gr | 0) - (a.gr | 0); });
+  out = out.filter(function (x, i, a) { return !x.fig || a.findIndex(function (y) { return y.fig === x.fig; }) === i; });   // 同名只推一張(副卡不重複推薦)
   return n ? out.slice(0, n) : out;
 }
 // R10 他人效果:名人專屬戰法裝在『非原主』身上時的效果(BN_SKILL_OTHER;缺項 = BN_KIT_CFG.otherDefaultMul)。原主 / 通用戰法回 null。戰鬥接線屬 B2

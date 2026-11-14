@@ -12,6 +12,10 @@ function npcJobTitle(e) {
   var j = (typeof CARD_JOB_BY_ID !== 'undefined') ? CARD_JOB_BY_ID[e.main] : null;
   return j ? j.t[Math.max(0, (e.ja[e.main] || 1) - 1)] : '';
 }
+// 小卡頭像底層剪影(沿用 cardsui.js CU_SIL;圖缺時 <img> 自行移除,剪影留底)
+function npcSilSvg() {
+  return (typeof CU_SIL === 'string') ? CU_SIL.replace('class="cusil"', 'style="position:absolute;left:0;top:0;width:100%;height:100%;fill:#c9b98f;opacity:.55"') : '';
+}
 function npcPortraitSrc(e) {
   var pj;
   if (e.fig) return (typeof fxFigImg === 'function' && fxFigImg(e.fig)) || 'assets/portraits/' + e.fig + '.webp';
@@ -63,7 +67,7 @@ function npcHeroCardRender() {
   g = CARD_GRADE[e.gr];
   src = npcPortraitSrc(e);
   h = '<div style="display:flex;gap:8px;align-items:center">' +
-    '<div style="width:44px;height:44px;border-radius:6px;border:2px solid #6fc08a;background:rgba(128,128,128,.2);overflow:hidden;flex:none">' + (src ? '<img alt="" src="' + npcEsc(src) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.remove()">' : '') + '</div>' +
+    '<div style="width:44px;height:44px;border-radius:6px;border:2px solid #6fc08a;background:rgba(128,128,128,.2);overflow:hidden;flex:none;position:relative">' + npcSilSvg() + (src ? '<img alt="" src="' + npcEsc(src) + '" style="position:relative;width:100%;height:100%;object-fit:cover" onerror="this.remove()">' : '') + '</div>' +
     '<div style="flex:1;min-width:0"><b>' + npcEsc(e.name) + '</b> <span style="color:#c9b98f;font-size:12px">' + g.ch + ' · ' + npcEsc(npcJobTitle(e)) + '</span>' +
     '<div style="font-size:12px;color:#c9b98f">' + npcEsc(npcFavLabel(e.fav)) + ' 親近 ' + (e.fav | 0) + '/' + NPC_CFG.favMax + ' · ' + npcWhereText(e) + '</div></div>' +
     '<span data-a="x" style="cursor:pointer;padding:0 4px">✕</span></div>';

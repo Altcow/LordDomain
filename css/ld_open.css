@@ -1,0 +1,116 @@
+/* css/ld_open.css — 開場 / 解鎖 / 預約 / 活動 介面(js/ld_open_ui.js)。前綴 ldo-。只在旗標 ldui 開啟時才有對應元素;顏色用 ld_theme.css 的變數。 */
+/* 灰木牌:鎖頭疊在木牌右上、條件文字沿用 .ldh-sub */
+.ldh-plq .ldo-lkic { position: absolute; right: -4px; top: -6px; width: 26px; height: 26px; pointer-events: none; z-index: 2; }
+.ldh-plq .ldo-lkic[hidden], .ldh-plq .ldo-lktx[hidden] { display: none; }
+.ldh-plq .ldo-lkimg { display: block; width: 26px; height: 26px; font: 900 14px/26px var(--ld-font); }
+.ldh-plq .ldo-lkimg img, .ldh-plq .ldo-lkimg .ld-ph-cell { width: 100%; height: 100%; display: block; }
+.ldh-plq .ldo-lktx { background: #2b1a10cc; border-radius: 8px; padding: 1px 5px; max-width: 120px; white-space: normal; text-align: center; }
+.ldh-plq.ldo-cele { animation: ldo-pop .6s ease-in-out 5; z-index: 8; }
+@keyframes ldo-pop { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.18); filter: drop-shadow(0 0 10px #ffe48a); } }
+@media (prefers-reduced-motion: reduce) { .ldh-plq.ldo-cele { animation: none; filter: drop-shadow(0 0 8px #ffe48a); } }
+.ldo-banner { position: absolute; left: 50%; top: 28%; transform: translateX(-50%); z-index: 30; pointer-events: none; text-align: center; font-family: var(--ld-font); animation: ldo-bn 3.2s ease-out both; }
+.ldo-banner b { display: block; font-size: 22px; color: var(--gold2); text-shadow: 0 2px 0 var(--ink), 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 -2px 0 var(--ink); }
+.ldo-banner span { display: inline-block; margin-top: 2px; padding: 2px 12px; border: var(--line2); border-radius: 12px; background: var(--paper); color: var(--ink); font-weight: 900; font-size: 14px; }
+.ldo-banner .ldo-bimg { display: block; width: 160px; height: 90px; margin: 0 auto; }
+.ldo-banner .ldo-bimg img { width: 100%; height: 100%; object-fit: contain; }
+@keyframes ldo-bn { 0% { opacity: 0; transform: translateX(-50%) translateY(14px); } 12%, 80% { opacity: 1; transform: translateX(-50%); } 100% { opacity: 0; } }
+
+/* 內頁共用:米紙卡 + 金鈕 */
+.ldo-page { display: flex; flex-direction: column; gap: 8px; font-family: var(--ld-font); color: var(--ink); }
+.ldo-card { background: var(--paper); color: var(--ink); border: var(--line2); border-radius: 12px; box-shadow: var(--drop2); padding: 8px 10px; line-height: 1.5; font-size: 13px; }
+.ldo-ttl { font-size: 15px; font-weight: 900; margin-bottom: 4px; }
+.ldo-ttl small { font-size: 12px; font-weight: 700; color: #7a6040; margin-left: 4px; }
+.ldo-sm { font-size: 12px; color: #6a5036; overflow-wrap: anywhere; }
+.ldo-gt { font-size: 13px; font-weight: 900; color: #8a4a10; }
+.ldo-b { font: 900 14px/1.1 var(--ld-font); min-height: 40px; min-width: 44px; padding: 4px 12px; color: var(--ink); background: linear-gradient(var(--gold2), var(--gold)); border: var(--line2); border-radius: 12px; box-shadow: var(--drop2); cursor: pointer; }
+.ldo-b:active { transform: translateY(3px); box-shadow: 0 0 0 var(--ink); }
+.ldo-b.s { background: linear-gradient(#fff3d6, #efdcb4); }
+.ldo-b.s.on { background: linear-gradient(var(--gold2), var(--gold)); }
+.ldo-b:disabled { filter: grayscale(1); opacity: .5; cursor: default; }
+.ldo-rowb { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.ldo-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: var(--paper); color: var(--ink); border: var(--line2); border-radius: 12px; box-shadow: var(--drop2); padding: 6px 10px; min-height: 48px; font-family: var(--ld-font); box-sizing: border-box; cursor: pointer; }
+.ldo-row.off { cursor: default; opacity: .92; }
+.ldo-row b { display: block; font-size: 14px; }
+.ldo-row small { display: block; font-size: 12px; color: #6a5036; }
+.ldo-ri { flex: none; width: 36px; height: 36px; display: inline-block; vertical-align: middle; position: relative; }
+.ldo-ri .ld-ph-cell, .ldo-ri img { display: block; width: 100%; height: 100%; }
+
+/* 新手七日 */
+.ldo-ban { height: 96px; border-radius: 10px; overflow: hidden; margin-bottom: 6px; background: #efdcb4; }
+.ldo-banimg { display: block; width: 100%; height: 100%; }
+.ldo-banimg img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ldo-g7 { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; margin-top: 6px; }
+.ldo-cell { position: relative; border: var(--line2); border-radius: 10px; background: #fff7e0; padding: 6px 4px; text-align: center; min-height: 92px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; overflow: hidden; }
+.ldo-cell > b, .ldo-cell > span, .ldo-cell > button, .ldo-cell > i { position: relative; z-index: 1; }
+.ldo-cell .ldo-cbg { position: absolute; inset: 0; opacity: .35; z-index: 0; }
+.ldo-cell .ldo-cbg .ld-ph-cell, .ldo-cell .ldo-cbg img { width: 100%; height: 100%; display: block; }
+.ldo-cell.can { box-shadow: 0 0 0 3px var(--gold); }
+.ldo-cell.got { opacity: .65; }
+.ldo-cell.big { background: #ffe9a8; }
+.ldo-cell i { font-style: normal; color: #7a6040; font-weight: 700; }
+.ldo-cell .ldo-b { min-height: 32px; padding: 2px 10px; font-size: 13px; }
+.ldo-pick-h { margin-top: 8px; padding-top: 6px; border-top: 2px dashed #c9a868; }
+.ldo-pickg { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; max-height: 180px; overflow-y: auto; }
+.ldo-pickg .ldo-b { min-height: 34px; font-size: 13px; padding: 2px 8px; }
+
+/* 賽季簽到 */
+.ldo-gs { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin: 4px 0; }
+.ldo-sc { position: relative; aspect-ratio: 1 / 1; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.ldo-sc .ldo-scbg { position: absolute; inset: 0; }
+.ldo-sc .ldo-scbg .ld-ph-cell, .ldo-sc .ldo-scbg img { width: 100%; height: 100%; display: block; }
+.ldo-sc > b { position: relative; z-index: 1; }
+.ldo-sc .ldo-scmk { position: absolute; inset: 14%; z-index: 2; opacity: .9; }
+.ldo-sc .ldo-scmk .ld-ph-cell, .ldo-sc .ldo-scmk img { width: 100%; height: 100%; display: block; }
+.ldo-sc.miss { opacity: .55; }
+.ldo-sc.today { box-shadow: 0 0 0 3px var(--red); }
+.ldo-sc .ldo-b { position: absolute; z-index: 3; bottom: 1px; left: 8%; right: 8%; min-height: 22px; min-width: 0; padding: 0; font-size: 12px; }
+
+/* 主線 / 獎勵列 */
+.ldo-q { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dashed #d8c08a; }
+.ldo-q .n { flex: none; min-width: 28px; height: 28px; border-radius: 14px; background: var(--wood2); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 900; padding: 0 4px; box-sizing: border-box; }
+.ldo-q .t { flex: 1 1 auto; min-width: 0; }
+.ldo-q .t b { display: block; font-size: 13px; }
+.ldo-q .t small { display: block; font-size: 12px; color: #6a5036; }
+.ldo-q.done { opacity: .55; }
+.ldo-q.done .n { background: var(--teal); }
+.ldo-q.cur { background: #fff0c4; border-radius: 8px; }
+
+/* 團結關 */
+.ldo-boss { display: flex; gap: 10px; align-items: flex-start; }
+.ldo-bimgw { flex: none; width: 96px; }
+.ldo-bossimg { display: block; width: 96px; height: 120px; font: 900 40px/120px var(--ld-font); text-align: center; }
+.ldo-bossimg img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ldo-binfo { flex: 1 1 auto; min-width: 0; }
+.ldo-hp { height: 14px; background: #e3d3a8; border: var(--line2); border-radius: 8px; overflow: hidden; margin: 2px 0; }
+.ldo-hp i { display: block; height: 100%; background: linear-gradient(#ef6a4c, var(--red)); }
+.ldo-ft { display: flex; align-items: center; gap: 4px; font-size: 12px; margin: 2px 0; }
+.ldo-ft span { flex: 1 1 0; max-width: 60px; height: 8px; border-radius: 4px; background: #e3d3a8; position: relative; overflow: hidden; }
+.ldo-ft span.on::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--p, 100%); background: var(--red); }
+.ldo-ft span.dead { background: #9b8e78; }
+.ldo-pick { display: flex; align-items: center; gap: 8px; width: 100%; background: #fff; color: var(--ink); border: var(--line2); border-radius: 10px; padding: 4px 8px; min-height: 44px; margin: 3px 0; text-align: left; font-family: var(--ld-font); font-size: 13px; box-sizing: border-box; cursor: pointer; }
+.ldo-pick.sel { background: #fff0c4; box-shadow: 0 0 0 2px var(--gold); }
+.ldo-pick .n { flex: none; width: 22px; height: 22px; border-radius: 11px; background: var(--wood2); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 900; }
+.ldo-pick .sp { flex: 1 1 auto; }
+
+/* 橫式:團結關頁左右排;窄螢幕保持單欄 */
+@media (orientation: landscape) and (min-width: 700px) { .ldo-g7 { grid-template-columns: repeat(7, 1fr); } }
+
+/* 首頁場景上方晶片列(新手七日 / 活動 / 主線) */
+.ldo-chips { position: absolute; left: 6px; top: 6px; right: 6px; z-index: 12; display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; pointer-events: none; }
+.ldo-chips[hidden] { display: none; }
+.ldo-chip { pointer-events: auto; position: relative; flex: 0 0 auto; display: flex; align-items: center; gap: 4px; min-height: 40px; max-width: 150px; padding: 2px 10px 2px 4px; font-family: var(--ld-font); color: var(--ink); background: var(--paper); border: var(--line2); border-radius: 20px; box-shadow: var(--drop2); cursor: pointer; text-align: left; }
+.ldo-chip:active { transform: translateY(2px); box-shadow: 0 0 0 var(--ink); }
+.ldo-chip .ldo-chic { flex: none; width: 30px; height: 30px; display: inline-block; font: 900 14px/30px var(--ld-font); text-align: center; }
+.ldo-chip .ldo-chic .ld-ph-cell, .ldo-chip .ldo-chic img { display: block; width: 100%; height: 100%; }
+.ldo-chip .ldo-chtx { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.ldo-chip .ldo-chtx b { font-size: 13px; white-space: nowrap; }
+.ldo-chip .ldo-chtx small { font-size: 11px; color: #6a5036; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* .ld-ph 預設是帶框的佔位方塊(ld_page.css);這裡的圖示 / 底圖不要框 */
+.ld-ph.ldo-ri, .ld-ph.ldo-chic, .ld-ph.ldo-cbg, .ld-ph.ldo-scbg, .ld-ph.ldo-scmk, .ld-ph.ldo-lkimg, .ld-ph.ldo-bossimg, .ld-ph.ldo-banimg, .ld-ph.ldo-bimg { border: 0; box-shadow: none; background: none; border-radius: 0; }
+.ld-ph.ldo-cbg, .ld-ph.ldo-scbg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ld-ph.ldo-scmk { position: absolute; width: auto; height: auto; }
+.ld-ph.ldo-banimg, .ld-ph.ldo-bimg { width: 100%; height: 100%; display: block; }
+.ld-ph.ldo-bossimg { width: 96px; height: 120px; }
+#shellRoot .ldo-chip .ldo-chtx b { color: var(--ink); text-shadow: none; }
+#shellRoot .ldo-chip .ldo-chtx small { color: #6a5036; text-shadow: none; }
