@@ -2,6 +2,19 @@
    直式:站位列 → 排序篩選 → 卡片橫列 → 按鈕列 → 資訊條;橫式:左 55% 站位 + 資訊、右 45% 排序 + 卡片網格 + 按鈕。所有按鈕 >= 44。 */
 .ldt { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; gap: 6px; font-family: var(--ld-font); color: var(--white); }
 .ldt button { font-family: var(--ld-font); -webkit-tap-highlight-color: transparent; cursor: pointer; }
+.ldt-teams { flex: 0 0 auto; display: flex; gap: 6px; }
+.ldt-tab { flex: 1 1 0; min-width: 44px; max-width: 160px; height: 44px; padding: 0 6px; display: flex; align-items: center; justify-content: center; gap: 5px; border: var(--line2); border-radius: 12px; background: linear-gradient(var(--wood2), var(--wood3)); color: #e9d3a6; font-size: 13px; font-weight: 900; box-shadow: inset 0 0 0 1px #f5c54255, var(--drop2); white-space: nowrap; overflow: hidden; }
+.ldt-tab:active { transform: translateY(2px); }
+.ldt-tab.on { background: linear-gradient(var(--gold2), var(--gold)); color: var(--ink); box-shadow: var(--drop2); }
+.ldt-tn { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ldt-tc { flex: 0 0 auto; min-width: 18px; padding: 0 4px; border-radius: 9px; background: #0006; font-size: 12px; line-height: 18px; text-align: center; }
+.ldt-tab.on .ldt-tc { background: #0002; }
+.ldt-tab.over, .ldt-slot.over .ldt-cell { box-shadow: 0 0 0 4px var(--mine), var(--drop2); }
+.ldt-tab.bad, .ldt-slot.bad .ldt-cell { box-shadow: 0 0 0 4px var(--red), var(--drop2); }
+.ldt-slot.over .ldt-cell.em { background: #3fa86a66; }
+.ldt-slot.bad .ldt-cell.em { background: #d9452b55; }
+.ldt-cards.over { box-shadow: inset 0 0 0 3px var(--red); border-radius: 10px; }
+.ldt-cards.bad { box-shadow: none; }
 .ldt-slots { flex: 1 1 178px; min-height: 150px; max-height: 214px; display: flex; gap: 6px; align-items: stretch; justify-content: center; }
 .ldt-slot { position: relative; display: flex; flex-direction: column; min-width: 0; flex: 104 1 0; max-width: 150px; }
 .ldt-slot.r2 { flex: 120 1 0; max-width: 174px; }
@@ -9,7 +22,19 @@
 .ldt-ico { width: 24px; height: 24px; font-size: 13px; border-radius: 7px; }
 .ldt-flag .ldt-ico { width: 26px; height: 26px; background: linear-gradient(#6fd2e0, var(--mine)); color: var(--ink); }
 .ldt-cell { position: relative; flex: 1 1 auto; min-height: 100px; padding: 0; overflow: hidden; border: 3px solid #8a8a8a; border-radius: 12px; background: linear-gradient(#4a2f1a, var(--wood3)); color: var(--white); box-shadow: var(--drop2); text-align: center; }
+.ldt-cell { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.ldt-card { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.ldt-pt img { pointer-events: none; -webkit-user-drag: none; }
 .ldt-cell:active { transform: translateY(2px); }
+.ldt-dragsrc { opacity: .35; }
+.ldt-slot.carry .ldt-cell { box-shadow: 0 0 0 3px var(--mine), var(--drop2); animation: ldtPulse 1s ease-in-out infinite; }
+.ldt-slot.tgt:not(.carry) .ldt-cell { box-shadow: 0 0 0 2px #f5c542aa, var(--drop2); }
+.ldt-slot.land .ldt-cell { animation: ldtLand .3s ease-out; }
+@keyframes ldtLand { 0% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@keyframes ldtPulse { 50% { opacity: .75; } }
+.ldt-ghost { position: fixed; left: 0; top: 0; z-index: 99999; margin: 0; pointer-events: none; box-shadow: 0 10px 22px #000a, var(--drop2); opacity: .96; will-change: transform; }
+.ldt-ghost.fly { transition: transform .2s ease-out, opacity .2s ease-out; }
+body.ldt-dragging { cursor: grabbing; user-select: none; -webkit-user-select: none; }
 .ldt-cell.g1 { border-color: var(--teal); } .ldt-cell.g2 { border-color: var(--q2); } .ldt-cell.g3 { border-color: var(--q3); } .ldt-cell.g4 { border-color: var(--q4); }
 .ldt-slot.sel .ldt-cell { box-shadow: 0 0 0 3px var(--gold), var(--drop2); }
 .ldt-cell.em { border-style: dashed; border-color: #f5c54299; background: #2b1a10a8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #e9d3a6; }
@@ -27,7 +52,7 @@
 .ldt-cell.busy .ldt-pt { filter: grayscale(.7); }
 .ldt-pos { flex: 0 0 28px; display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 3px; border: var(--line2); border-radius: 8px; background: linear-gradient(#e0b27a, #b07642 70%, #8a5a32); color: var(--ink); font-size: 13px; font-weight: 900; }
 .ldt-pos .ldt-ico { width: 20px; height: 20px; font-size: 12px; border-radius: 6px; box-shadow: none; }
-.ldt-sact { position: absolute; left: 3px; right: 3px; bottom: 66px; z-index: 4; display: flex; gap: 4px; justify-content: center; }
+.ldt-sact { position: absolute; left: 3px; right: 3px; bottom: 66px; z-index: 4; display: flex; flex-wrap: wrap-reverse; gap: 4px; justify-content: center; }
 .ldt-sact button { flex: 0 1 50px; min-width: 44px; height: 44px; padding: 0; border: var(--line2); border-radius: 12px; background: linear-gradient(var(--gold2), var(--gold)); color: var(--ink); font-size: 14px; font-weight: 900; box-shadow: var(--drop2); }
 .ldt-sact button[data-ldt="drop"] { background: linear-gradient(#ef6a4c, var(--red)); color: #fff; }
 .ldt-tools { flex: 0 0 auto; display: flex; gap: 6px; }
@@ -53,8 +78,9 @@
 .ldt-info { flex: 0 0 36px; display: flex; align-items: center; justify-content: center; gap: 6px; box-sizing: border-box; border: var(--line2); border-radius: 12px; background: #2b1a10a8; box-shadow: inset 0 0 0 1px #f5c54288; font-size: 13px; font-weight: 900; white-space: nowrap; overflow: hidden; }
 .ldt-info b { color: var(--gold2); font-size: 15px; } .ldt-info i { font-style: normal; opacity: .5; } .ldt-info em { font-style: normal; } .ldt-info em.u { color: #8fe0a0; } .ldt-info em.d { color: #ff9a8a; }
 @media (orientation: landscape) {
-  .ldt { display: grid; grid-template-columns: 55fr 45fr; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "slots tools" "slots cards" "info acts"; column-gap: 10px; row-gap: 6px; }
+  .ldt { display: grid; grid-template-columns: 55fr 45fr; grid-template-rows: auto auto minmax(0, 1fr) auto; grid-template-areas: "teams teams" "slots tools" "slots cards" "info acts"; column-gap: 10px; row-gap: 6px; }
   .ldt-slots { grid-area: slots; flex: none; min-height: 0; max-height: none; align-self: stretch; padding-top: 10px; }
+  .ldt-teams { grid-area: teams; }
   .ldt-tools { grid-area: tools; }
   .ldt-cards { grid-area: cards; display: grid; grid-template-columns: repeat(auto-fill, 66px); grid-auto-rows: 92px; justify-content: space-between; align-content: start; gap: 6px; overflow-x: hidden; overflow-y: auto; min-height: 0; }
   .ldt-card { flex: none; }
@@ -70,4 +96,49 @@
 @media (max-height: 700px) and (orientation: portrait) {
   .ldt-cards { flex-basis: 90px; } .ldt-card { flex-basis: 58px; width: 58px; height: 80px; } .ldt-card .ldt-pt { bottom: 30px; }
 }
-@media (prefers-reduced-motion: reduce) { .ldt-cell:active, .ldt-tools button:active, .ldt-rec:active, .ldt-go:active { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ldt-cell:active, .ldt-tab:active, .ldt-tools button:active, .ldt-rec:active, .ldt-go:active { transform: none; } .ldt-slot.land .ldt-cell, .ldt-slot.carry .ldt-cell { animation: none; } .ldt-ghost.fly { transition: none; } }
+
+/* 2026-11-15 布陣建議行 / 打得到 / 布陣要訣頁 / 統御 */
+.ldt { position: relative; }
+.ldt-ib { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ldt-ib .ldt-info { flex: 0 0 36px; }
+.ldt-tip { box-sizing: border-box; min-height: 28px; padding: 4px 8px; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-size: 13px; font-weight: 900; line-height: 1.25; text-align: center; border: 2px solid transparent; text-shadow: 0 1px 2px #000; }
+.ldt-tip.g { background: #1f4d2cd0; border-color: #6fcf8a; color: #c9f5d6; }
+.ldt-tip.y { background: #5a4310d0; border-color: #f5c542; color: #ffe9a8; }
+.ldt-tip.r { background: #5c1c14d8; border-color: #ff7a66; color: #ffd4cc; }
+.ldt-tip.i { background: #1d3a52d0; border-color: #7ab8e8; color: #cfe6f8; }
+.ldt-hit { flex: 0 0 auto; margin-top: 2px; font-size: 11px; font-weight: 900; line-height: 14px; text-align: center; color: #e9d3a6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ldt-info b.over { color: #ff8a78; }
+.ldt-tipsov { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 6px; background: #000b; }
+.ldt-tipspg { position: relative; box-sizing: border-box; width: 100%; max-width: 560px; max-height: 100%; overflow-y: auto; padding: 14px 56px 10px 14px; border: var(--line2); border-radius: 14px; background: linear-gradient(#4a2f1a, var(--wood3)); box-shadow: var(--drop2); font-size: 14px; line-height: 1.55; }
+.ldt-tipspg h4 { margin: 8px 0 4px; font-size: 15px; color: var(--gold2); }
+.ldt-tipspg h4:first-of-type { margin-top: 0; padding-right: 40px; }
+.ldt-tipspg p { margin: 3px 0; } .ldt-tipspg p.li { padding-left: 12px; text-indent: -12px; } .ldt-tipspg p.li::before { content: "• "; }
+.ldt-tipspg b { color: var(--gold2); }
+.ldt-tipsx { position: absolute; top: 6px; right: 6px; width: 44px; height: 44px; border: var(--line2); border-radius: 12px; background: linear-gradient(var(--wood2), var(--wood3)); color: #e9d3a6; font-size: 18px; font-weight: 900; }
+@media (orientation: landscape) { .ldt-ib { grid-area: info; align-self: end; } }
+@media (max-height: 400px) and (orientation: landscape) { .ldt-tip { min-height: 24px; padding: 2px 6px; font-size: 12px; } .ldt-hit { font-size: 11px; line-height: 13px; margin-top: 1px; color: #f3dfae; text-shadow: 0 1px 2px #000; } .ldt-tipspg { font-size: 12.5px; line-height: 1.4; padding: 10px 56px 6px 10px; } }
+
+/* 2026-11-15 R6 推薦戰法橫列(推薦戰隊後出現,貼在隊伍頁下緣;按「套用戰法」才裝) */
+.ldt-skr { position: absolute; left: 0; right: 0; bottom: 0; z-index: 20; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: var(--line2); border-radius: 14px; background: linear-gradient(#4a2f1a, var(--wood3)); box-shadow: 0 -3px 12px #000a, inset 0 0 0 1px #f5c54288; max-height: 70%; overflow-y: auto; }
+.ldt-skr-h { display: flex; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 900; color: var(--gold2); }
+.ldt-skr-h i { font-style: normal; font-size: 12px; opacity: .85; color: #e9d3a6; }
+.ldt-skr-b { display: flex; gap: 6px; align-items: stretch; }
+.ldt-skr-cols { flex: 1 1 auto; min-width: 0; display: flex; gap: 6px; }
+.ldt-skr-p { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ldt-skr-n { font-size: 12px; font-weight: 900; color: #e9d3a6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ldt-skp { display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 44px; padding: 0 6px; border: var(--line2); border-radius: 10px; background: #fbf1dcee; color: var(--ink); font-size: 12px; font-weight: 900; text-align: left; }
+.ldt-skp i { flex: 0 0 9px; width: 9px; height: 9px; border-radius: 50%; background: #8a8a8a; }
+.ldt-skp span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ldt-skp.on i, .ldt-skp.ready i { background: #3f9a2a; }
+.ldt-skp.take i { background: #e0a21a; }
+.ldt-skp.miss { background: #00000044; color: #e9d3a6; border-style: dashed; }
+.ldt-skp.miss i, .ldt-skp.none i, .ldt-skp.keep i { background: #8a8a8a; }
+.ldt-skp.on { background: #e2f2cf; }
+.ldt-skp.none { background: #00000033; color: #e9d3a6; border-style: dashed; cursor: default; }
+.ldt-skr-btns { flex: 0 0 92px; display: flex; flex-direction: column; gap: 6px; justify-content: flex-end; }
+.ldt-skr-btns button { min-height: 44px; border: var(--line2); border-radius: 12px; font-size: 14px; font-weight: 900; box-shadow: var(--drop2); }
+.ldt-skr-go { background: linear-gradient(var(--gold2), var(--gold)); color: var(--ink); }
+.ldt-skr-no { background: linear-gradient(var(--wood2), var(--wood3)); color: #e9d3a6; }
+.ldt-skr-m { font-size: 11.5px; line-height: 1.35; color: #f3dfae; }
+@media (max-height: 400px) and (orientation: landscape) { .ldt-skr { padding: 4px 8px; gap: 2px; } .ldt-skr-m { font-size: 11px; } }

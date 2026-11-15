@@ -445,7 +445,7 @@ function bnsShareLink() {
   if (!BNS.myCode) return Promise.resolve(false);
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-      return navigator.share({ title: '城主領地 對戰練習', text: '來挑戰我的隊伍!', url: url }).then(function () { return true; }, function (e) {
+      return navigator.share({ title: '東漢卡卡 對戰練習', text: '來挑戰我的隊伍!', url: url }).then(function () { return true; }, function (e) {
         if (e && e.name === 'AbortError') return false;
         return bnsCopy(url, 'bnsMyCode');
       });

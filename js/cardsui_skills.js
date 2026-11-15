@@ -47,13 +47,20 @@ function cuSkTx(s) { return (typeof fxText === 'function') ? fxText(s) : s; }
 function cuSkTierName(t) { for (var i = 0; i < CU_SK_TIER.length; i++) if (CU_SK_TIER[i][0] === t) return CU_SK_TIER[i][1]; return ''; }
 function cuSkTierOrd(t) { for (var i = 0; i < CU_SK_TIER.length; i++) if (CU_SK_TIER[i][0] === t) return i; return 9; }
 
-// 全部可解鎖戰法(戰法表 + 兵種卡,且有階級者;大招 / 被動不計)
+// 全部可解鎖戰法(戰法表 + 兵種卡,且有階級者;大招 / 被動不計)。2026-11-15 戰法大全:限第一季可得的 72 個(54 傳承 + 18 兵書,js/ld_skilldex.js skdPoolSet)+ 已解鎖的其他戰法;沒載入 ld_skilldex.js 時維持原清單
 function cuSkAll() {
-  var ids = {}, out = [];
+  var ids = {}, out = [], pool = (typeof skdPoolSet === 'function') ? skdPoolSet() : null, own = null;
   if (typeof BN_SKILLS !== 'undefined') Object.keys(BN_SKILLS).forEach(function (id) { ids[id] = 1; });
   if (typeof BN_LEGION !== 'undefined' && BN_LEGION.cards) Object.keys(BN_LEGION.cards).forEach(function (id) { ids[id] = 1; });
-  Object.keys(ids).forEach(function (id) { if (bnSkcTier(id)) out.push(id); });
+  if (pool && Object.keys(pool).length) own = bnSkcLoad().own;
+  Object.keys(ids).forEach(function (id) { if (bnSkcTier(id) && (!own || pool[id] || own.hasOwnProperty(id))) out.push(id); });
   return out;
+}
+// 傳承統計(頂列「已傳承 n / 總數」):分母 = 第一季可傳承 / 可得的戰法(傳承與通用;不含不再能拆卡取得的可拆池戰法),分子只算其中已解鎖者
+function cuSkStat() {
+  var c = (typeof skdCount === 'function') ? skdCount() : null;
+  if (c && c.total) return { own: c.own, total: c.total };
+  return { own: cuSkOwned().length, total: cuSkAll().length };
 }
 // 已解鎖(bnskc.own)且有階級者
 function cuSkOwned() {
@@ -270,14 +277,14 @@ function cuSkRedraw() {
 
 // 傳承分頁主體(cardsui.js cardsUiRender 呼叫)
 function cuSkillsHtml(cs) {
-  var all, own, h, cats = [''].concat(CU_SK_CAT.map(function (c) { return c[0]; })), p;
+  var all, own, h, cats = [''].concat(CU_SK_CAT.map(function (c) { return c[0]; })), p, stat;
   if (!cs) return '<div class="cusub">尚無城邦資料</div>';
   cuSkCss();
-  all = cuSkAll();
-  own = cuSkOwned();
+  stat = cuSkStat();
   CU_SK.av = cuSkAvailMap(cs);
   p = cuSkPartsHtml(cs);
-  h = '<div class="cusk-top"><span class="cusk-stat">已傳承 ' + own.length + ' / ' + all.length + '</span>' +
+  h = '<div class="cusk-top"><span class="cusk-stat">已傳承 ' + stat.own + ' / ' + stat.total + '</span>' +
+    '<button class="cub" data-sk="skd">戰法大全</button>' +
     '<button class="cub" data-sk="panel" data-v="drill">研兵</button>' +
     '<button class="cub" data-sk="panel" data-v="inh">卡包可傳承的卡 (' + cuSkInheritRows(cs).length + ')</button></div>';
   h += '<input id="cuskq" class="cusk-q" type="search" placeholder="搜尋戰法或武將名" autocomplete="off" value="' + cuEsc(CU_SK.q) + '">';
@@ -293,6 +300,7 @@ function cuSkillsClick(a, b, cs) {
   var id = b.getAttribute('data-id'), v = b.getAttribute('data-v'), eid = b.getAttribute('data-eid');
   if (a === 'pick') { CU_SK.sel = CU_SK.sel === id ? '' : id; CU_SK.panel = ''; return 'part'; }
   if (a === 'panel') { CU_SK.panel = v || ''; return 'part'; }
+  if (a === 'skd') { if (typeof ldNavPush === 'function') ldNavPush('skilldex', {}); return false; }   // 新介面戰法大全頁(js/ld_skilldex.js)
   if (a === 'cat') { CU_SK.cat = v || ''; return 'full'; }
   if (a === 'person' || a === 'inh') {
     if (!cs || !cardsFind(cs, eid)) return false;

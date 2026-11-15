@@ -1,152 +1,121 @@
-/* css/bnreport.css — 戰鬥戰報畫面(js/bnreport.js):「貼紙戲班」樣式(共用主題 css/ld_theme.css)。結果頁 = 844×390 基準等比縮放置中;逐回合詳情 = 可捲動單欄。 */
-#bnRpt{position:fixed;left:0;top:0;right:0;bottom:0;z-index:80;box-sizing:border-box;overflow:hidden;background:#1a0d05;color:#fbeed2;font-family:var(--ld-font);font-size:13px;line-height:1.4}
+/* css/bnreport.css — 戰鬥結果戰報(js/bnreport.js):「貼紙戲班」樣式(共用主題 css/ld_theme.css)。2026-11-15 改版:真實尺寸排版(不再 844×390 等比縮放),直 / 橫向都可用;
+   勝敗緞帶與兵力條縮在頂端窄條,中間可捲動的區域給每位武將的戰法框(戰法 / 次 / 傷害 / 治療),底部是戰果 + 按鈕列(按鈕 ≥ 44px)。 */
+#bnRpt{position:fixed;left:0;top:0;right:0;bottom:0;z-index:80;box-sizing:border-box;overflow:hidden;background:#1a0d05;color:#fbeed2;font-family:var(--ld-font);font-size:13px;line-height:1.35}
 #bnRpt *{box-sizing:border-box;min-width:0}
-#bnRpt button{font-family:var(--ld-font);min-width:64px;min-height:34px}
-/* 結果頁舞台 */
-#bnRpt .bnr-pg{position:absolute;left:50%;top:50%;width:844px;height:390px;overflow:hidden;transform-origin:center center;transform:translate(-50%,-50%)}
-#bnRpt .bnr-bg{position:absolute;inset:-12px;background:url(../assets/ui/bg_home_land.webp) center/cover;filter:blur(5px) brightness(.55) saturate(1.1);transform:scale(1.05)}
-#bnRpt .bnr-bg:after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 70% 60% at 55% 45%,transparent,#1a0d05cc)}
-/* 頂列 */
-#bnRpt .bnr-hd{position:absolute;left:0;right:0;top:0;height:38px;display:flex;align-items:center;justify-content:space-between;padding-right:8px;z-index:5;background:linear-gradient(#1a0d05e6,#1a0d0500)}
-#bnRpt .bnr-tabs{display:flex;gap:6px;align-items:center}
-#bnRpt .bnr-tabs .ld-tab{font-size:13px;padding:4px 12px}
-#bnRpt .bnr-hd .ld-plaque b{font-size:15px}
-#bnRpt .bnr-hd .ld-plaque small{font-size:12px;font-weight:700;opacity:.8}
-#bnRpt .bnr-back{width:24px;height:24px;border-radius:50%;background:var(--paper);border:var(--line2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer}
-/* 主持人 */
-#bnRpt .bnr-host{position:absolute;left:4px;bottom:0;width:128px;z-index:3}
-#bnRpt .bnr-host img{display:block;height:170px;margin:0 auto;filter:drop-shadow(0 4px 0 #0008);animation:bnrBob 2.4s ease-in-out infinite}
-#bnRpt .bnr-host .ld-bubble{position:absolute;left:6px;right:-26px;bottom:176px;animation:bnrPop .45s cubic-bezier(.3,1.6,.5,1) both .6s}
-#bnRpt .bnr-host .ld-bubble:after{content:"";position:absolute;left:40px;bottom:-11px;border:8px solid transparent;border-top:10px solid var(--ink)}
-@keyframes bnrBob{50%{transform:translateY(-4px)}}
-@keyframes bnrPop{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
-/* 勝敗緞帶 + 光芒 + 彩帶 */
-#bnRpt .bnr-ban{position:absolute;left:50%;top:34px;transform:translateX(-50%);z-index:4;text-align:center;width:300px}
-#bnRpt .bnr-rays{position:absolute;left:50%;top:30px;width:340px;height:340px;margin:-170px 0 0 -170px;background:repeating-conic-gradient(#ffe48a33 0 10deg,transparent 10deg 20deg);border-radius:50%;-webkit-mask:radial-gradient(circle,#000 20%,transparent 68%);mask:radial-gradient(circle,#000 20%,transparent 68%);animation:bnrSpin 14s linear infinite;z-index:-1}
-@keyframes bnrSpin{to{transform:rotate(360deg)}}
-#bnRpt .bnr-ribbon{display:inline-block;position:relative;padding:2px 34px 4px;background:linear-gradient(#ef6a4c,var(--red));border:var(--line);border-radius:10px;box-shadow:var(--drop);animation:bnrStamp .5s cubic-bezier(.3,1.7,.5,1) both}
-#bnRpt .bnr-ribbon:before,#bnRpt .bnr-ribbon:after{content:"";position:absolute;top:10px;width:26px;height:32px;background:#b3321c;border:var(--line2);z-index:-1}
-#bnRpt .bnr-ribbon:before{left:-18px;clip-path:polygon(0 0,100% 0,100% 100%,0 100%,30% 50%)}
-#bnRpt .bnr-ribbon:after{right:-18px;clip-path:polygon(0 0,100% 0,70% 50%,100% 100%,0 100%)}
+#bnRpt button{font-family:var(--ld-font);min-width:64px;min-height:44px}
+#bnRpt .bnr-pg{position:absolute;left:0;top:0;right:0;bottom:0;display:flex;flex-direction:column;overflow:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+#bnRpt .bnr-bg{position:absolute;inset:-12px;background:url(../assets/ui/bg_home_land.webp) center/cover;filter:blur(5px) brightness(.5) saturate(1.1);transform:scale(1.05)}
+#bnRpt .bnr-bg:after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 80% 70% at 50% 45%,transparent,#1a0d05cc)}
+/* 頂端窄條:小緞帶 + 兵力條 + 回合 / 原因 */
+#bnRpt .bnr-top{position:relative;z-index:4;flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:4px 10px;background:linear-gradient(#1a0d05e6,#1a0d0500)}
+#bnRpt .bnr-ribbon{position:relative;flex:0 0 auto;padding:0 16px 1px;background:linear-gradient(#ef6a4c,var(--red));border:var(--line2);border-radius:8px;box-shadow:var(--drop2);animation:bnrStamp .5s cubic-bezier(.3,1.7,.5,1) both}
 #bnRpt .bnr-ribbon.lose,#bnRpt .bnr-ribbon.draw{background:linear-gradient(#9a9a9a,#6b6b6b)}
-#bnRpt .bnr-ribbon.lose:before,#bnRpt .bnr-ribbon.lose:after,#bnRpt .bnr-ribbon.draw:before,#bnRpt .bnr-ribbon.draw:after{background:#4d4d4d}
-#bnRpt .bnr-ribbon .ld-outline{font-size:38px;letter-spacing:10px}
-@keyframes bnrStamp{0%{transform:scale(2.2) rotate(-8deg);opacity:0}100%{transform:scale(1) rotate(0)}}
-#bnRpt .bnr-ban small{display:block;margin-top:6px;font-size:12px;font-weight:900;text-shadow:0 2px 0 #000}
-#bnRpt .bnr-conf{position:absolute;top:-10px;width:8px;height:12px;border:1.5px solid var(--ink);border-radius:2px;animation:bnrFall 2.6s linear infinite;z-index:3}
-@keyframes bnrFall{0%{transform:translateY(-20px) rotate(0);opacity:1}100%{transform:translateY(330px) rotate(540deg);opacity:0}}
-/* 兵力拔河條 */
-#bnRpt .bnr-tug{position:absolute;left:150px;right:12px;top:116px;z-index:4;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:900}
-#bnRpt .bnr-tug .bar{flex:1;height:14px;border:var(--line2);border-radius:8px;background:#5a1d12;overflow:hidden;box-shadow:var(--drop2)}
-#bnRpt .bnr-tug .bar i{display:block;height:100%;background:linear-gradient(#7fe0ee,var(--mine));border-right:2px solid var(--ink);width:0;animation:bnrGrow 1s ease-out forwards .4s}
+#bnRpt .bnr-ribbon .ld-outline{font-size:20px;letter-spacing:4px;white-space:nowrap}
+@keyframes bnrStamp{0%{transform:scale(2);opacity:0}100%{transform:scale(1)}}
+#bnRpt .bnr-tug{flex:1 1 auto;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:900;white-space:nowrap}
+#bnRpt .bnr-tug .bar{flex:1;height:10px;border:var(--line2);border-radius:6px;background:#5a1d12;overflow:hidden}
+#bnRpt .bnr-tug .bar i{display:block;height:100%;background:linear-gradient(#7fe0ee,var(--mine));border-right:2px solid var(--ink);width:0;animation:bnrGrow 1s ease-out forwards .3s}
 @keyframes bnrGrow{to{width:var(--w)}}
-/* 雙方站位 */
-#bnRpt .bnr-field{position:absolute;left:150px;right:12px;top:136px;height:120px;z-index:3;display:flex;justify-content:space-between;align-items:flex-end}
-#bnRpt .bnr-team{display:flex;gap:2px;align-items:flex-end}
-#bnRpt .bnr-who{position:relative;width:74px;text-align:center}
-#bnRpt .bnr-who img{height:92px;filter:drop-shadow(0 3px 0 #0009)}
-#bnRpt .bnr-team.foe .bnr-who img{transform:scaleX(-1)}
-#bnRpt .bnr-ring{position:absolute;left:50%;bottom:-4px;width:58px;height:14px;margin-left:-29px;border-radius:50%;border:3px solid var(--qc);box-shadow:0 0 8px var(--qc);z-index:-1}
-#bnRpt .bnr-team.win .bnr-who:not(.dead) img{animation:bnrCheer .6s ease-in-out infinite alternate}
-#bnRpt .bnr-team.win .bnr-who:nth-child(2) img{animation-delay:.2s}
-#bnRpt .bnr-team.win .bnr-who:nth-child(3) img{animation-delay:.4s}
-@keyframes bnrCheer{to{transform:translateY(-8px)}}
-#bnRpt .bnr-team.win.foe .bnr-who:not(.dead) img{animation-name:bnrCheerF}
-@keyframes bnrCheerF{from{transform:scaleX(-1)}to{transform:scaleX(-1) translateY(-8px)}}
-#bnRpt .bnr-team.lose .bnr-who:not(.dead) img{filter:grayscale(.85) brightness(.7) drop-shadow(0 3px 0 #0009);transform:translateY(5px) rotate(5deg)}
-#bnRpt .bnr-who.dead img{filter:grayscale(1) brightness(.5) drop-shadow(0 3px 0 #0009);transform:rotate(-10deg) translateY(6px)}
-#bnRpt .bnr-team.foe .bnr-who.dead img{transform:scaleX(-1) rotate(-10deg) translateY(6px)}
-#bnRpt .bnr-who.dead .bnr-ring{opacity:.2}
-#bnRpt .bnr-who .ld-stamp{position:absolute;left:50%;top:30px;margin-left:-16px;font-size:15px}
-#bnRpt .bnr-flag{position:absolute;top:0;left:2px;width:20px;height:26px;color:#fff;font-weight:900;font-size:12px;display:flex;align-items:center;justify-content:center;border:var(--line2);clip-path:polygon(0 0,100% 0,100% 82%,50% 100%,0 82%)}
-#bnRpt .bnr-vs{align-self:center;font-size:20px}
-/* 每人資料面板 */
-#bnRpt .bnr-cards{position:absolute;left:150px;right:12px;bottom:46px;height:84px;z-index:4;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px}
-#bnRpt .bnr-cd{position:relative;min-width:0;padding:4px 5px 3px 34px;font-size:10px;line-height:1.35;border-radius:12px}
+#bnRpt .bnr-meta{flex:0 0 auto;font-size:11px;font-weight:900;opacity:.85;text-shadow:0 2px 0 #000}
+/* 彩帶(勝利才有) */
+#bnRpt .bnr-conf{position:absolute;top:-12px;width:8px;height:12px;border:1.5px solid var(--ink);border-radius:2px;animation:bnrFall 2.8s linear infinite;z-index:2;pointer-events:none}
+@keyframes bnrFall{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(105vh) rotate(540deg);opacity:0}}
+/* 中間:我方隊 / 敵方隊(可捲動) */
+#bnRpt .bnr-main{position:relative;z-index:3;flex:1 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:2px 8px 6px;display:flex;flex-direction:column;gap:6px}
+#bnRpt .bnr-side{flex:0 0 auto}
+#bnRpt .bnr-sdh{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px;margin:0 0 4px;padding:3px 10px;font-size:12px;font-weight:900;border-radius:10px;background:#1a0d05b3;border-left:5px solid var(--mine)}
+#bnRpt .bnr-side.enemy .bnr-sdh{border-left-color:var(--foe)}
+#bnRpt .bnr-sdh>b:first-child{font-size:14px;color:var(--gold2)}
+#bnRpt b.k{color:#ff9d8f}
+#bnRpt b.h{color:#9be39b}
+#bnRpt .bnr-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-items:start}
+/* 單位卡 */
+#bnRpt .bnr-cd{position:relative;padding:6px 8px 5px;font-size:12px;border-radius:12px}
 #bnRpt .bnr-cd.en{box-shadow:inset 0 0 0 1px #ff8a7a66,0 4px 0 #0007}
-#bnRpt .bnr-face{position:absolute;left:3px;top:4px;width:28px;height:28px;border-radius:50%;border:var(--line2);background:var(--qc);overflow:hidden}
-#bnRpt .bnr-face img{width:100%;height:220%;object-fit:cover;object-position:50% 0;transform:none}
-#bnRpt .bnr-face .bnr-pt{display:flex;width:100%;height:100%}
-#bnRpt .bnr-cd b{display:block;font-size:12px}
-#bnRpt .bnr-row{display:flex;justify-content:space-between;gap:2px;white-space:nowrap}
-#bnRpt .bnr-row>span:first-child{overflow:hidden;text-overflow:ellipsis}
-#bnRpt .bnr-row em{font-style:normal;color:var(--gold)}
-#bnRpt .bnr-row .g{display:inline-block;min-width:13px;padding:0 2px;margin-right:2px;border:1.5px solid var(--ink);border-radius:4px;font-size:9px;font-weight:900;text-align:center;color:#fff;font-style:normal;background:#777}
-#bnRpt .g.S{background:var(--red)}
-#bnRpt .g.A{background:#9a52e6}
-#bnRpt .g.B{background:#3d8fe0}
-#bnRpt .bnr-mvp{position:absolute;right:-4px;top:-9px;font-size:10px;font-weight:900;padding:0 5px;background:linear-gradient(var(--gold2),var(--gold));color:var(--ink);border:var(--line2);border-radius:8px;box-shadow:var(--drop2);transform:rotate(8deg);animation:bnrPop .4s both 1.2s}
-#bnRpt .bnr-cd.dead{filter:saturate(.3) brightness(.8)}
+#bnRpt .bnr-cd.dead{filter:saturate(.35) brightness(.85)}
+#bnRpt .bnr-uh{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+#bnRpt .bnr-who{position:relative;flex:0 0 46px;width:46px;height:60px;display:flex;align-items:flex-end;justify-content:center}
+#bnRpt .bnr-who img{height:60px;max-width:100%;object-fit:contain;filter:drop-shadow(0 3px 0 #0009)}
+#bnRpt .bnr-cd.en .bnr-who img{transform:scaleX(-1)}
+#bnRpt .bnr-ring{position:absolute;left:50%;bottom:-3px;width:40px;height:10px;margin-left:-20px;border-radius:50%;border:2px solid var(--qc);box-shadow:0 0 6px var(--qc);z-index:-1}
+#bnRpt .bnr-who.dead img{filter:grayscale(1) brightness(.5) drop-shadow(0 3px 0 #0009);transform:rotate(-10deg) translateY(4px)}
+#bnRpt .bnr-cd.en .bnr-who.dead img{transform:scaleX(-1) rotate(-10deg) translateY(4px)}
+#bnRpt .bnr-who.dead .bnr-ring{opacity:.2}
+#bnRpt .bnr-who .ld-stamp{position:absolute;left:50%;top:18px;margin-left:-14px;font-size:13px}
+#bnRpt .bnr-flag{position:absolute;top:0;left:-2px;width:17px;height:21px;color:#fff;font-weight:900;font-size:11px;display:flex;align-items:center;justify-content:center;border:var(--line2);clip-path:polygon(0 0,100% 0,100% 82%,50% 100%,0 82%);z-index:1}
+#bnRpt .bnr-un{flex:1 1 auto;min-width:0}
+#bnRpt .bnr-nm{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+#bnRpt .bnr-nm b{font-size:14px}
+#bnRpt .bnr-nm small{font-size:11px;font-weight:900;opacity:.75}
+#bnRpt .bnr-mvp{font-size:10px;font-weight:900;padding:0 6px;background:linear-gradient(var(--gold2),var(--gold));color:var(--ink);border:var(--line2);border-radius:8px;box-shadow:var(--drop2);transform:rotate(-4deg)}
+#bnRpt .bnr-hp{display:flex;align-items:center;gap:6px;margin:2px 0}
+#bnRpt .bnr-hp u{flex:1;height:7px;border:1.5px solid var(--ink);border-radius:5px;background:#0006;overflow:hidden;text-decoration:none}
+#bnRpt .bnr-hp u i{display:block;height:100%;background:linear-gradient(#7fe0ee,var(--mine))}
+#bnRpt .bnr-cd.en .bnr-hp u i{background:linear-gradient(#ff9a86,var(--foe))}
+#bnRpt .bnr-hp em{flex:0 0 auto;font-style:normal;font-size:11px;font-weight:900}
+#bnRpt .bnr-tot{display:flex;flex-wrap:wrap;gap:0 12px;font-size:12px;font-weight:900}
+#bnRpt .bnr-tot b{font-size:14px}
+/* 戰法表:戰法 / 次 / 傷害 / 治療(傷害與治療同時有都列出;0 顯示淡色「—」) */
+#bnRpt .bnr-sh,#bnRpt .bnr-sk{display:grid;grid-template-columns:minmax(0,1fr) 26px 54px 54px;align-items:center;gap:2px}
+#bnRpt .bnr-sh{padding:2px 0 1px;border-top:1px dashed #fbeed244;font-size:10px;font-weight:900;opacity:.7}
+#bnRpt .bnr-sh span:not(:first-child),#bnRpt .bnr-sk>span:not(.n){text-align:right}
+#bnRpt .bnr-sk{min-height:22px;padding:1px 0;border-top:1px dashed #fbeed21a;font-size:12px}
+#bnRpt .bnr-sk .n{display:flex;align-items:center;gap:3px;font-weight:900;min-width:0}
+#bnRpt .bnr-sk .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#bnRpt .bnr-sk .c{opacity:.8}
+#bnRpt .bnr-sk b{font-size:13px}
+#bnRpt .bnr-sk .k b{color:#ff9d8f}
+#bnRpt .bnr-sk .h b{color:#9be39b}
+#bnRpt .bnr-sk i{font-style:normal;opacity:.4}
+#bnRpt .bnr-sk.z{opacity:.6}
+#bnRpt .bnr-sk .g{flex:0 0 auto;display:inline-block;min-width:14px;padding:0 3px;border:1.5px solid var(--ink);border-radius:4px;font-size:9px;font-weight:900;text-align:center;color:#fff;background:#777;opacity:1}
+#bnRpt .g.S{background:var(--red)!important}
+#bnRpt .g.A{background:#9a52e6!important}
+#bnRpt .g.B{background:#3d8fe0!important}
+#bnRpt .bnr-face{display:inline-block;width:28px;height:28px;border-radius:50%;border:var(--line2);background:var(--qc);overflow:hidden}
+#bnRpt .bnr-face img{width:100%;height:220%;object-fit:cover;object-position:50% 0}
 #bnRpt .bnr-pt{display:flex;align-items:center;justify-content:center;overflow:hidden}
 #bnRpt .bnr-pt img,#bnRpt .bnr-pt svg{width:100%;height:100%;object-fit:cover;display:block}
 #bnRpt .bnr-pt-fb{font-size:14px;font-weight:900;color:#fff}
-/* 按鈕與戰果 */
-#bnRpt .bnr-pg .bnr-btns{position:absolute;right:12px;bottom:8px;z-index:5;display:flex;gap:8px;align-items:center}
+/* 底部:戰果 + 按鈕列 */
+#bnRpt .bnr-foot{position:relative;z-index:5;flex:0 0 auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 10px;padding:6px 10px calc(6px);background:linear-gradient(#1a0d0500,#1a0d05ee 35%)}
+#bnRpt .bnr-loot{flex:1 1 200px;font-size:12px;font-weight:900}
+#bnRpt .bnr-loot span{display:inline-block;margin:2px 0 2px 4px;padding:1px 8px;border:var(--line2);border-radius:10px;background:var(--paper);color:var(--ink);box-shadow:var(--drop2)}
+#bnRpt .bnr-btns{flex:0 1 auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;align-items:center;margin-left:auto}
+#bnRpt .bnr-btns .ld-btn.off{opacity:.55}
 #bnRpt .bnr-norep{font-size:12px;font-weight:900;opacity:.85}
-#bnRpt .bnr-pg .bnr-loot{position:absolute;left:150px;bottom:12px;z-index:5;font-size:12px;font-weight:900}
-#bnRpt .bnr-loot span{display:inline-block;margin-left:4px;padding:1px 8px;border:var(--line2);border-radius:10px;background:var(--paper);color:var(--ink);box-shadow:var(--drop2)}
-/* 逐回合詳情 */
-#bnRpt .bnr-det{position:absolute;left:8px;right:8px;top:44px;bottom:8px;z-index:2;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
-#bnRpt .bnr-det.rds{overflow:hidden}
-/* 戰法統計:6 張單位卡(上我下敵) */
-#bnRpt .bnr-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:start;padding:4px 2px 8px}
-#bnRpt .bnr-sc{position:relative;padding:6px 8px 6px;font-size:12px}
-#bnRpt .bnr-sc.en{box-shadow:inset 0 0 0 1px #ff8a7a99,0 4px 0 #0007;background:#3b1710a8}
-#bnRpt .bnr-sc.dead{filter:saturate(.35) brightness(.85)}
-#bnRpt .bnr-sc .hh{position:relative;display:flex;align-items:center;gap:6px;min-height:34px;margin-bottom:4px}
-#bnRpt .bnr-sc .hh b{font-size:14px}
-#bnRpt .bnr-sc .hh small{font-size:11px;font-weight:900;opacity:.8;padding:0 6px;border:1.5px solid #fbeed244;border-radius:8px}
-#bnRpt .bnr-sc .bnr-face{position:relative;left:auto;top:auto;flex:0 0 32px;width:32px;height:32px;border:3px solid var(--qc);box-shadow:0 0 6px var(--qc)}
-#bnRpt .bnr-sc .hh .ld-stamp{position:absolute;left:18px;top:4px;font-size:12px;padding:0 4px;border-width:2px}
-#bnRpt .bnr-sc .bnr-mvp{right:-2px;top:-12px;animation:none}
-#bnRpt .bnr-sk{padding:3px 0;border-top:1px dashed #fbeed233}
-#bnRpt .bnr-sk .t{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:900}
-#bnRpt .bnr-sk .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#bnRpt .bnr-sk .g{display:inline-block;min-width:14px;padding:0 3px;border:1.5px solid var(--ink);border-radius:4px;font-size:9px;font-weight:900;text-align:center;color:#fff;font-style:normal;background:#777}
-#bnRpt .bnr-sk .bs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:2px}
-#bnRpt .bb{display:flex;align-items:center;gap:3px;font-size:11px;min-height:14px}
-#bnRpt .bb em{font-style:normal;font-weight:900;opacity:.85}
-#bnRpt .bb u{flex:1;height:8px;border:1.5px solid var(--ink);border-radius:5px;background:#0006;overflow:hidden;text-decoration:none}
-#bnRpt .bb u i{display:block;height:100%}
-#bnRpt .bb.k u i{background:linear-gradient(#ff7a5e,var(--red))}
-#bnRpt .bb.h u i{background:linear-gradient(#8fe08f,#3f9f4a)}
-#bnRpt .bb b{min-width:22px;text-align:right}
-#bnRpt .bb.k b{color:#ff9d8f}
-#bnRpt .bb.h b{color:#9be39b}
-#bnRpt .bb.z{opacity:.45}
-#bnRpt .bb.z b{flex:1;text-align:left}
-/* 逐回合:左時間軸 + 右事件列 */
-#bnRpt .bnr-rds{display:flex;gap:8px;height:100%}
-#bnRpt .bnr-tl{flex:0 0 74px;display:flex;flex-direction:column;gap:5px;overflow-y:auto;padding:2px 2px 6px;-webkit-overflow-scrolling:touch}
-#bnRpt .bnr-tp{display:block;padding:3px 6px 5px;text-align:center;font-size:13px;flex:0 0 auto}
-#bnRpt .bnr-tp .tb{display:block;height:4px;margin-top:3px;border-radius:2px;background:var(--foe);overflow:hidden}
-#bnRpt .bnr-tp .tb s{display:block;height:100%;background:var(--mine);text-decoration:none}
-#bnRpt .bnr-rb{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 8px}
-#bnRpt .bnr-rh{display:flex;align-items:center;justify-content:space-between;gap:8px;position:sticky;top:-6px;z-index:2;margin:-6px -8px 4px;padding:6px 8px;background:#2b1a10f2;border-bottom:2px solid #f5c54255}
-#bnRpt .bnr-rh b{font-size:14px;color:var(--gold2)}
-#bnRpt .bnr-rh .ld-btn{font-size:12px;padding:4px 10px;min-height:28px}
-#bnRpt .bnr-ln{display:flex;align-items:flex-start;gap:6px;padding:3px 6px;font-size:13px;line-height:1.45;border-left:4px solid transparent}
-#bnRpt .bnr-ln .bnr-tx{flex:1;overflow-wrap:anywhere}
-#bnRpt .bnr-ln.me{border-left-color:var(--blue)}
-#bnRpt .bnr-ln.foe{border-left-color:var(--red)}
-#bnRpt .bnr-mini{flex:0 0 22px;width:22px;height:22px;margin-top:0}
-#bnRpt .bnr-mini .bnr-face{position:relative;left:auto;top:auto;display:block;width:22px;height:22px;border:2px solid var(--qc)}
-#bnRpt .bnr-ln.c-act{font-weight:900;margin-top:4px;background:#fbeed211}
-#bnRpt .bnr-ln.c-heal{color:#9be39b}
-#bnRpt .bnr-ln.c-kill{color:#ff9d8f;font-weight:900}
-#bnRpt .bnr-ln.c-ef,#bnRpt .bnr-ln.c-mo,#bnRpt .bnr-ln.c-ro{font-size:12px;opacity:.85}
-#bnRpt .bnr-nd{color:#ff6b4d;font-weight:900}
-#bnRpt .bnr-nh{color:#6fe07f;font-weight:900}
-#bnRpt .bnr-crit{color:#ffd24a;font-weight:900}
-#bnRpt .bnr-fin{margin:8px 0 0;padding:8px;border:var(--line2);border-radius:12px;background:var(--paper);color:var(--ink);font-weight:900;overflow-wrap:anywhere;box-shadow:var(--drop2)}
-/* 直向:不等比縮放,統計卡 2 欄、時間軸改上方橫排 */
-@media (orientation:portrait){
-  #bnRpt.bnr-v-detail .bnr-pg{left:0;top:0;width:100%;height:100%;transform:none!important}
-  #bnRpt.bnr-v-detail .bnr-hd{flex-wrap:wrap;height:auto;min-height:38px;padding:calc(2px + env(safe-area-inset-top)) 6px 2px 0;row-gap:4px}
-  #bnRpt.bnr-v-detail .bnr-det{top:calc(76px + env(safe-area-inset-top));bottom:calc(8px + env(safe-area-inset-bottom))}
-  #bnRpt .bnr-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
-  #bnRpt .bnr-rds{flex-direction:column}
-  #bnRpt .bnr-tl{flex:0 0 auto;flex-direction:row;overflow-x:auto;overflow-y:hidden}
-  #bnRpt .bnr-tp{min-width:56px}
+/* 窄螢幕(直向手機):一欄 */
+@media (max-width:640px){
+  #bnRpt .bnr-cards{grid-template-columns:minmax(0,1fr)}
+  #bnRpt .bnr-top{flex-wrap:wrap;row-gap:2px}
+  #bnRpt .bnr-meta{flex:1 0 100%;order:3}
+  #bnRpt .bnr-sh,#bnRpt .bnr-sk{grid-template-columns:minmax(0,1fr) 30px 64px 64px}
+  #bnRpt .bnr-btns{flex:1 1 100%}
+  #bnRpt .bnr-btns .ld-btn{flex:1 1 auto}
 }
-@media (prefers-reduced-motion:reduce){#bnRpt .bnr-conf,#bnRpt .bnr-rays,#bnRpt .bnr-host img,#bnRpt .bnr-team.win .bnr-who img{animation:none}}
+/* 橫向矮螢幕(手機橫放):壓縮高度,讓兩隊儘量同屏 */
+@media (max-height:520px) and (min-width:641px){
+  #bnRpt .bnr-top{padding:2px 10px}
+  #bnRpt .bnr-ribbon .ld-outline{font-size:17px}
+  #bnRpt .bnr-main{gap:3px;padding-bottom:2px}
+  #bnRpt .bnr-sdh{margin-bottom:2px;padding:1px 10px;font-size:11px}
+  #bnRpt .bnr-sdh>b:first-child{font-size:13px}
+  #bnRpt .bnr-cd{padding:3px 6px 2px;font-size:11px}
+  #bnRpt .bnr-uh{margin-bottom:1px;gap:6px}
+  #bnRpt .bnr-who{flex-basis:32px;width:32px;height:40px}
+  #bnRpt .bnr-who img{height:40px}
+  #bnRpt .bnr-ring{width:26px;margin-left:-13px}
+  #bnRpt .bnr-who .ld-stamp{top:9px;font-size:11px}
+  #bnRpt .bnr-flag{width:14px;height:17px;font-size:9px}
+  #bnRpt .bnr-nm b{font-size:13px}
+  #bnRpt .bnr-hp{margin:0}
+  #bnRpt .bnr-tot{font-size:11px}
+  #bnRpt .bnr-tot b{font-size:12px}
+  #bnRpt .bnr-sk{min-height:16px;font-size:11px;padding:0}
+  #bnRpt .bnr-sk b{font-size:12px}
+  #bnRpt .bnr-sh{font-size:9px}
+  #bnRpt .bnr-foot{padding:3px 10px;gap:2px 10px}
+  #bnRpt .bnr-loot{flex:1 1 120px;font-size:11px}
+  #bnRpt .bnr-loot span{margin:0 0 0 3px}
+}
+@media (prefers-reduced-motion:reduce){#bnRpt .bnr-conf,#bnRpt .bnr-ribbon,#bnRpt .bnr-tug .bar i{animation:none}#bnRpt .bnr-tug .bar i{width:var(--w)}}

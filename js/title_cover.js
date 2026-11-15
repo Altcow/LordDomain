@@ -79,9 +79,8 @@ function tcBuild() {
     img.onload = function () { bg.style.backgroundImage = 'url("' + bgUrl + '")'; };
     img.src = bgUrl;
   }
-  if (logoUrl) { logo = tcEl('img', 'tc-logo-img'); logo.alt = '城主領地'; logo.src = logoUrl; title.appendChild(logo); }
-  else title.appendChild(tcEl('div', 'tc-logo', '城主領地'));
-  title.appendChild(tcEl('div', 'tc-sub', '東漢戰區指揮'));
+  if (logoUrl) { logo = tcEl('img', 'tc-logo-img'); logo.alt = '東漢卡卡'; logo.src = logoUrl; title.appendChild(logo); }
+  else title.appendChild(tcEl('div', 'tc-logo', '東漢卡卡'));
   press = tcEl('div', 'tc-press', '點擊任意處開始');
   snd = tcBtn('', 'tc-snd', function (ev) { if (ev && ev.stopPropagation) ev.stopPropagation(); tcToggleSound(); });
   ver = tcEl('div', 'tc-ver', '');
@@ -221,7 +220,7 @@ function tcInfoText(srv) {
   if (!tcSt || !tcSt.info) return '讀取中…';
   inf = tcSt.info[srv.id];
   if (!inf) return '尚未建立角色';
-  return '城 Lv' + (inf.lv || 1) + (inf.ts ? ' · 最後遊玩 ' + tcTime(inf.ts) : '');
+  return inf.ts ? '最後遊玩 ' + tcTime(inf.ts) : '已建立角色';
 }
 
 function tcRenderAll() {

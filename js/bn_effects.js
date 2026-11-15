@@ -168,6 +168,8 @@ function bnHasBuff(x) { for (var i = 0; i < BN_BUFFS.length; i++) if (x.st[BN_BU
 function bnHasNeg(x) { var k; for (k in x.st) if (BN_NEG[k]) return true; return false; }
 
 // ───────── 發動戰法 ─────────
+// 發動率重平衡 pf 適用的主效果(同 tools/bn_rate_gen.js DMGK)
+var BN_PF_KIND = { atk_single: 1, atk_front: 1, atk_back: 1, atk_all: 1, atk_pierce: 1, atk_cross: 1, atk_multi: 1, atk_snipe: 1, atk_exec: 1, execute_chain: 1, lifesteal: 1, dot_spread: 1, dot_burn: 1, dot_poison: 1, dot_bleed: 1, delay_burst: 1, heal_single: 1, heal_all: 1, heal_hot: 1, shield_single: 1, shield_all: 1 };
 function bnCdOf(inst) {
   var d = inst.def, base = d.cd !== undefined ? d.cd : (d.cat === 'active' ? BN_DATA.cd[d.power] : (d.cat === 'ult' ? BN_DATA.rate.ultCd : 0));
   if (base > 1 && d.cat !== 'ult' && BN_DATA.cdCut) base = Math.max(1, base - BN_DATA.cdCut);   // 戰鬥改版:全機率制下冷卻整體縮短(讓一回合能放出更多戰法)
@@ -199,6 +201,7 @@ function bnCast(S, u, inst, o) {
   if (u.mods.skillPlus && (d.cat === 'active' || d.cat === 'pursuit' || d.cat === 'ult')) o = Object.assign({}, o, { scale: (o.scale || 1) * (1 + u.mods.skillPlus) });
   if (inst.vsScale) o = Object.assign({}, o, { scale: (o.scale || 1) * inst.vsScale });
   if (inst.otherMul) o = Object.assign({}, o, { scale: (o.scale || 1) * inst.otherMul });   // 他人效果倍率(BN_SKILL_OTHER.mul,B2;原主 / 無此欄不動)
+  if (d.pf && d.pf !== 1 && BN_PF_KIND[d.kind]) o = Object.assign({}, o, { scale: (o.scale || 1) * d.pf });   // 發動率重平衡:單次數值係數(傷害 / 治療 / 護盾 / 持續傷害 / 延遲爆發才縮;增減益、控制不縮;擊殺再放、援護、保底分支同一處)
   if (inst.vsCrit) o = Object.assign({}, o, { vsCrit: inst.vsCrit });
   if (u.randPow && (d.cat === 'active' || d.cat === 'pursuit' || d.cat === 'ult')) o = Object.assign({}, o, { scale: (o.scale || 1) * (u.randPow[0] + S.rng() * (u.randPow[1] - u.randPow[0])) });   // 對象條件(特定友軍在我方時)效果提升
   if (P.onlyVs && d.vs && !o.forced) o = Object.assign({}, o, { forced: bnEnemies(S, u).filter(function (x) { return bnVsMatch(S, d.vs, x); })[0] });
@@ -500,10 +503,8 @@ function bnApplyEffect2(S, u, eff, res, o) {
       var tl = targets.length ? targets : [u];
       if (eff.target === 'ally_one' && scope.indexOf('fig:') === 0) tl = bnAllies(S, u, true).filter(function (x) { return x.fig === scope.slice(4); });
       if (scope.indexOf('fig:') === 0 && eff.target === 'self') tl = bnAllies(S, u, true).filter(function (x) { return x.fig === scope.slice(4); });
-      for (i = 0; i < tl.length; i++) for (j = 0; j < tl[i].act.length; j++) {
-        if (tl[i].act[j].def.cat === 'ult') continue;   // 不可縮短大招
-        if (kind === 'cd_reset') tl[i].act[j].cd = 0; else tl[i].act[j].cd = Math.max(0, tl[i].act[j].cd - amt);
-      }
+      // 發動率重平衡(2026-11-15):冷卻已取消,『縮短冷卻』改為『戰法發動率提升』(每 1 回合冷卻 = +5pp、持續 2 回合;冷卻歸零 = +10pp);資料 kind / params 不變
+      for (i = 0; i < tl.length; i++) bnStatusApply(S, u, tl[i], 'rate_up', { val: (kind === 'cd_reset' ? 0.10 : 0.05 * Math.max(1, amt)), left: bnDurOf(eff, o) }, {});
       break;
     }
     case 'self_sacrifice': {
@@ -888,10 +889,13 @@ function bnTryPursuit(S, u, target) {
     inst = u.act[i]; d = inst.def;
     if (d.cat !== 'pursuit' || inst.cd > 0) continue;
     if (!bnCanCast(S, u, inst)) continue;
+    if (d.mx && inst.n >= d.mx) continue;   // 發動率重平衡:每場上限
+    var pity = bnPityOf(inst);
     rate = bnRateOf(S, u, inst); ok = S.rng() < rate;
     S.stats.rolls++; if (ok) S.stats.rollOk++;
-    bnEv(S, 'roll', { u: u.id, id: d.id, p: Math.round(rate * 100), ok: ok ? 1 : 0 });
-    if (!ok) continue;
+    bnEv(S, 'roll', { u: u.id, id: d.id, p: Math.round(rate * 100), ok: ok ? 1 : 0, pity: pity && ok ? 1 : undefined });
+    if (!ok) { inst.miss++; continue; }
+    inst.n++; inst.miss = 0;
     if (ch.step >= BN_DATA.chain.stepCap) { S.stats.chainCap++; bnEv(S, 'chaincap', { n: ch.step }); return n; }
     ch.step++; ch.dv++;
     bnEv(S, 'chain', { n: ch.step, k: 'pursuit' });
@@ -1394,7 +1398,7 @@ function bnSetupCdReduce(S, o, d, P) {
       return;
     }
   }
-  tl.forEach(function (x) { x.act.forEach(function (it) { it.cdMinus = (it.cdMinus || 0) + Math.max(1, Math.round(amt)); }); });
+  tl.forEach(function (x) { x.act.forEach(function (it) { if (it.def.cat !== 'ult') it.ratePP = (it.ratePP || 0) + 0.05 * Math.max(1, Math.round(amt)); }); });   // 發動率重平衡:冷卻縮短 → 發動率 +5pp / 級(不含大招)
 }
 
 // ───────── 羈絆(combos partB + fac*.json bonds) ─────────
@@ -1520,7 +1524,7 @@ function bnBondOp(S, bd, e, ctx) {
       break;
     }
     case 'cd_reduce':
-      for (i = 0; i < to.length; i++) to[i].act.forEach(function (it) { if ((!e.skill || it.def.id === e.skill) && it.cd > 0) it.cd = Math.max(0, it.cd - (e.amount || 1)); });
+      for (i = 0; i < to.length; i++) if (to[i].alive) bnStatusApply(S, null, to[i], 'rate_up', { val: 0.05 * (e.amount || 1), left: 2 }, {});   // 發動率重平衡:縮短冷卻 → 發動率提升
       break;
     case 'skill_amp':
       for (i = 0; i < to.length; i++) {

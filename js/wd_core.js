@@ -539,9 +539,15 @@ function wdTripHome(W, cs, trip, t, events, wiped) {
 function wdTripTurn(W, cs, trip, t, events) {   // 打完:隊伍開始回程;全滅 → 瞬間回城並重傷
   var wiped = !!trip.wiped;
   if (wiped) {
-    trip.slots.forEach(function (s) { W.hurt[s.id] = t + WD_CFG.hurtMs; });
+    trip.slots.forEach(function (s) { W.hurt[s.id] = t + Math.round(WD_CFG.hurtMs * wdHmMul('hurt')); });
     wdTripHome(W, cs, trip, t, events, true);
   } else { trip.st = 'back'; trip.tHome = t + wdBackMs(trip); }
+}
+// 首頁經營乘數(hm_core.js 的 hmMul;未載入 / 非有限正數 → 1,行為與未接掛鉤完全相同)
+function wdHmMul(k) {
+  var m = 1;
+  if (typeof hmMul === 'function') { try { m = Number(hmMul(k)); } catch (e) { m = 1; } }
+  return isFinite(m) && m > 0 ? m : 1;
 }
 // 兵種契合 / 星階 → 每小時產出
 function wdStarOf(e) { return typeof cardsStarLv === 'function' ? cardsStarLv(e) : ((e && e.starLv) | 0); }
@@ -590,7 +596,7 @@ function wdGarrisonDo(W, cs, pt, cardId, now) {
   if (!e) return { ok: false, reason: 'missing' };
   if (wdHurtLeft(W, cardId, now) > 0) return { ok: false, reason: 'hurt' };
   if (typeof cardsUseBlock === 'function') { b = cardsUseBlock(e, 'garrison'); if (!b.ok) return { ok: false, reason: b.k }; }
-  pt.guard = { card: cardId, t0: now, t1: now + WD_CFG.guardMs, ac: now, perH: wdYieldPerHour(pt, e) * (pt.tr && typeof EV_CFG !== 'undefined' ? EV_CFG.treasureYieldMul : 1), hb: 0 };   // 寶地產量 × 2(駐守當下算進 perH)
+  pt.guard = { card: cardId, t0: now, t1: now + WD_CFG.guardMs, ac: now, perH: wdYieldPerHour(pt, e) * wdHmMul('guardYield') * (pt.tr && typeof EV_CFG !== 'undefined' ? EV_CFG.treasureYieldMul : 1), hb: 0 };   // 寶地產量 × 2(駐守當下算進 perH)
   if (typeof ldOpenNote === 'function') ldOpenNote('garrison', { t: now });
   wdTrpSet(W, cardId, wdTroopR(W, cs, cardId, now), now);
   if (typeof cardsUseSet === 'function') cardsUseSet(e, 'garrison', 'wd:' + pt.id);

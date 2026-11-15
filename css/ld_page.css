@@ -27,6 +27,8 @@
 .ldp-panel { background: #2b1a10a8; border: var(--line2); border-radius: 14px; box-shadow: inset 0 0 0 1px #f5c54288, 0 4px 0 #0007; padding: 8px; }
 .ldp-empty { margin: 40px auto 0; text-align: center; font-size: 14px; font-weight: 900; color: #e9d3a6; opacity: .9; }
 @media (orientation: landscape) { .ldp-top { height: 44px; } }
+/* 新介面把舊統一外框(panelui.js)第 2 層面板改成滿版(ld_nav.js 的 ldNavFullFrame):不要寬度三檔鈕 */
+.pf-frame[data-ldfull] .pf-hd .pf-w { display: none; }
 /* 佔位徽章(素材沒到時):圓角方塊 + 墨線 + 落影 + 置中漢字;has:true 後圖片 / 圖集格疊在上面 */
 .ld-ph { position: relative; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 36px; height: 36px; overflow: hidden; border: var(--line2); border-radius: 10px; box-shadow: var(--drop2);
   background: linear-gradient(var(--paper), var(--paper3)); color: var(--ink); font: 900 18px/1 var(--ld-font); vertical-align: middle; }
@@ -35,3 +37,41 @@
   .ldp { transition: none; }
   .ldp-btn:active { transform: none; }
 }
+/* ───── 舊頁共用頂列(js/ld_nav.js ldNavSyncBar;2026-11-15 橫版首頁外殼):舊頁在堆疊頂端時,固定在最上面的一條,樣式同 .ldp-top ─────
+   body.ld-leg = 有頂列;--ldleg-h = 頂列高(直式 52、橫向小高度 44,都加上方安全區)。各舊頁內容讓到頂列之下,各頁自己的返回 / 關閉鈕一律藏起來。 */
+.ldleg { position: fixed; left: 0; top: 0; right: 0; z-index: 74; display: flex; align-items: center; gap: 8px; box-sizing: content-box; height: 52px; font-family: var(--ld-font);
+  padding: env(safe-area-inset-top, 0px) calc(8px + env(safe-area-inset-right, 0px)) 0 calc(8px + env(safe-area-inset-left, 0px));
+  background: linear-gradient(#8a5a32, #5b3a1e 70%, #4a2d18); box-shadow: 0 3px 0 var(--ink); }
+.ldleg[hidden] { display: none; }
+.ldleg .ldp-title { margin-left: 0; min-height: 30px; box-sizing: border-box; flex: 0 1 auto; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ldleg .ldp-x { margin-left: auto; }
+body.ld-leg { --ldleg-h: calc(52px + env(safe-area-inset-top, 0px)); }
+@media (orientation: landscape) and (max-height: 520px) {
+  .ldleg { height: 44px; }
+  body.ld-leg { --ldleg-h: calc(44px + env(safe-area-inset-top, 0px)); }
+}
+/* 統一外框(panelui.js)頁:卡包 / 地圖。外框讓到頂列之下,自己的標題列(標題 + ×)藏起來 */
+body.ld-leg .pf-frame.pf-l2, body.ld-leg .pf-frame.pf-l2[data-w] { top: var(--ldleg-h) !important; padding-top: 0 !important; }
+body.ld-leg .pf-frame.pf-l2 > .pf-hd { display: none; }
+body.ld-leg-cards .pf-frame.pf-l2 > .pf-bd { padding: 0 max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px)); }   /* 內容左右至少 12px(不貼邊、避開瀏海) */
+/* 戰鬥層(#bnLayer)裡的舊頁:擂台 / 對戰 / 戰報列表自己的標題列(關閉 / ✕ / ↩)藏起來,面板讓到頂列之下 */
+body.ld-leg #bnTour, body.ld-leg #bnShare, body.ld-leg #bnLog { top: var(--ldleg-h); }
+body.ld-leg #bnTour .bt-h, body.ld-leg #bnShare .bs-h, body.ld-leg #bnLog .lh { display: none; }
+/* 地圖子頁(校場等)的頁內「‹ 返回」:改由頂列 ‹ 負責(ld_nav.js legacy.back) */
+body.ld-leg-map #wdPanel .wd-sub [data-wd="back"] { display: none; }
+/* 庫房:舊頂列帶與 ✕ 在頂列正下方 / 底下,✕ 藏起來 */
+body.ld-leg-goods #goodsPanel [data-gp="close"] { display: none; }
+/* 設定:新介面一律全螢幕頁(原本橫向是 380px 右側抽屜、直式是底部面板);標題列(✕)、拖曳把手、「完成」都藏起來,返回 / 關閉走頂列。橫向 = 左分類(分頁鈕直排)+ 右設定項 */
+body.ld-leg-settings #stRoot .st-drawer { left: 0; right: 0; top: var(--ldleg-h); bottom: 0; width: auto; max-height: none; border-radius: 0; box-shadow: none; transform: none !important; transition: none !important; }
+body.ld-leg-settings #stRoot .st-mask { background: none; }
+body.ld-leg-settings #stRoot .st-grip, body.ld-leg-settings #stRoot .st-head, body.ld-leg-settings #stRoot .st-foot { display: none; }
+body.ld-leg-settings #stRoot .st-body { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
+@media (orientation: landscape) and (max-height: 520px) {
+  body.ld-leg-settings #stRoot .st-drawer { display: grid; grid-template-columns: 148px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  body.ld-leg-settings #stRoot .st-tabs { grid-column: 1; grid-row: 1; flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 8px 8px max(8px, env(safe-area-inset-left, 0px)); border-bottom: 0; border-right: 1px solid rgba(255, 255, 255, .18); overflow-y: auto; }
+  body.ld-leg-settings #stRoot .st-tabs[hidden] { display: none; }
+  body.ld-leg-settings #stRoot .st-tab { flex: 0 0 auto; border-bottom: 0; border-left: 3px solid transparent; border-radius: 6px; text-align: left; padding: 4px 10px; }
+  body.ld-leg-settings #stRoot .st-tab.on { border-left-color: #f0b45a; }
+  body.ld-leg-settings #stRoot .st-body { grid-column: 2; grid-row: 1; min-width: 0; padding-left: 16px; }
+}
+@media (orientation: portrait) { body.ld-leg-goods #goodsPanel { z-index: 46; left: 0; right: 0; top: var(--ldleg-h); bottom: 0; width: auto; max-width: none; max-height: none; border-radius: 0; box-sizing: border-box; overflow-y: auto; background: #141a24; } }   /* 直式庫房原本是 z-index 3 的小浮窗(被首頁蓋住):改成頂列下方的滿版頁 */

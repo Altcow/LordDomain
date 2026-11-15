@@ -129,7 +129,7 @@
     var head = document.createElement('div');
     head.className = 'itp-head';
     var title = document.createElement('b');
-    title.textContent = '要把城主領地放到主畫面嗎?';
+    title.textContent = '要把東漢卡卡放到主畫面嗎?';
     head.appendChild(title);
     head.appendChild(btn('✕', '關閉提示', 'itp-x', hide));
     card.appendChild(head);

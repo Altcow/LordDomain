@@ -225,7 +225,7 @@ function cardsRevealPlay(cards, onDone, opts) {
   var art = rvArtOk(list);
   root = document.createElement('div'); root.className = 'rv' + (power ? ' ps' : '') + (art ? ' art' : '');
   root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', '抽卡結果');
-  main = rvDiv('rv-main', root); grid = rvDiv('rv-grid', main);
+  main = rvDiv('rv-main', root); grid = rvDiv('rv-grid' + (list.length > 7 ? ' n' + list.length : ''), main);
   s = rvS = { root: root, more: !!(opts && opts.more), list: list, art: art, cards: [], cbs: typeof onDone === 'function' ? [onDone] : [], power: power, fast: chain, k: 1, timer: null, pos: 0, steps: null, stg: [], final: false, fired: false, closed: false, log: [] };
   rvLastLog = s.log;
   list.forEach(function (c) {

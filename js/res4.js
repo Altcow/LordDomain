@@ -1,6 +1,7 @@
 // js/res4.js — 木鐵石糧的統一讀寫(補兵・名聲・鍛造材料 設計 0.3)。四資源放在主存檔 world.res(wood / iron / stone / grain),不改 RESOURCES 常數。
 // 所有模組(校場征兵花糧、地圖一鍵收成)只經本檔讀寫;寫入後呼叫既有的 saveWorld()(map.js)。world 不存在(node 測試 / 尚未建世界)時 → 讀回 0、寫入失敗(false)。
-// 之後有倉庫上限就在 res4Add 夾。全域:RES4_KEYS res4Get res4Has res4Spend res4Add res4All。ES2017;不用 ?. ??。
+// 之後有倉庫上限就在 res4Add 夾。全域:RES4_KEYS res4Get res4Has res4Spend res4Add res4All res4Total4 res4SeasonReset。
+// 賽季:world.res.ss = 重置到的季號(戳記放 world.res 內,主存檔才存得下;偏離規格的 world.resSs);res4SeasonReset 只動木鐵石糧,coin(文)不動。ES2017;不用 ?. ??。
 
 var RES4_KEYS = ['wood', 'iron', 'stone', 'grain'];
 
@@ -55,4 +56,23 @@ function res4Add(gain) {
   }
   if (any) res4Save();
   return out;
+}
+// 四資源合計(賽季結餘換算用)
+function res4Total4() {
+  var s = 0;
+  RES4_KEYS.forEach(function (k) { s += res4Get(k); });
+  return s;
+}
+// 賽季重置(冪等):world.res.ss >= idx → {skipped:true};否則木鐵石糧 = homeSeasonStartRes() 或 SEASON_CFG.startRes(都沒有 → 0),coin 不動
+function res4SeasonReset(idx) {
+  var r = res4World(), st = null, k;
+  idx = typeof idx === 'number' && isFinite(idx) ? Math.floor(idx) : 0;
+  if (!r) return { skipped: true, reason: 'noworld' };
+  if (typeof r.ss === 'number' && r.ss >= idx) return { skipped: true };
+  if (typeof homeSeasonStartRes === 'function') { try { st = homeSeasonStartRes(); } catch (e) { st = null; } }
+  if (!st || typeof st !== 'object') st = (typeof SEASON_CFG !== 'undefined' && SEASON_CFG && SEASON_CFG.startRes) ? SEASON_CFG.startRes : null;
+  RES4_KEYS.forEach(function (key) { r[key] = res4Num(st && st[key]); });
+  r.ss = idx;
+  res4Save();
+  return { skipped: false };
 }

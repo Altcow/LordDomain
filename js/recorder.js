@@ -1246,7 +1246,7 @@ function recSave() {
   }
   if (canShare) {
     let p = null;
-    try { p = nav.share({ files: [file], title: '城主領地' }); } catch (e) { p = null; }
+    try { p = nav.share({ files: [file], title: '東漢卡卡' }); } catch (e) { p = null; }
     if (p && p.catch) {
       p.catch(function (e) {
         if (e && e.name === 'AbortError') return;

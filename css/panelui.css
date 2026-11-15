@@ -30,3 +30,6 @@
 /* 橫版大面板模式(style.css panel-big-landscape)會把 #cardsPanel 撐成滿版:外框接管時歸還給 .pf-bd */
 body.panel-big-landscape #cardsPanel#cardsPanel { position: static !important; top: auto !important; left: auto !important; right: auto !important; bottom: auto !important; width: auto !important; height: auto !important; max-width: none !important; max-height: none !important; margin: 0 !important; transform: none !important; border: 0 !important; border-radius: 0 !important; z-index: auto !important; padding: 0 !important; background: #141a24 !important; }
 body.panel-big-landscape .pf-frame.pf-l2 { background: #141a24; }
+/* 新介面(ldui,ld_nav.js 開頁時在 body 加 ld-ui):第 2 層外框一律滿寬滿高(直橫皆然),隱藏寬度三檔鈕;尊重安全區 */
+body.ld-ui .pf-frame.pf-l2, body.ld-ui .pf-frame.pf-l2[data-w] { left: 0 !important; right: 0 !important; top: 0 !important; bottom: 0 !important; width: auto !important; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+body.ld-ui .pf-hd .pf-w { display: none !important; }

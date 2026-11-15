@@ -164,6 +164,19 @@ function bnKitSlotIds(card, o, sl) {
   if (o && Array.isArray(o.slots)) return o.slots.filter(function (x) { return !!x; });   // 明確指定(敵將本命池 / 模擬)不截斷
   return (bnKitEq(card) || []).filter(function (x) { return !!x; }).slice(0, sl);
 }
+// 名人空槽自動帶本人專屬戰法(發動率重平衡 2026-11-15 決議):依序 = 傳承戰法(kit 的 legacy 欄)→ 專屬池(bnSimFigSlots 雜湊順序);跳過已裝備者與固定戰法(大招 / 固定主動),最多 n 個。確定性、不消耗 rng
+function bnOwnFill(card, have, n) {
+  var kf = (typeof BN_KIT_BY !== 'undefined' && BN_KIT_BY.figs && BN_KIT_BY.figs[card.fig]) || null, cand = [], out = [], i, id;
+  if (!kf || n <= 0) return out;
+  if (kf.legacy) cand.push(kf.legacy);
+  cand = cand.concat(bnSimFigSlots(card));
+  for (i = 0; i < cand.length && out.length < n; i++) {
+    id = cand[i];
+    if (!BN_SKILLS[id] || BN_SKILLS[id].cat === 'passive' || id === kf.fixed || have.indexOf(id) >= 0 || out.indexOf(id) >= 0) continue;
+    out.push(id);
+  }
+  return out;
+}
 // 單一選擇槽戰法的實例參數:原主 = 本命 homeRate;他人 = BN_SKILL_OTHER(bnSkcOtherOf)的 mul / tgtCut / ratePP。通用 / 兵種卡 / 無專屬者回 null
 function bnKitInst(card, id) {
   var d = BN_SKILLS[id], out = {}, ot;
@@ -327,10 +340,11 @@ function bnUnitSpec(card, o) {
     var kfb = (typeof BN_KIT_BY !== 'undefined' && BN_KIT_BY.figs && BN_KIT_BY.figs[card.fig]) || null;   // 專屬聯動(bondFix):不占被動 / 選擇槽,隨名人自帶;vs 條件不成立時該技能自行略過
     if (kfb && kfb.bondFix) for (i = 0; i < kfb.bondFix.length; i++) skills.push(kfb.bondFix[i]);
     spec.el = fg.el || '';
-    // 戰法欄位新制(B2):名人 = 固定戰法(kit 的 fixed 欄,大招;無大招者 = 第一個主動)+ 被動 + 聯動 + 選擇槽(只認裝備;空槽不自動配、不再帶舊 skills 欄)
+    // 戰法欄位新制(B2):名人 = 固定戰法(kit 的 fixed 欄,大招;無大招者 = 第一個主動)+ 被動 + 聯動 + 選擇槽(讀裝備;空槽 2026-11-15 起自動帶本人專屬戰法,見 bnOwnFill)
     sl = bnKitN(card);
     learned = bnKitSlotIds(card, o, sl);
     lgSrc = learned;
+    if (BN_KIT_CFG.autoFill && !(o && Array.isArray(o.slots)) && learned.length < sl) learned = learned.concat(bnOwnFill(card, learned, sl - learned.length));   // 發動率重平衡:選擇槽沒裝滿 → 自動帶本人專屬戰法(傳承優先、再專屬池);玩家一裝就覆寫、不鎖卡、不占裝備;模擬 / 測試明確指定 o.slots 者不補
     for (i = 0; i < learned.length; i++) if (BN_SKILLS[learned[i]] && skills.indexOf(learned[i]) < 0) { skills.push(learned[i]); kitIds.push(learned[i]); }
     spec.ult = (kfb && kfb.fixed) ? kfb.fixed : fg.ult;
   } else {

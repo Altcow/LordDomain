@@ -97,3 +97,90 @@ function perfGateOk(g, nowMs) {
   if (g.next < nowMs) g.next = nowMs + iv;
   return true;
 }
+
+// ───────── 畫質總開關(低 / 中 / 高) ─────────
+// 偏好鍵 lorddomain.quality.v1:'low' | 'mid' | 'high';沒有此鍵 = 自動(依裝置判斷)。
+// qualityApply 一次寫齊既有偏好鍵(省電 / 幀率 / 繪圖引擎 / 新美術 / 圖示 / 地形貼圖 / 外部建築圖),鍵名與讀取邏輯不變。
+// 其他程式只需讀 qualityLevel() / qualityFxCap() / qualityShareFx();body 另有 class q-low / q-mid / q-high 供 CSS 使用。
+const QUALITY_KEY = 'lorddomain.quality.v1';
+const QUALITY_LEVELS = ['low', 'mid', 'high'];
+const QUALITY_FX_CAP = { low: 6, mid: 16, high: 24 };   // 同時存在的特效元素上限(只影響演出,不影響戰鬥結果)
+
+// 自動判斷:偏好減少動態 / 核心數 <= 2 / 記憶體 <= 2GB / 極小螢幕 → 低;核心數 >= 8 且記憶體 >= 4GB(或未提供)→ 高;其餘 → 中
+function qualityAuto() {
+  const nav = typeof navigator !== 'undefined' ? navigator : {};
+  const cores = nav.hardwareConcurrency > 0 ? nav.hardwareConcurrency : 4;
+  const mem = nav.deviceMemory > 0 ? nav.deviceMemory : 0;
+  let reduced = false;
+  try { reduced = typeof matchMedia === 'function' && !!matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { reduced = false; }
+  let small = false;
+  try { small = typeof screen !== 'undefined' && screen && Math.min(screen.width, screen.height) > 0 && Math.min(screen.width, screen.height) <= 320; } catch (e) { small = false; }
+  if (reduced || cores <= 2 || (mem && mem <= 2) || small) return 'low';
+  if (cores >= 8 && (!mem || mem >= 4)) return 'high';
+  return 'mid';
+}
+
+function qualityStored() {
+  try {
+    const v = localStorage.getItem(QUALITY_KEY);
+    if (QUALITY_LEVELS.indexOf(v) >= 0) return v;
+  } catch (e) { /* 讀不到視為自動 */ }
+  return '';
+}
+
+// 'auto' 或 'low' / 'mid' / 'high'(設定頁顯示用)
+function qualityMode() {
+  return qualityStored() || 'auto';
+}
+
+function qualityLevel() {
+  return qualityStored() || qualityAuto();
+}
+
+function qualityBodyClass(level) {
+  if (typeof document === 'undefined' || !document.body || !document.body.classList) return;
+  QUALITY_LEVELS.forEach(function (l) { document.body.classList.toggle('q-' + l, l === level); });
+}
+
+// 把等級寫進各既有偏好鍵(函式不存在就略過,舊存檔 / 測試環境不出錯)
+function qualityApply(level) {
+  if (QUALITY_LEVELS.indexOf(level) < 0) level = 'mid';
+  const on = level !== 'low';
+  if (typeof perfSetPowerSave === 'function') perfSetPowerSave(level === 'low');
+  if (typeof perfSetFps === 'function') perfSetFps(level === 'high' ? 60 : 30);
+  if (typeof renderSetBackend === 'function') renderSetBackend('c2d');   // 加速繪圖(實驗)一律不開
+  if (typeof artSetOn === 'function') artSetOn(on);
+  if (typeof uiIconsSetOn === 'function') {
+    uiIconsSetOn(on);
+    if (typeof advUiRefresh === 'function') advUiRefresh(true);
+    if (typeof nsUiRefresh === 'function') nsUiRefresh(true);
+  }
+  if (typeof terrainTexSetOn === 'function') terrainTexSetOn(on);
+  if (typeof extSpritesSetOn === 'function') extSpritesSetOn(on);
+  qualityBodyClass(level);
+  return level;
+}
+
+// v:'low' | 'mid' | 'high' = 手動指定並寫入;'auto' / 空 = 清除手動值、改回自動判斷。回傳實際等級
+function qualitySet(v) {
+  if (QUALITY_LEVELS.indexOf(v) >= 0) {
+    try { localStorage.setItem(QUALITY_KEY, v); } catch (e) { console.warn('[quality] write failed', e); }
+    return qualityApply(v);
+  }
+  try { localStorage.removeItem(QUALITY_KEY); } catch (e) { console.warn('[quality] clear failed', e); }
+  return qualityApply(qualityAuto());
+}
+
+// 啟動時呼叫一次(settingsui 初始化):依目前等級(手動或自動)寫齊偏好並加 body class
+function qualityBoot() {
+  return qualityApply(qualityLevel());
+}
+
+// 特效數量上限 / 是否播放共用特效:供 bnstage / bncardbattle 等演出程式讀取
+function qualityFxCap() {
+  return QUALITY_FX_CAP[qualityLevel()] || QUALITY_FX_CAP.mid;
+}
+
+function qualityShareFx() {
+  return qualityLevel() !== 'low';
+}

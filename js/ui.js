@@ -1000,7 +1000,7 @@ function progLockText(type) {
   const kind = game.mode === 'battleDesign' ? 'camp' : 'estate';
   if (!progRulesOn() || isUnlocked(kind, type)) return '';
   if (kind === 'estate' && typeof techObjLockText === 'function') { const t = techObjLockText(type); if (t) return t; }
-  return '城市 ' + progUnlockLv(kind, type) + ' 級才開放';
+  return '尚未開放';
 }
 
 // 經營布置免費(PLAN_PROGRESSION §2.6)時,費用與退款的顯示文字

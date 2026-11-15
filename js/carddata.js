@@ -128,7 +128,7 @@ var CARD_DRAW = {
 var CARD_BOSS = { pulls: 10 };
 // 新手禮包(2026-11-11 使用者決議 v59;v60 起為道具『新手禮包』,數值皆 PLACEHOLDER):不需領取、不跳彈窗。發放由 items.js itemGiftGrant 以道具鍵的 gv 記版本;cs.gift200 為同步旗標。發出後到卡包道具頁籤點『使用』才入大池 pulls 抽(E 次數錢包,可超過上限)。
 //   第一次進入、被重啟(新建角色 / 重設存檔)、已在玩的帳號一律補;之後改版時改 ver 即會再補一次(重玩 / 重啟同樣會補)。
-var CARD_GIFT = { ver: 'v59', pulls: 2000, pool: 'E', pullsNew: 100 };   // 2026-11-11 使用者決議:補償改 2000 抽(一次性、可超過上限;旗標 cs.gift200 = 已發)
+var CARD_GIFT = { ver: 'v59', pulls: 2000, pool: 'E', pullsNew: 2000 };   // 2026-11-11 使用者決議:補償改 2000 抽(一次性、可超過上限;旗標 cs.gift200 = 已發)
 // 新手期(開局 / 重啟後的前 nbCards 張小池 / 大池卡;數值皆 PLACEHOLDER)。cards_starter.js cardsGiftCheck 發放禮包時重新開始計數(重玩 / 重啟才會重開新手期;已在玩的老帳號只保留既有計數)。
 //   新手期:改用 nbGr 品階機率,並有逐張保底:連續 nbPurple − 1 張沒有紫以上 → 下一張必紫(小池 / 大池);連續 nbGold − 1 張沒有金 → 下一張必金(只限大池,名人)。小池不出金,故不套金保底。
 var CARD_STARTER = {

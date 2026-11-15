@@ -97,10 +97,10 @@ function eqReasonText(r) {
 function eqSortItems(a, b) { return (b.q - a.q) || (b.lv - a.lv) || (a.id < b.id ? -1 : 1); }
 function eqPickHtml(ctx) {
   var slot = ctx.slot, cur = gearOf(ctx.eid)[slot], list = gearList({ slot: slot }).filter(function (it) { return it.owner !== ctx.eid; }).sort(eqSortItems), cs = eqCs(), f = cs ? cardsFind(cs, ctx.eid) : null, star = f ? cardsStarLv(f.e) : 0, h = '';
-  h += '<div class="eq-head">' + eqEsc(eqCardName(ctx.eid)) + ' · ' + GEAR_CFG.slotName[slot] + '<i>' + star + ' 星</i></div>';
+  h += '<div class="eq-l"><div class="eq-head">' + eqEsc(eqCardName(ctx.eid)) + ' · ' + GEAR_CFG.slotName[slot] + '<i>' + star + ' 星</i></div>';
   h += '<div class="eq-sec">目前</div>';
   h += cur ? '<div class="eq-row cur">' + ldEquipItemHtml(cur) + '<div class="eq-bt"><button class="eq-b" data-a="det" data-v="' + eqEsc(cur.id) + '">強化 / 詳情</button><button class="eq-b warn" data-a="off" data-v="' + eqEsc(cur.id) + '">脫下</button></div></div>' : '<div class="eq-none">沒有裝備</div>';
-  h += '<div class="eq-sec">可換(' + list.length + ')</div>';
+  h += '</div><div class="eq-r"><div class="eq-sec">可換(' + list.length + ')</div>';
   if (!list.length) h += '<div class="eq-none">背包沒有其他' + GEAR_CFG.slotName[slot] + '。' + (slot === 'wpn' || slot === 'arm' ? '到鍛造坊鍛造。' : slot === 'horse' ? '到書院尋訪馬。' : '到書院尋訪人才時有機會尋到。') + '</div>';
   list.forEach(function (it) {
     var need = GEAR_CFG.needStar[it.q], lack = star < need;
@@ -108,11 +108,11 @@ function eqPickHtml(ctx) {
       (lack ? '<span class="eq-need">需 ' + need + ' 星</span>' : '<button class="eq-b" data-a="on" data-v="' + eqEsc(it.id) + '">穿上</button>') +
       '<button class="eq-b sub" data-a="det" data-v="' + eqEsc(it.id) + '">詳情</button></div></div>';
   });
-  return h;
+  return h + '</div>';
 }
 function eqPickRender(el, ctx) {
   ctx.pickEl = el;
-  el.innerHTML = '<div class="eq-page">' + eqPickHtml(ctx) + '</div>';
+  el.innerHTML = '<div class="eq-page eq-2c">' + eqPickHtml(ctx) + '</div>';
   el.onclick = function (ev) { eqPickClick(ctx, ev); };
 }
 function eqFindAct(ev, root) {
@@ -180,26 +180,25 @@ function eqFeedHtml(it, ctx) {
   return h;
 }
 function eqEnhPageHtml(ctx) {
-  var st = gearRead(), it = gearFind(st, ctx.gid), h = '', sv, owner;
-  if (ctx.res) h += '<div class="eq-result ' + (ctx.res.cls || '') + '">' + ctx.res.html + '</div>';
-  if (!it) return h + '<div class="eq-none">' + (ctx.res ? '' : '找不到這件裝備') + '</div>' + '<button class="eq-b big" data-a="back">返回</button>';
+  var st = gearRead(), it = gearFind(st, ctx.gid), h = '', sv, owner, rs = '';
+  if (ctx.res) rs = '<div class="eq-result ' + (ctx.res.cls || '') + '">' + ctx.res.html + '</div>';
+  if (!it) return '<div class="eq-l">' + rs + '<div class="eq-none">' + (ctx.res ? '' : '找不到這件裝備') + '</div>' + '<button class="eq-b big" data-a="back">返回</button></div>';
   owner = it.owner ? eqCardName(it.owner) : '';
-  h += '<div class="eq-row cur">' + ldEquipItemHtml(it, { owner: true }) + '</div>';
+  h += '<div class="eq-l"><div class="eq-row cur">' + ldEquipItemHtml(it, { owner: true }) + '</div>';
   h += '<div class="eq-kv"><span>品質 / 部位</span><b>' + GEAR_CFG.qName[it.q] + ' · ' + GEAR_CFG.slotName[it.slot] + '</b></div>';
   h += '<div class="eq-kv"><span>強化</span><b>+' + it.lv + ' / ' + GEAR_CFG.lvMax + '(屬性 ×' + (1 + GEAR_CFG.lvGrow * it.lv).toFixed(2) + ',特性不變大)</b></div>';
-  h += (it.slot === 'wpn' || it.slot === 'arm') ? eqEnhHtml(it, ctx) : eqFeedHtml(it, ctx);
   h += '<div class="eq-sec">處理</div><div class="eq-bt">';
   if (it.owner) h += '<button class="eq-b warn" data-a="off">脫下</button><span class="eq-note">穿在身上的不能分解</span>';
   else {
     sv = gearSalvageValue(it);
     h += '<button class="eq-b warn" data-a="salv">' + (ctx.salvConfirm ? '確定分解' : '分解') + '(' + (sv.shards ? '碎片 ' + sv.shards : eqMatsText(sv.mats)) + ')</button>';
   }
-  h += '</div>';
+  h += '</div></div><div class="eq-r">' + rs + ((it.slot === 'wpn' || it.slot === 'arm') ? eqEnhHtml(it, ctx) : eqFeedHtml(it, ctx)) + '</div>';
   return h;
 }
 function eqEnhRender(el, ctx) {
   ctx.enhEl = el;
-  el.innerHTML = '<div class="eq-page">' + eqEnhPageHtml(ctx) + '</div>';
+  el.innerHTML = '<div class="eq-page eq-2c">' + eqEnhPageHtml(ctx) + '</div>';
   el.onclick = function (ev) { eqEnhClick(ctx, ev); };
 }
 function eqEnhResultHtml(r) {

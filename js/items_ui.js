@@ -51,7 +51,7 @@ function itemsTabHtml() {
     '<div class="iugrid">' + cells + '</div>';
 }
 function itemsEffectText(d) {
-  if (d.effect === 'pulls') return 'S01卡池 +' + CARD_GIFT.pulls + ' 抽(入S01卡池,不受上限截斷)';
+  if (d.effect === 'pulls') return 'S01卡池 +' + itemGiftPulls() + ' 抽(入S01卡池,不受上限截斷)';
   return '占位提示(效果尚未接上)';
 }
 // 選單(置中浮層):說明 / 詳情切換;『使用』只在可使用且持有時可按
@@ -61,7 +61,7 @@ function itemsPopHtml() {
   n = itemCount(d.id);
   for (i = 0; i < ITEM_CATS.length; i++) if (ITEM_CATS[i][0] === d.cat) cat = ITEM_CATS[i][1];
   if (IU.det) body = '<div class="cusub" style="opacity:1">類別:' + cuEsc(cat) + '</div><div class="cusub" style="opacity:1">堆疊上限:' + (d.max || ITEMS_STACK_DEF) + '</div><div class="cusub" style="opacity:1">持有:' + n + '</div><div class="cusub" style="opacity:1">使用效果:' + cuEsc(itemsEffectText(d)) + '</div>';
-  else body = '<div>' + cuEsc(d.desc) + '</div><div class="cusub" style="opacity:1">持有 ' + n + '</div>';
+  else body = '<div>' + cuEsc(itemDescOf(d.id)) + '</div><div class="cusub" style="opacity:1">持有 ' + n + '</div>';
   use = (d.usable && n > 0) ? '<button class="cub" data-a="iuse" data-id="' + cuEsc(d.id) + '">使用</button>' : '<button class="cub" disabled>使用</button>';
   return '<div class="iuov" data-a="iclose"><div class="iubox" data-a="inone"><h4 style="color:' + cuEsc(d.color) + '">' + cuEsc(d.name) + '</h4>' + body +
     '<div class="iubtns">' + use + '<button class="cub" data-a="idet" data-id="' + cuEsc(d.id) + '">' + (IU.det ? '說明' : '詳情') + '</button><button class="cub" data-a="iclose">取消</button></div></div></div>';

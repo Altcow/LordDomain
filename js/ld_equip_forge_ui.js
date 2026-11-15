@@ -14,12 +14,13 @@ function eqfHtml(ctx) {
   cost = forgeCost(f.kind, f.q, f.soul);
   can = forgeCan(f.kind, f.q, f.soul);
   fails = forgeFails(f.q);
-  h += '<div class="eq-page eq-forge">';
+  h += '<div class="eq-page eq-2c eq-forge"><div class="eq-l">';
   h += '<div class="eq-smithrow' + (ctx.hammer ? ' hit' : '') + '">' + eqArt('fg_smith', 'eq-smith') + '<div class="eq-bubble">' + (ctx.say || '要打什麼?') + '</div></div>';
-  if (ctx.res) h += '<div class="eq-result ' + ctx.res.cls + '">' + ctx.res.html + '</div>';
   h += '<div class="eq-sec">部位與型</div><div class="eq-chips">' + EQF_KINDS.map(function (x, i) { return '<button class="ld-tab' + ((ctx.k | 0) === i ? ' on' : '') + '" data-a="kind" data-v="' + i + '">' + eqEsc(x[2]) + '</button>'; }).join('') + '</div>';
   h += '<div class="eq-sec">品質</div><div class="eq-chips">' + GEAR_CFG.qName.map(function (n, i) { return '<button class="ld-tab q' + i + ((ctx.q | 0) === i ? ' on' : '') + '" data-a="q" data-v="' + i + '">' + n + '</button>'; }).join('') + '</div>';
   if ((ctx.q | 0) === 3) h += '<label class="eq-soul"><input type="checkbox" data-a="soul"' + (ctx.soul ? ' checked' : '') + '> 投入 1 個精魄(特性機率:1 個 30% → 50%、2 個 5% → 15%)</label>';
+  h += '</div><div class="eq-r">';
+  if (ctx.res) h += '<div class="eq-result ' + ctx.res.cls + '">' + ctx.res.html + '</div>';
   h += '<div class="eq-sec">配方</div><div class="eq-recipe">';
   for (k in cost.mats) if (Object.prototype.hasOwnProperty.call(cost.mats, k)) {
     h += '<div class="eq-cell mat' + ((have[k] | 0) < cost.mats[k] ? ' lack' : '') + '">' + eqArt(k, 'eq-ic') + '<b>' + (have[k] | 0) + '/' + cost.mats[k] + '</b><i>' + eqEsc(matName(k)) + '</i></div>';
@@ -29,7 +30,7 @@ function eqfHtml(ctx) {
   h += '<div class="eq-kv"><span>' + GEAR_CFG.qName[f.q] + '裝連敗</span><b>' + fails + ' / ' + GEAR_CFG.forge.pity + (fails >= GEAR_CFG.forge.pity ? '(下一次必成)' : '') + '</b></div>';
   if (f.q > 0) h += '<div class="eq-note">失敗:損失一半主材(向下取整)與半價的文,其他材料照扣;連敗 ' + GEAR_CFG.forge.pity + ' 次後第 ' + (GEAR_CFG.forge.pity + 1) + ' 次必成。</div>';
   h += '<button class="eq-b big' + (can.ok ? '' : ' off') + '" data-a="go">鍛造' + (can.ok ? '' : '(' + (can.reason === 'mat' ? '材料不足' : '文不足') + ')') + '</button>';
-  h += '</div>';
+  h += '</div></div>';
   return h;
 }
 function eqfRender(el, ctx) {

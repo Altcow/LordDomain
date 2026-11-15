@@ -146,7 +146,7 @@ function bnstStageHtml() {
     '<div class="bst-valance"></div><div class="bst-curtain l"></div><div class="bst-curtain r"></div>' +
     '<div class="bst-round ld-plaque">開鑼</div>' +
     '<div class="bst-banner"><b class="ld-outline"></b><div></div></div>' +
-    '<div class="bst-endbtns"><button type="button" class="ld-btn" data-act="replay">重播</button><button type="button" class="ld-btn sub" data-act="report">看戰報</button><button type="button" class="ld-btn sub" data-act="close">關閉</button></div>' +
+    '<div class="bst-endbtns"><button type="button" class="ld-btn" data-act="replay">重播</button><button type="button" class="ld-btn" data-act="report">看戰報</button></div>' +
     '</div>';
 }
 
@@ -272,6 +272,8 @@ function bnstHealNum(tgtId, v) {
 function bnstFx(x, y, file, size) {
   var i;
   if (!BNST.w || !file) return;
+  if (typeof qualityShareFx === 'function' && !qualityShareFx()) return;   // 畫質低:不播共用特效
+  if (typeof qualityFxCap === 'function' && BNST.w.querySelectorAll('.bst-fx').length >= qualityFxCap()) return;   // 依畫質限制同時特效數(不影響戰鬥結果)
   i = document.createElement('img');
   i.className = 'bst-fx';
   i.alt = '';

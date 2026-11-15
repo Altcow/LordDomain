@@ -3,7 +3,9 @@
 // 存檔:localStorage 'lorddomain.rsv.v1' = {v:1, n 存量, q:[{n,g,t0,t1}] 征兵佇列, ft 自然招募上次結算, auto 自動補兵 0/1, lack:{t,n} 補不滿, done:[{t,n,kind}]}(SAVE_SLOT_KEYS)。
 // 時間只存時間戳;rsvSettle(now) 結算到期征兵 + 自然招募;時鐘倒退(now < ft)凍結不倒算。壞檔 / 壞值 → 正規化,不丟例外。
 // 依賴(存在才用):res4.js(res4Has / res4Spend / res4Add 糧)、bnteam.js(bnTeamPresetGet 隊伍順序)、cityBldLv('drill')(校場等級,內政未做前固定等級 1)。
-// 全域:RSV_CFG RSV_KEY rsvGet rsvCap rsvCardFull rsvSpeedMul rsvSettle rsvOrderMax rsvRecruit rsvCancel rsvHeal rsvOrder rsvHealSweep rsvSetAuto rsvBadge rsvTakeDone rsvNorm。ES2017;不用 ?. ??。
+// 賽季:存檔多一欄 ss(季號戳記,由 season.js 蓋章;rsvNorm 保留);rsvSeasonReset(idx, tStart) 冪等:n=startN、q=[]、lack 清空、ft=tStart,done / auto 保留。
+// 首頁經營掛鉤(hm_core.js 存在才用):rsvCap 改讀 hmLv('yard') × hmMul('rsvCap')、rsvSpeedMul = hmMul('rsvSpeed')、自然招募 × hmMul('rsvFree');未載入時行為不變。
+// 全域:RSV_CFG RSV_KEY rsvGet rsvCap rsvCardFull rsvSpeedMul rsvSettle rsvOrderMax rsvRecruit rsvCancel rsvHeal rsvOrder rsvHealSweep rsvSetAuto rsvBadge rsvTakeDone rsvNorm rsvSeasonReset。ES2017;不用 ?. ??。
 
 var RSV_KEY = 'lorddomain.rsv.v1';
 var RSV_CFG = {
@@ -46,6 +48,7 @@ function rsvNorm(raw, now) {
   o.q = q;
   o.ft = rsvInt(raw.ft, 0, 1e15, now);
   o.auto = raw.auto === 0 || raw.auto === false ? 0 : 1;
+  if (typeof raw.ss === 'number' && isFinite(raw.ss) && raw.ss >= 0) o.ss = Math.floor(raw.ss);   // 賽季季號戳記:有才保留
   if (raw.lack && typeof raw.lack === 'object') o.lack = { t: rsvInt(raw.lack.t, 0, 1e15, 0), n: rsvInt(raw.lack.n, 0, 1e9, 0) };
   o.done = (Array.isArray(raw.done) ? raw.done : []).filter(function (d) { return d && typeof d === 'object'; }).slice(-RSV_CFG.doneMax).map(function (d) {
     return { t: rsvInt(d.t, 0, 1e15, 0), n: rsvInt(d.n, 0, 1e9, 0), kind: d.kind === 'free' ? 'free' : 'q' };
@@ -66,19 +69,30 @@ function rsvQueued(st) { var s = 0; st.q.forEach(function (x) { s += x.n; }); re
 
 // ───────── 對外:查詢 ─────────
 function rsvGet() { return rsvRead(Date.now()); }
+// 首頁經營乘數(hm_core.js 的 hmMul;未載入 / 非有限正數 → 1)
+function rsvHmMul(k) {
+  var m = 1;
+  if (typeof hmMul === 'function') { try { m = Number(hmMul(k)); } catch (e) { m = 1; } }
+  return isFinite(m) && m > 0 ? m : 1;
+}
 function rsvCap() {
-  var lv = 0;
+  var lv = 0, yl = 0, yc = 1000;
+  if (typeof hmLv === 'function') {   // 首頁經營:校場(yard)等級 + 屯兵 / 演武場乘數
+    try { yl = Number(hmLv('yard')) || 0; } catch (e0) { yl = 0; }
+    if (typeof HM_CFG !== 'undefined' && HM_CFG && typeof HM_CFG.yardCap === 'number') yc = HM_CFG.yardCap;
+    return Math.round((RSV_CFG.capByLv[0] + yc * Math.max(0, yl)) * rsvHmMul('rsvCap'));
+  }
   if (typeof cityBldLv === 'function') { try { lv = cityBldLv('drill') | 0; } catch (e) { lv = 0; } }
   if (lv >= 1) return RSV_CFG.capByLv[Math.min(lv, RSV_CFG.capByLv.length) - 1];
   return RSV_CFG.capByLv[0];
 }
 function rsvCardFull(entry) { return RSV_CFG.cardFull; }
-function rsvSpeedMul() { return 1; }   // 之後軍營 / 科技折扣集中在這裡
+function rsvSpeedMul() { return rsvHmMul('rsvSpeed'); }   // 首頁經營募兵令折扣;hm_core 未載入 → 1
 
 // ───────── 結算 ─────────
 // 結算到期征兵 + 自然招募。回 {added, free, done:[{t,n,kind:'q'}]};有變動才寫存檔。時鐘倒退 → 凍結
 function rsvSettle(now) {
-  var st, raw = null, cap = rsvCap(), out = { added: 0, free: 0, done: [] }, changed = false, left = [], el, g, room, last;
+  var st, raw = null, cap = rsvCap(), fr = RSV_CFG.freePerHour * rsvHmMul('rsvFree'), out = { added: 0, free: 0, done: [] }, changed = false, left = [], el, g, room, last;
   now = typeof now === 'number' && isFinite(now) ? now : Date.now();
   try { raw = localStorage.getItem(RSV_KEY); } catch (e) { raw = null; }
   st = rsvRead(now);
@@ -100,10 +114,10 @@ function rsvSettle(now) {
     room = cap - st.n - rsvQueued(st);
     if (room <= 0) { st.ft = now; changed = true; }
     else {
-      g = Math.floor(Math.min(el, RSV_CFG.freeMaxHours * RSV_HOUR) * RSV_CFG.freePerHour / RSV_HOUR);
+      g = Math.floor(Math.min(el, RSV_CFG.freeMaxHours * RSV_HOUR) * fr / RSV_HOUR);
       if (g > 0) {
         if (g >= room || el > RSV_CFG.freeMaxHours * RSV_HOUR) { g = Math.min(g, room); st.ft = now; }
-        else st.ft += Math.round(g * RSV_HOUR / RSV_CFG.freePerHour);
+        else st.ft += Math.round(g * RSV_HOUR / fr);
         st.n += g; out.added += g; out.free = g; changed = true;
         last = st.done[st.done.length - 1];
         if (last && last.kind === 'free') { last.n += g; last.t = now; } else st.done.push({ t: now, n: g, kind: 'free' });
@@ -232,4 +246,19 @@ function rsvTakeDone() {
   st.done = [];
   rsvWrite(st);
   return d;
+}
+// 賽季重置(冪等):ss >= idx → {skipped:true};否則預備兵 = startN(夾上限)、征兵佇列清空(不退糧)、補不滿紀錄清空、自然招募從 tStart 起算;done / auto 保留
+function rsvSeasonReset(idx, tStart) {
+  var st, now = Date.now();
+  idx = typeof idx === 'number' && isFinite(idx) ? Math.floor(idx) : 0;
+  tStart = typeof tStart === 'number' && isFinite(tStart) ? Math.floor(tStart) : now;
+  st = rsvRead(now);
+  if (typeof st.ss === 'number' && st.ss >= idx) return { skipped: true };
+  st.n = Math.min(RSV_CFG.startN, rsvCap());
+  st.q = [];
+  st.lack = { t: 0, n: 0 };
+  st.ft = Math.max(0, tStart);
+  st.ss = idx;
+  rsvWrite(st);
+  return { skipped: false };
 }

@@ -51,7 +51,7 @@ var SHELL_TOP_H = { p: 52, l: 44 }, SHELL_DOCK_H = 52, SHELL_FPS = 30, SHELL_TIC
 
 // 新介面骨架(旗標 ldui,預設關):首頁換成 5 格 dock + 建築木牌 + 隊伍欄 + 圓鈕(js/ld_home.js、css/ld_home.css);關閉時以下所有 ld 分支都不執行。
 var SHELL_DOCK_LD = [
-  { id: 'cards', label: '卡包', art: 'nav_cards', act: 'cards:R' },
+  { id: 'cards', label: '卡包', art: 'nav_recruit', act: 'cards:R' },   // 圖示沿用原首頁右側「招募」圓鈕(該鈕已移除);卡包頁內有抽卡分頁
   { id: 'bag', label: '背包', art: 'nav_bag', act: 'ldbag' },   // 新背包頁(裝備 / 材料 / 庫房;js/ld_equip_ui.js);庫房仍是舊的 goods 頁
   { id: 'event', label: '活動', art: 'nav_event', act: 'ldevent' },
   { id: 'report', label: '戰報', art: 'nav_log', act: 'log' },
@@ -103,7 +103,8 @@ function shellBuildTopLd(top) {
   var i, t, b, lab = { money: '錢', pulls: '抽', power: '戰' };
   for (i = 0; i < SHELL_TOP_ITEMS.length; i++) {
     t = SHELL_TOP_ITEMS[i];
-    b = shellBtn('', t.id === 'av' ? 'sh-item sh-lav' : 'sh-item sh-lslot', t.id);
+    b = shellBtn('', t.id === 'av' ? 'sh-item sh-lav' : 'sh-item sh-lslot', (t.id === 'money' || t.id === 'pulls') ? null : t.id);   // 錢 / 抽:純顯示不可點(庫房走 背包→庫房、抽卡走 卡包→抽卡分頁)
+    if (t.id === 'money' || t.id === 'pulls') { b.disabled = true; b.style.pointerEvents = 'none'; }
     b.id = 'sh_' + t.id;
     b.setAttribute('aria-label', t.id);
     if (t.id === 'av') b.appendChild(shellEl('span', 'sh-lavc', '城'));
@@ -161,7 +162,7 @@ function shellBuild() {
   }
   SHELL.stB = shellEl('div', 'sh-stb');
   SHELL.stV = {};
-  rows = [['lv', '城主等級'], ['troops', '出征兵數'], ['power', '出征戰力'], ['faction', '勢力'], ['fame', '名聲'], ['land', '領地'], ['rsv', '預備兵'], ['res', '木鐵石糧']];
+  rows = [['troops', '出征兵數'], ['power', '出征戰力'], ['faction', '勢力'], ['fame', '名聲'], ['land', '領地'], ['rsv', '預備兵'], ['res', '木鐵石糧']];
   for (i = 0; i < rows.length; i++) {
     row = shellEl('div', 'sh-str');
     row.appendChild(shellEl('span', 'sh-stk', rows[i][1]));
@@ -224,6 +225,10 @@ function shellSyncNav() {
     document.body.classList.toggle('shell-land', SHELL.lo === 'landscape');
     document.body.classList.toggle('shell-port', SHELL.lo !== 'landscape');
   }
+  if (SHELL.ld && !SHELL.bgPre && typeof ldArtHas === 'function' && typeof ldArtUrl === 'function' && typeof Image !== 'undefined') {   // 直橫兩張新背景都預載,轉向不閃
+    SHELL.bgPre = [];
+    ['bg_home2_land', 'bg_home2_port'].forEach(function (k) { var u = ldArtHas(k) ? ldArtUrl(k) : null, im; if (u) { im = new Image(); im.src = u; SHELL.bgPre.push(im); } });
+  }
   bid = SHELL.lo === 'landscape' ? 'home_bg_land' : 'home_bg_port';
   if (SHELL.ld && typeof ldArtHas === 'function' && ldArtHas(SHELL.lo === 'landscape' ? 'bg_home2_land' : 'bg_home2_port')) bid = SHELL.lo === 'landscape' ? 'bg_home2_land' : 'bg_home2_port';   // 新首頁背景有圖才用
   if (SHELL.bgEl && SHELL.bgId !== bid) {
@@ -254,7 +259,7 @@ function shellStatToggle() {
 }
 // 基本數據值:城主等級、出征兵數 / 戰力(出征隊伍);勢力 / 名聲 / 領地 目前無資料來源,標 --
 function shellStatRender(lv, n, pw) {
-  var txt = { lv: 'Lv' + lv, troops: String(n || 0), power: (pw || 0).toLocaleString(), faction: '--', fame: '--', land: '--', rsv: '--', res: '--' }, k, key, t;
+  var txt = { troops: String(n || 0), power: (pw || 0).toLocaleString(), faction: '--', fame: '--', land: '--', rsv: '--', res: '--' }, k, key, t;
   try {   // 名聲 / 預備兵 / 木鐵石糧:模組存在才顯示(fame.js rsv.js res4.js);領地讀地圖
     if (typeof fameGet === 'function') txt.fame = fameGet().toLocaleString();
     if (typeof rsvGet === 'function') { if (typeof rsvSettle === 'function') rsvSettle(Date.now()); txt.rsv = rsvGet().n.toLocaleString() + '/' + rsvCap().toLocaleString(); }
@@ -367,7 +372,7 @@ function shellAct(act) {
     case 'caravan': a = document.getElementById('btnCaravan'); if (a) a.click(); return true;
     case 'fish': if (typeof fishEnter === 'function') fishEnter('shell'); return true;
     case 'soon': if (typeof showToast === 'function') showToast('即將開放'); return true;
-    case 'av': if (typeof showToast === 'function') showToast('城主頭像與等級'); return true;
+    case 'av': if (typeof showToast === 'function') showToast('城主頭像'); return true;
     case 'money': if (typeof goodsPanelToggle === 'function') goodsPanelToggle(true); return true;
     case 'pulls': return shellAct('cards:D');
     case 'power': return shellDockOpen('field');
@@ -384,8 +389,8 @@ function shellRefresh() {
   if (typeof progLv === 'function') { try { lv = progLv(); } catch (e) { lv = '-'; } }
   if (now - SHELL.teamT >= SHELL_TEAM_MS || !SHELL.team) { SHELL.team = shellTeamUnits(); SHELL.teamT = now; }
   pw = SHELL.team ? SHELL.team.power : 0;
-  txt = SHELL.ld ? { av: 'Lv' + lv, money: shellFmtMoney(coin), pulls: String(pulls), power: (pw || 0).toLocaleString() }
-    : { av: '城主 Lv' + lv, money: '🪙 ' + shellFmtMoney(coin), pulls: '🎴 ' + pulls, power: '⚔ ' + (pw || 0).toLocaleString() };
+  txt = SHELL.ld ? { av: '城主', money: shellFmtMoney(coin), pulls: String(pulls), power: (pw || 0).toLocaleString() }
+    : { av: '城主', money: '🪙 ' + shellFmtMoney(coin), pulls: '🎴 ' + pulls, power: '⚔ ' + (pw || 0).toLocaleString() };
   if (SHELL.pv !== JSON.stringify(txt)) {
     SHELL.pv = JSON.stringify(txt);
     for (k in txt) if (SHELL.txt[k]) SHELL.txt[k].textContent = txt[k];

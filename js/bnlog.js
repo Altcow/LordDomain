@@ -4,11 +4,14 @@
 // 存檔:世界內 'lorddomain.bnlog.v1'(SAVE_SLOT_KEYS,隨世界 / 回溯點切換)= {v:1, rules:BNLOG_RULES, recent:[戰報], saved:[戰報]};有值才寫;壞檔 / rules 不同 = 整批清除並提示一次。
 // 面板掛在 bnui.js 的 #bnLayer 內(#bnLog);Esc / 返回鍵先關面板(bnUiBack 先問 bnLogBack)。不發聲。ES2017;不用 ?. ??。
 // 戰鬥改版(2026-11-06):沒有士氣(舊戰報的 M 士氣行仍可顯示);新增 r = 戰法發動判定(哪個戰法擲骰成功 / 未發動、發動率)。
-// 全域:BNLOG bnLogEncode bnLogBuild bnLogLoad bnLogRecord bnLogSave bnLogDel bnLogGet bnLogItems bnLogVerify bnLogOpen bnLogClose bnLogIsOpen bnLogBack bnLogDo bnLogRender
+// 2026-11-15 戰報改版:檢視頁(文字戰報)只留文字內容 = 戰果統計(bnLogStats:每位武將每個戰法的 次數 / 傷害 / 治療、武將與隊伍總傷害 / 總治療、雙方剩餘兵力)+ 陣容快照 + 逐回合文字;
+//   不再有 儲存 / 刪除 / 重播 / 重打驗證 / 分享 / 全部展開 按鈕(儲存、重播、分享在戰鬥結果戰報 bnreport.js;刪除、重播、重打驗證在清單列)。
+//   bnLogOpen(tab, id, ret):從戰報開文字戰報時帶 ret,檢視頁按返回 → 關面板並呼叫 ret(回到那份戰報),不落到「最近 / 已儲存」清單。
+// 全域:BNLOG bnLogEncode bnLogBuild bnLogLoad bnLogRecord bnLogSave bnLogDel bnLogGet bnLogItems bnLogStats bnLogVerify bnLogOpen bnLogClose bnLogIsOpen bnLogBack bnLogDo bnLogRender
 
 var BNLOG = {
   key: 'lorddomain.bnlog.v1', recentMax: 10, savedMax: 20, maxLines: 2500, maxChars: 900000, recsMax: 10,
-  recs: {}, recIds: [], el: null, tab: 'recent', view: null, msg: ''
+  recs: {}, recIds: [], el: null, tab: 'recent', view: null, msg: '', ret: null
 };
 // 短碼:事件類型 → 1 字母(init / cd 不存:陣容另有快照,冷卻不影響數字與順序)
 var BNLOG_CODE = { round: 'R', act: 'A', skill: 'K', ult: 'U', dmg: 'D', evade: 'E', heal: 'H', shield: 'S', revive: 'V', status: 'T', unstatus: 'X', resist: 'Q', immune: 'I', ccimm: 'C',
@@ -52,7 +55,7 @@ function bnLogEncOne(e, K) {
     case 'unstatus': f = [e.tgt, K(e.id), K(e.why || '')]; break;
     case 'resist': f = [e.tgt, K(e.id), n(e.layers)]; break;
     case 'immune': case 'ccimm': f = [e.tgt, K(e.id)]; break;
-    case 'roll': f = [e.u, K(bnLogSkName(e.id)), e.p | 0, e.ok ? 1 : 0]; break;
+    case 'roll': f = [e.u, K(bnLogSkName(e.id)), e.p | 0, e.ok ? 1 : 0, e.pity ? 1 : '']; break;
     case 'kill': f = [n(e.src), e.tgt]; break;
     case 'move': f = [e.u, e.row, e.col]; break;
     case 'react': f = [K(e.name || e.id), n(e.tgt)]; break;
@@ -214,7 +217,7 @@ function bnLogItems(rep) {
       case 'Q': push('ef', nm(f[0]) + ' 抵禦了〔' + bnLogStName(D(f[1])) + '〕' + (f[2] ? '(剩 ' + f[2] + ' 層)' : '')); break;
       case 'I': push('ef', nm(f[0]) + ' 免疫〔' + bnLogStName(D(f[1])) + '〕'); break;
       case 'C': push('ef', nm(f[0]) + ' 抗控擋下〔' + bnLogStName(D(f[1])) + '〕'); break;
-      case 'r': push(f[3] === '1' ? 'ro' : 'mo', nm(f[0]) + '「' + D(f[1]) + '」發動率 ' + f[2] + '% → ' + (f[3] === '1' ? '發動' : '未發動')); break;
+      case 'r': push(f[3] === '1' ? 'ro' : 'mo', nm(f[0]) + '「' + D(f[1]) + '」發動率 ' + f[2] + '% → ' + (f[3] === '1' ? '發動' : '未發動') + (f[4] === '1' ? '(保底)' : '')); break;
       case 'M': push('mo', nm(f[0]) + ' 士氣 ' + (+f[1] > 0 ? '+' : '') + f[1] + ' → ' + f[2] + '(' + W(D(f[3])) + ')'); break;   // 舊戰報(戰鬥改版前)
       case 'Z': push('kill', '✖ ' + nm(f[0]) + ' 擊倒 ' + nm(f[1])); break;
       case 'O': push('ef', nm(f[0]) + ' 移到' + ['前', '中', '後'][+f[1]] + '排第 ' + (+f[2] + 1) + ' 格'); break;
@@ -241,6 +244,70 @@ function bnLogResTxt(rep) {
 }
 function bnLogDate(ts) { var d = new Date(ts || 0), p = function (n) { return (n < 10 ? '0' : '') + n; }; return (d.getMonth() + 1) + '/' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
 
+// ───────── 戰果統計:由存檔的事件短碼直接算(不需要開戰紀錄 rec,舊戰報、重開遊戲後也能看)─────────
+// 回 {A, B}:每隊 {dmg, heal, open, left, pct, units:[{name, gr, t, hpOpen, hpLeft, dead, dmg, heal, sk:[{name, cnt, dmg, heal}]}]}(units 依陣容順序)
+// 歸屬規則同 bnreport.js:普攻 / 反擊 → 普攻列;持續傷害 → 持續傷害列;反應 → 該反應列;其餘依施放者最近一次發動的戰法(行動時重置);無歸屬 → 其他。
+// 傷害不含自傷,取 dmg 事件的 v(進兵力的部分,不含護盾吸收)。開場兵力 = 陣容快照 hp;之後依事件的「剩兵力」更新。
+function bnLogStats(rep) {
+  var k = rep.k, all = [], rows = [], cur = [], hp = [], i, s, f, code, id, src, tgt, fl, nm, out = { A: null, B: null };
+  function D(j) { return k[+j] === undefined ? '' : k[+j]; }
+  function row(uid, name, fixed) {
+    var list = rows[uid], j;
+    for (j = 0; j < list.length; j++) if (list[j].name === name) return list[j];
+    list.push({ name: name, cnt: 0, dmg: 0, heal: 0, fixed: !!fixed });
+    return list[list.length - 1];
+  }
+  function mk(list, side) { list.forEach(function (x) { var n = all.length; all.push({ side: side, u: x }); rows[n] = []; cur[n] = null; hp[n] = x.hp | 0; row(n, '普攻', true); (x.sk || []).forEach(function (a) { row(n, a, true); }); if (x.u) row(n, x.u, true); }); }
+  mk(rep.A || [], 'A'); mk(rep.B || [], 'B');
+  for (i = 0; i < rep.L.length; i++) {
+    s = rep.L[i]; code = s.charAt(0); f = s.slice(1).split(',');
+    if (code === 'K') { id = +f[0]; if (all[id]) { nm = D(f[1]); cur[id] = nm; row(id, nm).cnt++; } }
+    else if (code === 'A') { id = +f[0]; if (all[id]) cur[id] = null; }
+    else if (code === 'D') {
+      src = f[0] === '' ? -1 : +f[0]; tgt = +f[1]; fl = +f[4] || 0;
+      if (all[tgt]) hp[tgt] = +f[5] || 0;
+      if (src >= 0 && src !== tgt && all[src]) {
+        if (fl & 6) nm = '普攻'; else if (f[8]) nm = '持續傷害'; else if (f[9]) nm = D(f[9]); else nm = cur[src] || '其他';
+        row(src, nm).dmg += +f[2] || 0;
+        if (fl & 2) row(src, '普攻', true).cnt++;
+      }
+    }
+    else if (code === 'H') {
+      src = f[0] === '' ? -1 : +f[0]; tgt = +f[1];
+      if (all[tgt]) hp[tgt] = +f[4] || 0;
+      if (src >= 0 && all[src]) row(src, cur[src] || '其他').heal += +f[2] || 0;
+    }
+    else if (code === 'V') { tgt = +f[0]; if (all[tgt]) hp[tgt] = +f[1] || 0; }
+  }
+  ['A', 'B'].forEach(function (sd) {
+    var t = { dmg: 0, heal: 0, open: 0, left: 0, pct: 0, units: [] };
+    all.forEach(function (x, n) {
+      var sk, d = 0, h = 0, u = x.u;
+      if (x.side !== sd) return;
+      sk = rows[n].filter(function (q) { return q.fixed || q.cnt > 0 || q.dmg > 0 || q.heal > 0; }).map(function (q) { var o = { name: q.name, cnt: q.cnt, dmg: Math.round(q.dmg), heal: Math.round(q.heal) }; d += o.dmg; h += o.heal; return o; });
+      t.units.push({ name: String(u.n || ''), gr: u.g | 0, t: String(u.t || ''), hpOpen: u.hp | 0, hpLeft: Math.max(0, hp[n]), dead: hp[n] <= 0, dmg: d, heal: h, sk: sk });
+      t.dmg += d; t.heal += h; t.open += u.hp | 0; t.left += Math.max(0, hp[n]);
+    });
+    t.pct = t.open > 0 ? Math.max(0, Math.min(1, t.left / t.open)) : 0;
+    out[sd] = t;
+  });
+  return out;
+}
+// 戰果統計 HTML:兩隊各一個區塊(隊伍總傷害 / 總治療 / 剩餘兵力),每位武將一個表(戰法 / 次 / 傷害 / 治療 + 武將合計)
+function bnLogStatsHtml(rep) {
+  var st = bnLogStats(rep), h = '';
+  function num(v) { return v > 0 ? v : '—'; }
+  [['A', '我方'], ['B', '敵方']].forEach(function (p) {
+    var t = st[p[0]];
+    h += '<div class="sm"><b>' + p[1] + '</b> · 隊伍總傷害 ' + t.dmg + ' · 隊伍總治療 ' + t.heal + ' · 剩餘兵力 ' + t.left + ' / ' + t.open + '(' + Math.round(t.pct * 100) + '%)</div>';
+    t.units.forEach(function (u) {
+      h += '<table class="tm st"><tr><th colspan="4" class="g' + u.gr + '">' + bnLogEsc(u.name) + ' <span>總傷害 ' + u.dmg + ' · 總治療 ' + u.heal + ' · ' + (u.dead ? '潰滅' : '剩餘兵力 ' + u.hpLeft + ' / ' + u.hpOpen) + '</span></th></tr>' +
+        '<tr><th>戰法</th><th>次</th><th>傷害</th><th>治療</th></tr>' +
+        u.sk.map(function (q) { return '<tr' + (q.dmg || q.heal ? '' : ' class="z"') + '><td>' + bnLogEsc(q.name) + '</td><td>' + q.cnt + '</td><td class="kd">' + num(q.dmg) + '</td><td class="hl">' + num(q.heal) + '</td></tr>'; }).join('') + '</table>';
+    });
+  });
+  return h;
+}
 // ───────── 重打驗證:同陣容同種子重跑引擎,比對前 ne 行雜湊 ─────────
 function bnLogVerify(rep, rec) {
   var S, en, h;
@@ -264,7 +331,7 @@ var BNLOG_CSS = '#bnLog{position:absolute;left:0;top:0;right:0;bottom:0;z-index:
   '#bnLog .it{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 8px;margin:0 0 6px;border-radius:10px;background:rgba(255,255,255,.07)}#bnLog .it .t{flex:1 1 180px;min-width:0;font-size:14px;line-height:1.4;overflow-wrap:anywhere}#bnLog .it small{opacity:.8;font-size:12px}' +
   '#bnLog .sm{font-size:12px;opacity:.8;margin:4px 0}#bnLog .em{padding:20px 0;text-align:center;opacity:.75;font-size:14px}#bnLog .msg{color:#ffd25a;font-size:13px;margin:4px 0}' +
   '#bnLog .sum{font-size:13px;line-height:1.5;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.07);margin:0 0 6px;overflow-wrap:anywhere}' +
-  '#bnLog .tm{width:100%;border-collapse:collapse;font-size:12px;margin:2px 0 6px}#bnLog .tm td,#bnLog .tm th{padding:2px 4px;border-bottom:1px solid rgba(255,255,255,.1);text-align:left;vertical-align:top;overflow-wrap:anywhere}#bnLog .tm th{opacity:.75;font-weight:normal}#bnLog .tm td:not(:last-child),#bnLog .tm th{white-space:nowrap}#bnLog details{margin:0 0 6px}#bnLog summary{min-height:44px;line-height:44px;font-size:14px;cursor:pointer}' +
+  '#bnLog .tm{width:100%;border-collapse:collapse;font-size:12px;margin:2px 0 6px}#bnLog .tm td,#bnLog .tm th{padding:2px 4px;border-bottom:1px solid rgba(255,255,255,.1);text-align:left;vertical-align:top;overflow-wrap:anywhere}#bnLog .tm th{opacity:.75;font-weight:normal}#bnLog .tm td:not(:last-child),#bnLog .tm th{white-space:nowrap}#bnLog .tm.st{margin:0 0 8px}#bnLog .tm.st th[colspan]{white-space:normal;color:#f4ead2;opacity:1;font-size:13px;font-weight:bold;border-bottom:2px solid rgba(255,210,90,.4)}#bnLog .tm.st th span{font-size:12px;font-weight:normal;opacity:.85;margin-left:6px}#bnLog .tm.st td:not(:first-child),#bnLog .tm.st th:not(:first-child):not([colspan]){text-align:right}#bnLog .tm.st td.kd{color:#ffb0a0;font-weight:bold}#bnLog .tm.st td.hl{color:#9be39b;font-weight:bold}#bnLog .tm.st tr.z td{opacity:.6}#bnLog details{margin:0 0 6px}#bnLog summary{min-height:44px;line-height:44px;font-size:14px;cursor:pointer}' +
   '#bnLog .stk{position:sticky;top:-8px;z-index:1;background:#1b150f;padding:4px 0 2px}#bnLog .ctl{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}#bnLog .rds{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin:0 0 6px}#bnLog .rds::-webkit-scrollbar{display:none}#bnLog .rds button{flex:0 0 auto}' +
   '#bnLog .ln{font-size:13px;line-height:1.45;padding:1px 6px;overflow-wrap:anywhere;border-left:3px solid transparent}#bnLog .ln.rd,#bnLog .ln.end{color:#ffd25a;font-weight:bold;margin-top:6px}#bnLog .ln.act{color:#9fc8ff;margin-top:4px}' +
   '#bnLog .ln.dmg{color:#ffb0a0}#bnLog .ln.heal{color:#9be39b}#bnLog .ln.kill{color:#ff7a6a;font-weight:bold}#bnLog .ln.mo{opacity:.7;font-size:12px}#bnLog .ln.ro{color:#ffe6a0;font-size:12px}#bnLog .ln.st{color:#e0c8ff}#bnLog .ln.cur{background:rgba(255,210,90,.14);border-left-color:#ffd25a}' +
@@ -285,8 +352,8 @@ function bnLogOnClick(e) {
   if (!b) return;
   bnLogDo(b.getAttribute('data-l'), b.getAttribute('data-id'), +b.getAttribute('data-i'));
 }
-// 開啟面板。tab = 'recent' | 'saved';id 給了就直接檢視該場
-function bnLogOpen(tab, id) {
+// 開啟面板。tab = 'recent' | 'saved';id 給了就直接檢視該場;ret(可省略)= 檢視頁按返回時呼叫(關面板後回到呼叫端,例:戰鬥結果戰報)
+function bnLogOpen(tab, id, ret) {
   var host = (typeof bnu !== 'undefined' && bnu.layer) || null, el;
   if (!host || typeof document === 'undefined') return false;
   if (typeof bnu !== 'undefined' && bnu.phase === 'fight' && bnu.P && !bnu.P.done && !bnu.paused && typeof bnUiPause === 'function') bnUiPause(true);
@@ -297,7 +364,7 @@ function bnLogOpen(tab, id) {
     host.appendChild(el);
     BNLOG.el = el;
   }
-  BNLOG.tab = tab === 'saved' ? 'saved' : 'recent'; BNLOG.view = null; BNLOG.msg = '';
+  BNLOG.tab = tab === 'saved' ? 'saved' : 'recent'; BNLOG.view = null; BNLOG.msg = ''; BNLOG.ret = typeof ret === 'function' ? ret : null;
   if (id) bnLogDo('view', id);
   else bnLogRender();
   return true;
@@ -307,18 +374,20 @@ function bnLogClose() {
   if (!el) return false;
   el.removeEventListener('click', bnLogOnClick);
   if (el.parentNode) el.parentNode.removeChild(el);
-  BNLOG.el = null; BNLOG.view = null; BNLOG.msg = '';
+  BNLOG.el = null; BNLOG.view = null; BNLOG.msg = ''; BNLOG.ret = null;
   return true;
 }
-// 返回 / Esc:檢視中 → 回清單;清單 → 關面板。回是否有處理
+// 返回 / Esc:檢視中 → 回清單(有 ret = 關面板並回到呼叫端);清單 → 關面板。回是否有處理
 function bnLogBack() {
+  var f;
   if (!bnLogIsOpen()) { BNLOG.el = null; return false; }
+  if (BNLOG.view && BNLOG.ret) { f = BNLOG.ret; bnLogClose(); f(); return true; }
   if (BNLOG.view) { BNLOG.view = null; BNLOG.msg = ''; bnLogRender(); return true; }
   bnLogClose();
   return true;
 }
 function bnLogViewGroups(items) { var n = 0; items.forEach(function (x) { if (x.g + 1 > n) n = x.g + 1; }); return n; }
-// 動作:tab(id='recent'|'saved') view(id) save(id) del(id) back close first prev next all rd(i=回合;0=全部) verify
+// 動作:tab(id='recent'|'saved') view(id) save(id) del(id) replay(id) verify(id) back close first prev next all(回到全部回合 / 取消逐步) rd(i=回合;0=全部)
 function bnLogDo(a, id, i) {
   var v = BNLOG.view, r, items, n, g;
   if (a === 'close') { bnLogClose(); return true; }
@@ -329,7 +398,6 @@ function bnLogDo(a, id, i) {
     if (!r) { BNLOG.msg = '找不到這場戰報'; }
     else { items = bnLogItems(r); BNLOG.view = { rep: r, items: items, n: bnLogViewGroups(items), step: -1, rd: 0 }; BNLOG.msg = ''; }
   } else if (a === 'save') { r = bnLogSave(id); BNLOG.msg = r.ok ? '已儲存戰報' : r.why; bnLogToast(BNLOG.msg); }
-  else if (a === 'share') { if (typeof bnsDo === 'function') { bnLogClose(); bnsDo('rcode'); return true; } }   // 分享戰報碼(對戰練習;結算畫面只留「查看戰報 / 離開」,分享移到這裡)
   else if (a === 'replay') { if (bnLogCanReplay(id) && typeof bnBattleShow === 'function') bnBattleShow(BNLOG.recs[id], { mode: 'play', mySide: 'A' }); else BNLOG.msg = '這場沒有可重播的紀錄'; }
   else if (a === 'del') { if (bnLogDel(id)) { BNLOG.msg = '已刪除'; if (v && v.rep.id === id) BNLOG.view = null; } }
   else if (v && (a === 'first' || a === 'prev' || a === 'next' || a === 'all' || a === 'rd')) {
@@ -343,7 +411,7 @@ function bnLogDo(a, id, i) {
       v.step = g;
       if (v.rd) { n = bnLogRoundOf(v, g); if (n !== v.rd) v.rd = n; }
     }
-  } else if (v && a === 'verify') { r = bnLogVerify(v.rep); BNLOG.msg = r.why; }
+  } else if (a === 'verify') { r = (id ? bnLogGet(id) : (v && v.rep)) || null; BNLOG.msg = r ? bnLogVerify(r).why : '找不到這場戰報'; }
   else return false;
   bnLogRender();
   return true;
@@ -357,23 +425,21 @@ function bnLogUnitRows(list, mine) {
   }).join('') + '</table>';
 }
 function bnLogRender() {
-  var el = BNLOG.el, h = '', v = BNLOG.view, d, list, rep, items, maxR = 0, saved, cur;
+  var el = BNLOG.el, h = '', v = BNLOG.view, d, list, rep, items, maxR = 0, cur;
   if (!el) return;
   if (v) {
     rep = v.rep;
     h += '<div class="lh"><button data-l="back" aria-label="返回">↩</button><b>戰報 · ' + bnLogEsc(rep.lb) + '</b></div><div class="lb"><div class="cols"><div class="c1">';
     h += '<div class="sum"><b>' + bnLogEsc(bnLogResTxt(rep)) + '</b> · ' + bnLogDate(rep.ts) + '<br>關卡 ' + bnLogEsc(rep.sid || '-') + ' · 種子 ' + rep.seed + (rep.mu ? ' · 有手動操作' : '') +
       (rep.bA.length ? '<br>羈絆 / 陣型:' + bnLogEsc(rep.bA.join('、')) : '') + '</div>';
-    h += '<details' + (bnLogWide() ? ' open' : '') + '><summary>陣容快照(武將 / 品階 / 星 / 兵種 / 位置 / 兵力 / 戰力 / 戰法)</summary><div class="sm">我方陣容</div>' + bnLogUnitRows(rep.A, true) + '<div class="sm">敵方陣容</div>' + bnLogUnitRows(rep.B, false) + '</details>';
-    saved = bnLogLoad().saved.some(function (x) { return x.id === rep.id; });
-    h += '<div class="ctl">' + (saved ? '<button data-l="del" data-id="' + bnLogEsc(rep.id) + '">刪除</button>' : '<button data-l="save" data-id="' + bnLogEsc(rep.id) + '">儲存戰報</button>') + (bnLogCanReplay(rep.id) ? '<button data-l="replay" data-id="' + bnLogEsc(rep.id) + '">重播</button>' : '') + (BNLOG.recs[rep.id] ? '<button data-l="verify">重打驗證</button>' : '') +
-      (rep.kind === 'duel' && typeof BNS !== 'undefined' && BNS.last && typeof bnu !== 'undefined' && rep.id === bnu.logId ? '<button data-l="share">分享戰報碼</button>' : '') + '</div>';
+    h += '<div class="sm">戰果統計(每位武將每個戰法的次數 / 傷害 / 治療,以及武將與隊伍的總傷害、總治療、剩餘兵力)</div>' + bnLogStatsHtml(rep);
+    h += '<details><summary>陣容快照(武將 / 品階 / 星 / 兵種 / 位置 / 兵力 / 戰力 / 戰法)</summary><div class="sm">我方陣容</div>' + bnLogUnitRows(rep.A, true) + '<div class="sm">敵方陣容</div>' + bnLogUnitRows(rep.B, false) + '</details>';
     if (BNLOG.msg) h += '<div class="msg">' + bnLogEsc(BNLOG.msg) + '</div>';
     h += '</div><div class="c2">';
     v.items.forEach(function (x) { if (x.r > maxR) maxR = x.r; });
     h += '<div class="stk"><div class="rds"><button data-l="rd" data-i="0"' + (v.rd === 0 ? ' class="on"' : '') + '>全部</button>';
     for (cur = 1; cur <= maxR; cur++) h += '<button data-l="rd" data-i="' + cur + '"' + (v.rd === cur ? ' class="on"' : '') + '>第' + cur + '回</button>';
-    h += '</div><div class="ctl"><button data-l="first" aria-label="從頭逐步">⏮</button><button data-l="prev" aria-label="上一步">◀ 上一步</button><button data-l="next" aria-label="下一步">下一步 ▶</button><button data-l="all"' + (v.step < 0 ? ' class="on"' : '') + '>全部展開</button></div>';
+    h += '</div><div class="ctl"><button data-l="first" aria-label="從頭逐步">⏮</button><button data-l="prev" aria-label="上一步">◀ 上一步</button><button data-l="next" aria-label="下一步">下一步 ▶</button></div>';
     h += '<div class="sm">' + (v.step >= 0 ? '逐步:第 ' + (v.step + 1) + ' / ' + v.n + ' 步' : '共 ' + v.n + ' 步、' + rep.L.length + ' 行') + '</div></div>';
     items = v.items.filter(function (x) { return (!v.rd || x.r === v.rd) && (v.step < 0 || x.g <= v.step); });
     h += '<div class="lines">' + items.map(function (x) { return '<div class="ln ' + x.c + (v.step >= 0 && x.g === v.step ? ' cur' : '') + '">' + bnLogEsc(x.txt) + '</div>'; }).join('') + '</div>';
@@ -389,7 +455,7 @@ function bnLogRender() {
     h += list.map(function (r) {
       var isSaved = BNLOG.tab === 'saved' || d.saved.some(function (x) { return x.id === r.id; });
       return '<div class="it"><div class="t"><b>' + bnLogEsc(r.lb) + '</b> · ' + bnLogEsc(bnLogResTxt(r)) + '<br><small>' + bnLogDate(r.ts) + ' · ' + bnLogEsc(r.A.map(function (u) { return u.n; }).join('、')) + '</small></div>' +
-        '<button data-l="view" data-id="' + bnLogEsc(r.id) + '">檢視</button>' + (bnLogCanReplay(r.id) ? '<button data-l="replay" data-id="' + bnLogEsc(r.id) + '">重播</button>' : '') +
+        '<button data-l="view" data-id="' + bnLogEsc(r.id) + '">檢視</button>' + (bnLogCanReplay(r.id) ? '<button data-l="replay" data-id="' + bnLogEsc(r.id) + '">重播</button>' : '') + (BNLOG.recs[r.id] ? '<button data-l="verify" data-id="' + bnLogEsc(r.id) + '">重打驗證</button>' : '') +
         (BNLOG.tab === 'saved' ? '<button data-l="del" data-id="' + bnLogEsc(r.id) + '">刪除</button>' : (isSaved ? '<button disabled>已儲存</button>' : '<button data-l="save" data-id="' + bnLogEsc(r.id) + '">儲存</button>')) + '</div>';
     }).join('');
     h += '</div>';

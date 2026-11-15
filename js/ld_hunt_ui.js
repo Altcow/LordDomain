@@ -57,15 +57,15 @@ function huntExchangeHtml(ctx) {
   return h;
 }
 function huntHtml(ctx) {
-  var h = '<div class="eq-page eq-hunt">';
-  h += '<div class="eq-smithrow">' + eqArt('st_host', 'eq-smith') + '<div class="eq-bubble">' + eqEsc(ctx.say || '遠道而來,想訪哪一位?') + '</div></div>';
+  var h = '<div class="eq-page eq-2c eq-hunt"><div class="eq-l">';
+  h += '<div class="eq-smithrow">' + eqArt('st_host', 'eq-smith') + '<div class="eq-bubble">' + eqEsc(ctx.say || '遠道而來,想訪哪一位?') + '</div></div></div><div class="eq-r">';
   h += huntHead(ctx);
   if (ctx.tab === 'clue') h += huntExchangeHtml(ctx);
   else {
     h += huntBtns(ctx, ctx.tab);
     if (ctx.res) h += '<div class="eq-result ok">' + ctx.res + '</div>';
   }
-  return h + '</div>';
+  return h + '</div></div>';
 }
 function huntTabsHtml(ctx) {
   return HUNT_TABS.map(function (t) { return '<button class="ld-tab' + (ctx.tab === t[0] ? ' on' : '') + '" data-a="tab" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('');

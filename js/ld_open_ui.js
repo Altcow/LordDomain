@@ -38,8 +38,15 @@ function ldoTeams() { try { return typeof wdTeams === 'function' ? wdTeams() : [
 function ldoTeamPower(t) { var cs = ldoCs(); try { return cs && typeof wdTeamPower === 'function' ? Math.round(wdTeamPower(cs, t.slots)) : 0; } catch (e) { return 0; } }
 
 // ═════════ 一、首頁:木牌鎖 / 慶祝 / 登入 ═════════
+// 木牌下方的鎖定短字(完整條件點了才用 Toast 顯示):「名聲 800」「打一場戰鬥」「得鍛造材料」
+function ldoLockShort(uid) {
+  var full = unlockLockText(uid), c = unlockCfg(uid);
+  if (!full) return '';
+  if (c && c.ev && c.txt) return ({ drill: '打一場戰鬥', forge: '得鍛造材料' })[uid] || full.replace(/\s*開放$/, '');
+  return full.replace(/\s*開放$/, '');
+}
 function ldoPlaqueSync() {
-  var map = (typeof UNLOCK_PLAQUE !== 'undefined') ? UNLOCK_PLAQUE : {}, n = 0;
+  var map = (typeof UNLOCK_PLAQUE !== 'undefined') ? UNLOCK_PLAQUE : {}, n = 0, sig = '';
   if (typeof LDH === 'undefined' || !LDH.plq) return 0;
   Object.keys(map).forEach(function (pid) {
     var el = LDH.plq[pid], uid = map[pid], lk, sub, ic;
@@ -49,12 +56,13 @@ function ldoPlaqueSync() {
     if (lk) {
       el.classList.add('lock'); n++;
       if (!LDO.plq[pid]) { LDO.plq[pid] = { sub: ldoEl('span', 'ldh-sub ldo-lktx'), ic: ldoEl('span', 'ldo-lkic') }; el.appendChild(LDO.plq[pid].sub); el.appendChild(LDO.plq[pid].ic); LDO.plq[pid].ic.innerHTML = ldoArt('evi_lock', 'ldo-lkimg'); sub = LDO.plq[pid].sub; }
-      sub.textContent = unlockLockText(uid); sub.hidden = false; LDO.plq[pid].ic.hidden = false;
+      sub.textContent = ldoLockShort(uid); sub.hidden = false; LDO.plq[pid].ic.hidden = false; sig += pid + ':' + sub.textContent.length + ';';
     } else if (LDO.plq[pid]) {
       el.classList.remove('lock');
       LDO.plq[pid].sub.hidden = true; LDO.plq[pid].ic.hidden = true;
     }
   });
+  if (sig !== LDO.lkSig) { LDO.lkSig = sig; if (typeof ldHomeLayout === 'function') ldHomeLayout(); }   // 鎖定小字有增減:木牌分區要重排
   return n;
 }
 function ldoCelebrate() {
@@ -136,6 +144,7 @@ function ldoChipBar() {
   list.forEach(function (c) { h += '<button type="button" class="ldo-chip" data-act="' + ldoEsc(c.act) + '">' + ldoArt(c.id === 'nb7' ? 'evi_book' : (c.id === 'evt' ? 'evi_flag' : 'evi_ribbon'), 'ldo-chic') + '<span class="ldo-chtx"><b>' + ldoEsc(c.label) + '</b><small>' + ldoEsc(c.sub) + '</small></span>' + (c.dot ? '<i class="ldh-dot"></i>' : '') + '</button>'; });
   LDO.bar.innerHTML = h;
   LDO.bar.hidden = !list.length;
+  if (LDO.barN !== list.length) { LDO.barN = list.length; if (typeof ldHomeLayout === 'function') ldHomeLayout(); }   // 晶片數變了:木牌避開的分區寬度跟著變
   return true;
 }
 function ldoShellAct(act) {
@@ -164,14 +173,14 @@ function ldoMainGo(q) {
 
 // ═════════ 三、頁面 HTML ═════════
 function ldoNbHtml(A) {
-  var l = evNbList(), o = evRead(), h = '<div class="ldo-card"><div class="ldo-ban">' + ldoArt('ev_week', 'ldo-banimg') + '</div><div class="ldo-sm">第 ' + Math.min(7, o.nb.days) + ' 個登入日。每個登入日領一格,沒來的天之後照順序補領,不會斷。' + (o.legacy ? '(舊帳號:抽數格改發碎片)' : '') + '</div><div class="ldo-g7">';
+  var l = evNbList(), o = evRead(), h = '<div class="ldo-card ldo-nb"><div class="ldo-nbl"><div class="ldo-ban">' + ldoArt('ev_week', 'ldo-banimg') + '</div><div class="ldo-sm">第 ' + Math.min(7, o.nb.days) + ' 個登入日。每個登入日領一格,沒來的天之後照順序補領,不會斷。' + (o.legacy ? '(舊帳號:抽數格改發碎片)' : '') + '</div></div><div class="ldo-nbr"><div class="ldo-g7">';
   l.forEach(function (x) {
-    h += '<div class="ldo-cell' + (x.got ? ' got' : '') + (x.can ? ' can' : '') + (x.pick ? ' big' : '') + '">' + ldoArt(x.got ? 'evs_3' : (x.pick ? 'evs_2' : 'evs_1'), 'ldo-cbg') + '<b>第 ' + x.day + ' 天</b><span>' + (x.legacy ? '碎片 ' + EV_CFG.legacyShards : (x.pulls ? '抽 ' + x.pulls : '糧食')) + (x.pick ? ' + 紫將' : '') + '</span>' +
+    h += '<div class="ldo-cell' + (x.got ? ' got' : '') + (x.can ? ' can' : '') + (x.pick ? ' big' : '') + '">' + ldoArt(x.got ? 'evs_3' : (x.pick ? 'evs_2' : 'evs_1'), 'ldo-cbg') + '<b>第 ' + x.day + ' 天</b><span>' + (x.legacy ? '碎片 ' + EV_CFG.legacyShards : (x.pulls ? '抽 ' + x.pulls : (x.give ? '碎片 ' + x.give.shards + ' + 材料' : '糧食'))) + (x.pick ? ' + 紫將' : '') + '</span>' +
       (x.can ? '<button class="ldo-b" ' + A + '="ev_nbclaim" data-d="' + x.day + '">領取</button>' : (x.got ? '<i>已領</i>' : '<i>未到</i>')) + '</div>';
   });
   h += '</div>';
   if (o.nb.pick === 1) h += ldoPickHtml(A);
-  return h + '</div>';
+  return h + '</div></div>';
 }
 function ldoPickHtml(A) {
   var pool = (typeof cardsFigPool === 'function') ? cardsFigPool(3) : [], h = '<div class="ldo-pick-h"><b>第 7 天大獎:自選 1 張紫名人</b><div class="ldo-pickg">';
@@ -187,15 +196,15 @@ function ldoSignHtml(A, now) {
   return h + '</div><div class="ldo-sm">每天:抽數 ' + EV_CFG.signPulls + '、糧 ' + EV_CFG.signGrain + '、碎片 ' + EV_CFG.signShards + ';第 ' + EV_CFG.signBig.join(' / ') + ' 天大獎再加抽數 ' + EV_CFG.signBigPulls + '、礪石 3。</div></div>';
 }
 function ldoEventHtml(A, now) {
-  var h = '', a = evActive(now), boss = evBossGet(), tr = a.filter(function (x) { return x.id === 'treasure'; })[0], nx;
+  var h = '<div class="ldo-ev"><div class="ldo-evg">', a = evActive(now), boss = evBossGet(), tr = a.filter(function (x) { return x.id === 'treasure'; })[0], nx;
   if (evNbList().some(function (x) { return !x.got; })) h += '<button class="ldo-row" ' + A + '="ev_gonb">' + ldoArt('evi_book', 'ldo-ri') + '<span><b>新手七日</b><small>登入第 ' + Math.min(7, evRead().nb.days) + ' 天;領完 7 格後消失</small></span></button>';
   if (unlockIs('event')) {
     if (boss && !boss.fin && now < boss.t1) h += '<button class="ldo-row" ' + A + '="ev_goboss">' + ldoArt('evc_6', 'ldo-ri') + '<span><b>團結關:' + ldoEsc(EV_CFG.bossName) + '</b><small>剩 ' + ldoDur(boss.t1 - now) + '・打掉 ' + Math.round(boss.dmg * 100) + '%' + (ldoBossReady(now) ? '・本時段可出戰' : '') + '</small></span></button>';
     else { nx = evNextStart(now, 'boss'); h += '<div class="ldo-row off">' + ldoArt('evc_6', 'ldo-ri') + '<span><b>團結關</b><small>' + (boss && boss.fin ? '本次已結束・' : '') + (nx ? '下次 ' + ldoMD(nx.t0) + '(' + ldoDur(nx.t0 - now) + '後)' : '') + '</small></span></div>'; }
     h += '<div class="ldo-row off">' + ldoArt('evi_medal', 'ldo-ri') + '<span><b>寶地採集</b><small>' + (tr ? '進行中,剩 ' + ldoDur(tr.t1 - now) + ':每次刷新有 ' + EV_CFG.treasureCount + ' 個金邊資源點,駐守產量 ×' + EV_CFG.treasureYieldMul + '、每 6 小時另得碎片 ' + EV_CFG.treasureShard : (function () { var n2 = evNextStart(now, 'treasure'); return n2 ? '下次 ' + ldoMD(n2.t0) + '(' + ldoDur(n2.t0 - now) + '後)' : ''; })()) + '</small></span></div>';
-    h += ldoSignHtml(A, now);
-  } else h += '<div class="ldo-row off">' + ldoArt('evi_lock', 'ldo-ri') + '<span><b>限時活動</b><small>' + ldoEsc(unlockLockText('event')) + '</small></span></div>';
-  return h;
+    h += '</div>' + ldoSignHtml(A, now);
+  } else h += '<div class="ldo-row off">' + ldoArt('evi_lock', 'ldo-ri') + '<span><b>限時活動</b><small>' + ldoEsc(unlockLockText('event')) + '</small></span></div>' + '</div>';
+  return h + '</div>';
 }
 function ldoQuestHtml(A) {
   var l = evMainList(), h = '<div class="ldo-card"><div class="ldo-ttl">主線 <small>一次一條,點「前往」直接跳過去</small></div>';

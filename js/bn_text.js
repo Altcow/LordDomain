@@ -53,9 +53,11 @@ function bntKT(kind, power, sc) {
   return v * (sc === undefined ? 1 : sc);
 }
 // 攻擊類倍率(顯示用):同 bn_effects.js bnAtkMul 的基礎部分 —— params.mulOverride 取代檔位表,params.mulScale 再乘(B 級對齊 / S·A 補強用)
+// 發動率重平衡:再乘單次數值係數 pf(bnSkillBody 在產生內文時暫存於 BNT_PF;傷害 / 治療 / 護盾 / 持續傷害 / 延遲爆發類才縮,同 bn_effects.js BN_PF_KIND)
+var BNT_PF = 1;
 function bntAtkV(kind, power, P) {
   P = P || {};
-  return (P.mulOverride !== undefined ? P.mulOverride : bntKT(kind, power)) * (P.mulScale || 1);
+  return (P.mulOverride !== undefined ? P.mulOverride : bntKT(kind, power)) * (P.mulScale || 1) * BNT_PF;
 }
 function bntTg(tg, def) { return BNT_TG[tg] || BNT_TG[def] || '目標'; }
 function bntFigName(id) { return (typeof CARD_FIG_BY_ID !== 'undefined' && CARD_FIG_BY_ID[id]) ? CARD_FIG_BY_ID[id].name : id; }
@@ -195,8 +197,8 @@ function bntClause(kind, target, power, P, d, isExtra) {
     case 'immune': s = bntList(P.types); return bntTg(target, 'self') + '免疫' + (s || '指定狀態') + (P.firstOnly ? '(僅首次)' : '');
     case 'resist': return '獲得 ' + bntS(P.layers, 1) + ' 層抵禦(可擋下下一次' + (P.guard ? bntStName(P.guard) : '負面效果') + '),持續 ' + bntS(P.dur, BN_DATA.ward.dur) + ' 回合';
     case 'heal_reduce': return '使' + bntTg(target, 'enemy_one') + (P.ratio >= 100 ? '完全無法被治療(禁療)' : '受到的治療 −' + bntS(P.ratio, 50) + '%') + (P.turns === 'battle' ? '(全程)' : ' ' + bntS(P.turns, BN_DATA.hb.defaultTurns) + ' 回合');
-    case 'cd_reduce': return '縮短' + (target && target !== 'self' ? bntTg(target) : '自身') + '技能冷卻 ' + (typeof P.amount === 'number' ? P.amount : bntKT(kind, pw)) + ' 回合';
-    case 'cd_reset': return '使' + bntTg(target, 'ally_all') + '的技能冷卻全部歸零';
+    case 'cd_reduce': return '提高' + (typeof P.scope === 'string' && P.scope.indexOf('fig:') === 0 ? bntFigName(P.scope.slice(4)) + '的' : (target && target !== 'self' ? bntTg(target) : '自身')) + '戰法發動率 +' + bntPct(0.05 * Math.max(1, typeof P.amount === 'number' ? P.amount : bntKT(kind, pw))) + ((d.cat === 'passive' || d.cat === 'command') && !P.trigger ? '' : ',持續 2 回合');
+    case 'cd_reset': return '提高' + bntTg(target, 'ally_all') + '戰法發動率 +10%,持續 2 回合';
     case 'extra_turn': return bntTg(target, 'ally_all') + '立即額外行動一次' + (P.normalOnly ? '(僅普通攻擊)' : '');
     case 'self_sacrifice': if (P.trigger === 'hp_below_30') return '立刻退場,把剩下的兵力化為:' + (P.gain && P.gain.kind ? bntClause(P.gain.kind, P.gain.target || 'ally_all', P.gain.power || pw, P.gain.params || {}, d, true) : '額外效果');
       return '自損 ' + bntPct(P.hpCost || 0.1) + ' 兵力,換取:' + (P.gain && P.gain.kind ? bntClause(P.gain.kind, P.gain.target || target, P.gain.power || pw, P.gain.params || {}, d, true) : '額外效果');
@@ -275,34 +277,38 @@ function bnSkillResolve(sk) {
 function bnSkillCatName(sk) { var d = bnSkillResolve(sk); return d ? (BN_TEXT_CATS[d.cat] || '戰法') : ''; }
 // 被動帶 attack / defend / both 條件且為 buff_* 等:只在條件成立時生效 → 內文直接寫條件句
 function bntVsOnly(d) { return !!(d.vs && d.vs.bonus && d.cat === 'passive' && d.vs.mode !== 'ally' && BNT_VS_ONLY[d.kind]); }
-// 發動率:同 bn_engine.js bnRateOf 的基礎部分(不含兵種 / 星數等個別加成)
+// 發動率:同 bn_engine.js bnRateOf 的基礎部分(不含兵種 / 星數等個別加成)。發動率重平衡(2026-11-15):資料的 rate 由產生器依類別查表寫入;上限主動 / 追擊 0.95、大招 0.60;無準備型 / 治療加成
 function bntRate(d) {
   var cat = d.cat === 'pursuit' ? 'pursuit' : 'active', r = d.rate;
   if (d.cat === 'ult') return Math.max(0, Math.min(BN_DATA.rate.ultCap, r === undefined ? BN_DATA.rate.ult : r));
   if (r === undefined) r = BN_DATA.rate[cat][d.power || 'M'];
-  if (d.prep) r += BN_DATA.rate.prepBonus;
+  if (d.prep) r += BN_DATA.rate.prepBonus || 0;
   if (cat === 'active' && /^heal_[sah]/.test(d.kind)) r += BN_DATA.rate.healBoost || 0;
   return Math.max(0, Math.min(BN_DATA.rate.cap, r));
 }
+// 每場最多 N 次(def.mx);沒有就不顯示
+function bntMx(d) { return d.mx ? '每場最多 ' + d.mx + ' 次' : ''; }
 // 抬頭:類別(發動條件)
 function bnSkillHead(sk) {
   var d = bnSkillResolve(sk), P, a = [], cat, t;
   if (!d) return '';
   P = d.params || {}; cat = BN_TEXT_CATS[d.cat] || '戰法';
-  if (d.cat === 'active') { a.push('發動率 ' + bntPct(bntRate(d))); if (d.prep) a.push('準備 ' + d.prep + ' 回合'); }
-  else if (d.cat === 'pursuit') a.push('普攻後 ' + bntPct(bntRate(d)) + ' 機率發動');
+  if (d.cat === 'active') { a.push('發動率 ' + bntPct(bntRate(d))); if (d.prep) a.push('準備 ' + d.prep + ' 回合'); if (d.mx) a.push(bntMx(d)); }
+  else if (d.cat === 'pursuit') { a.push('普攻後 ' + bntPct(bntRate(d)) + ' 機率發動'); if (d.mx) a.push(bntMx(d)); }
   else if (d.cat === 'command') a.push('開戰生效');
-  else if (d.cat === 'ult') { a.push('發動率 ' + bntPct(bntRate(d))); a.push('第 ' + BN_DATA.rate.ultFrom + ' 回合起'); if (d.prep) a.push('準備 ' + d.prep + ' 回合'); a.push('冷卻 ' + (typeof d.cd === 'number' ? d.cd : BN_DATA.rate.ultCd) + ' 回合'); }
+  else if (d.cat === 'ult') { a.push('發動率 ' + bntPct(bntRate(d))); a.push('第 ' + BN_DATA.rate.ultFrom + ' 回合起'); if (d.prep) a.push('準備 ' + d.prep + ' 回合'); if (d.mx) a.push(bntMx(d)); if (BN_DATA.rateRule && BN_DATA.rateRule.ultPity > 0 && !d.np) a.push('連 ' + (BN_DATA.rateRule.ultPity - 1) + ' 次未發必發'); }
   else if (d.cat === 'passive' && !(P.trigger && BNT_TRIG[P.trigger])) a.push('全程');
-  if ((d.cat === 'active' || d.cat === 'pursuit') && d.cd) a.push('冷卻 ' + d.cd + ' 回合');
   return cat + (a.length ? '(' + a.join('、') + ')' : '');
 }
 // 內文(不含抬頭)
+var BNT_PFK = { atk_single: 1, atk_front: 1, atk_back: 1, atk_all: 1, atk_pierce: 1, atk_cross: 1, atk_multi: 1, atk_snipe: 1, atk_exec: 1, execute_chain: 1, lifesteal: 1, dot_spread: 1, delay_burst: 1 };
 function bnSkillBody(sk) {
   var d = bnSkillResolve(sk), P, s, notes, trig = '';
   if (!d) return '';
   P = d.params || {};
+  BNT_PF = (d.pf && typeof BN_SKILLS !== 'undefined' && BNT_PFK[d.kind]) ? d.pf : 1;
   s = bntVsOnly(d) ? bntVsText(d) : bntClause(d.kind, d.target || P.target, d.power, P, d, false);
+  BNT_PF = 1;
   if (d.vs && d.vs.mode === 'ally' && d.cat === 'passive' && d.kind !== 'self_sacrifice') s = bntVsWho(d.vs) + '在我方時:' + s;
   if (d.cat === 'passive' && P.trigger && BNT_TRIG[P.trigger]) trig = BNT_TRIG[P.trigger] + ',';
   notes = bntNotes(d, P);
@@ -313,7 +319,7 @@ function bnSkillParts(sk) {
   if (!d) return null;
   return { head: bnSkillHead(d), body: bnSkillBody(d), cat: d.cat, name: d.name, id: d.id, desc: d.desc || '' };
 }
-// 完整一句:『主動(發動率 30%、冷卻 2 回合):對敵方後排造成 120% 謀略傷害。』
+// 完整一句:『主動(發動率 30%、每場最多 4 次):對敵方後排造成 120% 謀略傷害。』
 function bnSkillText(sk) {
   var p = bnSkillParts(sk);
   return p ? p.head + ':' + p.body : '';
@@ -463,7 +469,7 @@ function bnCardSkillIds(card, o) {   // o 可選 {troop}:布陣時依所選兵�
 function bnCardSkillRows(card, o) {
   return bnCardSkillIds(card, o).map(function (x) {
     var p = bnSkillParts(x.id), d = BN_SKILLS[x.id];
-    return { id: x.id, role: x.role, cat: d.cat, name: d.name, head: p.head, body: p.body, desc: p.desc, cd: d.cd || 0, rate: d.rate, fig: d.fig || '', flavor: (typeof BN_FLAVOR !== 'undefined' && BN_FLAVOR[x.id]) || '' };
+    return { id: x.id, role: x.role, cat: d.cat, name: d.name, head: p.head, body: p.body, desc: p.desc, cd: d.cd || 0, rate: d.rate, mx: d.mx || 0, fig: d.fig || '', flavor: (typeof BN_FLAVOR !== 'undefined' && BN_FLAVOR[x.id]) || '' };
   });
 }
 // ---------- 卡面「戰法」區塊:名稱連結 + 類別小標 + 一行短說明;完整說明在彈窗(cardsui 說明浮層 kind=bnskill,bnSkillInfo) ----------
@@ -516,7 +522,7 @@ function bnSkillInfo(id) {
   if (p.desc) lines.push(['補充', p.desc]);
   fl = (typeof BN_FLAVOR !== 'undefined' && BN_FLAVOR[d.id]) || '';
   if (d.fig) lines.push(['事蹟 / 典故', fl || '依人物經歷與個性設計(史料較少者為推想)。']);
-  else { lines.push(['用法', d.cat === 'ult' ? '大招式戰法:發動率低、威力大,第 ' + BN_DATA.rate.ultFrom + ' 回合起每次行動擲骰,依兵種而定。' : '依發動率自動施放,不需操作。']); lines.push(['適合搭配', bntFitText(d)]); }
+  else { lines.push(['用法', d.cat === 'ult' ? '大招式戰法:威力大,第 ' + BN_DATA.rate.ultFrom + ' 回合起每次行動擲骰,連續未發動會保底必發,每場有發動上限,依兵種而定。' : '依發動率自動施放,不需操作。']); lines.push(['適合搭配', bntFitText(d)]); }
   if (d.vs && bntVsText(d)) lines.splice(2, 0, ['對象條件', bntVsText(d)]);
   return { title: d.name, tags: bnSkillTags(d), tagCls: ['bnt-' + d.cat], lines: lines };
 }

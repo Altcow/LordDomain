@@ -1,4 +1,4 @@
-const VERSION = 'v62';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v63';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -23,6 +23,7 @@ const PRECACHE = [
   './css/ld_home.css',
   './css/ld_open.css',
   './css/ld_hero.css',
+  './css/ld_skilldex.css',
   './css/ld_team.css',
   './css/ld_tower.css',
   './css/ld_equip.css',
@@ -193,6 +194,7 @@ const PRECACHE = [
   './js/interiors_pack2.js',
   './js/bldtag.js',
   './js/bn_data.js',
+  './js/bn_cost_data.js',
   './js/bn_skills_data.js',
   './js/bn_units.js',
   './js/bn_flavor.js',
@@ -224,6 +226,8 @@ const PRECACHE = [
   './js/bn_effects.js',
   './js/bn_book.js',
   './js/bn_skcard.js',
+  './js/skill_rec_data.js',
+  './js/skill_rec.js',
   './js/bndraw.js',
   './js/bnsfx.js',
   './js/bnui.js',
@@ -246,6 +250,8 @@ const PRECACHE = [
   './js/ld_nav.js',
   './js/tower.js',
   './js/ld_hero.js',
+  './js/ld_skilldex.js',
+  './js/ld_team_tips.js',
   './js/ld_team.js',
   './js/ld_tower.js',
   './js/ld_equip_ui.js',

@@ -9,17 +9,19 @@
 //   nums:{tgt, kind:'dmg'|'heal', v, crit, hooked} hooked = 數字已由命中掛鉤在命中格顯示,render 不再顯示。
 // 每步播放順序:① 前置掛鉤(依 pre 順序;掛鉤回傳毫秒即等待)② 套用本步結果(兵力條、未掛鉤的數字、回合牌、戰報)③ 等 baseMs ÷ 速度。
 // 掛鉤 BNCB.hooks = BNST.hooks(見 bnstage.js 檔頭)。播完 → BNST.hooks.onEnd(plan,false) 出勝敗牌與按鈕;不再自動開結果頁(按「看戰報」才開)。
-// 速度 1× / 2× / 3×(3× 簡化:BNST.simple)。頂列右上「離」鈕 → 變暗 + 確認視窗(戰鬥內部凍結)→ 取消繼續 / 確認全黑淡出後離開。速度記在 localStorage(讀寫包 try/catch,失敗用 1×)。
+// 速度 1× / 2× / 3×(3× 簡化:BNST.simple)。頂列右上「離」鈕 → 變暗 + 確認視窗(戰鬥內部凍結)→ 取消繼續 / 確認全黑淡出後離開(autoReport 時離開 = 進戰鬥結果戰報,bncbToReport;否則關閉)。速度記在 localStorage(讀寫包 try/catch,失敗用 1×)。
+// 流程(2026-11-15):重播 → 戰鬥過程 → 離開 → 戰鬥結果戰報(bnreport.js)→ 離開 → opts.onLeave(關卡選擇 / 入口)。戰報參數(戰果 loot、logId、onLeave)記在 BNCB.rptOpts,重播 / 離開時原樣帶回戰報。
 // 舊版戰報(rec.v < BN_REC_VER)不可重播:bncbOpen 直接開結果頁(顯示「舊版戰報,無法重播」)。
 // 測試入口:網址 ?cb=1&nocover=1 以 bnRptSampleRec() 自動開啟。
 // ES2017;不用 ?. ??;不用 canvas;不發聲;全域 BNCB / bncb 前綴。
 
 var BNCB = {
-  el: null, rec: null, plan: null, mySide: 'A', speed: 1, baseMs: 600, run: 0, timer: null, stageEl: null, last: null, logWrap: null, ll: null, rdTxt: '', resizeFn: null,
-  hooks: null, ultShow: {}, autoReport: false, conf: '', confTm: 0
+  el: null, rec: null, plan: null, mySide: 'A', speed: 2, baseMs: 600, run: 0, timer: null, stageEl: null, last: null, logWrap: null, ll: null, rdTxt: '', resizeFn: null,
+  hooks: null, ultShow: {}, autoReport: false, rptOpts: null, conf: '', confTm: 0
 };
 var BNCB_OUT_MS = 350;
 var BNCB_SPD_KEY = 'lorddomain.bncb.speed';
+var BNCB_SPD_DEF = 2;   // 發動率重平衡(2026-11-15):每場變長(平均 6~7 回合),預設播放速度 1× → 2×(使用者仍可切 1× / 2× / 3×,已存的偏好不動)
 
 // ───────── 純資料:事件 → 步 ─────────
 // 回 {mySide, enemySide, mine:[單位], enemy:[單位], byId, open:{hp,dead}, steps, win, reason, reasonTxt, maxRound, endTxt, seed}
@@ -185,7 +187,7 @@ function bncbShellHtml(plan, title) {
     '<div class="bcb-dim" data-act="noop"></div><div class="bcb-dlg" role="alertdialog" aria-label="離開確認"><b>確定要離開戰鬥嗎?</b><div class="bcb-db"><button type="button" class="ld-btn" data-act="leave-ok">確認</button><button type="button" class="ld-btn sub" data-act="leave-no">取消</button></div></div><div class="bcb-black"></div></div><div class="bst-rot">請將手機轉橫</div>';
 }
 function bncbSpeedLoad() {
-  try { return bncbSpeedNorm(localStorage.getItem(BNCB_SPD_KEY)); } catch (e) { return 1; }
+  try { var v = localStorage.getItem(BNCB_SPD_KEY); return v === null || v === '' ? BNCB_SPD_DEF : bncbSpeedNorm(v); } catch (e) { return BNCB_SPD_DEF; }
 }
 function bncbSpeedSave(n) {
   try { localStorage.setItem(BNCB_SPD_KEY, String(n)); } catch (e) { /* 無法寫入時略過 */ }
@@ -270,7 +272,7 @@ function bncbAskOk() {
   var el = BNCB.el;
   if (!el || BNCB.conf !== 'ask') return false;
   bncbSetConf('out');
-  BNCB.confTm = setTimeout(function () { BNCB.confTm = 0; if (BNCB.el === el) bnBattleClose(); }, BNCB_OUT_MS);
+  BNCB.confTm = setTimeout(function () { BNCB.confTm = 0; if (BNCB.el !== el) return; if (BNCB.autoReport) bncbToReport(); else bnBattleClose(); }, BNCB_OUT_MS);
   return true;
 }
 function bncbOnClick(e) {
@@ -281,9 +283,9 @@ function bncbOnClick(e) {
   else if (a === 'spd2') bncbSpeed(2);
   else if (a === 'spd3') bncbSpeed(3);
   else if (a === 'log') bncbToggleLog();
-  else if (a === 'replay') { var rpl = BNCB.rec, rs = BNCB.mySide, ra = BNCB.autoReport; bncbOpen(rpl, { mySide: rs, autoReport: ra }); }
-  else if (a === 'report') { var rp = BNCB.rec, side = BNCB.mySide; bncbClose(); if (rp) bnRptOpen(rp, { mySide: side }); }
-  else if (a === 'close') bncbClose();
+  else if (a === 'replay') { var rpl = BNCB.rec, rs = BNCB.mySide, ra = BNCB.autoReport, ro = BNCB.rptOpts; bncbOpen(rpl, { mySide: rs, autoReport: ra, rptOpts: ro }); }
+  else if (a === 'report') bncbToReport();
+  else if (a === 'close') { if (BNCB.autoReport) bncbToReport(); else bncbClose(); }
   else if (a === 'leave') bncbAsk();   // 離開鈕:先確認;確認後才走 bnBattleClose(結果早已結算,只關掉畫面,不撤退、不改結果)
   else if (a === 'leave-ok') bncbAskOk();
   else if (a === 'leave-no') bncbAskNo();
@@ -315,8 +317,15 @@ function bncbFinish(plan, instant) {
   if (!BNCB.autoReport) return;
   rp = BNCB.rec; sd = BNCB.mySide;
   bnstLater(instant ? 0 : BNCB_REPORT_MS, function () {
-    if (rp && BNCB.rec === rp) { bncbClose(); bnRptOpen(rp, { mySide: sd }); }
+    if (rp && BNCB.rec === rp) bncbToReport();
   });
+}
+// 關掉戲台,開戰鬥結果戰報(離開確認通過 / 播完自動 / 按「看戰報」);戰報參數用 BNCB.rptOpts
+function bncbToReport() {
+  var rp = BNCB.rec, o = Object.assign({}, BNCB.rptOpts || {}, { mySide: BNCB.mySide });
+  if (!rp) return false;
+  bncbClose();
+  return bnRptOpen(rp, o);
 }
 function bncbRun(from, my) {
   var plan = BNCB.plan;
@@ -348,7 +357,7 @@ function bncbClose() {
     el.removeEventListener('click', bncbOnClick);
     if (el.parentNode) el.parentNode.removeChild(el);
   }
-  BNCB.el = null; BNCB.autoReport = false; BNCB.plan = null; BNCB.rec = null; BNCB.stageEl = null; BNCB.last = null; BNCB.logWrap = null; BNCB.ll = null; BNCB.rdTxt = '';
+  BNCB.el = null; BNCB.autoReport = false; BNCB.rptOpts = null; BNCB.plan = null; BNCB.rec = null; BNCB.stageEl = null; BNCB.last = null; BNCB.logWrap = null; BNCB.ll = null; BNCB.rdTxt = '';
   return !!el;
 }
 // 預載:最多等 8 秒,失敗的圖不擋播放
@@ -366,9 +375,9 @@ function bncbOpen(rec, opts) {
   var o = opts || {}, el, plan, my, stageEl, fit;
   if (typeof document === 'undefined' || !document.body) return false;
   if (BNCB.el) bncbClose();
-  if (!bnRptReplayable(rec)) { bnRptOpen(rec, { mySide: o.mySide === 'B' ? 'B' : 'A' }); return false; }
+  if (!bnRptReplayable(rec)) { bnRptOpen(rec, Object.assign({}, o.rptOpts || {}, { mySide: o.mySide === 'B' ? 'B' : 'A' })); return false; }
   plan = bncbSteps(rec, o.mySide === 'B' ? 'B' : 'A');
-  BNCB.rec = rec; BNCB.plan = plan; BNCB.mySide = plan.mySide; BNCB.autoReport = !!o.autoReport; BNCB.speed = bncbSpeedLoad(); BNST.simple = BNCB.speed >= 3;
+  BNCB.rec = rec; BNCB.plan = plan; BNCB.mySide = plan.mySide; BNCB.autoReport = !!o.autoReport; BNCB.rptOpts = o.rptOpts || null; BNCB.speed = bncbSpeedLoad(); BNST.simple = BNCB.speed >= 3;
   BNCB.ultShow = {};
   (plan.mine || []).concat(plan.enemy || []).forEach(function (u) { if (bnstAnimOf(u.fig) && bnstAnimOf(u.fig).ult) BNCB.ultShow[u.fig] = true; });
   el = document.createElement('div');
@@ -409,17 +418,22 @@ function bncbTitle(rec) {
   return '戰鬥';
 }
 function bncbIsOpen() { return !!(BNCB.el && BNCB.el.parentNode); }
-// 共用入口(戰役 / 擂台 / 切磋 / 外勤 / 戰報列表)。mode:'play' = 播舞台,播完自動進結果頁;'report' = 直接開結果頁(結果頁「重播」可進舞台)。opts.mySide 預設 'A'。
+// 共用入口(戰役 / 擂台 / 切磋 / 外勤 / 戰報列表)。mode:'play' = 播舞台,播完(或按離開)進戰鬥結果戰報;'report' = 直接開戰報(戰報「重播」可進舞台)。opts.mySide 預設 'A'。
+// 戰報參數:loot = 戰果欄(字串 / 陣列)、logId = 該場文字戰報 id(有才有儲存 / 文字戰報鈕)、onLeave = 戰報按離開 / 返回時呼叫(關卡選擇 / 入口)。
 function bnBattleShow(rec, opts) {
-  var o = opts || {}, side = o.mySide === 'B' ? 'B' : 'A';
+  var o = opts || {}, side = o.mySide === 'B' ? 'B' : 'A', ro = { loot: o.loot, logId: o.logId, onLeave: o.onLeave, share: o.share };
   if (!rec) return false;
-  if (o.mode === 'report') return bnRptOpen(rec, { mySide: side, loot: o.loot, logId: o.logId });
-  return bncbOpen(rec, { mySide: side, autoReport: true, fromRound: o.fromRound | 0 });
+  if (o.mode === 'report') return bnRptOpen(rec, Object.assign({ mySide: side }, ro));
+  return bncbOpen(rec, { mySide: side, autoReport: true, fromRound: o.fromRound | 0, rptOpts: ro });
 }
-// 返回鍵 / Esc:戲台開著時,無視窗 = 按離開(跳確認),視窗開著 = 取消;否則關結果頁。回 true = 有處理
+// 返回鍵 / Esc:戲台開著時,無視窗 = 按離開(跳確認),視窗開著 = 取消;戰報開著 = 離開戰報(onLeave);文字戰報蓋在戰報上時交給 bnlog 處理。回 true = 有處理
 function bnBattleBack() {
   if (bncbIsOpen()) { if (BNCB.conf === 'ask') bncbAskNo(); else if (!BNCB.conf) bncbAsk(); return true; }
-  if (typeof bnRptIsOpen === 'function' && bnRptIsOpen()) { bnRptClose(); return true; }
+  if (typeof bnRptIsOpen === 'function' && bnRptIsOpen()) {
+    if (BNRPT.hidden) return false;
+    bnRptLeave();
+    return true;
+  }
   return false;
 }
 function bnBattleClose() {

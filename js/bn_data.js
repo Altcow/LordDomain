@@ -4,7 +4,7 @@
 // 全域:BN_DATA(係數)BN_TRAIT_MODS(詞條 → 戰鬥修正)BN_FIG_TRAIT(名人專屬詞條 → 戰鬥修正,B4)BN_FIG_TUNE(名人強度校正,B6)BN_BONDS(陣營 / 職業標籤 / 特殊組合羈絆)。僅純邏輯。
 var BN_DATA = {
   v: 1,
-  K: 0.78,                     // 傷害總係數(§3.4);B1 調參 1.6 → 1.73;戰鬥改版(多戰法同時發動 + 放完戰法仍普攻 + cdCut)1.73 → 1.0,維持 5~7 回合;2026-11-13 戰法補強(通用 B 對齊揮砍標準 + S/A 補強,傷害變多)1.0 → 0.85,維持平均 5~6 回合;2026-11-14 B 非攻擊下修後五隊 3v3 平均回合約 5.0~5.16 < 5.5,0.85 → 0.78
+  K: 0.55,                     // 2026-11-15 發動率重平衡:0.78 → 0.55(配合發動率大增、單次數值 ×pf,拉長戰鬥到平均 6~7 回合);傷害總係數(§3.4);B1 調參 1.6 → 1.73;戰鬥改版(多戰法同時發動 + 放完戰法仍普攻 + cdCut)1.73 → 1.0,維持 5~7 回合;2026-11-13 戰法補強(通用 B 對齊揮砍標準 + S/A 補強,傷害變多)1.0 → 0.85,維持平均 5~6 回合;2026-11-14 B 非攻擊下修後五隊 3v3 平均回合約 5.0~5.16 < 5.5,0.85 → 0.78
   reachMin: 1,                 // 射程下限(2026-11-12 使用者決定:每個人都能出手,後排近戰也能打到敵方前排);bnReach 回傳 max(reachMin, 原值)
   maxRound: 10,                // 回合上限(單一來源;2026-11-09 使用者決議 50 → 10:讓慢熱 / 爆發型戰法節奏都有空間;到上限依剩餘兵力比例判定,較高者勝)
   roundPhase: { earlyTo: 3, lateFrom: 7 },   // 節奏分段(前期 1~3、中期 4~6、後期 7~maxRound);之後加『第 N 回合起 / 前 N 回合』效果請走 bnRoundPhase / bnRoundIn
@@ -44,9 +44,9 @@ var BN_DATA = {
   pickPrey: 100, pickLowHp: 50,
   // 戰法發動率 / 冷卻預設(§4.2)。每次行動:每個主動戰法與大招各自擲骰(可同時放好幾個),普攻後每個追擊戰法各自擲骰。
   // ult = 大招(大招式戰法)預設發動率(json 有 rate 者以 json 為準);ultCap = 大招發動率上限;ultFrom = 第幾回合起可發動;ultCd = 大招發動後冷卻回合
-  rate: { active: { S: 0.50, M: 0.40, L: 0.35, XL: 0.35 }, pursuit: { S: 0.40, M: 0.35, L: 0.30, XL: 0.30 }, ult: 0.15, ultCap: 0.45, ultFrom: 2, ultCd: 3, prepBonus: 0.10, cap: 0.70, healBoost: 0.25 },   // healBoost:主動治療戰法的發動率加成(調參用)
-  cd: { S: 1, M: 2, L: 3, XL: 3 },
-  cdCut: 1,                    // 戰鬥改版:主動 / 追擊戰法冷卻一律 −1(最少 1;大招不受影響)
+  rate: { active: { S: 0.50, M: 0.40, L: 0.35, XL: 0.35 }, pursuit: { S: 0.40, M: 0.35, L: 0.30, XL: 0.30 }, ult: 0.35, ultCap: 0.60, ultFrom: 2, ultCd: 0, prepBonus: 0, cap: 0.95, healBoost: 0 },   // 2026-11-15 發動率重平衡:戰法各自的發動率由產生器依類別查表寫進資料(rate / rl / mx / pf),這裡的表只是沒寫 rate 時的後備;冷卻全面取消(ultCd 0)、prepBonus / healBoost 取消(查表已含);舊值見 BN_RATE_LEGACY(階級凍結用)
+  cd: { S: 0, M: 0, L: 0, XL: 0 },   // 2026-11-15:主動戰法冷卻取消(資料欄位 cd 也一律 0;舊值見 BN_RATE_LEGACY.cd)
+  cdCut: 0,                    // 戰鬥改版:主動 / 追擊戰法冷卻一律 −1(最少 1;大招不受影響)
   passiveMul: 0.5,             // 被動 / 持續指揮的數值 = 主動同 power × 0.5
   defaultRounds: 3,            // 指揮戰法預設持續
   buffRounds: 2, buffRoundsXL: 3,
@@ -82,6 +82,9 @@ var BN_DATA = {
   paralyze: { skip: 0.5, spd: 0.15, conductLeft: 1 },
   dotRounds: 2, dotRoundsXL: 3, poisonRounds: 3, poisonHeal: 0.5,
   burnTickK: 1,
+  healK: 0.70,                 // 2026-11-15:治療 / 護盾輸出係數(降 K 時避免補師變強;bnHeal / bnShield 入口乘上)
+  // 發動率規則(rate_rule.json 的執行期參數):actCap = 同一次出手最多幾個主動戰法(大招、追擊不算);firstPity = 這場還沒發過的戰法連續 N−1 次沒中、第 N 次必發;ultPity = 大招連續 N−1 次沒中、第 N 次必發;皆可設 0 關閉
+  rateRule: { actCap: 2, firstPity: 4, ultPity: 3 },
   healCap: { single: 0.35, xl: 0.50, round: 0.40, second: 0.7, third: 0.5 },
   shieldDur: 2, shieldCap: 0.40, pierceShield: 1.5,
   // 禁療 / 抵禦(§4.11、SCHEMA C):發動率與持續集中在 skills json 的 params.healBlock / params.resist;此處只放引擎參數
@@ -89,7 +92,7 @@ var BN_DATA = {
   ward: { maxLayers: 2, dur: 3, rateScale: 5.0 },   // B1 調參 1 → 5(抵禦來源稀少,否則擋下率 < 2%)
   ccImmRounds: 1,              // 強控後抗控
   // 疲兵(§4.11):第 5 回合起 受傷 +10 %/回合、受療 −10 %/回合,累加
-  fatigue: { start: 5, dmg: 0.10, heal: 0.10 },   // 回合上限 10(2026-11-09):疲兵第 5 回合起累加,至第 10 回合受傷 +60 %、受療 −60 %
+  fatigue: { start: 4, dmg: 0.20, heal: 0.15 },   // 2026-11-15 發動率重平衡:第 5 回合起 +10 % / −10 % → 第 4 回合起 +20 % / −15 %(拉長平均回合的同時壓住打滿 10 回合);回合上限 10,累加
   // 連鎖(§3.10、combos partC)
   chain: { stepCap: 8, maxDepth: 3, followUpPerUnit: 1, extraActionPerUnit: 1, extraActionPerTeam: 2, comboHitBonus: 0.05, comboHitCap: 0.25, targetDmgCapPct: 0.60, teamDmgCapPct: 0.40, assistKillRecast: false, ultAssistMul: 0.5, assistBasicMul: 1.0, assistSmallMul: 0.7, recastDefaultMax: 2, recastDefaultDecay: 0.7, ultRecastMax: 2, ultRecastDecay: 0.7 },
   counterPerAttacker: 1,
@@ -231,17 +234,12 @@ var BN_FIG_TUNE = { caocao: 0.96, xunyu: 0.7, guojia: 1.16, jiaxu: 1.02, simayi:
 // 戰法平衡覆寫(B6):戰法 id → 要覆寫的欄位(rate 發動率 / power 檔位)。載入時由 bn_units.js 套到 BN_SKILLS(戰鬥與卡面文字一致);
 // 來源 json 與 js/bn_skills_data.js 不改(存檔相容、重新產生逐位不變)。對象:強度校正係數壓不下來的治療型 / 拉不上來的純輔助型。
 var BN_SKILL_TUNE = {
-  p_zhangjiao: { power: 'S' }, s_zhangjiao_1: { rate: 0.2 }, s_zhangjiao_vs1: { rate: 0.16 }, u_zhangjiao: { rate: 0.08 }, s_zhangjiao_2: { rate: 0.28 }, s_zhangjiao_3: { rate: 0.22 }, s_zhugeliang_2: { rate: 0.25 }, s_zhugeliang_3: { rate: 0.3 },   // 張角:三個全隊治療太穩
-  s_guanyu_1: { rate: 0.3 }, s_guanyu_vs1: { rate: 0.25 },
-  p_lusu: { power: 'S' }, s_lusu_1: { rate: 0.3 }, p_xunyu_rn: { power: 'S' }, s_renjun_rn1: { rate: 0.3 }, p_zhangmancheng: { power: 'S' },
-  s_lvbu_1: { rate: 0.38 }, s_zhangliao_2: { rate: 0.3 }, s_zhangliao_3: { rate: 0.45 },
-  s_peiyuanshao_1: { rate: 0.5 }, s_yuanshu_2: { rate: 0.45 }, s_zhengxuan_2: { rate: 0.4 }, s_zhengxuan_3: { rate: 0.4 },
-  s_kanze_3: { rate: 0.45 }, s_caozhi_1: { rate: 0.5 }, u_caozhi: { rate: 0.2 }, s_zhangzhao_3: { rate: 0.4 }, s_maliang_2: { rate: 0.5 },
-  s_dw_jincheng_1: { rate: 0.5 }, s_elf_liguo_1: { rate: 0.5 }, s_elf_liguo_2: { rate: 0.4 },
-  s_dw_dengxin_1: { rate: 0.45 }, s_dw_dengxin_2: { rate: 0.45 }, s_elf_yedi_1: { rate: 0.5 }, s_elf_yedi_2: { rate: 0.5, power: 'M' },
-  s_elf_tengluo_1: { rate: 0.45 }, s_elf_tengluo_2: { rate: 0.4 },
-  p_elf_yueyao: { power: 'S' }, s_elf_yueyao_1: { rate: 0.3 }, u_elf_yueyao: { rate: 0.1 }, s_dw_rongxin_1: { rate: 0.3 }, s_dw_jincheng_2: { rate: 0.5 }, p_dw_rongxin: { power: 'S' }, p_kd_fengnian: { power: 'S' }, s_kd_lingfeng_1: { rate: 0.34 }
+  // 2026-11-15 發動率重平衡:原本的 rate 覆寫已烘進 tools/gen_bn_skills.js 的計算(舊值留存 tools/battle_skills/tune_rate_legacy.json,產生器讀它算 e_old),資料檔的 rate 一律由 rate_rule.json 查表產生;這裡只留 power 覆寫
+  p_zhangjiao: { power: 'S' }, p_lusu: { power: 'S' }, p_xunyu_rn: { power: 'S' }, p_zhangmancheng: { power: 'S' }, s_elf_yedi_2: { power: 'M' }, p_elf_yueyao: { power: 'S' }, p_dw_rongxin: { power: 'S' }, p_kd_fengnian: { power: 'S' }
 };
+
+// 發動率重平衡前的舊常數(2026-11-15):只給產生器凍結階級(紫金點數 Ra、每回合期望)與計算 e_old / pf 用,執行期不讀
+var BN_RATE_LEGACY = { ult: 0.15, ultCd: 3, ultCap: 0.45, prepBonus: 0.10, cap: 0.70, healBoost: 0.25, cd: { S: 1, M: 2, L: 3, XL: 3 }, cdCut: 1 };
 
 // 羈絆(§2.6;PLACEHOLDER)。陣營 / 職業標籤由 bn_units.js bnBondsOf 計算;特殊組合另走 combos.json partB(BN_COMBOS.bonds)
 var BN_BONDS = {
@@ -253,7 +251,7 @@ var BN_BONDS = {
   special: [   // 名人組合(戰前算好,戰中只查表)
     { id: 'sp_enruo', name: '桃園結義', members: ['liubei', 'guanyu', 'zhangfei'], need: 3, rate: 0.05 },
     { id: 'sp_tiangong', name: '天公地公人公', members: ['zhangjiao', 'zhangbao', 'zhangliang'], need: 3, strat: 0.12 },
-    { id: 'sp_yingchuan', name: '潁川之士', members: ['xunyu', 'xunyou', 'guojia', 'zhongyao'], need: 2, cdMinus: 1 },
+    { id: 'sp_yingchuan', name: '潁川之士', members: ['xunyu', 'xunyou', 'guojia', 'zhongyao'], need: 2, rate: 0.05 },
     { id: 'sp_baima', name: '白馬義從', members: ['gongsunzan', 'zhaoyun'], need: 2, cavSpd: 8 }
   ],
   maxSpecial: 3
@@ -268,16 +266,16 @@ var BN_KIT_CFG = {
   otherDefaultMul: 0.8,             // 名人專屬戰法裝給他人:效果預設 = 原主 ×0.8(戰法 params.other 或 BN_SKILL_OTHER 另有寫者以其為準)
   homeRate: 0.05,                   // 『本命』:原主本人裝備自己的專屬戰法,發動率 +5pp
   taughtRetired: true,              // 名人傳授退場旗標(B1 只留旗標,不刪 bn_book.js 的程式)
-  autoFill: false                   // 名人空槽不自動配(B2 決定);路人空槽仍由 bnLearnMerge / autoLearn 補。本旗標目前未被讀取
+  autoFill: true                    // 2026-11-15 發動率重平衡決議:名人選擇槽沒裝滿時自動帶本人專屬戰法(bn_units.js bnOwnFill;玩家一裝就覆寫、不鎖卡);路人空槽仍由 bnLearnMerge / autoLearn 補
 };
 // 發動率護欄(B1 只放資料,B2 接 bnRateOf):永久來源(羈絆 / 被動 command / 本命 / 校正連動)合計 +15pp;永久 + rate_up 狀態合計 +25pp;rate_up 對大招只算一半
 var BN_RATE_CAP = {
   permCap: 0.15, totalCap: 0.25, ultRateUpMul: 0.5,
-  activeCap: 0.70, ultCap: 0.45,    // 主動 / 追擊上限、大招上限(與 BN_DATA.rate.cap / ultCap 一致)
+  activeCap: 0.95, ultCap: 0.60,    // 主動 / 追擊上限、大招上限(與 BN_DATA.rate.cap / ultCap 一致;2026-11-15 0.70 / 0.45 → 0.95 / 0.60)
   castsPerActMax: 1.6, perSkillMax: 5,   // 驗收:10 回合內平均每次行動施放數、單一戰法場均施放次數
   wired: true                       // B2:已接 bnRateOf(bn_engine.js)
 };
-// 戰法傳承(card_ui_redesign §2.3 / R1~R13;2026-11-11 改版):傳承 = 拆卡確定解鎖該卡全部可傳承戰法(無機率、無保底、無庫存)。階級:金名人 S、紫名人 A(tierByGr);通用戰法封頂 B。
+// 戰法傳承(card_ui_redesign §2.3 / R1~R13;2026-11-11 改版):傳承 = 拆卡確定解鎖該名人的 1 個傳承戰法 legacy(2026-11-15 起;原為全部可拆池;無機率、無保底、無庫存)。階級:金名人 S、紫名人 A(tierByGr);通用戰法封頂 B。
 // 同時裝備上限不在這裡:逐戰法欄位 BN_SKILL_MAXUSE(tools/bn_kit_gen.js 產生,可由 tools/battle_skills/maxuse.json 覆寫;S/A = 1)。
 var BN_SKC = {
   v: 2,
@@ -287,7 +285,14 @@ var BN_SKC = {
   genericMaxTier: 'B',              // 通用戰法傳承階級封頂
   frag: { purple: 8, purpleMaster: 12, figPurple: 10, figGold: 20 },   // 傳承另得碎片:紫路人 8、宗師 12、紫名人 10、金名人 20
   dupFrag: 4,                       // 兵書 / 通用戰法已擁有 → 轉碎片
-  legionExtra: 1                    // 兵種卡(與名人綁定)每人 1 張
+  legionExtra: 1,                   // 兵種卡(與名人綁定)每人 1 張
+  // 2026-11-15 傳承一人一個:拆卡只解鎖名人的 legacy 1 個。第一季 17 位借用他人戰法 id 的武將改指本人專屬複本;舊存檔(v62 以前)用此表把 own / eq 的原 id 換成複本 id(bnSkcLoad 遷移,存檔旗標 mg:1)
+  inhMove: {
+    s_sunquan_2: 's_chengpu_inh', s_panfeng_2: 's_huaxiong_inh', s_mateng_3: 's_caohong_inh', s_zhujun_3: 's_weizi_inh',
+    s_zhengxuan_2: 's_sunqian_inh', s_liuzhang_1: 's_mifang_inh', s_zhangniujiao_1: 's_liaohua_inh', s_gongsunzan_1: 's_zoujing_inh',
+    s_wangping_1: 's_tianyu_inh', s_lingtong_leg: 's_handang_inh', s_chendao_leg: 's_zumao_inh', s_taoqian_leg: 's_zhuzhi_inh',
+    s_dingfeng_1: 's_wujing_inh', s_liupi_1: 's_sunben_inh', s_yudu_1: 's_sunjing_inh', s_mateng_1: 's_lijue_inh', s_guotai_2: 's_guosi_inh'
+  }
 };
 // 兵種卡共通規則(數值上限 / 分享;B3 接原語)。LP 記帳:優勢點數 − 弱點點數 ≈ 一張 M 級戰法(netTarget),弱點至少 conMin 點真代價
 var BN_LEGION_CFG = {
@@ -328,4 +333,4 @@ function bnTroopNorm(t) {
   return BN_DATA.troops[t] ? t : '';
 }
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { bnTroopNorm: bnTroopNorm, BN_DATA: BN_DATA, BN_TRAIT_MODS: BN_TRAIT_MODS, BN_BONDS: BN_BONDS, BN_FIG_TRAIT: BN_FIG_TRAIT, BN_SKILL_TUNE: BN_SKILL_TUNE, BN_KIT_CFG: BN_KIT_CFG, BN_RATE_CAP: BN_RATE_CAP, BN_SKC: BN_SKC, BN_LEGION_CFG: BN_LEGION_CFG, BN_TIER_CFG: BN_TIER_CFG };
+if (typeof module !== 'undefined' && module.exports) module.exports = { bnTroopNorm: bnTroopNorm, BN_DATA: BN_DATA, BN_TRAIT_MODS: BN_TRAIT_MODS, BN_BONDS: BN_BONDS, BN_FIG_TRAIT: BN_FIG_TRAIT, BN_SKILL_TUNE: BN_SKILL_TUNE, BN_RATE_LEGACY: BN_RATE_LEGACY, BN_KIT_CFG: BN_KIT_CFG, BN_RATE_CAP: BN_RATE_CAP, BN_SKC: BN_SKC, BN_LEGION_CFG: BN_LEGION_CFG, BN_TIER_CFG: BN_TIER_CFG };

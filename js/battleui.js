@@ -625,7 +625,7 @@ function atkMusterHtml() {
   h += '<div class="abody">';
   h += '<small>難度 ' + (nb ? ATK_DIFF[nb.diff] : '—') + ' ・ 最佳 ' + atkStars(best) + '</small>';
   h += '<div class="apopcap">出征人口上限 <b>' + atkPopCap() + '</b></div>';
-  h += '<small>可帶兵種(每次放 1 個單位;🔒 為城市等級未開放;長按兵種可看說明)</small><div class="ulist">';
+  h += '<small>可帶兵種(每次放 1 個單位;🔒 為尚未開放;長按兵種可看說明)</small><div class="ulist">';
   deployUnitKeys().forEach(u => {
     const lock = !atkUnitOpen(u);
     h += '<div class="urow"' + (lock ? ' style="filter:grayscale(1);opacity:.45"' : '') + '><span class="uico">' + UNIT_ICON[u] + '</span><span class="uname">' + tdEsc(UNITS[u].name) +

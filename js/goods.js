@@ -559,7 +559,7 @@ function goodsGapInfo(id, built, need) {
     else {
       m = mk[0]; lk = goodsBldLock(m.bld);
       if (lk.tech) { out.where = '「' + m.bldName + '」要先研發' + (lk.techName ? '「' + lk.techName + '」' : '科技'); out.act = 'tech'; out.arg = lk.tech; out.label = '前往科技'; }
-      else out.where = '「' + m.bldName + '」' + (lk.lv ? '城市 Lv' + lk.lv + ' 開放' : '尚未開放');
+      else out.where = '「' + m.bldName + '」' + '尚未開放';
     }
   } else out.where = g.legacy ? '舊材料,目前只能從獎勵取得' : '本城還做不出來';
   if (!out.act && out.buy) { out.act = 'buy'; out.label = '走鏢'; out.where += out.where ? ';走鏢有機會帶回' : '走鏢有機會帶回'; }

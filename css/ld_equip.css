@@ -98,6 +98,21 @@
 .ldh-info .eq-act .ldh-mini { min-height: 36px; margin-right: 4px; }
 @media (prefers-reduced-motion: reduce) { .eq-result, .eq-horse, .eq-smithrow.hit .eq-smith { animation: none; } .eq-b:active { transform: none; } }
 @media (orientation: landscape) { .eq-page { padding: 6px 10px; } .eq-smith { width: 56px; height: 88px; } }
+/* 雙欄頁(換裝 / 強化 / 鍛造 / 書院):直式 .eq-l / .eq-r 透明(版面與原本相同);橫向小高度改左右雙欄,主按鈕在右欄底部 sticky */
+.eq-l, .eq-r { display: contents; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .eq-page { max-width: none; margin: 0; }
+  .eq-page.eq-2c { display: grid; grid-template-columns: minmax(200px, 36%) minmax(0, 1fr); gap: 10px; align-items: start; }
+  .eq-2c > .eq-l, .eq-2c > .eq-r { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .eq-2c > .eq-r > .eq-b.big, .eq-2c > .eq-r > .eq-go { position: sticky; bottom: 0; z-index: 2; }
+  .eq-2c > .eq-r > .eq-go { padding: 6px 0 2px; background: linear-gradient(rgba(43, 26, 16, 0), rgba(43, 26, 16, .85) 35%); }
+  .eq-2c > .eq-r > .eq-go .eq-b.big { margin-top: 0; }
+  .eq-chips .ld-tab, .eq-filter .ld-tab { min-height: 44px; min-width: 44px; }
+  .ldp[data-ldp=bag] .ld-tab, .ldp[data-ldp=study] .ld-tab { min-height: 44px; }
+  .ldp .ld-tab.eq-tabi:not(.on) { font-size: 12px; padding: 3px 7px 3px 4px; }
+  .eq-kv .eq-b, .eq-intro .eq-b { min-height: 44px; }
+  .eq-forge > .eq-r, .eq-hunt > .eq-r { padding: 6px 8px; border-radius: 12px; background: rgba(43, 26, 16, .78); }
+}
 .ld-tab.eq-tabi { display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px 3px 4px; flex: 0 0 auto; }
 .ld-tab.eq-tabi .eq-tabic { width: 20px; height: 20px; flex: 0 0 auto; font-size: 12px; }
 .ld-tab.eq-tabi:not(.on) { font-size: 0; padding: 3px 4px; }

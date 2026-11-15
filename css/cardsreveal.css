@@ -107,6 +107,14 @@
 .rv .caf .capn { gap: 1.5em; }
 .rv .caf .capl { font-size: 9.5em; }
 .rv .caf .rv-sil { fill: var(--gc); opacity: .55; }
+/* 橫向小高度、超過 7 張(十抽):兩排每排 5 張,高度以兩排計,卡名不低於 11px */
+@media (orientation: landscape) and (max-height: 520px) {
+  .rv { --ar: 1.34; }
+  .rv.art { --ar: 1.628; }
+  .rv-grid.n8, .rv-grid.n9, .rv-grid.n10, .rv-grid.n11, .rv-grid.n12 { --cw: min(calc((100vw - 96px - 4 * var(--gap)) / 5), calc((100vh - 48px - 60px - 1.5 * var(--gap)) / 2 / var(--ar)), 118px); flex-wrap: wrap; width: calc(5 * var(--cw) + 4 * var(--gap)); }
+  .rv-grid.n8 .caf .canm, .rv-grid.n9 .caf .canm, .rv-grid.n10 .caf .canm, .rv-grid.n11 .caf .canm, .rv-grid.n12 .caf .canm { font-size: max(11px, 10em); }
+  .rv-grid.n8 .rv-nm, .rv-grid.n9 .rv-nm, .rv-grid.n10 .rv-nm, .rv-grid.n11 .rv-nm, .rv-grid.n12 .rv-nm { font-size: max(11px, 1.05em); }
+}
 .rv.final { background: rgba(8, 10, 18, .96); }
 .rv.final .rv-main { z-index: 5; }
 body.cards-reveal { overscroll-behavior: none; }

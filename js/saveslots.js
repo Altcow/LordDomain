@@ -30,7 +30,7 @@ var SAVE_PREF_KEYS = [
   'lorddomain.render', 'lorddomain.fps', 'lorddomain.powersave', 'lorddomain.cityonly', 'lorddomain.adv.mode', 'lorddomain.adv.faceHide', 'lorddomain.guide.v1', 'lorddomain.id.v1',
   'lorddomain.ui.top', 'lorddomain.ui.cat', 'lorddomain.ui.camptop', 'lorddomain.ui.campcat', 'lorddomain.ui.variant', 'lorddomain.ui.wallskin',
   'lorddomain.feature.shell', 'lorddomain.ui.mode', 'lorddomain.ui.prevMode','lorddomain.ui.compact', 'lorddomain.ui.bpreview', 'lorddomain.ui.fsTipDismissed', 'lorddomain.ui.worldtag', 'lorddomain.ui.settingsTab', 'lorddomain.extsprites', 'lorddomain.nextstep', 'lorddomain.uiicons', 'lorddomain.terraintex', 'lorddomain.ui.minimap', 'lorddomain.bn.pref', 'lorddomain.bnshare.pref', 'lorddomain.ui.autoBrowse', 'lorddomain.ui.installTip', 'lorddomain.ui.doorMarks',
-  'lorddomain.goods.mode', 'lorddomain.goods.auto', 'lorddomain.ui.titleServer', 'lorddomain.bncb.speed'
+  'lorddomain.goods.mode', 'lorddomain.goods.auto', 'lorddomain.ui.titleServer', 'lorddomain.bncb.speed', 'lorddomain.quality.v1'
 ];
 // 世界管理鍵:不進槽、不清除(世界清單 / 跨分頁鎖)
 var SAVE_WORLD_KEYS = ['lorddomain.worlds.v1', 'lorddomain.worlds.lock', 'lorddomain.legacymig.v1'];
@@ -471,9 +471,9 @@ function savesClearEstate() {
 
 // 動作說明文案(確認視窗與測試共用)
 var SAVE_ACTIONS = {
-  camp: { title: '清除陣地', text: '只影響目前這個世界,不影響其他世界。\n會清掉:戰陣板(戰鬥陣)上的全部布置。\n保留:經營領地的建築與地形、資源、科技、卡牌、庫房、城市等級。\n清除前會自動建立復原點,可從設定「復原上一步」找回。' },
-  estate: { title: '清空領地', text: '只影響目前這個世界,不影響其他世界。\n會清掉:經營領地(經營板)上的全部建築與地形。\n保留:資源、科技進度、卡牌、庫房、城市等級、戰陣板。\n清除前會自動建立復原點,可從設定「復原上一步」找回。' },
-  all: { title: '重新開始目前世界', text: '會清掉:目前這個世界的所有進度(領地、戰陣、資源、科技、卡牌、城市等級、釣魚與仙獸)。\n保留:聲音、畫質、介面等偏好設定、其他世界、此世界的回溯點。\n重新開始前會自動建立復原點,可從設定「復原上一步」找回。' }
+  camp: { title: '清除陣地', text: '只影響目前這個世界,不影響其他世界。\n會清掉:戰陣板(戰鬥陣)上的全部布置。\n保留:經營領地的建築與地形、資源、科技、卡牌、庫房。\n清除前會自動建立復原點,可從設定「復原上一步」找回。' },
+  estate: { title: '清空領地', text: '只影響目前這個世界,不影響其他世界。\n會清掉:經營領地(經營板)上的全部建築與地形。\n保留:資源、科技進度、卡牌、庫房、戰陣板。\n清除前會自動建立復原點,可從設定「復原上一步」找回。' },
+  all: { title: '重新開始遊戲', text: '會清掉:目前的所有進度(領地、戰陣、資源、科技、卡牌、釣魚與仙獸)。\n保留:聲音、畫質、介面等偏好設定。\n重新開始前會自動建立復原點備份。' }
 };
 
 // 執行一個動作:先彈說明確認(opts.confirm 可替換),備份復原點,再執行。回 {ok, reason}

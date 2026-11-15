@@ -57,6 +57,57 @@ function ldNavEl(tag, cls, txt) {
   return e;
 }
 function ldNavReduced() { try { return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+// ───────── 舊頁共用頂列(2026-11-15 橫版首頁外殼 / WP-5) ─────────
+// 舊頁(卡包 / 庫房 / 設定 / 擂台 / 對戰 / 戰報 / 地圖)在堆疊頂端時,顯示一條固定在最上面的頂列(樣式同新頁 .ldp-top):左上 ‹ 返回、頁名、右上 ✕ 回首頁;
+//   body 同時加 ld-leg 與 ld-leg-<id>,css/ld_page.css 據此把各舊頁內容讓到頂列之下、藏起各頁自己的返回 / 關閉鈕。副本(stage)是戰鬥畫面,不套。
+// ‹ 先問舊頁有沒有「頁內返回」(def.legacy.back():例 地圖子頁、戰報檢視 → 回上一個畫面,回 true = 已處理),沒有才退一層。
+var LDNAV_LEG = { cards: 1, goods: 1, settings: 1, log: 1, tour: 1, share: 1, map: 1 };
+function ldNavBackSmart() {
+  var n, e, d, ok = false;
+  ldNavPrune();
+  n = LDNAV.stack.length;
+  e = n ? LDNAV.stack[n - 1] : null;
+  d = e ? LDNAV.reg[e.id] : null;
+  if (e && e.legacy && d && d.legacy && typeof d.legacy.back === 'function') {
+    try { ok = !!d.legacy.back(); } catch (er) { ok = false; if (typeof console !== 'undefined' && console.error) console.error('ldNav legacy back ' + e.id, er); }
+    if (ok) { ldNavPrune(); ldNavSyncBar(); return true; }
+  }
+  return ldNavBack();
+}
+function ldNavLegBarEl() {
+  var bar, back, title, x;
+  if (LDNAV.bar) return LDNAV.bar;
+  if (typeof document === 'undefined' || !document.body || !document.createElement) return null;
+  bar = ldNavEl('div', 'ldleg ld-noselect');
+  bar.id = 'ldLegBar';
+  back = ldNavEl('button', 'ldp-btn ldp-back', '‹'); back.setAttribute('data-ld', 'back'); back.setAttribute('aria-label', '返回'); back.setAttribute('type', 'button');
+  title = ldNavEl('span', 'ld-plaque ldp-title', '');
+  x = ldNavEl('button', 'ldp-btn ldp-x', '×'); x.setAttribute('data-ld', 'close'); x.setAttribute('aria-label', '關閉'); x.setAttribute('type', 'button');
+  back.addEventListener('click', function () { ldNavBackSmart(); });
+  x.addEventListener('click', function () { ldNavClose(); });
+  bar.appendChild(back); bar.appendChild(title); bar.appendChild(x);
+  bar.hidden = true;
+  document.body.appendChild(bar);
+  LDNAV.bar = bar; LDNAV.barTitle = title;
+  return bar;
+}
+// 依堆疊頂端同步頂列與 body class(每次堆疊變動都會呼叫)
+function ldNavSyncBar() {
+  var n = LDNAV.stack.length, e = n ? LDNAV.stack[n - 1] : null, show = !!(e && e.legacy && LDNAV_LEG[e.id]), bar, d, cl, k, want;
+  try {
+    if (typeof document === 'undefined' || !document.body || !document.body.classList) return show;
+    cl = document.body.classList;
+    want = show ? 'ld-leg-' + e.id : '';
+    for (k in LDNAV_LEG) if (('ld-leg-' + k) !== want) cl.remove('ld-leg-' + k);
+    if (want) cl.add(want);
+    if (show) cl.add('ld-leg'); else cl.remove('ld-leg');
+    bar = show ? ldNavLegBarEl() : LDNAV.bar;   // 第一次需要時才建
+    if (!bar) return show;
+    bar.hidden = !show;
+    if (show) { d = LDNAV.reg[e.id]; LDNAV.barTitle.textContent = (d && d.title) || ''; }
+  } catch (er) { /* 顯示用:失敗不影響堆疊 */ }
+  return show;
+}
 // 場景背景圖:登記時 def.bg = ld_art 鍵(或回傳鍵的函式,例如依直橫切換);鍵沒圖(has:false)就不放 img、不發請求
 function ldNavSetBg(scene, def) {
   var k = def && def.bg, url, im;
@@ -130,6 +181,7 @@ function ldNavShowTop() {
     e.el.classList.toggle('ldp-hid', leg);
     e.el.classList.toggle('under', i < n - 1);
   }
+  ldNavSyncBar();
 }
 function ldNavEnter(e) {
   var host = document.body;
@@ -161,6 +213,7 @@ function ldNavPush(id, ctx) {
     return true;
   }
   c.lvl = plan.to + 1; c.last = c.lvl === LDNAV.max;
+  try { if (typeof document !== 'undefined' && document.body && document.body.classList) document.body.classList.add('ld-ui'); } catch (er0) { /* 略過 */ }   // 新介面:舊頁外框改滿版(css/panelui.css .ld-ui)
   if (d.legacy) {
     ldNavHistEnsure();   // 先掛 ld_nav 自己那筆 history,讓舊頁(戰鬥層)自己的那筆疊在它上面
     try { d.legacy.open(c); } catch (er) { if (typeof console !== 'undefined' && console.error) console.error('ldNav legacy open ' + id, er); if (d.legacy.bn) ldNavBnSettle(); ldNavHist(); return false; }
@@ -246,6 +299,7 @@ function ldNavHistEnsure() {
 }
 function ldNavHist() {
   var n = LDNAV.stack.length;
+  ldNavSyncBar();
   ldNavBind(n > 0 || LDNAV.histOn);
   if (n > 0 && !LDNAV.histOn) {
     try { history.pushState({ ldnav: 1 }, ''); LDNAV.histOn = true; } catch (e) { /* 略過 */ }
@@ -309,6 +363,25 @@ function ldNavBnSettle() {
   if (!ok) LDNAV.histSkip = false;
   return ok;
 }
+// 把統一外框(panelui.js)的第 2 層面板改成滿版:寬度 100%(橫向不再讓出舊分頁軌 64px)、隱藏 50 / 67 / 滿 三檔鈕(css/ld_page.css 的 [data-ldfull])
+function ldNavFullFrame(id) {
+  var f = (typeof PF_FR !== 'undefined' && PF_FR) ? PF_FR[id] : null;
+  if (!f || !f.root) return false;
+  if (typeof pfSetWidth === 'function') pfSetWidth(id, 100);
+  f.root.setAttribute('data-ldfull', '1');
+  if (f.root.style) f.root.style.width = '100%';
+  return true;
+}
+// ld 模式下戰鬥層的舊『入口選單』不再給人看:bnui 的 bnUiToEntry 改呼叫這裡 = 立刻離開戰鬥層(回到呼叫它的新頁)。回 true = 已離開
+function ldNavBnExit() {
+  var ok = false;
+  if (typeof bnu === 'undefined' || !bnu || !bnu.open || bnu.leaving || typeof bnUiLeave !== 'function') return false;
+  ldNavSkipPop(300);
+  try { ok = !!bnUiLeave(true); } catch (e) { ok = false; if (typeof console !== 'undefined' && console.error) console.error('ldNav bnUiLeave', e); }
+  if (!ok) { LDNAV.histSkip = false; return false; }
+  ldNavPrune();   // 堆疊上依戰鬥層開的舊頁(例:副本)立刻剪掉,新頁馬上露出,不等 250 ms 輪詢
+  return true;
+}
 function ldNavBnOpen(fn) {
   var ok = (typeof bnu !== 'undefined' && bnu && bnu.open) ? true : (typeof bnUiOpen === 'function' ? !!bnUiOpen() : false);
   if (!ok) return false;
@@ -331,6 +404,7 @@ function ldNavRegLegacy() {
   ldNavRegister({ id: 'log', title: '戰報', legacy: { bn: true,
     open: function (c) { return ldNavBnOpen(function () { if (typeof bnLogOpen === 'function') bnLogOpen(c && c.tab, c && c.rid); }); },
     close: function () { if (typeof bnLogClose === 'function') bnLogClose(); },
+    back: function () { if (typeof BNLOG !== 'undefined' && BNLOG && BNLOG.view && typeof bnLogBack === 'function') { bnLogBack(); return true; } return false; },   // 檢視中 → 回清單
     isOpen: function () { return typeof bnLogIsOpen === 'function' && bnLogIsOpen(); } } });
   ldNavRegister({ id: 'tour', title: '擂台', legacy: { bn: true,
     open: function () { return ldNavBnOpen(function () { if (typeof bnTourOpen === 'function') bnTourOpen(); }); },
@@ -340,10 +414,16 @@ function ldNavRegLegacy() {
     open: function () { return ldNavBnOpen(function () { if (typeof bnsOpen === 'function') bnsOpen('share'); }); },
     close: function () { if (typeof bnsClose === 'function') bnsClose(); },
     isOpen: function () { return typeof bnsIsOpen === 'function' && bnsIsOpen(); } } });
+  // 副本(章節 / 關卡選擇、布陣、戰鬥、結算都在戰鬥層的非入口階段):戰鬥層回到入口階段(或關閉)= 這頁結束
+  ldNavRegister({ id: 'stage', title: '副本', legacy: { bn: true,
+    open: function () { return ldNavBnOpen(function () { if (typeof bnUiToMap === 'function') bnUiToMap(); }); },
+    close: function () { if (typeof bnUiLeave === 'function') bnUiLeave(false); },
+    isOpen: function () { return typeof bnu !== 'undefined' && !!bnu && !!bnu.open && !bnu.leaving && bnu.phase !== 'entry'; } } });
   ldNavRegister({ id: 'map', title: '地圖', legacy: { bn: true,
     open: function (c) {
       return ldNavBnOpen(function () {
         if (typeof wdOpen !== 'function' || wdOpen() === false) return;
+        ldNavFullFrame('wd');   // 新介面一律滿版:地圖外框直接 100% 寬、不留寬度三檔鈕
         if (c && c.sub === 'rsv') {   // 校場 = 地圖層的預備兵頁
           if (typeof rsvSettle === 'function') rsvSettle(Date.now());
           if (typeof wdUiPush === 'function') wdUiPush({ v: 'rsv' });
@@ -351,6 +431,7 @@ function ldNavRegLegacy() {
       });
     },
     close: function () { if (typeof wdClose === 'function') wdClose(); },
+    back: function () { if (typeof WDUI !== 'undefined' && WDUI && WDUI.stack && WDUI.stack.length && typeof wdBack === 'function') { wdBack(); return true; } return false; },   // 子頁(校場 / 預約 / 戰報…)→ 回地圖
     isOpen: function () { return typeof wdIsOpen === 'function' && wdIsOpen(); } } });
 }
 ldNavRegLegacy();

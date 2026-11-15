@@ -1,8 +1,8 @@
 // js/bn_skcard.js — 戰法傳承與裝備(card_ui_redesign §2 R1~R13;skill_rework §2.3)。
-// 傳承 = 拆一張名冊卡 → 該卡可傳承的戰法永久解鎖(R1);金名人 S、紫名人 A、路人 B/C(R5);路人門檻紫以上(R3)。拆卡永遠消耗該卡(名人轉流浪,路人消失),另得碎片 BN_SKC.frag(R4)。
+// 傳承 = 拆一張名冊卡 → 名人只解鎖他自己的 1 個傳承戰法(BN_KIT_BY.figs[fig].legacy;2026-11-15 一人一個,可拆池與兵種卡不再由拆卡取得);路人解鎖卡面戰法(R1);金名人 S、紫名人 A、路人 B/C(R5);路人門檻紫以上(R3)。拆卡永遠消耗該卡(名人轉流浪,路人消失),另得碎片 BN_SKC.frag(R4)。
 // 裝備:選擇槽白 1、青以上 2(BN_KIT_CFG.selSlots);任何已解鎖戰法都可裝進選擇槽(無適性 / 階級限制;可選 onlyTroops 才限兵種;兵種卡限同基礎兵種);同一戰法同時裝備人數上限 = BN_SKILL_MAXUSE[id](S/A 與名人 / 兵種 = 1,會壞平衡者 = 1,其餘 B 3 / C 5);解鎖後不消耗、不計張數(R7)。
 // 兵書(章節掉落)直接解鎖通用戰法;已擁有則回傳碎片 BN_SKC.dupFrag(R12,由呼叫端 bnStgGrant 發碎片)。
-// 存檔:世界內 'lorddomain.bnskc.v1'(進度鍵 SAVE_SLOT_KEYS;有值才寫):{v:2, own:{戰法id:解鎖時間}, eq:{entryId:[戰法id|null, 戰法id|null]}}。版本不符 / 壞檔 = 空;解鎖表外的戰法、重複 / 超額裝備在讀入時清掉。
+// 存檔:世界內 'lorddomain.bnskc.v1'(進度鍵 SAVE_SLOT_KEYS;有值才寫):{v:2, mg:1, own:{戰法id:解鎖時間}, eq:{entryId:[戰法id|null, 戰法id|null]}}。版本不符 / 壞檔 = 空(所以版本號不可再升,遷移改用 mg 旗標:沒有 mg 的舊檔讀入時依 BN_SKC.inhMove 把 17 個借用原 id 換成本人複本 id,有換才寫回);解鎖表外的戰法、重複 / 超額裝備在讀入時清掉。
 // 對 bn_units.js 提供:bnSkcLearnOf(card)(路人裝備的戰法,沒有回 null;名人不走此路徑,B2 另接)。
 // 全域:BNSKC bnskc bnSkcLoad bnSkcSave bnSkcOwned bnSkcTier bnSkcMaxUse bnSkcTroopOk bnSkcHolders bnSkcHolder bnSkcUseCount bnSkcSlots bnSkcCanEquip bnSkcEquip bnSkcUnequip bnSkcOnLeave bnSkcInheritList bnSkcInheritCheck bnSkcInherit bnSkcGrant bnSkcRecommend bnSkcOtherOf bnSkcLearnOf
 // 不發聲、不寫 DOM。ES2017;不用 ?. ??。
@@ -52,12 +52,30 @@ function bnSkcTroopOk(e, id) {
   return ot.indexOf(bnDefaultTroop(e)) >= 0;
 }
 
+// 一次性遷移(傳承一人一個,2026-11-15):v62 以前拆借用者的卡,解鎖的是別人的戰法 id(BN_SKC.inhMove 的 key);改成本人複本 id。own 與 eq 都換;原 id 與複本 id 並存時取較早時間。冪等(換完原 id 不復存在)。就地修改 o,回傳是否有換
+function bnSkcMigrate(o) {
+  var M = (typeof BN_SKC !== 'undefined' && BN_SKC.inhMove) || {}, moved = false, k, a, i, to;
+  if (o.own && typeof o.own === 'object') for (k in M) {
+    if (!Object.prototype.hasOwnProperty.call(o.own, k)) continue;
+    to = M[k];
+    if (Object.prototype.hasOwnProperty.call(o.own, to)) o.own[to] = Math.min(+o.own[to] || 0, +o.own[k] || 0); else o.own[to] = o.own[k];
+    delete o.own[k]; moved = true;
+  }
+  if (o.eq && typeof o.eq === 'object') for (k in o.eq) {
+    a = o.eq[k];
+    if (!Array.isArray(a)) continue;
+    for (i = 0; i < a.length; i++) if (typeof a[i] === 'string' && Object.prototype.hasOwnProperty.call(M, a[i])) { a[i] = M[a[i]]; moved = true; }
+  }
+  return moved;
+}
+
 // 讀檔(依 localStorage 原字串快取;切換世界後字串變了就重讀)
 function bnSkcLoad() {
-  var raw = bnSkcLsGet(), o = null, d = bnSkcNew(), k, j, taken = {}, legionOf = {};
+  var raw = bnSkcLsGet(), o = null, d = bnSkcNew(), k, j, taken = {}, legionOf = {}, moved = false;
   if (bnskc.d && raw === bnskc.raw) return bnskc.d;
   if (raw) { try { o = JSON.parse(raw); } catch (e) { o = null; } }
   if (o && typeof o === 'object' && o.v === BNSKC.v) {
+    if (!o.mg) moved = bnSkcMigrate(o);
     if (o.own && typeof o.own === 'object') for (k in o.own) {
       if (bnSkcTier(k)) d.own[String(k).slice(0, 40)] = Math.max(0, Math.floor(+o.own[k]) || 0);
     }
@@ -78,6 +96,7 @@ function bnSkcLoad() {
     }
   }
   bnskc.raw = raw; bnskc.d = d;
+  if (moved) bnSkcSave(d);   // 遷移有換 id 才寫回(帶 mg:1);沒有舊 id 的存檔原樣不動
   return d;
 }
 function bnSkcHas(d) { return Object.keys(d.own).length || Object.keys(d.eq).length; }
@@ -85,7 +104,7 @@ function bnSkcHas(d) { return Object.keys(d.own).length || Object.keys(d.eq).len
 function bnSkcSave(d) {
   var raw;
   d = d || bnSkcLoad();
-  raw = bnSkcHas(d) ? JSON.stringify({ v: BNSKC.v, own: d.own, eq: d.eq }) : null;
+  raw = bnSkcHas(d) ? JSON.stringify({ v: BNSKC.v, mg: 1, own: d.own, eq: d.eq }) : null;
   if (raw === null && bnSkcLsGet() === null) { bnskc.raw = null; bnskc.d = d; return true; }
   if (!bnSkcLsSet(raw)) return false;
   bnskc.raw = raw; bnskc.d = d;
@@ -163,11 +182,11 @@ function bnSkcNatural(e) {
   var troop = bnDefaultTroop(e), nat = bnNativeSkills(e, troop), auto = BN_DATA.slots.autoLearn ? bnAutoLearn(e, troop, nat, bnSlotCount(e)) : [];
   return nat.concat(auto).filter(function (id, i, a) { return a.indexOf(id) === i && bnSkcSkill(id) && bnSkcTier(id); });
 }
-// 可傳承清單:名人 = BN_KIT_BY.figs[fig].pool(+ legion);路人 = 卡面戰法。回 [{id, tier, owned}]
+// 可傳承清單:名人 = 只有 BN_KIT_BY.figs[fig].legacy 那 1 個(一人一個;可拆池 pool 與兵種卡 legion 不再由拆卡取得);路人 = 卡面戰法。回 [{id, tier, owned}]
 function bnSkcInheritList(e) {
   var K = (typeof BN_KIT_BY !== 'undefined' && BN_KIT_BY.figs) ? BN_KIT_BY.figs : {}, k, ids = [], out = [];
   if (!e) return out;
-  if (e.fig) { k = K[e.fig]; if (!k) return out; ids = (k.pool || []).slice(); if (k.legacy) ids.push(k.legacy); if (k.legion) ids.push(k.legion); }
+  if (e.fig) { k = K[e.fig]; if (!k) return out; ids = k.legacy ? [k.legacy] : []; }
   else ids = bnSkcNatural(e);
   ids.forEach(function (id) {
     var t = bnSkcTier(id);
@@ -193,7 +212,7 @@ function bnSkcFrag(r) {
   if (r.fig) return (r.gr | 0) === 4 ? F.figGold : F.figPurple;
   return ((r.gr | 0) === 3 && (r.learn | 0) === 3) ? F.purpleMaster : F.purple;
 }
-// 傳承(拆卡):解鎖全部可傳承戰法、人離開名冊(名人轉流浪、路人消失)、得碎片。回 {ok, reason, unlocked, shards, wander}
+// 傳承(拆卡):解鎖可傳承清單(名人 = 1 個傳承戰法)、人離開名冊(名人轉流浪、路人消失)、得碎片。回 {ok, reason, unlocked, shards, wander}
 function bnSkcInherit(cs, e) {
   var chk = bnSkcInheritCheck(cs, e), r, rel, frag, d, now, isFig;
   if (!chk.ok) return { ok: false, reason: chk.reason, unlocked: [], shards: 0, wander: false };

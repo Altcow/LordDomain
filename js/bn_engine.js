@@ -6,7 +6,8 @@
 // 對外介面:
 //   bnInit(rec) → state        rec = {v:BN_REC_VER, seed, teamA:[spec], teamB:[spec], opts:{events:true, scene:''}}(spec 由 bn_units.js 產生;舊紀錄的 opts.autoUlt 不再使用)
 // 戰報版本 BN_REC_VER:2 = 普攻改「射程內隨機」(2026-11-13)。rec.v < BN_REC_VER 的舊戰報結果可能已不同,不可重播(只能看文字結果)。
-var BN_REC_VER = 2;
+// 3 = 戰法發動率重平衡(2026-11-15):發動率查表 / 取消冷卻 / 保底 / 每場上限 / 同次 2 招 / pf / K 0.55 / 疲兵 / healK。
+var BN_REC_VER = 3;
 //   bnStep(state) → events[]   推進一個「行動」(或回合結束)
 //   bnRunToEnd(state) → state          跑到結束;bnRun(rec) = bnInit + bnRunToEnd
 //   state.over / state.result = {winner:'A'|'B'|'draw', reason:'wipe'|'limit', rounds, hp:{A,B}}
@@ -360,6 +361,7 @@ function bnStatusRemove(S, t, id, why) {
 function bnShield(S, src, t, nominal, o) {
   var cap, cur, amt;
   if (!t.alive) return 0;
+  nominal *= BN_DATA.healK || 1;   // 發動率重平衡:降 K 時避免補師變強
   amt = nominal * (1 + (src && src.mods.shieldOut || 0));
   cap = t.maxHp * BN_DATA.shieldCap;
   amt = Math.min(Math.round(amt), Math.round(cap));
@@ -373,6 +375,7 @@ function bnShield(S, src, t, nominal, o) {
 function bnHeal(S, src, t, nominal, o) {
   var hr, ratio = 0, amt, cap, n, lim, fat, nom0, xl = o && o.xl;
   if (!t.alive || nominal <= 0 || t.hp >= t.maxHp) return 0;
+  nominal *= BN_DATA.healK || 1;   // 發動率重平衡:降 K 時避免補師變強
   hr = t.st.heal_reduce;
   if (hr) ratio = hr.val / 100;
   S.stats.healEvents[t.side]++;
@@ -641,7 +644,7 @@ function bnMakeUnit(S, side, spec, idx) {
   for (i = 0; i < ids.length; i++) {
     d = BN_SKILLS[ids[i]];
     if (!d) { S.warn.push('未知戰法 ' + ids[i]); continue; }
-    inst = { def: d, cd: 0, prepLeft: 0, fires: 0, recastRound: -1, recastN: 0, owner: u };
+    inst = { def: d, cd: 0, prepLeft: 0, fires: 0, recastRound: -1, recastN: 0, owner: u, n: 0, miss: 0 };   // n = 本場已發次數、miss = 連續沒中次數(發動率重平衡:每場上限 / 保底)
     ki = spec.kitInst && spec.kitInst[d.id];   // 戰法欄位新制 B2:選擇槽內名人專屬戰法的『他人效果』(otherMul / tgtCut / ratePP)與『本命』(homeRate);無此欄 = 原樣
     if (ki) { if (ki.mul !== undefined) inst.otherMul = ki.mul; if (ki.tgtCut) inst.tgtCut = ki.tgtCut; if (ki.ratePP) inst.ratePP = ki.ratePP; if (ki.home) inst.homeRate = ki.home; }
     if (BN_DATA.cd0AllL && d.kind === 'atk_all' && d.cat === 'active' && bnPow(d.power) >= 2) inst.cd = 1;
@@ -862,18 +865,26 @@ function bnAct(S, u, o) {
       }
     }
     // 4. 主動戰法與大招:每個戰法各自擲發動率,成功者依序施放(同一次行動可發動多個);計窮(silence)時全部無法發動
+    // 發動率重平衡(2026-11-15):大招先擲(不受同次上限);主動戰法同一次出手最多 BN_DATA.rateRule.actCap 個(準備型擲中時就算一次),超過者本次不擲骰也不算沒中;每場上限 def.mx;保底見 bnPityOf
     if (!u.st.silence) {
-      for (i = 0; i < u.act.length && !S.over && u.alive; i++) {
+      var actCap = (BN_DATA.rateRule && BN_DATA.rateRule.actCap) | 0, actCnt = 0, pass;
+      for (pass = 0; pass < 2; pass++) for (i = 0; i < u.act.length && !S.over && u.alive; i++) {
         inst = u.act[i];
         if (inst.def.cat !== 'active' && inst.def.cat !== 'ult') continue;
+        if ((inst.def.cat === 'ult') !== (pass === 0)) continue;
         if (inst.cd > 0 || inst.prepLeft > 0 || inst.actNo === S.actNo) continue;
         if (inst.def.cat === 'ult' && (o.noUlt || u.st.ult_lock || S.round < BN_DATA.rate.ultFrom)) continue;
+        if (inst.def.mx && inst.n >= inst.def.mx) continue;
+        if (actCap > 0 && inst.def.cat === 'active' && actCnt >= actCap) continue;
         if (!bnCanCast(S, u, inst)) continue;
         var forced = inst.def.params && inst.def.params.firstRoundForce && S.round === 1;
+        var pity = bnPityOf(inst);
         var rate = bnRateOf(S, u, inst), ok = forced || S.rng() < rate;
         S.stats.rolls++; if (ok) S.stats.rollOk++;
-        bnEv(S, 'roll', { u: u.id, id: inst.def.id, p: Math.round(rate * 100), ok: ok ? 1 : 0 });
-        if (!ok) continue;
+        bnEv(S, 'roll', { u: u.id, id: inst.def.id, p: Math.round(rate * 100), ok: ok ? 1 : 0, pity: pity && ok ? 1 : undefined });
+        if (!ok) { inst.miss++; continue; }
+        inst.n++; inst.miss = 0;
+        if (inst.def.cat === 'active') actCnt++;
         inst.actNo = S.actNo;
         if (inst.def.prep > 0) {
           inst.prepLeft = inst.def.prep;
@@ -972,8 +983,17 @@ function bnNormal(S, u) {
 
 // 發動率。護欄(BN_RATE_CAP,B2)只套在 kit2 單位(名人或有選擇槽裝備者;spec.kit2):永久來源(mods.rateBonus + 本命 homeRate)合計夾 permCap;
 // 永久 + rate_up 合計夾 totalCap;rate_up 對大招只算 ultRateUpMul。無 kit2 的路人 / generic 走舊公式(逐位不變)。主動 / 大招上限不變。
+// 保底(發動率重平衡):大招連續 ultPity−1 次沒中 → 第 ultPity 次必發;其餘戰法這場還沒發過、連續 firstPity−1 次沒中 → 第 firstPity 次必發。def.np = 1(刻意設低的戰法)不保底。純函式,不改計數(計數只在擲骰處 n / miss 增減)
+function bnPityOf(inst) {
+  var d = inst.def, R = BN_DATA.rateRule;
+  if (!R || d.np) return false;
+  if (d.cat === 'ult') return R.ultPity > 0 && inst.miss >= R.ultPity - 1;
+  return R.firstPity > 0 && inst.n === 0 && inst.miss >= R.firstPity - 1;
+}
 function bnRateOf(S, u, inst) {
   var d = inst.def, r = d.rate, cat = d.cat === 'pursuit' ? 'pursuit' : (d.cat === 'ult' ? 'ult' : 'active'), RC = BN_RATE_CAP, perm, up;
+  if (d.mx && inst.n >= d.mx) return 0;   // 每場上限
+  if (bnPityOf(inst)) return 1;           // 保底(在所有加減之後、不受 rate_down 影響)
   if (r === undefined) r = cat === 'ult' ? BN_DATA.rate.ult : BN_DATA.rate[cat][d.power || 'M'];
   if (d.prep) r += BN_DATA.rate.prepBonus;
   if (u.troop === '謀' && cat === 'active') r += BN_DATA.mageRateBonus;

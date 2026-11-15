@@ -219,6 +219,21 @@ function bnMapDo(a, id, r, c, t, i) {
   return false;
 }
 
+// 戰報戰果欄用的獎勵清單(字串陣列;沒贏回空陣列)
+function bnMapRewardList(rep) {
+  var a = [];
+  if (!rep || !rep.win) return a;
+  if (rep.first && rep.id !== 'B') a.push('首通');
+  if (rep.star3) a.push('三星首次');
+  if (rep.gold) a.push('金幣 +' + rep.gold);
+  (rep.goods || []).forEach(function (g) { a.push(bnMapGoodsName(g.id) + ' ×' + g.n); });
+  if (rep.shards) a.push('碎片 +' + rep.shards);
+  if (rep.books) a.push('通用戰法「' + bnMapSkillName(rep.bookId) + '」' + (rep.bookUnlock === false ? '(兵書:已有,轉碎片)' : '(兵書:解鎖戰法)'));
+  if (rep.pulls) a.push('抽卡 +' + rep.pulls + ' 抽');
+  if (!rep.gold && !(rep.goods || []).length && !rep.shards && !rep.books && !rep.pulls) a.push('本次沒有獎勵');
+  if (rep.repeat && rep.id !== 'B') a.push('重複通關:不給碎片與抽卡');
+  return a;
+}
 // 結算面板的獎勵段落
 function bnMapRewardHtml(rep) {
   var a = [], h = '';

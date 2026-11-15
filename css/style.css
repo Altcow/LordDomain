@@ -241,6 +241,8 @@ body.replay-mode #toast { top: calc(100px + env(safe-area-inset-top)); bottom: a
 #stRoot .st-mask { position: absolute; inset: 0; background: rgba(0, 0, 0, .45); opacity: 0; transition: opacity .2s; }
 #stRoot.st-open .st-mask { opacity: 1; }
 #stRoot .st-drawer { position: absolute; left: 0; right: 0; bottom: 0; max-height: 82vh; display: flex; flex-direction: column; background: #1c2430; color: #e8edf2; border-radius: 14px 14px 0 0; box-shadow: 0 -4px 20px rgba(0, 0, 0, .5); transform: translateY(105%); transition: transform .25s; }
+#stRoot:not(.st-open) .st-drawer { transition: none; visibility: hidden; }   /* 關著的抽屜:轉向時不動畫、不殘影 */
+#stRoot.st-open .st-drawer { transition: transform .25s; }
 #stRoot.st-open .st-drawer { transform: none; }
 @media (min-width: 768px) {
   #stRoot .st-drawer { left: auto; top: 0; bottom: 0; width: 380px; max-height: none; border-radius: 0; transform: translateX(105%); }
@@ -499,13 +501,6 @@ body.atk-mode #toast { top: calc(162px + env(safe-area-inset-top)); bottom: auto
 #atkPanel .sact .abig { min-height: 52px; font-size: 17px; font-weight: 700; }
 
 /* 全螢幕說明與一次性提示條 */
-#stRoot .st-howto p { font-size: 13px; line-height: 1.6; margin: 6px 0; opacity: .9; }
-#stRoot .st-howto ol { margin: 4px 0 4px 20px; padding: 0; font-size: 13px; line-height: 1.6; }
-#stRoot .st-howto li { margin: 2px 0; }
-#stRoot .st-howto .st-link { margin-top: 8px; }
-#fsTip { position: fixed; left: 8px; right: 8px; max-width: 480px; margin: 0 auto; z-index: 3; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 10px; border-radius: 10px; background: rgba(20, 26, 36, .94); border: 1px solid #f0b45a; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); font-size: 13px; }
-#fsTip .ftx { flex: 1; min-width: 0; }
-#fsTip button { min-height: 36px; min-width: 36px; padding: 4px 8px; font-size: 12px; }
 
 /* ===== 角落操作群:左下 經營/戰鬥布置、其正上方 ⚔ 戰鬥(+選單)。貼左緣、貼底部列上緣;位置由 --stack 與安全區固定(mapedit.js cornerBuild) ===== */
 #modeBtn, #btnAttack.corner-atk, #seasonBtn { position: fixed; z-index: 3; margin: 0; }
@@ -600,8 +595,6 @@ body.ui-compact { --stack: 40px; --side-w: 80px; }
 #topbar .lbl { display: none; }
 #topbar #btnToolHelp, #topbar #btnTplLabels { display: none !important; }
 #topbar #btnMenu { flex: 0 0 auto; }
-/* 一次性提示條移到底部列上方,避開右側邊欄與 ⋯ 鈕 */
-#fsTip { top: auto; bottom: calc(var(--stack) + 10px + env(safe-area-inset-bottom)); }
 @media (min-width: 700px) {
   #title { display: inline; margin-right: 4px; }
   #info { display: inline; flex: 1 1 auto; }
@@ -766,8 +759,6 @@ body.atk-mode #progFtue, body.replay-mode #progFtue, body.sandbox #progFtue, bod
 }
 /* 功能未開放(syncFeatureGate 設定 data-feat-locked):頂列鈕與邊欄項目完全不顯示 */
 [data-feat-locked="1"] { display: none !important; }
-/* 設定 > 頂列圖示說明 */
-.st-iconlist { margin: 6px 0 0; padding-left: 4px; list-style: none; line-height: 1.8; font-size: 13px; }
 /* ===== 新手指引(progui.js):左上任務提示條(資源列下方、半透明、單行)、歡迎泡泡、全畫面任務清單 #questList。只追加 ===== */
 #progFtue { position: fixed; z-index: 3; top: calc(var(--top-h) + env(safe-area-inset-top) + 2px); left: 8px; right: auto; max-width: 240px; width: max-content; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 6px; border-radius: 6px; background: rgba(20, 26, 36, .28); border: none; box-shadow: none; color: #ffe7b3; font-size: 12px; line-height: 1.3; cursor: pointer; text-shadow: 0 1px 2px #000, 0 0 4px rgba(0, 0, 0, .9); }
 #progFtue .pg-ftx { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1129,7 +1120,6 @@ body.guide-on #toast, body.guide-list #toast { z-index: 70; }
 #stRoot .st-card.open.fold { border-color: #f0b45a; }
 #stRoot .st-card:not(.open) .st-card-b { display: none; }
 #stRoot .st-card-b { padding: 4px 12px 10px; border-top: 1px solid rgba(255, 255, 255, .1); }
-#stRoot .st-card-b .st-iconlist { margin: 4px 0 0; }
 #stRoot .st-bgm { display: flex; flex-direction: column; gap: 2px; padding-top: 4px; }
 #stRoot .st-bgm-row { display: flex; align-items: center; gap: 6px; min-height: 34px; }
 #stRoot .st-bgm-l { flex: 0 0 72px; font-size: 13px; }
@@ -1313,12 +1303,9 @@ body.panel-big-landscape #svPanel .svlist > .svsec { grid-column: 1 / -1; }
 #stRoot .st-tabs[hidden] { display: none; }
 #stRoot .st-tab { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 4px 2px; font-size: 14px; border: 0; border-bottom: 3px solid transparent; border-radius: 6px 6px 0 0; background: none; color: inherit; opacity: .7; white-space: nowrap; }
 #stRoot .st-tab.on { opacity: 1; font-weight: bold; color: #f0b45a; border-bottom-color: #f0b45a; background: rgba(240, 180, 90, .1); }
-#stRoot .st-body[data-tab="view"] > .st-sec:not([data-tab="view"]),
 #stRoot .st-body[data-tab="sound"] > .st-sec:not([data-tab="sound"]),
-#stRoot .st-body[data-tab="world"] > .st-sec:not([data-tab="world"]),
 #stRoot .st-body[data-tab="more"] > .st-sec:not([data-tab="more"]) { display: none; }
 #stRoot .st-hint.st-note { margin: -2px 0 6px; padding: 0 8px; font-size: 12px; line-height: 1.5; color: #9aa6b5; opacity: 1; }
-#stRoot .st-sec-mode { padding: 10px; border: 1px solid rgba(240, 180, 90, .55); border-radius: 10px; background: rgba(240, 180, 90, .08); }
 #stRoot .st-sec-danger { padding: 10px; border: 2px solid #c96a5f; border-radius: 10px; background: rgba(201, 106, 95, .1); }
 #stRoot .st-sec-danger .st-h { color: #ff9b8f; }
 #stRoot .st-hint.st-warn { color: #ffb4aa; opacity: 1; }
@@ -1363,3 +1350,8 @@ body.ui-placing #nsCard.ns-tut .ns-tx { -webkit-line-clamp: 1; }
 #bldTag .bt-door { font-size: 12px; color: #ffd56a; }
 #bldTag .bt-go { min-width: 88px; min-height: 44px; padding: 4px 14px; font-size: 15px; font-weight: bold; background: #c9892f; border: 1px solid #f0b45a; color: #1b1308; border-radius: 22px; touch-action: manipulation; }
 body:is(.photo-mode, .panel-cover, .ui-placing, .panel-fs, .in-interior) #bldTag { display: none !important; }
+
+/* 畫質「低」:關閉昂貴的 CSS 濾鏡(模糊、毛玻璃)與大陰影,背景只留變暗 */
+body.q-low * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+body.q-low #bnRpt .bnr-bg, body.q-low #bnCB .bst-scene, body.q-low .ldp-scene > img, body.q-low .ldp-scene > .ldp-bg { filter: brightness(.6) !important; }
+body.q-low :is(#topbar, #toolbar, #catbar, #varbar, .ld-panel, #stRoot .st-drawer) { box-shadow: none !important; }

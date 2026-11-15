@@ -283,10 +283,10 @@ function bnUiCurFoes(mySpecs) {
   if (g.kind === 'bounty' && g.def) return { specs: g.def.units, scale: 1, power: g.def.rec, label: '每日流寇', kind: 'bounty' };
   if (g.kind === 'custom' && typeof g.foes === 'function') return g.foes(mySpecs);   // 新介面骨架(百層塔等):呼叫端給對手,回傳格式同其他分支 { specs, scale, power, label, kind }
   f = bnUiFoes(mySpecs);
-  f.label = '練兵'; f.kind = 'practice';
+  f.label = '訓練場'; f.kind = 'practice';
   return f;
 }
-function bnUiStageLabel() { var g = bnu.stg || {}; if (g.kind === 'custom') return g.label || '挑戰'; return g.kind === 'stage' ? '討伐 ' + g.id : (g.kind === 'bounty' ? '每日流寇' : (g.kind === 'tourney' ? '擂台' : '練兵')); }
+function bnUiStageLabel() { var g = bnu.stg || {}; if (g.kind === 'custom') return g.label || '挑戰'; return g.kind === 'stage' ? '討伐 ' + g.id : (g.kind === 'bounty' ? '每日流寇' : (g.kind === 'tourney' ? '擂台' : '訓練場')); }
 function bnUiDayNo() { var d = new Date(); return d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate(); }
 function bnUiRec() {
   var b = bnUiBuild(), foes = bnUiCurFoes(b.team.units), cs = (typeof cardsGet === 'function') ? cardsGet() : null, fp = bnu.slots.map(function (s) { return s.id + ':' + s.row + s.col + (s.troop || bnu.tp[s.id] || ''); }).join(',');
@@ -802,7 +802,7 @@ function bnUiInfoHtml(uid) {
     var d = inst.def, rate = '', cd = '', txt = '';
     if (d.cat !== 'passive' && d.cat !== 'command') {
       if (typeof bnRateOf === 'function') { try { rate = '發動率 ' + Math.round(bnRateOf(S, u, inst) * 100) + '%'; } catch (er) { rate = ''; } }
-      cd = (inst.cd | 0) > 0 ? '冷卻中:還要 ' + inst.cd + ' 回合' : '可發動';
+      cd = (inst.cd | 0) > 0 ? '冷卻中:還要 ' + inst.cd + ' 回合' : (inst.def.mx ? (inst.n >= inst.def.mx ? '本場已達上限 ' + inst.def.mx + ' 次' : '本場已發 ' + (inst.n | 0) + ' / ' + inst.def.mx + ' 次') : '可發動');   // 發動率重平衡:取消冷卻,改顯示每場上限
       if (d.cat === 'ult' && S.round < BN_DATA.rate.ultFrom) cd = '第 ' + BN_DATA.rate.ultFrom + ' 回合起可發動';
     }
     if (typeof bnSkillText === 'function') { try { txt = bnSkillText(d); } catch (er) { txt = ''; } }
@@ -857,7 +857,23 @@ function bnUiStart() {
   bnUiSyncBtns();
   if (bnu.roundEl) bnu.roundEl.textContent = '';
   bnUiShowResult(S);
-  bnBattleShow(rec, { mode: 'play', mySide: 'A' });
+  bnUiShowRes(false);   // 結算面板不再出現:戲台 → 戰報(戰果、星等、獎勵都在戰報裡)→ 離開時才回關卡選擇 / 入口(bnUiRptLeave)
+  bnBattleShow(rec, { mode: 'play', mySide: 'A', loot: bnUiLootList(), logId: bnu.logId || '', onLeave: bnUiRptLeave });
+  return true;
+}
+// 戰報的戰果欄:評價星等 + 獎勵(討伐 / 流寇依 bnu.report;練兵不計戰績)
+function bnUiLootList() {
+  var d = bnu.result, rep = bnu.report, a = [];
+  if (!d) return a;
+  if (d.winner === 'A') a.push('評價 ' + '★'.repeat(d.stars) + '☆'.repeat(3 - d.stars));
+  if (rep && typeof bnMapRewardList === 'function') a = a.concat(bnMapRewardList(rep));
+  else if (!rep && (!bnu.stg || bnu.stg.kind === 'practice')) a.push('練兵不計戰績、不給獎勵');
+  return a;
+}
+// 戰鬥結果戰報按「離開」(或返回鍵):結算早已完成,直接回關卡選擇(討伐 / 流寇 / 挑戰)或入口(練兵);再離開才退出戰鬥層。回 true = 有處理
+function bnUiRptLeave() {
+  if (!bnu.open || bnu.leaving || bnu.phase !== 'res') return false;
+  if (bnu.stg && bnu.stg.kind === 'practice') bnUiToEntry(); else bnUiToMap();
   return true;
 }
 function bnUiSyncBtns() {
@@ -995,7 +1011,7 @@ function bnUiRenderEntry() {
     '<button class="bnen-b" data-a="ent" data-t="share"><b>對戰</b><small>對戰碼與擂台(不計進度、不給獎勵)</small></button>' +
     '<button class="bnen-b" data-a="ent" data-t="log"><b>戰報</b><small>最近的戰報,可查看與儲存</small></button>' +
     '<button class="bnen-b" data-a="ent" data-t="tourney"><b>擂台</b><small>16 隊單淘汰,比出前三名;系統隊伍自動補滿,每 2 小時一屆</small></button>' +
-    '<button class="bnen-b" data-a="ent" data-t="prac"><b>練兵</b><small>不計戰績、不給獎勵,敵將依我方戰力縮放,可自由試陣</small></button>' + (typeof featureOn === 'function' && featureOn('worldmap') ? (featureOn('world') ? '<button class="bnen-b" data-a="ent" data-t="wm"><b>地圖</b><small>派部隊占領資源點、討伐山寨野怪、集結攻城;離開時也會照算</small></button>' : '<button class="bnen-b" data-a="ent" data-t="wm"><b>外勤</b><small>派部隊出外採集或討伐據點;清單每格會刷新,離開時也會照算</small></button>') : '') + '</div>'; // @DORMANT worldmap @DORMANT world
+    '<button class="bnen-b" data-a="ent" data-t="prac"><b>訓練場</b><small>不計戰績、不給獎勵,敵將依我方戰力縮放,可自由試陣</small></button>' + (typeof featureOn === 'function' && featureOn('worldmap') ? (featureOn('world') ? '<button class="bnen-b" data-a="ent" data-t="wm"><b>地圖</b><small>派部隊占領資源點、討伐山寨野怪、集結攻城;離開時也會照算</small></button>' : '<button class="bnen-b" data-a="ent" data-t="wm"><b>外勤</b><small>派部隊出外採集或討伐據點;清單每格會刷新,離開時也會照算</small></button>') : '') + '</div>'; // @DORMANT worldmap @DORMANT world
 }
 function bnUiEntryDo(t) {
   if (t === 'stage') { if (featureOn('stages') || featureOn('shell')) bnUiToMap(); }   // @DORMANT stages:副本入口休眠(v60);@DORMANT shell:外殼開啟時放行
@@ -1010,6 +1026,7 @@ function bnUiToEntry() {
   bnUiStopLoop();
   bnUiShowRes(false); bnUiShowPause(false); bnUiCutRender(null);
   bnu.paused = false;
+  if (typeof SHELL !== 'undefined' && SHELL && SHELL.ld && typeof ldNavBnExit === 'function' && ldNavBnExit()) return;   // 新介面(ld):舊入口選單不顯示,『回入口』= 離開戰鬥層,回到新的戰鬥入口頁
   bnUiSetPhase('entry');
   bnUiRenderEntry();
 }

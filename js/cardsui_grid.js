@@ -121,6 +121,17 @@ function cuGridList(cs, R) {
   out.sort(function (a, b) { return cmp(a.top, b.top); });
   return out;
 }
+// 同名疊卡「傳」字章:名人、同名 ≥ 2 張、傳承戰法未擁有、且堆內有一張現在能拆(未鎖、未派駐、品階夠)
+function cuGridInhOk(g) {
+  var e = g.top, list, i, m;
+  try {
+    if (!e.fig || g.n < 2 || typeof bnSkcInheritList !== 'function') return false;
+    list = bnSkcInheritList(e);
+    if (!list.length || !list.some(function (x) { return !x.owned; })) return false;
+    for (i = 0; i < g.members.length; i++) { m = g.members[i]; if (!m.star && !m.at && (m.gr | 0) >= BN_SKC.minGr) return true; }
+  } catch (er) { /* 略過 */ }
+  return false;
+}
 // 單一堆疊:疊牌偏移(n ≥ 2 才畫後層)+ 右上 ×N 徽章 + 陣中小點;點擊 data-a=gopen 掛在外層
 function cuGridCardHtml(g, selMap) {
   var e = g.top, troop = cardsRosterTroop(e), lv = cardsStarLv(e), dots = '', i, art = '', tri = '', n = g.n, atAny = false, picked = false, pp, back = '';
@@ -139,7 +150,7 @@ function cuGridCardHtml(g, selMap) {
     (tri ? '<span class="cugc-tl">' + tri + '</span>' : '') +
     (e.star ? '<span class="cugc-lk">🔒</span>' : '') +
     (picked ? '<span class="cugc-ck">✓</span>' : '') +
-    '<div class="cugc-st">' + dots + '</div><div class="cugc-nm">' + cuEsc(e.name) + '</div></div>' +
+    '<div class="cugc-st">' + dots + '</div><div class="cugc-nm">' + cuEsc(e.name) + '</div>' + (n >= 2 && typeof cuGridInhOk === 'function' && cuGridInhOk(g) ? '<span class="cugc-inh" title="可傳承">傳</span>' : '') + '</div>' +
     (n >= 2 ? '<span class="cugc-badge">×' + n + '</span>' : '') +
     (atAny ? '<i class="cugc-ing" title="上陣中"></i>' : '') + '</div>';
 }

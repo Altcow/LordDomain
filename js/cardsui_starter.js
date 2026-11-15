@@ -17,7 +17,7 @@ function cuDrawInfo() {
   o.lines.push(['現在', '每 ' + T.h + ' 小時,S01卡池補充 ' + T.n + ' 抽。']);
   o.lines.push(['每次補充', D.size.map(function (x) { return x.tech ? '研發〈' + cuTechName(x.tech) + '〉→ ' + x.n + ' 抽' : '一開始 ' + x.n + ' 抽'; }).join(';') + '。']);
   o.lines.push(['間隔', 'S01卡池每 ' + D.gap.E + ' 小時,+' + D.size[0].n + ' 抽(間隔固定,不受科技影響)。']);
-  o.lines.push(['額外贈抽', '新手禮包(道具)內含 ' + CARD_GIFT.pulls + ' 抽,到卡包的道具頁籤使用(入S01卡池,不受上限截斷);每章頭目關首次通關各 +' + CARD_BOSS.pulls + ' 抽(S01卡池)。贈抽不受上限 ' + D.cap + ' 截斷。']);
+  o.lines.push(['額外贈抽', '新手禮包(道具)內含 ' + ((typeof itemGiftPulls === 'function') ? itemGiftPulls() : CARD_GIFT.pulls) + ' 抽,到卡包的道具頁籤使用(入S01卡池,不受上限截斷);每章頭目關首次通關各 +' + CARD_BOSS.pulls + ' 抽(S01卡池)。贈抽不受上限 ' + D.cap + ' 截斷。']);
   o.lines.push(['卡包滿了', '卡包固定 ' + cardsCap() + ' 格,不隨官階。卡包滿了就停止抽卡(次數保留、不扣);遣散或熔鍊騰出空位後才能再抽。自動熔爐可在卡包頁設定(預設關),設到藍時白 / 青 / 藍的路人抽到就直接熔成碎片(名人不熔)。']);
   o.lines.push(['碎片', '遣散路人、卡片熔爐都會得到碎片;碎片可升星,也可花 ' + CARD_RECALL_COST + ' 碎請回流浪的名人。']);
   if (cs) o.lines.push(['你的狀況', 'S01卡池可抽 ' + cardsPulls(cs, 'E') + ' 次;卡包 ' + cs.roster.length + '/' + cardsCap() + '(剩 ' + cardsRosterRoom(cs) + ' 格),碎片 ' + (cs.shards | 0) + '。']);

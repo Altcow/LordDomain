@@ -11,7 +11,7 @@ var CUC_APT_PT = { S: 3, A: 2, B: 1, C: 0 };
 var CUC_CAT = { ult: '大', passive: '被', active: '主', pursuit: '追', command: '指', legion: '兵' };
 var CUC_ROLE = { ult: '固定', native: '固定', passive: '被動', bond: '聯動' };
 var CUC_REASON = { none: '此人不在卡包,不能裝備', own: '此戰法尚未解鎖', slot: '此槽位目前未開放', dup: '同一人兩槽不可裝同一戰法', legion: '兵種卡每人 1 張,且限同兵種', troop: '此戰法限特定兵種裝備', full: '已達同時裝備上限,需先卸下他人' };
-var CUC_INH_REASON = { none: '沒有可傳承的戰法', grade: '品階未達紫,不可傳承', locked: '已鎖定(🔒),先解除鎖定才能傳承', owned: '可傳承戰法已全部擁有,可改用熔爐' };
+var CUC_INH_REASON = { none: '沒有可傳承的戰法', grade: '品階未達紫,不可傳承', locked: '已鎖定(🔒),先解除鎖定才能傳承', owned: '此人的傳承戰法已擁有,可改用熔爐' };
 
 function cuCardCss() {
   var st;
@@ -266,7 +266,7 @@ function cuPopPick(cs, f, p) {
   owned.sort(function (a, b) { return CUC_TIER_ORD.indexOf(bnSkcTier(a)) - CUC_TIER_ORD.indexOf(bnSkcTier(b)); });
   h += '<div class="cpl">' + cuEsc(e.name) + ' · 第 ' + (slot + 1) + ' 槽。從已解鎖的戰法選一個;每個戰法有同時裝備人數上限(見各列說明),已滿的需先從對方卸下。</div>';
   if (p.err) h += '<div class="cpwarn">' + cuEsc(p.err) + '</div>';
-  if (!owned.length) h += '<div class="cpl">尚未解鎖任何選擇戰法。拆名人卡(傳承)即可解鎖該名人的全部戰法。</div><div class="cprow"><button class="cub" data-a="cptabs">去傳承頁</button></div>';
+  if (!owned.length) h += '<div class="cpl">尚未解鎖任何選擇戰法。拆名人卡(傳承)即可解鎖該名人的傳承戰法。</div><div class="cprow"><button class="cub" data-a="cptabs">去傳承頁</button></div>';
   owned.forEach(function (id) {
     var c = bnSkcCanEquip(cs, e, slot, id), t = bnSkcTier(id), act = '', why = '', hd;
     if (c.ok) act = '<button class="cub" data-a="cpeq" data-id="' + cuEsc(id) + '" data-eid="' + cuEsc(e.id) + '" data-slot="' + slot + '">裝備</button>';
@@ -303,7 +303,7 @@ function cuInhSpare(cs, e) {
 }
 function cuPopInherit(cs, f, p) {
   var e = f.e, fig = !!e.fig, spf = cuInhSpare(cs, e), st = cuInhState(cs, spf || f), list = bnSkcInheritList(e), tiers = {}, fresh, frag, sum, h = '';
-  h += '<div class="cpl">傳承後此卡離開卡包(' + (fig ? '名人轉流浪,可花 ' + CARD_RECALL_COST + ' 碎片請回' : '路人消失') + '),以下戰法永久解鎖。同一戰法有同時裝備人數上限(見傳承頁『使用 n/上限』)。</div>';
+  h += '<div class="cpl">傳承後此卡離開卡包(' + (fig ? '名人轉流浪,可花 ' + CARD_RECALL_COST + ' 碎片請回' : '路人消失') + '),' + (fig ? '此人的傳承戰法永久解鎖' : '以下戰法永久解鎖') + '。同一戰法有同時裝備人數上限(見傳承頁『使用 n/上限』)。</div>';
   list.forEach(function (x) {
     var recs = cuRecommend(cs, x.id, e, 3), rh = '';
     recs.forEach(function (r) {
@@ -414,7 +414,7 @@ function cuRecommend(cs, id, exclude, n) {
   list.sort(cuCRecSort);
   list = list.filter(function (x, i, a) { return !x.c.fig || a.findIndex(function (y) { return y.c.fig === x.c.fig; }) === i; });   // 同名只推一張(副卡不重複推薦)
   if (list.length < n) {
-    src = (typeof fxFigSrc === 'function' && fxFigSrc()) || (typeof CARD_FIGS !== 'undefined' ? CARD_FIGS : []);
+    src = (typeof cardsFigSrc === 'function') ? cardsFigSrc() : ((typeof fxFigSrc === 'function' && fxFigSrc()) || (typeof CARD_FIGS !== 'undefined' ? CARD_FIGS : []));   // 補人只列抽得到的名人(第一季 54 位;魔幻世界走 fxFigSrc)
     src.forEach(function (fg) {
       var c;
       if (fg.id === ex.fig || cardsFindFig(cs, fg.id)) return;

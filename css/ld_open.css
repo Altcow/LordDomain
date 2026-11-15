@@ -4,7 +4,7 @@
 .ldh-plq .ldo-lkic[hidden], .ldh-plq .ldo-lktx[hidden] { display: none; }
 .ldh-plq .ldo-lkimg { display: block; width: 26px; height: 26px; font: 900 14px/26px var(--ld-font); }
 .ldh-plq .ldo-lkimg img, .ldh-plq .ldo-lkimg .ld-ph-cell { width: 100%; height: 100%; display: block; }
-.ldh-plq .ldo-lktx { background: #2b1a10cc; border-radius: 8px; padding: 1px 5px; max-width: 120px; white-space: normal; text-align: center; }
+.ldh-plq .ldo-lktx { position: absolute; left: 50%; top: calc(100% + 2px); transform: translateX(-50%); z-index: 3; width: max-content; max-width: 140px; box-sizing: border-box; padding: 0 6px; border-radius: 8px; background: #2b1a10dd; font: 900 12px/16px var(--ld-font); white-space: nowrap; text-align: center; pointer-events: none; }   /* 鎖定短字在木牌正下方(木牌 64px 寬,字不再被擠成直排) */
 .ldh-plq.ldo-cele { animation: ldo-pop .6s ease-in-out 5; z-index: 8; }
 @keyframes ldo-pop { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.18); filter: drop-shadow(0 0 10px #ffe48a); } }
 @media (prefers-reduced-motion: reduce) { .ldh-plq.ldo-cele { animation: none; filter: drop-shadow(0 0 8px #ffe48a); } }
@@ -22,7 +22,7 @@
 .ldo-ttl small { font-size: 12px; font-weight: 700; color: #7a6040; margin-left: 4px; }
 .ldo-sm { font-size: 12px; color: #6a5036; overflow-wrap: anywhere; }
 .ldo-gt { font-size: 13px; font-weight: 900; color: #8a4a10; }
-.ldo-b { font: 900 14px/1.1 var(--ld-font); min-height: 40px; min-width: 44px; padding: 4px 12px; color: var(--ink); background: linear-gradient(var(--gold2), var(--gold)); border: var(--line2); border-radius: 12px; box-shadow: var(--drop2); cursor: pointer; }
+.ldo-b { font: 900 14px/1.1 var(--ld-font); min-height: 44px; min-width: 56px; padding: 4px 12px; color: var(--ink); background: linear-gradient(var(--gold2), var(--gold)); border: var(--line2); border-radius: 12px; box-shadow: var(--drop2); cursor: pointer; }
 .ldo-b:active { transform: translateY(3px); box-shadow: 0 0 0 var(--ink); }
 .ldo-b.s { background: linear-gradient(#fff3d6, #efdcb4); }
 .ldo-b.s.on { background: linear-gradient(var(--gold2), var(--gold)); }
@@ -36,9 +36,9 @@
 .ldo-ri .ld-ph-cell, .ldo-ri img { display: block; width: 100%; height: 100%; }
 
 /* 新手七日 */
-.ldo-ban { height: 96px; border-radius: 10px; overflow: hidden; margin-bottom: 6px; background: #efdcb4; }
+.ldo-ban { aspect-ratio: 768 / 447; max-height: 160px; margin: 0 auto 6px; border-radius: 10px; overflow: hidden; background: #efdcb4; }
 .ldo-banimg { display: block; width: 100%; height: 100%; }
-.ldo-banimg img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ldo-banimg img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .ldo-g7 { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; margin-top: 6px; }
 .ldo-cell { position: relative; border: var(--line2); border-radius: 10px; background: #fff7e0; padding: 6px 4px; text-align: center; min-height: 92px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; overflow: hidden; }
 .ldo-cell > b, .ldo-cell > span, .ldo-cell > button, .ldo-cell > i { position: relative; z-index: 1; }
@@ -48,10 +48,10 @@
 .ldo-cell.got { opacity: .65; }
 .ldo-cell.big { background: #ffe9a8; }
 .ldo-cell i { font-style: normal; color: #7a6040; font-weight: 700; }
-.ldo-cell .ldo-b { min-height: 32px; padding: 2px 10px; font-size: 13px; }
+.ldo-cell .ldo-b { min-height: 44px; padding: 2px 10px; font-size: 13px; }
 .ldo-pick-h { margin-top: 8px; padding-top: 6px; border-top: 2px dashed #c9a868; }
 .ldo-pickg { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; max-height: 180px; overflow-y: auto; }
-.ldo-pickg .ldo-b { min-height: 34px; font-size: 13px; padding: 2px 8px; }
+.ldo-pickg .ldo-b { min-height: 44px; font-size: 13px; padding: 2px 8px; }
 
 /* 賽季簽到 */
 .ldo-gs { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin: 4px 0; }
@@ -63,7 +63,7 @@
 .ldo-sc .ldo-scmk .ld-ph-cell, .ldo-sc .ldo-scmk img { width: 100%; height: 100%; display: block; }
 .ldo-sc.miss { opacity: .55; }
 .ldo-sc.today { box-shadow: 0 0 0 3px var(--red); }
-.ldo-sc .ldo-b { position: absolute; z-index: 3; bottom: 1px; left: 8%; right: 8%; min-height: 22px; min-width: 0; padding: 0; font-size: 12px; }
+.ldo-sc .ldo-b { position: absolute; z-index: 3; inset: 0; width: 100%; height: 100%; min-height: 0; min-width: 0; padding: 0; font-size: 14px; border-radius: 8px; }   /* 簽到「領」:整格可點 */
 
 /* 主線 / 獎勵列 */
 .ldo-q { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dashed #d8c08a; }
@@ -93,12 +93,22 @@
 .ldo-pick .sp { flex: 1 1 auto; }
 
 /* 橫式:團結關頁左右排;窄螢幕保持單欄 */
-@media (orientation: landscape) and (min-width: 700px) { .ldo-g7 { grid-template-columns: repeat(7, 1fr); } }
+@media (orientation: landscape) and (max-height: 520px) {
+  .ldo-g7 { grid-template-columns: repeat(7, 1fr); margin-top: 0; }
+  .ldo-nb { display: grid; grid-template-columns: minmax(150px, 34%) 1fr; gap: 6px 12px; align-items: start; }
+  .ldo-nb .ldo-ban { width: 100%; max-height: none; }
+  .ldo-nb .ldo-nbr { min-width: 0; }
+  .ldo-ev { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 10px; align-items: start; }
+  .ldo-evg { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .ldo-ev > .ldo-card { min-width: 0; }
+  .ldo-gs { grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); }
+  .ldo-cell { min-height: 0; }
+}
 
 /* 首頁場景上方晶片列(新手七日 / 活動 / 主線) */
 .ldo-chips { position: absolute; left: 6px; top: 6px; right: 6px; z-index: 12; display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; pointer-events: none; }
 .ldo-chips[hidden] { display: none; }
-.ldo-chip { pointer-events: auto; position: relative; flex: 0 0 auto; display: flex; align-items: center; gap: 4px; min-height: 40px; max-width: 150px; padding: 2px 10px 2px 4px; font-family: var(--ld-font); color: var(--ink); background: var(--paper); border: var(--line2); border-radius: 20px; box-shadow: var(--drop2); cursor: pointer; text-align: left; }
+.ldo-chip { pointer-events: auto; position: relative; flex: 0 0 auto; display: flex; align-items: center; gap: 4px; min-height: 44px; max-width: 150px; padding: 2px 10px 2px 4px; font-family: var(--ld-font); color: var(--ink); background: var(--paper); border: var(--line2); border-radius: 20px; box-shadow: var(--drop2); cursor: pointer; text-align: left; }
 .ldo-chip:active { transform: translateY(2px); box-shadow: 0 0 0 var(--ink); }
 .ldo-chip .ldo-chic { flex: none; width: 30px; height: 30px; display: inline-block; font: 900 14px/30px var(--ld-font); text-align: center; }
 .ldo-chip .ldo-chic .ld-ph-cell, .ldo-chip .ldo-chic img { display: block; width: 100%; height: 100%; }
@@ -106,6 +116,11 @@
 .ldo-chip .ldo-chtx b { font-size: 13px; white-space: nowrap; }
 .ldo-chip .ldo-chtx small { font-size: 11px; color: #6a5036; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* 橫向小高度:晶片列只占左上角(最多 3 顆,每顆 <= 116px),不再拉滿整列;木牌座標避開這一塊(js/ld_home.js ldHomeZones) */
+@media (orientation: landscape) and (max-height: 520px) {
+  .ldo-chips { right: auto; overflow: hidden; }
+  .ldo-chip { max-width: 116px; }
+}
 /* .ld-ph 預設是帶框的佔位方塊(ld_page.css);這裡的圖示 / 底圖不要框 */
 .ld-ph.ldo-ri, .ld-ph.ldo-chic, .ld-ph.ldo-cbg, .ld-ph.ldo-scbg, .ld-ph.ldo-scmk, .ld-ph.ldo-lkimg, .ld-ph.ldo-bossimg, .ld-ph.ldo-banimg, .ld-ph.ldo-bimg { border: 0; box-shadow: none; background: none; border-radius: 0; }
 .ld-ph.ldo-cbg, .ld-ph.ldo-scbg { position: absolute; inset: 0; width: 100%; height: 100%; }

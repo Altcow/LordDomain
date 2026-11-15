@@ -34,6 +34,40 @@ function bnTeamNormSlots(a) {
   out.forEach(function (s) { s.nm = nm[s.id] || ''; });
   return out;
 }
+// ───────── 跨隊不重複(2026-11-15 使用者決議:同一武將只能出現在一支隊伍)─────────
+// 鍵 = 名人 fig(同名多張卡視為同一武將);路人卡(沒有 fig)= 卡 id。名冊找不到的卡只能以 id 比對
+function bnTeamKeyOf(id) {
+  var e = (typeof bnUiEntry === 'function') ? bnUiEntry(id) : null;
+  return (e && e.fig) ? 'f:' + e.fig : 'c:' + id;
+}
+function bnTeamNameOf(id) { var e = (typeof bnUiEntry === 'function') ? bnUiEntry(id) : null; return e ? String(e.name) : '(不明人物)'; }
+// 整份隊伍陣列 p(長度 = 儲存隊數)去重:保留編號小的隊,其他隊該格移除。回移除的人數(原地修改)
+function bnTeamDedupe(p) {
+  var seen = {}, cnt = 0, i;
+  for (i = 0; i < p.length; i++) {
+    if (!p[i]) continue;
+    p[i].slots = p[i].slots.filter(function (s) {
+      var k = bnTeamKeyOf(s.id);
+      if (seen[k]) { cnt++; return false; }
+      seen[k] = 1; return true;
+    });
+    if (!p[i].slots.length) p[i] = null;
+  }
+  return cnt;
+}
+// 若把第 n 隊換成 slots,有沒有人已在另一隊?回 {id, name, n:另一隊號} 或 null
+function bnTeamConflict(n, slots) {
+  var d = bnTeamData(), i, j, seen = {}, k, ps;
+  for (i = 0; i < d.p.length; i++) {
+    if (i + 1 === (n | 0) || !d.p[i]) continue;
+    for (j = 0; j < d.p[i].slots.length; j++) seen[bnTeamKeyOf(d.p[i].slots[j].id)] = i + 1;
+  }
+  ps = slots || [];
+  for (j = 0; j < ps.length; j++) { k = bnTeamKeyOf(ps[j].id); if (seen[k]) return { id: ps[j].id, name: bnTeamNameOf(ps[j].id), n: seen[k] }; }
+  return null;
+}
+// 讀存檔時若發現重複並整理過,留一句白話提示(只給一次;bnTeamDedupNote 取走後清掉)
+function bnTeamDedupNote() { var m = BNTEAM.dedupMsg || ''; BNTEAM.dedupMsg = ''; return m; }
 function bnTeamLoad() {
   var raw = bnUiLsGet(BNTEAM.key), o = null, d = { v: 1, p: [] }, i, f, s, old, nS = bnTeamStoreN();
   for (i = 0; i < nS; i++) d.p.push(null);
@@ -55,6 +89,7 @@ function bnTeamLoad() {
     }
   }
   BNTEAM.data = d; BNTEAM.raw = raw;
+  if (bnTeamDedupe(d.p) > 0) { BNTEAM.dedupMsg = '已為你整理重複出戰的武將'; bnTeamSave(); }   // 冪等:存回後下次讀取不會再有重複
   return d;
 }
 // 讀取快取:鍵內容變了(切換世界 / 回溯點)就重讀
@@ -80,11 +115,14 @@ function bnTeamPresetGet(n) {
   p = bnTeamData().p[i];
   return { n: i + 1, name: p ? p.name : bnTeamDefName(i), slots: p ? p.slots.map(function (s) { return { id: s.id, row: s.row, col: s.col, troop: s.troop, nm: s.nm }; }) : [], empty: !p };
 }
+function bnTeamNameOf2(n) { var d = bnTeamData(), p = d.p[n - 1]; return (p && p.name) || bnTeamDefName(n - 1); }
 function bnTeamPresetSave(n) {
-  var i = bnTeamIdx(n), d, p, s;
+  var i = bnTeamIdx(n), d, p, s, c;
   if (i < 0) return false;
   if (!bnu.slots || !bnu.slots.length) { bnTeamToast('目前沒有陣容可存'); return false; }
   d = bnTeamData(); p = d.p[i];
+  c = bnTeamConflict(n, bnu.slots);
+  if (c) { bnTeamToast('「' + c.name + '」已經在' + bnTeamNameOf2(c.n) + ',同一武將只能在一隊'); return false; }
   s = bnTeamNormSlots(bnu.slots.map(function (x) { var e = bnUiEntry(x.id); return { id: x.id, row: x.row, col: x.col, troop: x.troop || bnu.tp[x.id] || '', nm: e ? String(e.name) : '' }; }));
   d.p[i] = { name: p ? p.name : bnTeamDefName(i), slots: s };
   bnTeamSave();
@@ -130,12 +168,31 @@ function bnTeamPresetRename(n, name) {
 function bnTeamPresetSet(n, slots) {
   var i = bnTeamIdx(n), d, p, src, s, ok;
   if (i < 0 || !Array.isArray(slots)) return false;
+  if (bnTeamConflict(n, slots.filter(function (x) { return x && bnUiEntry(x.id); }))) return false;   // 同一武將已在另一隊:擋下(呼叫端自己提示)
   src = slots.filter(function (x) { return x && bnUiEntry(x.id); }).map(function (x) { var e = bnUiEntry(x.id); return { id: x.id, row: x.row, col: 0, troop: x.troop, nm: String(e.name) }; });   // 名冊沒有的人不寫
   s = bnTeamNormSlots(src);
   d = bnTeamData(); p = d.p[i];
   d.p[i] = s.length ? { name: p ? p.name : bnTeamDefName(i), slots: s } : null;
   ok = bnTeamSave();
   return ok || s.length === 0;
+}
+
+// 一次寫多隊(跨隊移動 / 互換用):先驗證「寫完之後」沒有同一武將出現在兩隊,通過才逐隊寫入;list = [{n, slots}]。回 true/false(失敗不改任何隊)
+function bnTeamPresetSetMany(list) {
+  var d = bnTeamData(), snap = d.p.map(function (x) { return x ? { name: x.name, slots: x.slots.map(function (s) { return Object.assign({}, s); }) } : null; }), tmp, i, ok = true, w, src, s, p;
+  if (!Array.isArray(list)) return false;
+  tmp = snap.map(function (x) { return x ? { name: x.name, slots: x.slots.map(function (s) { return Object.assign({}, s); }) } : null; });
+  for (i = 0; i < list.length; i++) {
+    w = list[i]; if (bnTeamIdx(w.n) < 0 || !Array.isArray(w.slots)) return false;
+    src = w.slots.filter(function (x) { return x && bnUiEntry(x.id); }).map(function (x) { return { id: x.id, row: x.row, col: 0, troop: x.troop, nm: String(bnUiEntry(x.id).name) }; });
+    s = bnTeamNormSlots(src); p = tmp[w.n - 1];
+    tmp[w.n - 1] = s.length ? { name: p ? p.name : bnTeamDefName(w.n - 1), slots: s } : null;
+  }
+  if (bnTeamDedupe(tmp.map(function (x) { return x ? { name: x.name, slots: x.slots.slice() } : null; })) > 0) return false;
+  d.p = tmp;
+  ok = bnTeamSave() || !tmp.some(function (x) { return !!x; });
+  if (!ok) { d.p = snap; return false; }
+  return true;
 }
 
 // ───────── 目前隊伍快照(給對戰練習等模組;純 JSON)─────────

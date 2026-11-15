@@ -28,7 +28,12 @@ var EV_CFG = {
   DAY: 86400000, HOUR: 3600000, tz: 8 * 3600000,
   seasonDays: 28,
   // 新手七日(2.4):每個登入日的抽數;第 7 天另送 1 張自選紫名人。舊存檔(legacy)抽數格改碎片 legacyShards
-  nbPulls: [0, 300, 300, 300, 300, 250, 250], nbPickDay: 7, legacyShards: 30,   // 第 1 天的 300 抽 = 禮包 100 + 主線前 5 條各 40(設計 2.4),簽到格只給糧;七日合計 1700
+  // v63:新手禮包開啟即給 2000 抽(CARD_GIFT.pullsNew),七日與主線前 5 條不再給抽數,改等值獎勵(1 抽 = 2 碎片等值)。nbPulls 保留為 0 陣列(UI / 相容)
+  nbPulls: [0, 0, 0, 0, 0, 0, 0], nbPickDay: 7, legacyShards: 30,
+  // 七日各天等值獎勵(取代原抽數 300/300/300/300/250/250 = 1700 抽 → 3400 碎片等值):第 2~5 天各 600、第 6~7 天各 500
+  nbGive: [null, { shards: 406, mats: { m_iron3: 4, m_hide3: 4, m_whet: 8, m_iron4: 1, m_hide4: 1, m_soul: 2 } }, { shards: 406, mats: { m_iron3: 4, m_hide3: 4, m_whet: 8, m_iron4: 1, m_hide4: 1, m_soul: 2 } }, { shards: 406, mats: { m_iron3: 4, m_hide3: 4, m_whet: 8, m_iron4: 1, m_hide4: 1, m_soul: 2 } }, { shards: 406, mats: { m_iron3: 4, m_hide3: 4, m_whet: 8, m_iron4: 1, m_hide4: 1, m_soul: 2 } }, { shards: 331, mats: { m_iron3: 4, m_hide3: 4, m_whet: 8, m_iron4: 1, m_hide4: 1, m_soul: 1 } }, { shards: 331, mats: { m_iron3: 4, m_hide3: 4, m_whet: 8, m_iron4: 1, m_hide4: 1, m_soul: 1 } }],
+  // 等值換算表(碎片等值):白名人熔鍊期望約 5 碎/抽,保守取 2;材料價 礪石 5、百鍊鋼/虎皮 8、玄鐵/玄龜甲 20、精魄 25
+  valueRate: { pull: 2, shard: 1, m_whet: 5, m_iron3: 8, m_hide3: 8, m_iron4: 20, m_hide4: 20, m_soul: 25 },
   nbExtra: { 1: { grain: 1000 }, 2: { grain: 1000 }, 3: { grain: 1000 }, 4: { grain: 1000 }, 5: { grain: 1000 }, 6: { grain: 1000 }, 7: { grain: 1000 } },   // 占位:七日每天另送一點糧
   // 賽季簽到(4.2):每天 3 抽 + 糧 1000 + 碎片 5;第 7/14/21/28 天大獎再 +4 抽、礪石 3
   signPulls: 3, signGrain: 1000, signShards: 5, signBig: [7, 14, 21, 28], signBigPulls: 4, signBigMat: { m_whet: 3 },
@@ -57,11 +62,11 @@ var EV_CFG = {
 
 // 主線 14 條(2.5)。k = 計數器名(ev.cnt);n = 需要次數;poll = 輪詢條件名(不靠事件);need = 需要存在的全域函式名(不存在 = 視為不存在,自動跳過);give = 獎勵
 var EV_MAIN = [
-  { id: 1, t: '使用新手禮包', k: 'gift', n: 1, give: { pulls: 40 } },
-  { id: 2, t: '招賢館十連一次', k: 'ten', n: 1, give: { pulls: 40 } },
-  { id: 3, t: '軍營排好隊伍 1', poll: 'team1', give: { pulls: 40 } },
-  { id: 4, t: '打下新手寨', k: 'tut', n: 1, give: { pulls: 40 } },
-  { id: 5, t: '收成一次', k: 'harv', n: 1, give: { pulls: 40 } },
+  { id: 1, t: '使用新手禮包', k: 'gift', n: 1, give: { shards: 50, mats: { m_whet: 6 } } },
+  { id: 2, t: '招賢館十連一次', k: 'ten', n: 1, give: { shards: 50, mats: { m_whet: 6 } } },
+  { id: 3, t: '軍營排好隊伍 1', poll: 'team1', give: { shards: 48, mats: { m_iron3: 2, m_hide3: 2 } } },
+  { id: 4, t: '打下新手寨', k: 'tut', n: 1, give: { shards: 38, mats: { m_iron3: 2, m_hide3: 2, m_whet: 2 } } },
+  { id: 5, t: '收成一次', k: 'harv', n: 1, give: { shards: 40, mats: { m_iron4: 1, m_hide4: 1 } } },
   { id: 6, t: '打下 1 個資源點並駐守', k: 'garrison', n: 1, give: { grain: 2000 } },
   { id: 7, t: '打下 3 個資源點', k: 'resWin', n: 3, give: { shards: 20 } },
   { id: 8, t: '用一次自動派遣', k: 'auto', n: 1, give: { grain: 2000 } },

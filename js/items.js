@@ -77,7 +77,7 @@ function itemUse(id) {
   if (d.effect === 'pulls') {
     cs = (typeof cardsGet === 'function') ? cardsGet() : null;
     if (!cs) return { ok: false, effect: d.effect, msg: '尚無城邦資料' };
-    gpn = itemsRead().gp || CARD_GIFT.pulls;   // 新存檔禮包只含 100 抽(其餘分七天發,js/ld_open_ev.js),沒有 gp = 2000
+    gpn = itemGiftPulls();   // 新存檔 gp = CARD_GIFT.pullsNew(2000),舊存檔沒有 gp = CARD_GIFT.pulls(2000)
     cardsPullGrant(cs, gpn, CARD_GIFT.pool);
     if (cs.bagAuto === -1) delete cs.bagAuto;   // 自動熔爐若為關(-1)改回預設(開,藍以下);使用者仍可在熔爐設定再關
     msg = '使用『' + d.name + '』,S01卡池 +' + gpn + ' 抽';
@@ -100,9 +100,19 @@ function itemList(cat) {
   for (i = 0; i < ITEM_ORDER.length; i++) {
     d = ITEMS[ITEM_ORDER[i]];
     if (!(st.n[d.id] > 0) || (cat && d.cat !== cat)) continue;
-    out.push({ id: d.id, name: d.name, cat: d.cat, desc: d.desc, max: d.max || ITEMS_STACK_DEF, usable: !!d.usable, effect: d.effect, color: d.color, n: st.n[d.id], seen: !!st.seen[d.id], dot: itemDot(d.id, st) });
+    out.push({ id: d.id, name: d.name, cat: d.cat, desc: itemDescOf(d.id), max: d.max || ITEMS_STACK_DEF, usable: !!d.usable, effect: d.effect, color: d.color, n: st.n[d.id], seen: !!st.seen[d.id], dot: itemDot(d.id, st) });
   }
   return out;
+}
+// 新手禮包實際內含抽數(本存檔 gp;沒有 gp = CARD_GIFT.pulls)。顯示文字與 itemUse 都用它,避免文字與實發不一致
+function itemGiftPulls() { return itemsRead().gp || CARD_GIFT.pulls; }
+// 道具說明(禮包的抽數依本存檔實際內含數顯示)
+function itemDescOf(id) {
+  var d = itemDef(id), n;
+  if (!d) return '';
+  if (d.effect !== 'pulls') return d.desc;
+  n = itemGiftPulls();
+  return '內含S01卡池 ' + n + ' 抽。點『使用』後入S01卡池,次數不受上限截斷。';
 }
 // 單一道具是否顯示紅點(st 為 itemsRead 結果):禮包持有中一律紅點(直到使用);其他道具持有且未查看
 function itemDot(id, st) {
@@ -143,6 +153,6 @@ function itemGiftGrant(ver, gp) {
   st.n.gift_newbie = Math.min(d.max || ITEMS_STACK_DEF, (st.n.gift_newbie | 0) + 1);
   st.gv = ver;
   st.notice = 1;
-  if (gp > 0) st.gp = Math.floor(gp);   // 新存檔(ldui):禮包內含抽數 = pullsNew
+  if (gp > 0) st.gp = Math.floor(gp);   // 新存檔(ldui):禮包內含抽數 = pullsNew(2000)
   return itemsWrite(st) ? 1 : -1;
 }

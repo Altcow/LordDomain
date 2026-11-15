@@ -182,12 +182,15 @@ function evLoginTick(now) {
 // 新手七日:[{day, got, can, pulls, pick}],can = 登入日數已到且沒領
 function evNbList() {
   var o = evRead(), i, out = [];
-  for (i = 1; i <= 7; i++) out.push({ day: i, got: o.nb.got.indexOf(i) >= 0, can: i <= o.nb.days && o.nb.got.indexOf(i) < 0, pulls: EV_CFG.nbPulls[i - 1], pick: i === EV_CFG.nbPickDay, legacy: !!o.legacy });
+  for (i = 1; i <= 7; i++) out.push({ day: i, got: o.nb.got.indexOf(i) >= 0, can: i <= o.nb.days && o.nb.got.indexOf(i) < 0, pulls: EV_CFG.nbPulls[i - 1], give: EV_CFG.nbGive ? EV_CFG.nbGive[i - 1] : null, pick: i === EV_CFG.nbPickDay, legacy: !!o.legacy });
   return out;
 }
 function evNbGive(day, legacy) {
   var g = { grain: (EV_CFG.nbExtra[day] || {}).grain || 0 };
-  if (legacy) g.shards = EV_CFG.legacyShards; else g.pulls = EV_CFG.nbPulls[day - 1];
+  var ng = EV_CFG.nbGive && EV_CFG.nbGive[day - 1];
+  if (legacy) g.shards = EV_CFG.legacyShards;
+  else if (ng) { if (ng.shards) g.shards = ng.shards; if (ng.mats) g.mats = JSON.parse(JSON.stringify(ng.mats)); }
+  else if (EV_CFG.nbPulls[day - 1] > 0) g.pulls = EV_CFG.nbPulls[day - 1];
   return g;
 }
 function evNbClaim(day) {
@@ -198,6 +201,7 @@ function evNbClaim(day) {
   if (o.nb.got.indexOf(day) >= 0) return { ok: false, reason: 'got' };
   r = evGive(evNbGive(day, !!o.legacy));
   if (!r.ok) return { ok: false, reason: 'nocards' };
+  o = evRead();   // 發獎過程可能重入而寫過存檔,重讀再改
   o.nb.got.push(day);
   if (day === EV_CFG.nbPickDay && !o.nb.pick) o.nb.pick = 1;   // 第 7 天:另送 1 張自選紫名人(待選)
   evWrite(o);
@@ -240,6 +244,7 @@ function evSignClaim(day, now) {
   if (big) g.mats = EV_CFG.signBigMat;
   r = evGive(g);
   if (!r.ok) return { ok: false, reason: 'nocards' };
+  o = evRead(now);   // 發獎過程可能重入而寫過存檔,重讀再改
   o.ss.got[day] = 1;
   evWrite(o);
   return { ok: true, text: r.text };
@@ -391,12 +396,13 @@ function evMainCheck(now) {
     q = EV_MAIN[i];
     if (o.main.done[q.id] || !evMainAvail(q)) continue;
     if (!evMainMet(q, o)) break;   // 一次一條:卡在目前這條就停
+    o.main.done[q.id] = 1;   // 先記完成再發獎:matGrant / cardsShardGain 內會再呼叫 ldOpenNote → evMainCheck(重入),不先記會同一條獎勵無限重發
+    evWrite(o);
     r = evGive(q.give);
-    if (!r.ok) break;
-    o.main.done[q.id] = 1;
+    o = evRead(now);
+    if (!r.ok) { delete o.main.done[q.id]; evWrite(o); break; }
     out.push({ id: q.id, t: q.t, text: r.text });
   }
-  if (out.length) evWrite(o);
   return out;
 }
 
