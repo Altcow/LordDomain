@@ -879,6 +879,7 @@ function goodsOpenChain(sel, focus) {
   goodsPanelRender();
 }
 function goodsPanelToggle(open) {
+  if (!featureOn('goods_panel')) return;   // @DORMANT goods_panel
   goodsPanelOpen = open === undefined ? !goodsPanelOpen : !!open;
   if (goodsPanelOpen) {
     if (typeof toggleTechPanel === 'function') { try { toggleTechPanel(false); } catch (e) { /* 略過 */ } }

@@ -79,8 +79,8 @@ function tcBuild() {
     img.onload = function () { bg.style.backgroundImage = 'url("' + bgUrl + '")'; };
     img.src = bgUrl;
   }
-  if (logoUrl) { logo = tcEl('img', 'tc-logo-img'); logo.alt = '東漢卡卡'; logo.src = logoUrl; title.appendChild(logo); }
-  else title.appendChild(tcEl('div', 'tc-logo', '東漢卡卡'));
+  if (logoUrl) { logo = tcEl('img', 'tc-logo-img'); logo.alt = '東漢Q卡'; logo.src = logoUrl; title.appendChild(logo); }
+  else title.appendChild(tcEl('div', 'tc-logo', '東漢Q卡'));
   press = tcEl('div', 'tc-press', '點擊任意處開始');
   snd = tcBtn('', 'tc-snd', function (ev) { if (ev && ev.stopPropagation) ev.stopPropagation(); tcToggleSound(); });
   ver = tcEl('div', 'tc-ver', '');

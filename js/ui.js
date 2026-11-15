@@ -209,7 +209,6 @@ const UI_SIDE_ITEMS = [
   { key: 'shop', icon: '🏪', label: '商店', title: '商店', scope: 'estate', target: 'btnShop', gate: 'shop', dorm: 'citysim' },
   { key: 'tech', icon: '📜', label: '科技', title: '科技樹與研發序列', scope: 'estate', special: 'tech', dorm: 'citysim' },
   { key: 'cards', icon: '🃏', label: '卡片', title: '卡片:抽卡、卡包、熔爐與傳承(次數隨時間累積)', scope: 'estate', special: 'cards' },
-  { key: 'goods', icon: '📦', label: '庫房', title: '庫房(貨品與工坊狀態)', scope: 'estate', target: 'btnGoods' },
   { key: 'caravan', icon: '🛻', label: '走鏢', title: '走鏢(鏢師、馬車與高階貨品)', scope: 'estate', target: 'btnCaravan', gate: 'caravan', dorm: 'caravan' },
   { key: 'bn', icon: '⚔', label: '戰鬥', title: '戰鬥(3v3 回合制練習戰)', scope: 'estate', special: 'bn', gate: 'battleA', showLocked: true },
   { key: 'season', icon: '🌤', label: '季節', title: '季節與時段', scope: 'estate', target: 'seasonBtn', dorm: 'citysim' },
@@ -3265,12 +3264,12 @@ function onSettleClick(e) {
   }
 }
 
-function showToast(msg) {
+function showToast(msg, ms) {   // ms = 顯示毫秒(省略 = 2000)
   if (!toastEl) return;
   toastEl.textContent = msg;
   toastEl.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2000);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms > 0 ? ms : 2000);
 }
 
 function syncSeasonSelect() {

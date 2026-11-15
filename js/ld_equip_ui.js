@@ -1,5 +1,5 @@
 // js/ld_equip_ui.js — 裝備介面(設計_裝備與尋訪_定案.md 任務卡 6;前綴 eq / ldEquip)。只在旗標 ldui 開啟時有作用(頁面登錄在 ld_nav 堆疊;武將詳情的 4 格由 ld_hero.js 呼叫本檔掛鉤)。
-// 頁面:'equipPick' 換裝(從武將詳情開)、'equipEnh' 裝備詳情 / 強化 / 餵養 / 分解、'bag' 背包(裝備 / 材料 / 庫房)。頁面層數 ≤ 5:首頁 → 卡包 → 武將詳情 → 換裝 → 強化(第 5 層不放往下的按鈕)。
+// 頁面:'equipPick' 換裝(從武將詳情開)、'equipEnh' 裝備詳情 / 強化 / 餵養 / 分解、'bag' 背包(裝備 / 材料)。頁面層數 ≤ 5:首頁 → 卡包 → 武將詳情 → 換裝 → 強化(第 5 層不放往下的按鈕)。
 // 素材走 ld_art.js(has:false = CSS 佔位 + 單一漢字);品質框 / 顏色用程式加,不必每品質各畫。ES2017;不用 ?. ??。
 // 全域:ldEquipSlotInner ldEquipInfoHtml ldEquipHeroAct ldEquipItemHtml eqEsc eqArt。
 // @DORMANT ldui:本檔所有入口都在 ldui 路徑(ld_hero.js / shell.js 的 ld 分支)才會被呼叫。
@@ -258,10 +258,10 @@ function eqEnhClick(ctx, ev) {
   return false;
 }
 
-// ───────── 背包(裝備 / 材料 / 庫房)─────────
+// ───────── 背包(裝備 / 材料)─────────
 var EQ_BAG_FILTERS = [['', '全部'], ['wpn', '武器'], ['arm', '防具'], ['horse', '馬'], ['relic', '寶具']];
 function eqBagTabsHtml(ctx) {
-  return [['eq', '裝備', 'tab_equip'], ['mat', '材料', 'tab_mat'], ['store', '庫房', 'tab_item']].map(function (t) { return '<button class="ld-tab eq-tabi' + (ctx.tab === t[0] ? ' on' : '') + '" data-a="tab" data-v="' + t[0] + '" aria-label="' + t[1] + '">' + eqArt(t[2], 'eq-tabic') + t[1] + '</button>'; }).join('');
+  return [['eq', '裝備', 'tab_equip'], ['mat', '材料', 'tab_mat']].map(function (t) { return '<button class="ld-tab eq-tabi' + (ctx.tab === t[0] ? ' on' : '') + '" data-a="tab" data-v="' + t[0] + '" aria-label="' + t[1] + '">' + eqArt(t[2], 'eq-tabic') + t[1] + '</button>'; }).join('');
 }
 function eqBagHtml(ctx) {
   var h = '', list, n, k, ids, mats;
@@ -276,7 +276,6 @@ function eqBagHtml(ctx) {
     if (ctx.matInfo && matDef(ctx.matInfo)) h += '<div class="eq-note">' + eqEsc(matName(ctx.matInfo)) + ':' + eqEsc(matDef(ctx.matInfo).desc) + '</div>';
     return h;
   }
-  if (ctx.tab === 'store') return '<div class="eq-sec">庫房</div><div class="eq-note">城市物資與商品庫存在舊的庫房頁。</div><button class="eq-b big" data-a="goods">開啟庫房</button>';
   list = gearList(ctx.slot ? { slot: ctx.slot } : {}).sort(eqSortItems);
   n = gearList({ free: true }).length;
   h += '<div class="eq-filter">' + EQ_BAG_FILTERS.map(function (f) { return '<button class="ld-tab' + ((ctx.slot || '') === f[0] ? ' on' : '') + '" data-a="flt" data-v="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>';
@@ -302,7 +301,6 @@ function eqBagClick(ctx, ev) {
   if (a === 'tab') { ctx.tab = v; ctx.bulkConfirm = false; eqBagRender(ctx.bagEl, ctx); return true; }
   if (a === 'flt') { ctx.slot = v; ctx.bulkConfirm = false; eqBagRender(ctx.bagEl, ctx); return true; }
   if (a === 'matinfo') { ctx.matInfo = v; eqBagRender(ctx.bagEl, ctx); return true; }
-  if (a === 'goods') { if (typeof ldNavPush === 'function') ldNavPush('goods'); return true; }
   if (a === 'item') {
     if (ctx.last || typeof ldNavPush !== 'function') { eqToast('層數已達上限'); return true; }
     ldNavPush('equipEnh', { gid: v });

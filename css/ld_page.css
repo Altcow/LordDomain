@@ -75,3 +75,5 @@ body.ld-leg-settings #stRoot .st-body { padding-left: max(16px, env(safe-area-in
   body.ld-leg-settings #stRoot .st-body { grid-column: 2; grid-row: 1; min-width: 0; padding-left: 16px; }
 }
 @media (orientation: portrait) { body.ld-leg-goods #goodsPanel { z-index: 46; left: 0; right: 0; top: var(--ldleg-h); bottom: 0; width: auto; max-width: none; max-height: none; border-radius: 0; box-sizing: border-box; overflow-y: auto; background: #141a24; } }   /* 直式庫房原本是 z-index 3 的小浮窗(被首頁蓋住):改成頂列下方的滿版頁 */
+/* 新介面頁(z-index 45)蓋過全域提示 #toast(z-index 4):提示在頁面上方才看得到(整隊頁統御不足等自動消失提示) */
+body.ld-ui #toast { z-index: 80; }

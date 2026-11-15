@@ -1,6 +1,6 @@
 // js/fame.js — 名聲(補兵・名聲・鍛造材料 設計 第 2 節;純邏輯,無 DOM)。數值全部 PLACEHOLDER,集中在 FAME_CFG。
-// 名聲 = 單一累計整數,只增不減,只用來「開放功能」(第 3~5 隊、駐守上限 4~8),不能花。來源只有戰鬥勝利與高塔首通(擂台不給)。不設每日上限;賽季重置不歸零(◇ 待拍板)。
-// 存檔:localStorage 'lorddomain.fame.v1' = {v:1, n 累計, got:[已提示過的門檻], lt 舊存檔第一次載入時記下的隊伍數(2~5;新檔 2), tw:{高塔層:1}, log:[{t,n,why}] 最近 30 筆}(SAVE_SLOT_KEYS)。
+// 名聲 = 單一累計整數,只增不減,只用來「開放功能」(第 3~5 隊、駐守上限 4~8),不能花。來源只有地圖戰鬥勝利(擂台不給)。不設每日上限;賽季重置不歸零(◇ 待拍板)。
+// 存檔:localStorage 'lorddomain.fame.v1' = {v:1, n 累計, got:[已提示過的門檻], lt 舊存檔第一次載入時記下的隊伍數(2~5;新檔 2), tw:{休眠舊欄位:只讀不寫}, log:[{t,n,why}] 最近 30 筆}(SAVE_SLOT_KEYS)。
 // 舊存檔相容:第一次載入時(沒有存檔鍵)以 bnteam 已有內容的最高隊號記 lt;fameTeamCap() = max(門檻隊數, lt),已在用的隊不被鎖。
 // 讀寫失敗 / 壞檔 → 正規化,不丟例外。全域:FAME_CFG FAME_KEY fameGet fameFor fameAdd fameGuardCap fameTeamCap fameNext fameSteps fameTakeUnlocked fameTeamLockText fameNorm。ES2017;不用 ?. ??。
 
@@ -11,7 +11,7 @@ var FAME_CFG = {
   src: {
     res: { per: 2 }, camp: { per: 15 }, beast: { per: 40 },
     county: { flat: 300 }, pass: { flat: 400 }, jun: { flat: 600 },
-    tower: { flat: 10 }, towerBoss: { flat: 50 }, towerTop: { flat: 300 }
+    tower: { flat: 10 }, towerBoss: { flat: 50 }, towerTop: { flat: 300 }   // @DORMANT tower:塔系來源休眠(FEATURES.tower=false 時沒有任何呼叫端),保留供日後改作別的塔使用
   },
   // 門檻(由低到高,一階一個獎勵):team = 開放到第幾隊、guard = 駐守上限
   steps: [

@@ -372,7 +372,7 @@ function gearIconKey(it) {
 }
 function gearTitle(it) {
   var C = GEAR_CFG, main = it.attrs[0][0];
-  if (it.slot === 'relic') return C.qName[it.q] + '·' + ({ mag: '兵書', heal: '藥葫蘆', res: '護身符', sres: '銅鏡' }[main] || '寶具');
+  if (it.slot === 'relic') return C.qName[it.q] + '·' + ({ mag: '策略', heal: '藥葫蘆', res: '護身符', sres: '銅鏡' }[main] || '寶具');
   if (it.slot === 'horse') return C.qName[it.q] + '·戰馬';
   return C.qName[it.q] + '·' + ({ wu: '戰刀', wen: '羽扇', heavy: '重甲', robe: '法袍' }[it.type] || C.slotName[it.slot]);
 }

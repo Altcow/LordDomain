@@ -51,7 +51,7 @@ function bnMapRewardLine(r) {
   if (r.gold) a.push('金幣 ' + r.gold);
   (r.goods || []).forEach(function (g) { a.push(bnMapGoodsName(g[0]) + ' ×' + g[1]); });
   if (r.shards) a.push('碎片 ' + r.shards);
-  if (r.book) a.push('通用戰法「' + bnMapSkillName(r.book[0]) + '」(兵書:解鎖戰法;已有則轉碎片)');
+  if (r.book) a.push('戰法「' + bnMapSkillName(r.book[0]) + '」(解鎖戰法;已有則轉碎片)');
   if (r.pulls) a.push('抽卡 +' + r.pulls + ' 抽');
   return a.join('、');
 }
@@ -123,7 +123,7 @@ function bnMapDetailHtml(d, sel, f, mine, ratio) {
     '<p class="sm">敵將</p>' + bnMapFoesHtml(f) +
     '<p>建議戰力 <b>' + f.rec + '</b> · 我方 <b>' + mine + '</b> <em class="' + ratio[1] + '">' + ratio[0] + '</em></p>' +
     '<p class="sm">' + (first ? '首通:' + bnMapRewardLine({ gold: rw.first.gold, goods: rw.first.goods, shards: rw.first.shards, book: rw.first.book, pulls: rw.first.pulls }) : '首通已領') + '</p>' +
-    '<p class="sm">重複通關(不限次數):金幣 ' + rw.repeat.gold + '、' + bnMapGoodsName(rw.repeat.goods[0]) + ' 機率 ' + Math.round(rw.repeat.goodsP * 100) + '%、通用戰法「' + bnMapSkillName(rw.repeat.book) + '」機率 ' + Math.round(rw.repeat.bookP * 100) + '%(不給碎片與抽卡)</p>' +
+    '<p class="sm">重複通關(不限次數):金幣 ' + rw.repeat.gold + '、' + bnMapGoodsName(rw.repeat.goods[0]) + ' 機率 ' + Math.round(rw.repeat.goodsP * 100) + '%、戰法「' + bnMapSkillName(rw.repeat.book) + '」 機率 ' + Math.round(rw.repeat.bookP * 100) + '%(不給碎片與抽卡)</p>' +
     (((d.got || {})[sel.id] | 0) & 2 ? '' : '<p class="sm">三星首次:金幣 ' + rw.star3.gold + '、碎片 ' + rw.star3.shards + '(三星:勝利 + 無人陣亡 + 5 回合內全殲)</p>') +
     '<button class="bnm-dbtn" data-a="dclose">關閉</button></div></div>';
 }
@@ -228,7 +228,7 @@ function bnMapRewardList(rep) {
   if (rep.gold) a.push('金幣 +' + rep.gold);
   (rep.goods || []).forEach(function (g) { a.push(bnMapGoodsName(g.id) + ' ×' + g.n); });
   if (rep.shards) a.push('碎片 +' + rep.shards);
-  if (rep.books) a.push('通用戰法「' + bnMapSkillName(rep.bookId) + '」' + (rep.bookUnlock === false ? '(兵書:已有,轉碎片)' : '(兵書:解鎖戰法)'));
+  if (rep.books) a.push('戰法「' + bnMapSkillName(rep.bookId) + '」' + (rep.bookUnlock === false ? '(已有,轉碎片)' : '(解鎖戰法)'));
   if (rep.pulls) a.push('抽卡 +' + rep.pulls + ' 抽');
   if (!rep.gold && !(rep.goods || []).length && !rep.shards && !rep.books && !rep.pulls) a.push('本次沒有獎勵');
   if (rep.repeat && rep.id !== 'B') a.push('重複通關:不給碎片與抽卡');
@@ -242,7 +242,7 @@ function bnMapRewardHtml(rep) {
   if (rep.gold) a.push('金幣 +' + rep.gold);
   (rep.goods || []).forEach(function (g) { a.push(bnMapGoodsName(g.id) + ' ×' + g.n); });
   if (rep.shards) a.push('碎片 +' + rep.shards);
-  if (rep.books) a.push('通用戰法「' + bnMapSkillName(rep.bookId) + '」' + (rep.bookUnlock === false ? '(兵書:已有,轉碎片)' : '(兵書:解鎖戰法)'));
+  if (rep.books) a.push('戰法「' + bnMapSkillName(rep.bookId) + '」' + (rep.bookUnlock === false ? '(已有,轉碎片)' : '(解鎖戰法)'));
   if (rep.pulls) a.push('抽卡 +' + rep.pulls + ' 抽');
   h += '<p class="rw">' + (rep.first && rep.id !== 'B' ? '首通 · ' : '') + (rep.star3 ? '三星首次 · ' : '') + (a.length ? '獲得:' + a.join('、') : '本次沒有獎勵') + '</p>';
   if (rep.repeat && rep.id !== 'B') h += '<p class="sm">重複通關:不給碎片與抽卡</p>';

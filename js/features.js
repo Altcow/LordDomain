@@ -17,7 +17,10 @@ var FEATURES = {
   worldmap: true,      // 外勤(wm_core.js 外勤清單、戰鬥入口『外勤』鈕)預設開(v60;原為大地圖登錄用,大地圖改用 bigmap)
   world: true,         // 地圖(wd_core.js / wd_ui.js:資源採集 / 野怪集結 / 攻城;shell 的「地圖」入口);關閉時入口退回舊外勤 wmOpen(2026-11-13)
   bigmap: false,       // 大地圖(尚未接入;只登錄,無守衛)
-  ldui: true,          // 新介面骨架(js/ld_nav.js 頁面堆疊 + 新首頁 / 武將詳情 / 整隊 / 百層塔 / 舊頁接入堆疊;設計_介面骨架實作計畫.md);第 6 階段整合完成後預設開(2026-11-14);網址 ?ldui=0 還原舊首頁、?ldui=1 開,或 localStorage lorddomain.feature.ldui 覆寫
+  ldui: true,          // 新介面骨架(js/ld_nav.js 頁面堆疊 + 新首頁 / 武將詳情 / 整隊 / 舊頁接入堆疊;設計_介面骨架實作計畫.md);第 6 階段整合完成後預設開(2026-11-14);網址 ?ldui=0 還原舊首頁、?ldui=1 開,或 localStorage lorddomain.feature.ldui 覆寫
+  goods_panel: false,  // 舊庫房面板(goods.js #goodsPanel:貨品 / 材料 / 鏈條 / 生產;已移出背包與頂列,2026-11-15 休眠;goods 資料與存檔保留)
+  tower: false,        // 試煉塔(首頁木牌、ld_tower 頁、首通名聲、賽季塔層同步;併入 49 格大地圖戰鬥,暫時關閉;程式與存檔 lorddomain.tower.v1 保留;主線 12 已改成地圖戰鬥計數,不再依賴本旗標)
+  grid49: false,       // 大地圖 19×19(設計_49格地圖_整合規格.md;js/wd_grid_data.js 資料表已載入、尚無任何程式引用;K / B 包完成接入前保持關閉)
   shell: true          // 新主畫面外殼 App Shell(js/shell.js、css/shell.css;B 包 S0/S1)預設開(2026-11-12 純卡牌版);網址 ?shell=1 / ?shell=0 或 localStorage lorddomain.feature.shell 覆寫
 };
 var FEATURES_WARNED = {};

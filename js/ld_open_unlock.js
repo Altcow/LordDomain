@@ -92,6 +92,7 @@ function unlockTakeCelebrate() {
   if (st.legacy) return null;
   for (i = 0; i < UNLOCK_CFG.length; i++) {
     c = UNLOCK_CFG[i];
+    if (c.dorm && !featureOn(c.dorm)) continue;   // @DORMANT tower(休眠功能不慶祝)
     if (st.got[c.id] > 1 && !st.shown[c.id]) { st.shown[c.id] = 1; unlockWrite(st); return c.id; }
   }
   return null;

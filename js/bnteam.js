@@ -1,9 +1,9 @@
 // js/bnteam.js — 戰鬥 A:武將戰法卡(布陣 / 討伐地圖 / 結算中我方隊伍一律用卡片顯示:頭像、品階、星等、兵種、戰力、兵力條、戰法清單)、名冊搜尋 / 排序、隊伍預設 3 組(可命名、一鍵套用)。
 // 掛在 bnui.js 的全螢幕 layer 內;卡片 / 預設的點擊經 bnUiDo → bnTeamDo。戰法清單一律取自 bn_text.js 的 bnCardSkillRows(card, {troop})(唯讀;含被動與大招)。戰法名可點 → 戰法說明浮層(內容 = bnSkillInfo,同名冊卡的 bnskill 說明)。
 // 存檔:世界內 'lorddomain.bnteam.v1' = {v:1, p:[3 組 {name, slots:[{id,row,col,troop,nm}]} | null]}(有值才寫;壞檔 / 舊檔 = 空;沒有此鍵時沿用 bn.v1 的舊 forms 當初值,不改舊鍵)。
-// 對外(給「對戰練習」等其他模組):bnTeamPresetGet(n) n=1..3 → {n, name, slots:[…], empty};bnTeamSnapshot() → 目前隊伍 ≤3 人快照(3 人隊伍)。
+// 對外(給「對戰練習」等其他模組):bnTeamPresetGet(n) n=1..3 → {n, name, slots:[…], empty};bnTeamSnapshot(slots?) → 目前隊伍(或傳入的 slots)≤3 人快照(3 人隊伍);bnRepGet() / bnRepSet(slots) = 代表隊伍(獨立存檔 lorddomain.bnrep.v1,與 5 隊分開)。
 // 依賴:bnui.js(bnu BNUI bnUiEntry bnUiSpec bnUiTroopOf bnUiEsc bnUiLsGet bnUiLsSet bnUiNormForm bnUiRosterIds bnUiCurSave bnUiRenderForm bnUiToast)、bn_units.js;bn_text.js / cardsui.js 可缺。ES2017;不用 ?. ??。
-// 全域:BNTEAM bnTeamLoad bnTeamSave bnTeamPresetGet bnTeamPresetSave bnTeamPresetApply bnTeamPresetRename bnTeamPresetSet bnTeamSnapshot bnTeamSkillRows bnTeamCardHtml bnTeamStripHtml bnTeamRosterHtml bnTeamPresetHtml bnTeamSkillLinksHtml bnTeamDo bnTeamBack bnTeamIsOpen bnTeamInfoOpen bnTeamInfoClose bnTeamCss
+// 全域:BNTEAM bnTeamLoad bnTeamSave bnTeamPresetGet bnTeamPresetSave bnTeamPresetApply bnTeamPresetRename bnTeamPresetSet bnRepGet bnRepSet bnTeamSnapshot bnTeamSkillRows bnTeamCardHtml bnTeamStripHtml bnTeamRosterHtml bnTeamPresetHtml bnTeamSkillLinksHtml bnTeamDo bnTeamBack bnTeamIsOpen bnTeamInfoOpen bnTeamInfoClose bnTeamCss
 
 var BNTEAM = { key: 'lorddomain.bnteam.v1', n: 3, max: 5, show: 3, nameMax: 12, qMax: 20, rawMax: 200000, sort: 'pw', q: '', exp: {}, data: null, raw: undefined, info: '', infoEl: null, per: 40, pg: 0, fac: '', gr: '' };
 var BNTEAM_SORT = [['pw', '戰力'], ['gr', '品階'], ['tr', '兵種']];
@@ -195,14 +195,34 @@ function bnTeamPresetSetMany(list) {
   return true;
 }
 
+// ───────── 代表隊伍(2026-11-15):獨立單隊,與上面 5 隊完全分開(不受「同一武將只能在一隊」限制、不參與去重 / 衝突檢查)─────────
+// 存檔 'lorddomain.bnrep.v1' = {v:1, slots:[{id,row,col,troop,nm}]}(有值才寫;壞檔 / 舊檔 = 空)。用途:擂台、對戰練習等「只需要一支隊伍」的地方預設取用;空 = 呼叫端退回原行為。
+var BNREP = { key: 'lorddomain.bnrep.v1', name: '代表隊伍', rawMax: 200000, raw: undefined };
+// → {n:0, name, slots:[…], empty};讀不到 / 壞檔 = 空。只保留名冊還找得到的人
+function bnRepGet() {
+  var raw = bnUiLsGet(BNREP.key), o = null, s = [];
+  if (raw && raw.length < BNREP.rawMax) { try { o = JSON.parse(raw); } catch (e) { o = null; } }
+  if (o && typeof o === 'object' && Array.isArray(o.slots)) s = bnTeamNormSlots(o.slots).filter(function (x) { return !!bnUiEntry(x.id); });
+  return { n: 0, name: BNREP.name, slots: s.map(function (x) { return { id: x.id, row: x.row, col: x.col, troop: x.troop, nm: x.nm }; }), empty: !s.length };
+}
+// 寫入(名冊沒有的人不寫;同隊同名名人 / 同卡由 bnTeamNormSlots 與呼叫端擋)。空陣列 = 清空(原本沒有鍵就不寫)。回 true/false
+function bnRepSet(slots) {
+  var src, s, raw = bnUiLsGet(BNREP.key);
+  if (!Array.isArray(slots)) return false;
+  src = slots.filter(function (x) { return x && bnUiEntry(x.id); }).map(function (x) { return { id: x.id, row: x.row, col: 0, troop: x.troop, nm: String(bnUiEntry(x.id).name) }; });
+  s = bnTeamNormSlots(src);
+  if (!s.length && raw === null) return true;
+  return bnUiLsSet(BNREP.key, JSON.stringify({ v: 1, slots: s })) !== false;
+}
+
 // ───────── 目前隊伍快照(給對戰練習等模組;純 JSON)─────────
 var BNTEAM_CARD_KEYS = ['name', 'zi', 'fig', 'fac', 'gr', 'st', 'ja', 'main', 'tr', 'tok', 'learn', 'up', 'sex', 'no', 'starLv', 'bnLearn'];
 function bnTeamJson(x) { try { return JSON.parse(JSON.stringify(x)); } catch (e) { return null; } }
 // [{id, name, fig, gr, starLv, bnLearn, learned, learnSrc, drill, drillLv, row, col, troop, power, hp, skills:[戰法 id], ult, card:{名冊卡屬性}, spec:{單位規格}}],依前排→後排、上→下
 // learned = 路人學習欄實際戰法(自帶以外);learnSrc = 'skc' 戰法傳承裝備(bn_skcard.js)、'card' 卡面 bnLearn、'auto' 自動補;drill / drillLv = 研兵加成比例 / 等級(隊伍碼帶出,對方重建戰力一致)
-function bnTeamSnapshot() {
+function bnTeamSnapshot(slots) {   // slots 省略 = 目前布陣 bnu.slots;對戰練習傳入代表隊伍
   var out = [], per = (typeof BNBOOK !== 'undefined' && BNBOOK.drillPer) || 0.02;
-  bnTeamOrder(bnu.slots || []).slice(0, BNUI.maxUnits).forEach(function (s) {
+  bnTeamOrder(Array.isArray(slots) ? slots : (bnu.slots || [])).slice(0, BNUI.maxUnits).forEach(function (s) {
     var e = bnUiEntry(s.id), tr, sp, card = {}, nat;
     if (!e) return;
     tr = s.troop || bnUiTroopOf(e);

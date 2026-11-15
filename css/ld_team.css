@@ -142,3 +142,5 @@ body.ldt-dragging { cursor: grabbing; user-select: none; -webkit-user-select: no
 .ldt-skr-no { background: linear-gradient(var(--wood2), var(--wood3)); color: #e9d3a6; }
 .ldt-skr-m { font-size: 11.5px; line-height: 1.35; color: #f3dfae; }
 @media (max-height: 400px) and (orientation: landscape) { .ldt-skr { padding: 4px 8px; gap: 2px; } .ldt-skr-m { font-size: 11px; } }
+.ldt-tab.rep { flex: 0 0 auto; min-width: 56px; border-style: dashed; }
+.ldt-rn { margin: 0 0 3px; font-size: 12px; line-height: 1.3; color: #f3dfae; text-shadow: 0 1px 2px #000; }

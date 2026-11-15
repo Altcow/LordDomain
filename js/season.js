@@ -1,6 +1,6 @@
 // js/season.js — 賽季核心(設計_賽季_規格.md S1;純邏輯、無 DOM)。前綴 season。數值在 season_data.js(SEASON_CFG,全部 PLACEHOLDER)。
 // 存檔:localStorage 'lorddomain.season.v1' = {v:1, s0 第 0 季起點(週一 00:00 東八區), idx 存檔目前屬於第幾季, hi 看過的最晚時刻, part:{季號:1}(最近 3 季), job:null|{from,to,step:'settle'|'reset',tEnd,tw?,err?},
-//   hist:[{idx,pow,rank,of,cities,tw,part,conv}](新→舊,最多 12)、pend:[{id,idx,rank,give:{pulls,shards,mats},conv,sweep:{from,to}|null}](待領結算)、twBest(百層塔歷史最高)、seen、warn}(已加入 SAVE_SLOT_KEYS)。
+//   hist:[{idx,pow,rank,of,cities,tw,part,conv}](新→舊,最多 12)、pend:[{id,idx,rank,give:{pulls,shards,mats},conv,sweep:{from,to}|null}](待領結算)、twBest(休眠塔功能的歷史最高層;塔休眠時只保留、不顯示、不參與結算與排名)、seen、warn}(已加入 SAVE_SLOT_KEYS)。
 // 換季 seasonTick(now):時鐘凍結 → 遷移(舊存檔只蓋章)→ 開 job → 'settle'(推到封榜、收成、名次、結餘換算)→ 'reset'(各模組 xxxSeasonReset,各自以 ss 冪等)→ 完成。做到一半當機,下次 tick 從 job.step 續做。
 // 重置掛點(存在才呼叫):wdSeasonReset twSeasonReset rsvSeasonReset res4SeasonReset homeSeasonReset;另有模組註冊式 seasonRegister(name, {reset, settle, stamp, power})給首頁經營等後補模組。
 // 各模組的季號戳記 ss:world.v2 的 W.ss、tower.v1 / rsv.v1 的 ss、world.res.ss(四資源;偏離規格的 world.resSs,因主存檔 saveWorldObj 只寫 world.res,resSs 不會被存下)、首頁經營自訂。
@@ -25,6 +25,8 @@ function seasonMonday(now) {
 }
 
 // ───────── 存檔 ─────────
+// 塔功能(FEATURES.tower)休眠時:結算不記塔層、不重置 / 掃蕩塔、不發塔材料(名次一律用本季名聲 / 領地戰力,見 seasonRankAt)
+function seasonTowerOn() { return typeof featureOn === 'function' && featureOn('tower'); }   // @DORMANT tower
 function seasonDefault(s0) { return { v: 1, s0: s0, idx: 0, hi: 0, part: {}, job: null, hist: [], pend: [], twBest: 0, seen: -1, warn: -1 }; }
 function seasonNormGive(g) {
   var o = { pulls: 0, shards: 0, mats: {} };
@@ -223,12 +225,6 @@ function seasonLootGrant(loot) {
   if (loot.forge && typeof matGrant === 'function') { matGrant(loot.mats); return; }
   if (typeof cityGoodsAdd === 'function') for (k in loot.mats || {}) if (loot.mats[k] > 0) cityGoodsAdd(k, loot.mats[k]);
 }
-function seasonTotal4() {
-  var s = 0;
-  if (typeof res4Total4 === 'function') return res4Total4();
-  if (typeof res4Get === 'function') ['wood', 'iron', 'stone', 'grain'].forEach(function (k) { s += res4Get(k); });
-  return s;
-}
 function seasonHistPut(st, e) {
   st.hist = st.hist.filter(function (h) { return h.idx !== e.idx; });
   st.hist.push(e);
@@ -251,7 +247,7 @@ function seasonSettle(st, job) {
     r = wdAdvance(W, cs, tEnd);   // 季末前的行程照打、事件照記
     (r.events || []).forEach(function (ev) { if (ev.k === 'report') seasonLootGrant(ev.loot); });
     got = wdCollect(W, tEnd);
-    if (typeof WD_HARV_KEYS !== 'undefined' && typeof res4Add === 'function') WD_HARV_KEYS.forEach(function (key) { var g = {}; if (got[key] > 0) { g[WD_HARV_RES4[key]] = got[key]; res4Add(g); } });
+    if (typeof WD_HARV_KEYS !== 'undefined' && typeof res4Add === 'function') WD_HARV_KEYS.forEach(function (key) { var g = {}; if (got[key] > 0) { if (WD_HARV_RES4[key]) { g[WD_HARV_RES4[key]] = got[key]; res4Add(g); } else if (WD_HARV_MAT[key] && typeof matGrant === 'function') { g[WD_HARV_MAT[key]] = got[key]; matGrant(g); } } });
     if (got.shards > 0 && typeof cardsShardGain === 'function') cardsShardGain(cs, got.shards);
     seasonSaveW(W);
   }
@@ -259,8 +255,8 @@ function seasonSettle(st, job) {
   seasonRegEach('settle', tEnd);
   part = st.part[from] ? 1 : 0;
   rk = seasonRankAt(from, tEnd, W);
-  conv = Math.min(SEASON_CFG.convMax, Math.floor(seasonTotal4() / SEASON_CFG.convPer));
-  if (typeof twRead === 'function') { try { twTop = twRead().top | 0; } catch (e2) { twTop = 0; } }
+  conv = 0;   // 方案 A:剩餘資源換碎片已移除(欄位保留給舊存檔 hist / pend 讀取)
+  if (seasonTowerOn() && typeof twRead === 'function') { try { twTop = twRead().top | 0; } catch (e2) { twTop = 0; } }   // @DORMANT tower
   e = { idx: from, pow: 0, rank: part ? rk.rank : 0, of: part ? rk.of : 0, cities: 0, tw: twTop, part: part, conv: conv };
   rk.rows.forEach(function (row) { if (row.me) { e.pow = row.pow; e.cities = row.cities; } });
   for (j = job.to - 1; j > from && job.to - j <= SEASON_CFG.histMax; j--) seasonHistPut(st, { idx: j, pow: 0, rank: 0, of: 0, cities: 0, tw: 0, part: 0, conv: 0 });   // 中間沒參加的季
@@ -278,7 +274,7 @@ function seasonReset(st, job) {
     lw = seasonLoadW(tStart);
     if (lw) { wdSeasonReset(lw.W, lw.cs, to, tStart); seasonSaveW(lw.W); }
   }
-  if (typeof twSeasonReset === 'function') {
+  if (seasonTowerOn() && typeof twSeasonReset === 'function') {   // @DORMANT tower(休眠:塔存檔原樣保留,不重置不掃蕩)
     r = twSeasonReset(to, st.twBest);
     if (r && !r.skipped) { job.tw = { from: r.from | 0, to: r.to | 0, mats: seasonNormGive({ mats: r.mats }).mats }; st.job = job; seasonWrite(st); }
   }
@@ -286,7 +282,7 @@ function seasonReset(st, job) {
   seasonCall(typeof res4SeasonReset === 'function' ? res4SeasonReset : null, [to]);
   seasonCall(typeof homeSeasonReset === 'function' ? homeSeasonReset : null, [to, tStart]);
   SEASON_REG.forEach(function (m) { if (typeof m.reset === 'function') m.reset(to, tStart); });
-  // 完成:百層塔掃蕩結果併入上季結算
+  // 完成:塔掃蕩結果併入上季結算(塔休眠時 job.tw 不會產生)
   if (job.tw && (job.tw.to > 0 || Object.keys(job.tw.mats).length)) {
     p = st.pend.filter(function (x) { return x.id === 's' + job.from; })[0];
     if (!p) { p = { id: 's' + job.from, idx: job.from, rank: 0, give: seasonNormGive(null), conv: 0, sweep: null }; seasonPendPut(st, p); }
@@ -380,7 +376,7 @@ function seasonClaimAll() {
 }
 function seasonMarkSeen(idx) { var st = seasonRead(); if (!st) return false; st.seen = seasonInt(idx, -1, 1e5, st.seen); return seasonWrite(st); }
 function seasonMarkWarn(idx) { var st = seasonRead(); if (!st) return false; st.warn = seasonInt(idx, -1, 1e5, st.warn); return seasonWrite(st); }
-// 百層塔歷史最高(只增不減;S3 的 twSettle 首通後呼叫)
+// 塔歷史最高(只增不減;塔休眠時沒有呼叫端)
 function seasonTowerBest(top) {
   var st = seasonRead();
   top = seasonInt(top, 0, 100, 0);

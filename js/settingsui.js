@@ -374,6 +374,21 @@ function stSoundSec() {
   return stSec('聲音', nodes.concat(stExtraNodesH('聲音')), 'sound');
 }
 
+// 擂台(js/bn_tourney_ui.js 的存檔選項):擂台提醒(預設開)/ 自動報名(預設關)
+function stTourSec() {
+  if (typeof bnTourOptSet !== 'function' || typeof bnTourOpt !== 'function') return null;
+  const nodes = [];
+  stAdd(nodes, '擂台提醒', stSwitch(bnTourOpt('remind'), function (v) {
+    bnTourOptSet('remind', v);
+    stRender();
+  }), '擂台報名開始時彈出一次公告,可直接用代表隊伍參加。');
+  stAdd(nodes, '自動報名', stSwitch(bnTourOpt('auto'), function (v) {
+    bnTourOptSet('auto', v);
+    stRender();
+  }), '開啟且已設定代表隊伍時,報名一開始就自動報名、不再彈公告(離線時不會報名)。');
+  return stSec('擂台', nodes, 'more');
+}
+
 function stCityOn() { return typeof isCityOnly === 'function' && isCityOnly(); }
 
 // 拍攝與錄影:入口由 recorder.js 以 settingsAddRow(group '拍攝') 登記;只在出征 / 回放 / 沙盤時放進聲音頁(stRender)
@@ -527,6 +542,7 @@ function stRender() {
     add(stShotSec());
     secs.forEach(function (sec) { sec.setAttribute('data-tab', 'sound'); sec.stTab = 'sound'; });
   } else {
+    add(stTourSec());
     add(stHelpSec());
     add(stCacheSec());
     add(stAboutSec());

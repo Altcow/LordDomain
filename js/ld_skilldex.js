@@ -271,7 +271,7 @@ function skdSecGet(cs, id) {
   var src = skdSrc(cs, id), fig = skdLegacyFig(id), h = '', e = src.e;
   h += '<p class="big">' + skdEsc(src.text || '') + '</p>';
   if (fig) h += '<p>這是 ' + skdEsc(skdFigName(fig)) + ' 的傳承戰法,每位武將只有 1 個;拆他的卡就永久解鎖,之後可以裝給任何人。</p>';
-  else if (src.k === 'book') h += '<p>這是通用戰法(兵書),不屬於任何一位名人;可以多人同時裝。</p>';
+  else if (src.k === 'book') h += '<p>這是通用戰法,不屬於任何一位名人;可以多人同時裝。</p>';
   else h += '<p>這是通用戰法,不屬於任何一位名人。</p>';
   if (src.k === 'inh' || src.k === 'inhWait' || src.k === 'inhRoster') {
     if (e && e.id) h += '<div class="skd-acts"><button class="skd-btn" data-act="inhgo" data-v="' + skdEsc(e.id) + '">' + (src.k === 'inhRoster' ? '去看那位路人' : '去看' + skdEsc(skdFigName(fig)) + '的傳承') + ' ›</button></div>';

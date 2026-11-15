@@ -314,7 +314,7 @@ var CARD_FIGS = [
   {id:"mateng",name:"馬騰",zi:"壽成",fac:4,home:"扶風茂陵",st:[82,86,58,60,90],tai:376,tr:[["騎射",0],["寬厚",0],["涼州豪帥",1,"騎兵、胡騎移速 +5 %"]],bio:"據涼州,「性賢厚,人多敬之」;208 年入朝",fb:"史",gr:4,birth:"?–212"},
   {id:"xurong",name:"徐榮",zi:"",fac:4,home:"遼東",st:[88,78,76,55,58],tai:355,tr:[["設伏",0],["治軍嚴整",0]],bio:"汴水敗曹操;梁東敗孫堅",fb:"史(董卓部)",gr:3,birth:"?–192"},
   {id:"huatuo",name:"華佗",zi:"元化",fac:4,home:"沛國譙",st:[15,20,86,45,72],tai:238,tr:[["通醫",0],["五禽戲",1,"本軍負傷場次 −1,城內晨練場面"]],bio:"麻沸散;五禽之戲",fb:"史(醫者)",gr:4,birth:"?–208"},
-  {id:"caiyong",name:"蔡邕",zi:"伯喈",fac:4,home:"陳留圉縣",st:[30,15,90,82,92],tai:309,tr:[["經學",0],["熹平石經",1,"學職 +10 %"]],bio:"175 年書石經;焦尾琴",fb:"史(士人)",gr:4,birth:"133–192"},
+  {id:"caiyong",name:"蔡邕",zi:"伯喈",fac:4,home:"陳留圉縣",st:[30,15,90,82,92],tai:309,tr:[["經學",0],["熹平石經",1,"學職 +10 %"]],bio:"175 年書石經;焦尾琴",fb:"史(士人)",gr:3,birth:"133–192"},
   {id:"youtu",name:"尤突",zi:"",fac:4,home:"丹陽",st:[60,72,47,35,62],tai:276,tr:[["山戰",0],["丹陽宗帥",1,"山地格守方受傷 −8 %"]],bio:"丹陽宗帥,受曹公印綬,為陸遜所破",fb:"史(山越,外族)",gr:3,birth:"?–?"},
   {id:"yufuluo",name:"於夫羅",zi:"",fac:4,home:"南匈奴",st:[80,86,52,50,78],tai:346,tr:[["騎射",0],["南匈奴單于",1,"胡騎部隊移速 +8 %"]],bio:"南匈奴單于,寓居河東平陽",fb:"史(外族)",gr:3,birth:"?–195"},
   // 戰鬥改版新增 30 位(tools/battle_skills/new_heroes_draft.md;頭像 / 全身圖在 assets/portraits、assets/fullbody,id 同):魏 6、蜀 6、吳 6、黃巾 6、中立 6
@@ -377,6 +377,10 @@ var CARD_FIGS = [
   {id:"lvfan",name:"呂範",zi:"子衡",fac:2,home:"汝南細陽",st:[58,38,74,76,58],tai:304,tr:[["性好威儀",1,"(史)"],["貨殖",0],["勤政",0]],bio:"孫策謀臣,後領財計,性好威儀、車服整麗",fb:"史",gr:3,birth:"?–228"},
   {id:"lijue",name:"李傕",zi:"稚然",fac:4,home:"北地",st:[72,80,40,28,60],tai:280,tr:[["巫覡迷信",1,"(史)"],["暴躁",0],["突擊",0]],bio:"董卓部將,董卓死後與郭汜攻長安、把持朝政;信巫覡",fb:"史",gr:3,birth:"?–198"},
   {id:"guosi",name:"郭汜",zi:"",fac:4,home:"張掖",st:[72,80,42,30,58],tai:282,tr:[["劫掠公卿",1,"(史)"],["貪財",0],["輕敵",0]],bio:"董卓部將,與李傕共亂長安,後與李傕相攻、劫持公卿",fb:"史",gr:3,birth:"?–197"},
+  // 2026-11-15 第一季換人(設計_六季武將路線圖 §0):張紘 / 程昱 / 李儒 新增(184~195 時代吻合),蔡邕既有資料改紫
+  {id:"zhanghong",name:"張紘",zi:"子綱",fac:2,home:"廣陵",st:[38,22,88,90,80],tai:318,tr:[["江都獻策",1,"(史)"],["勤政",0],["好學",0]],bio:"孫策首席謀士之一,獻平定江東之策,任正議校尉",fb:"史",gr:4,birth:"153–212"},
+  {id:"chengyu",name:"程昱",zi:"仲德",fac:0,home:"東郡東阿",st:[60,54,90,78,56],tai:338,tr:[["鄄城死守",1,"(史)"],["謹慎",0],["設伏",0]],bio:"呂布襲兗州時守鄄城;三城得全",fb:"史(192 歸曹操)",gr:3,birth:"141–220"},
+  {id:"liru",name:"李儒",zi:"",fac:4,home:"不詳",st:[46,36,86,50,34],tai:252,tr:[["毒計",1,"(史+演義)"],["設伏",0]],bio:"董卓帳下謀士;奉命進毒酒鴆殺弘農王",fb:"史+演義(董卓謀士)",gr:3,birth:"?–192"},
 ];
 // 名人職業覆寫表(之後逐位手填;cards.js 的 cardFigJobs 優先讀此表,查無才由五維推導):{ 名人id: { ja: { 職業id: 階(1~4) }, main: '主職業id' } }。目前為空。
 var CARD_FIG_JOB_OVERRIDE = {};
@@ -391,7 +395,7 @@ var CARD_FIG_WEIGHT = {
   sunjian: 10, lusu: 10, ganning: 10, luxun: 10, lvmeng: 10, zhangzhao: 10,
   zhangbao: 10, zhangliang: 10, zhangniujiao: 10, zhangmancheng: 10, mayuanyi: 10, guanhai: 10, zhanglu: 10, guotai: 10,
   dongzhuo: 10, yuanshao: 10, huangfusong: 10, luzhi: 10, gongsunzan: 10, zhujun: 10, zhengxuan: 10, mateng: 10,
-  xuchu: 10, caoren: 6, xiahouyuan: 10, xuhuang: 10, huangzhong: 10, xushu: 10, taishici: 10, huanggai: 10, huatuo: 3, caiyong: 3,
+  xuchu: 10, caoren: 6, xiahouyuan: 10, xuhuang: 10, huangzhong: 10, xushu: 10, taishici: 10, huanggai: 10, huatuo: 3, caiyong: 6,
   zhongyao: 6, mizhu: 10, maliang: 6, shamoke: 6, zhoutai: 6, chengpu: 6, shixie: 6,
   boca: 10, zhangyan: 10, liupi: 6, yudu: 6, yuji: 10, xurong: 6, youtu: 6, yufuluo: 6,
   // 戰鬥改版新增 30 位(貂蟬、孫尚香、甄姬較有名 = 3)
@@ -400,7 +404,9 @@ var CARD_FIG_WEIGHT = {
   // 2026-11-10 新名人 7 位(卡池權重:金 10 / 紫 6)
   taoqian: 6, wangping: 6, gaoshun: 10, caochun: 6, chendao: 6, quyi: 6, liuzhang: 6,
   // 2026-11-13 第一季新配 21 位(金 10 / 紫 6)
-  caohong: 6, lidian: 6, shihuan: 6, hanhao: 6, weizi: 6, renjun: 6, jianyong: 10, sunqian: 6, mifang: 6, liaohua: 6, zoujing: 6, tianyu: 6, handang: 10, zumao: 6, zhuzhi: 6, wujing: 6, sunben: 6, sunjing: 6, lvfan: 6, lijue: 6, guosi: 6
+  caohong: 6, lidian: 6, shihuan: 6, hanhao: 6, weizi: 6, renjun: 6, jianyong: 10, sunqian: 6, mifang: 6, liaohua: 6, zoujing: 6, tianyu: 6, handang: 10, zumao: 6, zhuzhi: 6, wujing: 6, sunben: 6, sunjing: 6, lvfan: 6, lijue: 6, guosi: 6,
+  // 2026-11-15 第一季換人(張紘 金 10 / 程昱、李儒 紫 6;caiyong 由金改紫,權重 3 → 6 比照紫階)
+  zhanghong: 10, chengyu: 6, liru: 6
 };
 // 在野名人路過(js/npcvisit.js;使用者決議,數值皆 PLACEHOLDER)。名人來源 CARD_FIGS(金 / 紫階),依上面 CARD_FIG_WEIGHT 加權(缺項 金 10 / 紫 6),已在名冊 / 卡包的不來。
 //   countW = 每日 0 / 1 / 2 位的權重;startMin~endMin = 一天中可抵達的時段(分鐘,本機時間,白天);windowMin = 預定抵達後多久內才演(過了不補演);
@@ -434,13 +440,16 @@ var CARD_FIG_BY_ID = {};
 // (2026-11-13 後續:原本 CARD_FIGS 查無的第一季人物 21 位已補入 CARD_FIGS 與下表;既有 11 位的品質(gr)尚未依第一季戰法搭配調整,見 第一季戰法補寫與五隊測試報告_v2.md)
 var CARD_S01_ONLY = true;
 var CARD_S01_FIGS = [
-  'caocao', 'xiahoudun', 'xiahouyuan', 'caoren', 'dianwei', 'xunyu',   // 魏
+  'caocao', 'xiahoudun', 'xiahouyuan', 'caoren', 'dianwei', 'xunyu', 'chengyu',   // 魏
   'liubei', 'guanyu', 'zhangfei', 'zhaoyun', 'mizhu', 'zhoucang',   // 蜀
-  'sunjian', 'sunce', 'chengpu', 'huanggai', 'zhouyu',   // 吳
+  'sunjian', 'sunce', 'chengpu', 'huanggai', 'zhanghong',   // 吳
   'zhangjiao', 'zhangbao', 'zhangyan', 'lvbu', 'dongzhuo', 'huangfusong', 'huaxiong', 'xurong', 'boca', 'zhangmancheng',   // 群
-  'chengyuanzhi', 'dengmao', 'peiyuanshao', 'heyi', 'caoxing', 'zhangkai',   // 藍將
+  'chengyuanzhi', 'dengmao', 'peiyuanshao', 'heyi', 'liru', 'zhangkai',   // 藍將
   // 2026-11-13 新增 21 位(原未列入的第一季人物,現已補 CARD_FIGS)
-  'caohong', 'lidian', 'shihuan', 'hanhao', 'weizi', 'renjun', 'jianyong', 'sunqian', 'mifang', 'liaohua', 'zoujing', 'tianyu', 'handang', 'zumao', 'zhuzhi', 'wujing', 'sunben', 'sunjing', 'lvfan', 'lijue', 'guosi'
+  'caohong', 'shihuan', 'hanhao', 'weizi', 'renjun', 'jianyong', 'sunqian', 'mifang', 'liaohua', 'tianyu', 'handang', 'zumao', 'zhuzhi', 'wujing', 'sunben', 'sunjing', 'lvfan', 'lijue', 'guosi',
+  'caiyong'   // 2026-11-15 換人:蔡邕(中立 紫 輔助)進第一季;張紘 / 程昱 / 李儒 見上,周瑜 / 李典 / 曹性 / 鄒靖 移出
 ];
+// 武將登場季(2026-11-15,設計_六季武將路線圖):被移出第一季卡池的 4 位保留全部資料(已持有存檔卡片照常使用),之後該季重新入池。CARD_S01_FIGS 才是目前抽卡池名單。
+var CARD_FIG_SEASON = { zhouyu: 3, lidian: 3, caoxing: 2, zoujing: 4 };
 CARD_FIGS.forEach(function (f) { CARD_FIG_BY_ID[f.id] = f; });
 if (typeof module !== 'undefined' && module.exports) module.exports = { CARD_GRADE: CARD_GRADE, CARD_JOBS: CARD_JOBS, CARD_TRAITS: CARD_TRAITS, CARD_FIGS: CARD_FIGS, CARD_VENUES: CARD_VENUES };

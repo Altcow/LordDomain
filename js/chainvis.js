@@ -19,7 +19,7 @@ function chainVisToggle(v) { CV.on = v === undefined ? !CV.on : !!v; return CV.o
 function chainVisStats() { return CV.stats; }
 function chainVisNow() { return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now(); }
 
-// 能不能畫(省電 / 拍照 / 錄影乾淨 / 全景 / 縮放太小 / 非經營模式 / 非城主領地都不畫)
+// 能不能畫(省電 / 拍照 / 錄影乾淨 / 全景 / 縮放太小 / 非經營模式 / 非東漢Q卡都不畫)
 var CV_ICONS_DEFAULT = false;   // true = 一般模式也畫瓶頸圖示與流向點(舊行為);預設關閉
 function chainVisAllowed() {
   if (typeof game !== 'undefined' && game && game.mode !== 'estate') return false;

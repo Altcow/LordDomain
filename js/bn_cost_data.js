@@ -10,7 +10,9 @@ var BN_FIG_COST = {
   dengmao: 5, sunben: 5, liaohua: 5, sunjing: 5, zhoucang: 5, dianwei: 5, chengpu: 5, xunyu: 5, zhangjiao: 5, zhangfei: 5, caocao: 5, jianyong: 5,
   peiyuanshao: 4, chengyuanzhi: 4, zhangkai: 4, renjun: 4, boca: 4,
   caoxing: 3, zoujing: 3, caohong: 3, tianyu: 3, shihuan: 3, wujing: 3, mifang: 3, weizi: 3, zhangmancheng: 3, lvfan: 3, lidian: 3, guosi: 3, zhuzhi: 3, lijue: 3, sunqian: 3, zumao: 3,
-  heyi: 2
+  heyi: 2,
+  // 2026-11-15 第一季換人(張紘 金 謀 = 金階預設 6;程昱 紫 = 4;李儒 藍將 3;蔡邕 金改紫 → 4)
+  zhanghong: 6, chengyu: 4, liru: 3, caiyong: 4
 };
 function bnCostCap() { return BN_COST_CFG.cap; }
 // 單張卡的 cost:e = 名冊卡({fig, gr});名人查表,沒表值或路人卡依品階

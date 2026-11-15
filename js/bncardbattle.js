@@ -184,7 +184,7 @@ function bncbShellHtml(plan, title) {
     '<button type="button" data-act="leave" class="bcb-exit" aria-label="離開">離</button></div>' +
     '<div class="bst-spd"><button type="button" data-act="spd1" class="ld-btn on" aria-label="1倍速">1×</button><button type="button" data-act="spd2" class="ld-btn sub" aria-label="2倍速">2×</button><button type="button" data-act="spd3" class="ld-btn sub" aria-label="3倍速">3×</button></div>' +
     '<div class="bcb-log ld-panel collapsed"><div class="bcb-lh"><button type="button" class="ld-btn sub" data-act="log">戰報 ▲</button><span class="bcb-last"></span></div><div class="bcb-ll"></div></div>' +
-    '<div class="bcb-dim" data-act="noop"></div><div class="bcb-dlg" role="alertdialog" aria-label="離開確認"><b>確定要離開戰鬥嗎?</b><div class="bcb-db"><button type="button" class="ld-btn" data-act="leave-ok">確認</button><button type="button" class="ld-btn sub" data-act="leave-no">取消</button></div></div><div class="bcb-black"></div></div><div class="bst-rot">請將手機轉橫</div>';
+    '<div class="bcb-dim" data-act="noop"></div><div class="bcb-dlg" role="alertdialog" aria-label="離開確認"><b>確定要離開戰鬥嗎?</b><div class="bcb-db"><button type="button" class="ld-btn" data-act="leave-ok">確認</button><button type="button" class="ld-btn sub" data-act="leave-no">取消</button></div></div><div class="bcb-black"></div></div><div class="bst-rot"><span>請將手機轉橫</span><button type="button" data-act="leave-rot" class="ld-btn sub" aria-label="離開">離開</button></div>';
 }
 function bncbSpeedLoad() {
   try { var v = localStorage.getItem(BNCB_SPD_KEY); return v === null || v === '' ? BNCB_SPD_DEF : bncbSpeedNorm(v); } catch (e) { return BNCB_SPD_DEF; }
@@ -287,6 +287,7 @@ function bncbOnClick(e) {
   else if (a === 'report') bncbToReport();
   else if (a === 'close') { if (BNCB.autoReport) bncbToReport(); else bncbClose(); }
   else if (a === 'leave') bncbAsk();   // 離開鈕:先確認;確認後才走 bnBattleClose(結果早已結算,只關掉畫面,不撤退、不改結果)
+  else if (a === 'leave-rot') { if (!BNCB.conf) bncbAsk(); bncbAskOk(); }   // 直版「請轉橫」畫面的離開:等同離開鈕 + 確認(結果早已結算,只關畫面)
   else if (a === 'leave-ok') bncbAskOk();
   else if (a === 'leave-no') bncbAskNo();
   else if (a === 'from') { if (!BNCB.conf) bncbFrom(+b.getAttribute('data-r')); }

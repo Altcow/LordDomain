@@ -3,7 +3,7 @@
 // 入口:shell.js 的 case 'wm'(world 旗標開時)→ wdOpen();外框沿用外勤做法(bnu.layer + pfOpen,標題「城門・地圖」)。返回鍵:bnUiBack → wdBack()。
 // 存檔:localStorage 'lorddomain.world.v2' = wdSave(W);另呼叫 saveWorld()(卡片 use 欄位隨世界存)。
 // 推進:開啟時 wdAdvance 一次,開啟期間每秒 wdUiTick:有事件才整頁重畫(保留捲動位置、按住時不重畫),否則只更新倒數文字 / 進度條。
-// 入帳:一鍵收成 → res4Add(木鐵石糧都放 world.res:wood iron stone grain,res4.js);戰利 coin → world.res.coin;材料 → matGrant(鍛造材料,存在才用)或 cityGoodsAdd 占位貨物。
+// 入帳:一鍵收成 → 糧 res4Add(world.res.grain,res4.js)、生鐵 / 獸皮 / 木炭 / 礪石 matGrant(mat.js);戰利 coin → world.res.coin;材料 → matGrant(鍛造材料,存在才用)或 cityGoodsAdd 占位貨物。
 // 校場 / 名聲:地圖頁收成列的按鈕開子頁(內容由 rsvui.js 產生);開啟與每秒推進時先 rsvSettle(now) 再 wdAdvance(0.2 結算順序)。
 // 對外:wdTerritory() → {res,county,jun,pass,total};wdBadge() → 可收成 / 有未看的回城;wdOpen()。ES2017;不用 ?. ??。不發聲。
 // 全域:WDUI wdOpen wdClose wdIsOpen wdBack wdTerritory wdBadge wdUiTick wdUiBoot wdUiSave wdUiConsume wdUiGrant wdUiCollect wdUiMapHtml wdUiPtHtml wdUiPickHtml wdUiAutoHtml wdUiRlistHtml wdUiRptHtml wdUiGuardHtml wdUiCss
@@ -22,9 +22,11 @@ var WDUI_SUBS = [['全部', ''], ['野怪', 'beast'], ['山寨', 'camp'], ['縣�
 function wdUiEsc(s) { return (typeof bnUiEsc === 'function') ? bnUiEsc(s) : String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function wdUiFmt(n) { return Math.floor(+n || 0).toLocaleString(); }
 function wdUiResTxt() {
-  var a = [['🪵', 'wood'], ['⛏️', 'iron'], ['🧱', 'stone'], ['🌾', 'grain']];
+  var a = [['🔩', 'm_iron1'], ['🟫', 'm_hide1'], ['⚫', 'm_coal'], ['🪨', 'm_whet']], s = [];
   if (typeof res4Get !== 'function') return '';
-  return a.map(function (x) { return x[0] + ' ' + wdUiFmt(res4Get(x[1])); }).join('  ');
+  s.push('🌾 ' + wdUiFmt(res4Get('grain')));
+  if (typeof matCount === 'function') a.forEach(function (x) { s.push(x[0] + ' ' + wdUiFmt(matCount(x[1]))); });
+  return s.join('  ');
 }
 function wdUiToast(m) { if (typeof bnUiToast === 'function') bnUiToast(m); }
 function wdUiLsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -118,7 +120,9 @@ function wdUiCollect() {
   got = wdCollect(WDUI.W, now);
   WD_HARV_KEYS.forEach(function (k) {
     var g = {};
-    if (got[k] > 0) { g[WD_HARV_RES4[k]] = got[k]; if (typeof res4Add === 'function') res4Add(g); txt.push(k + ' +' + got[k]); }
+    if (!(got[k] > 0)) return;
+    if (WD_HARV_RES4[k]) { g[WD_HARV_RES4[k]] = got[k]; if (typeof res4Add === 'function') res4Add(g); txt.push(k + ' +' + got[k]); }
+    else if (WD_HARV_MAT[k]) { g[WD_HARV_MAT[k]] = got[k]; if (typeof matGrant === 'function') matGrant(g); txt.push(k + ' +' + got[k]); }
   });
   if (got.shards > 0 && typeof cardsShardGain === 'function' && wdUiCs()) { cardsShardGain(wdUiCs(), got.shards); txt.push('碎片 +' + got.shards); }   // 寶地碎片
   wdUiSave();
@@ -233,7 +237,8 @@ function wdUiMapHtml(W, cs, now) {
 // ───────── 點詳情 ─────────
 function wdUiYieldTxt(pt) {
   var key = WD_RES_KEY[pt.ty], base = (WD_CFG.yield[pt.ty] || 0) * pt.lv;
-  return key ? key + ' 每小時約 ' + base + '(駐守卡星階越高、兵種越契合越多)' : '';
+  if (!key) return '';
+  return key + (base >= 10 ? ' 每小時約 ' + base : ' 每天約 ' + Math.round(base * 24 * 10) / 10) + '(駐守卡星階越高、兵種越契合越多)';
 }
 function wdUiPtHtml(W, cs, id, now) {
   var pt = wdPt(W, id), s, h = '', cat, foeTxt, ratio;

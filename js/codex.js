@@ -7,7 +7,7 @@
 // 布陣套用只寫 bnui.js 既有的當前陣容(bnu.data.cur → bnUiSave),不改戰鬥版面。不發聲。外部全域一律 typeof 守衛。ES2017;不用 ?. ??。
 // 2026-11-15 R6:配隊建議只列「全員第一季武將」的隊伍(cxTeams;替代人選也只留第一季)、每格標出戰法(skc,已解鎖亮 / 未解鎖灰並標「拆〇〇」)、套用到布陣後問「也套用戰法?」(skrTeamPlan + skrApply);cxRecommend 的 withSkills 見該函式。
 // 全域名稱:CX cx codexOpen codexClose codexToggle codexIsOpen codexBtnHtml codexOpenKey codexSearch codexSrHtml codexGoRoster codexRevealHook codexRevealHtml
-//   cxIndex cxCard cxSkillRows cxFullPoolRows cxOwnMap cxTraitList cxBondsOf cxFigLink cxTeams cxTeamOwn cxTeamPlan cxApplySlots cxRecommend cxRulesHtml
+//   cxEmbedHtml cxEmbedEl cxIndex cxCard cxSkillRows cxFullPoolRows cxOwnMap cxTraitList cxBondsOf cxFigLink cxTeams cxTeamOwn cxTeamPlan cxApplySlots cxRecommend cxRulesHtml
 
 var CX = { pageFig: 20, pageSk: 30, srMax: 10, debounce: 150, catOrder: ['command', 'active', 'pursuit', 'passive', 'ult'] };
 var CX_TABS = [['team', '配隊']];
@@ -392,13 +392,13 @@ function cxRulesHtml() {
 // ───────── 戰法(R6):每格的戰法名 + 取得狀態;套用戰法 ─────────
 function cxSkName(id) { return (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[id]) ? BN_SKILLS[id].name : String(id); }
 function cxSkOwned(id) { try { return typeof bnSkcOwned === 'function' && bnSkcOwned(id); } catch (e) { return false; } }
-// 未解鎖戰法的取得提示:「拆〇〇」/「兵書」
+// 未解鎖戰法的取得提示:「拆〇〇」/「通用戰法」
 function cxSkSrcTag(id) {
   var src, cs = (typeof cardsGet === 'function') ? cardsGet() : null;
   if (typeof skrSource !== 'function') return '未解鎖';
   src = skrSource(cs, id);
   if (src.fig) return '拆' + (typeof skrFigName === 'function' ? skrFigName(src.fig) : src.fig);
-  return src.k === 'book' ? '兵書' : src.k === 'inhRoster' ? '拆紫路人' : '暫時無法取得';
+  return src.k === 'book' ? '通用戰法' : src.k === 'inhRoster' ? '拆紫路人' : '暫時無法取得';
 }
 function cxSkLine(ids) {   // 一格的戰法列:已解鎖亮、未解鎖灰並標「拆〇〇」;點戰法名開戰法詳情
   var ok;
@@ -546,6 +546,7 @@ function cxListHtml() {
   return h;
 }
 function cxRender(tool) {
+  if (cxEmbedEl()) cxPaint();
   if (!cx.el) return;
   if (cx.title) cx.title.textContent = cxWorldTxt();
   if (cx.tabsEl) cx.tabsEl.innerHTML = CX_TABS.map(function (t) { return '<button type="button" class="cx-tab' + (cx.tab === t[0] ? ' on' : '') + '" data-cx="tab" data-k="' + t[0] + '">' + t[1] + '</button>'; }).join('');
@@ -555,7 +556,29 @@ function cxRender(tool) {
 }
 // 魔幻世界用語替換(fx_text.js fxText;歷史世界原樣)
 function cxT(s) { return (typeof fxText === 'function') ? fxText(s) : s; }
-function cxPaint() { if (cx.list) cx.list.innerHTML = cxT(cxListHtml()); }
+function cxPaint() {
+  var em = cxEmbedEl();
+  if (em) { if (typeof cuKeepScroll === 'function') cuKeepScroll(function () { em.innerHTML = cxT(cxToolHtml() + cxListHtml()); }); else em.innerHTML = cxT(cxToolHtml() + cxListHtml()); }
+  if (cx.list) cx.list.innerHTML = cxT(cxListHtml());
+}
+// 內嵌在卡包「大全 → 配隊建議」分頁(cardsui_codex.js 的 rec 子分頁):容器 #cuxrec,內容 = 工具列 + 配隊清單;點擊 / 下拉由 document 捕獲監聽轉給 cxOnClick / cxOnChange
+function cxEmbedEl() { return (typeof cu !== 'undefined' && cu && cu.open && cu.el && cu.el.querySelector) ? cu.el.querySelector('#cuxrec') : null; }
+function cxEmbedHtml() { return '<div id="cuxrec" class="cx-emb">' + cxT(cxToolHtml() + cxListHtml()) + '</div>'; }
+function cxEmbClick(e) {
+  var t = e && e.target && e.target.closest ? e.target.closest('#cuxrec [data-cx]') : null;
+  if (!t) return;
+  if (e.stopPropagation) e.stopPropagation();
+  cxOnClick({ target: t });
+}
+function cxEmbChange(e) {
+  var t = e && e.target;
+  if (!t || !t.closest || !t.closest('#cuxrec')) return;
+  cxOnChange(e);
+}
+if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
+  document.addEventListener('click', cxEmbClick, true);
+  document.addEventListener('change', cxEmbChange, false);
+}
 function cxOnClick(e) {
   var t = e.target && e.target.closest ? e.target.closest('[data-cx]') : null, a, k, team, r;
   if (!t || t.disabled) return;

@@ -8,13 +8,18 @@
 // 滑鼠 / 觸控站位直接拖;觸控卡片列長按 150ms 起拖(避免與捲動衝突);拖到隊伍名稱停 450ms 會自動切過去。備案:點站位選中 →「移動」→ 點目標格(可先切隊)。存檔仍是 bnTeamPresetSet(格式不變)。
 // 2026-11-15:布陣建議行 / 每格「打得到」小字 / 「布陣要訣」頁(js/ld_team_tips.js);統御 cost 一隊上限(js/bn_cost_data.js);同一武將(名人同名、不論幾張卡)全部隊伍只能出現在一隊,路人卡以卡 id 為準。
 // 2026-11-15 R6:「推薦戰隊」後出現「推薦戰法」橫列(cxRecommend({withSkills:true}) 的 r.skills;skill_rec.js),按「套用戰法」才裝(skrApply 整隊);缺的戰法標「拆〇〇卡可得」,戰法名可點開戰法詳情(ld_skilldex.js)。
+// 2026-11-15 代表隊伍:ctx.n = 0 = 代表隊伍(bnteam.js bnRepGet / bnRepSet,獨立存檔鍵,與 5 隊分開;可與其他隊重複用同一武將、不參與跨隊去重);隊伍名稱列最右邊「代表」小分頁,頁內一行小字「擂台與活動用」;不能與其他隊互換 / 拖曳。
+// 2026-11-15 提示:放人 / 換位被擋(統御超限、同武將重複上場、同名、占用)一律經 ldTeamToast → showToast(msg, LDTEAM.toastMs) 自動消失(不用按鈕)。
 // 全域:LDTEAM ldTeamPlan ldTeamSortList ldTeamRender ldTeamGo ldTeamWatchTick ldTeamRecommend ldTeamSwapPlan ldTeamCrossPlan ldTeamDropPlan ldTeamDoDrop ldTeamSwitch
-var LDTEAM = { rowTxt: ['前鋒', '中衛', '主將'], posKey: ['pos_van', 'pos_mid', 'pos_camp'], posPh: ['矛', '盾', '旗'], grTxt: ['白', '青', '藍', '紫', '金'], pollMs: 120, timer: 0, st: null, sorts: ['pw', 'gr'], sortTxt: { pw: '戰力', gr: '品階' }, holdMs: 150, eps: 6, springMs: 450, clickGuardMs: 350, hitFn: null, drag: null, noClickUntil: 0 };
+var LDTEAM = { rowTxt: ['前鋒', '中衛', '主將'], posKey: ['pos_van', 'pos_mid', 'pos_camp'], posPh: ['矛', '盾', '旗'], grTxt: ['白', '青', '藍', '紫', '金'], pollMs: 120, toastMs: 2600, timer: 0, st: null, sorts: ['pw', 'gr'], sortTxt: { pw: '戰力', gr: '品階' }, holdMs: 150, eps: 6, springMs: 450, clickGuardMs: 350, hitFn: null, drag: null, noClickUntil: 0 };
 
 function ldTeamEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+// 自動消失的提示(showToast 的第二參數 = 顯示毫秒;沒給時預設 2 秒)。魔幻世界用語替換同 bnUiToast
 function ldTeamToast(m) {
-  if (typeof bnUiToast === 'function') bnUiToast(m);
-  else if (typeof showToast === 'function') { try { showToast(m); } catch (e) { /* 略過 */ } }
+  var t = m;
+  if (typeof fxText === 'function') { try { t = fxText(m); } catch (e0) { t = m; } }
+  if (typeof showToast === 'function') { try { showToast(t, LDTEAM.toastMs); } catch (e) { /* 略過 */ } }
+  else if (typeof bnUiToast === 'function') bnUiToast(m);
 }
 function ldTeamEntry(id) { return (typeof bnUiEntry === 'function') ? bnUiEntry(id) : null; }
 function ldTeamTroopOf(e, slot) { return (slot && slot.troop) || ((typeof bnDefaultTroop === 'function') ? bnDefaultTroop(e) : '槍'); }
@@ -58,7 +63,7 @@ function ldTeamPlan(slots, id, selRow, o) {
   if (typeof o.cost === 'function' && o.cap > 0) {   // 統御上限:超過且比原本更高才擋(舊存檔超限隊伍仍可調整成更低)
     oldT = 0; cur.forEach(function (s) { oldT += o.cost(s.id); });
     newT = oldT - (occ ? o.cost(occ.id) : 0) + o.cost(id);
-    if (newT > o.cap && newT > oldT) return { ok: false, slots: cur, row: row, msg: '統御超過上限 ' + o.cap + '(放入後會是 ' + newT + '),請換統御較低的人' };
+    if (newT > o.cap && newT > oldT) return { ok: false, slots: cur, row: row, msg: '統御不足,無法' + (occ ? '替換' : '上陣') + ':統御超過上限 ' + o.cap + '(放入後會是 ' + newT + '),請換統御較低的人' };
   }
   if (occ) cur.splice(cur.indexOf(occ), 1);
   cur.push({ id: id, row: row, col: 0, troop: '' });
@@ -74,13 +79,13 @@ function ldTeamSortList(list, sort) {
 
 // ───────── 狀態 ─────────
 function ldTeamSlotsFromPreset(n) {
-  var p = (typeof bnTeamPresetGet === 'function') ? bnTeamPresetGet(n) : null, out = [];
+  var p = n === 0 ? ((typeof bnRepGet === 'function') ? bnRepGet() : null) : ((typeof bnTeamPresetGet === 'function') ? bnTeamPresetGet(n) : null), out = [];
   if (!p || p.empty) return out;
   p.slots.forEach(function (s) { if (ldTeamEntry(s.id) && (s.row === 0 || s.row === 1 || s.row === 2)) out.push({ id: s.id, row: s.row, col: 0, troop: s.troop || '' }); });
   return out;
 }
 function ldTeamState(ctx) {
-  var st = ctx.__t, n = ctx.n | 0 || 1, mode = ctx.mode === 'battle' ? 'battle' : 'edit';
+  var st = ctx.__t, n = ctx.n === 0 ? 0 : (ctx.n | 0 || 1), mode = ctx.mode === 'battle' ? 'battle' : 'edit';
   if (!st || st.n !== n || st.mode !== mode || st.stg !== ctx.stg) {
     st = { n: n, mode: mode, stg: ctx.stg, slots: ldTeamSlotsFromPreset(n), sel: -1, sort: 'pw', troop: '', fac: '', total: 0, pw: {}, el: null, ctx: ctx, started: false };
     ctx.__t = st;
@@ -89,7 +94,10 @@ function ldTeamState(ctx) {
   LDTEAM.st = st;
   return st;
 }
-function ldTeamSave(st) { if (typeof bnTeamPresetSet === 'function') bnTeamPresetSet(st.n, st.slots); }
+function ldTeamSave(st) {
+  if (st.n === 0) { if (typeof bnRepSet === 'function') bnRepSet(st.slots); }
+  else if (typeof bnTeamPresetSet === 'function') bnTeamPresetSet(st.n, st.slots);
+}
 function ldTeamPower(st, e, tr, row) {
   var k = e.id + '|' + tr + '|' + (row === undefined ? '' : row), sp;
   if (st.pw[k] === undefined) {
@@ -168,17 +176,23 @@ function ldTeamCardHtml(st, x, um) {
     (on ? '<span class="ldt-tag">上陣</span>' : (blk ? '<span class="ldt-tag lk">' + ldTeamEsc(blk) + '</span>' : '')) + '</button>';
 }
 function ldTeamName(n) {
-  var p = (typeof bnTeamPresetGet === 'function') ? bnTeamPresetGet(n) : null;
+  var p;
+  if (n === 0) return '代表隊伍';
+  p = (typeof bnTeamPresetGet === 'function') ? bnTeamPresetGet(n) : null;
   return (p && p.name) || ('隊伍 ' + n);
 }
 // 隊伍名稱列:所有已開放的隊(<2 隊不畫)。每個鈕同時是拖曳的放置目標(data-drop="tab")
 function ldTeamTabsHtml(st) {
   var cap = (typeof bnTeamN === 'function') ? bnTeamN() : 1, n, h = '', c;
-  if (cap < 2) return '';
-  for (n = 1; n <= cap; n++) {
+  if (cap >= 2) for (n = 1; n <= cap; n++) {
     c = n === st.n ? st.slots.length : ldTeamSlotsFromPreset(n).length;
     h += '<button class="ldt-tab' + (n === st.n ? ' on' : '') + '" data-ldt="team" data-n="' + n + '" data-drop="tab" aria-label="' + ldTeamEsc(ldTeamName(n)) + ',' + c + ' 人"><span class="ldt-tn">' + ldTeamEsc(ldTeamName(n)) + '</span><span class="ldt-tc">' + c + '</span></button>';
   }
+  if (typeof bnRepGet === 'function') {   // 最右邊:代表隊伍小分頁(不是拖曳放置目標,不與其他隊互換)
+    c = st.n === 0 ? st.slots.length : ldTeamSlotsFromPreset(0).length;
+    h += '<button class="ldt-tab rep' + (st.n === 0 ? ' on' : '') + '" data-ldt="team" data-n="0" aria-label="代表隊伍(擂台與活動用),' + c + ' 人"><span class="ldt-tn">代表</span><span class="ldt-tc">' + c + '</span></button>';
+  }
+  if (!h) return '';
   return '<div class="ldt-teams">' + h + '</div>';
 }
 // 即時建議:只算三格的兵種(用目前選的兵種)。回 {lv,color,code,text} 或 null(沒載入)
@@ -201,7 +215,7 @@ function ldTeamHtml(st) {
     '<div class="ldt-tools"><button data-ldt="sort">' + LDTEAM.sortTxt[st.sort] + ' ▾</button><button data-ldt="troop">兵種 ' + (st.troop || '全') + '</button><button data-ldt="fac">陣營 ' + (st.fac === '' ? '全' : ldTeamEsc(ldTeamFacName(+st.fac))) + '</button>' + (typeof LDTIPS_PAGE !== 'undefined' ? '<button data-ldt="tips">布陣要訣</button>' : '') + '</div>' +
     '<div class="ldt-cards" data-drop="cards">' + (list.length ? list.map(function (x) { return ldTeamCardHtml(st, x, um); }).join('') : '<p class="ldt-none">沒有符合的武將</p>') + '</div>' +
     '<div class="ldt-acts"><button class="ldt-rec" data-ldt="rec">推薦戰隊</button><button class="ldt-go" data-ldt="go">' + goTxt + '</button></div>' +
-    '<div class="ldt-ib">' + (adv ? '<div class="ldt-tip ' + adv.color + '" data-code="' + adv.code + '">' + ldTeamEsc(adv.text) + '</div>' : '') + '<div class="ldt-info">' + (carryE ? '移動「' + ldTeamEsc(carryE.name) + '」:點目標位置(可先切到別隊)' : '戰力 <b>' + sx.total + '</b><i>·</i>羈絆 <b>' + sx.bonds + '</b><i>·</i>相剋 ' + (sx.prey ? '<em class="u">▲' + sx.up + '</em> <em class="d">▼' + sx.down + '</em>' : '<em>—</em>') + (cap ? '<i>·</i>統御 <b class="' + (cost > cap ? 'over' : '') + '">' + cost + '</b>/' + cap : '')) + '</div></div>' + (st.skr ? ldTeamSkrHtml(st) : '') + (st.tipsOpen ? ldTeamTipsHtml() : '') + '</div>';
+    '<div class="ldt-ib">' + (st.n === 0 ? '<div class="ldt-rn">代表隊伍:擂台與活動用(可與其他隊重複用同一武將)</div>' : '') + (adv ? '<div class="ldt-tip ' + adv.color + '" data-code="' + adv.code + '">' + ldTeamEsc(adv.text) + '</div>' : '') + '<div class="ldt-info">' + (carryE ? '移動「' + ldTeamEsc(carryE.name) + '」:點目標位置(可先切到別隊)' : '戰力 <b>' + sx.total + '</b><i>·</i>羈絆 <b>' + sx.bonds + '</b><i>·</i>相剋 ' + (sx.prey ? '<em class="u">▲' + sx.up + '</em> <em class="d">▼' + sx.down + '</em>' : '<em>—</em>') + (cap ? '<i>·</i>統御 <b class="' + (cost > cap ? 'over' : '') + '">' + cost + '</b>/' + cap : '')) + '</div></div>' + (st.skr ? ldTeamSkrHtml(st) : '') + (st.tipsOpen ? ldTeamTipsHtml() : '') + '</div>';
   st.flash = null;
   return h;
 }
@@ -389,8 +403,8 @@ function ldTeamCrossPlan(sa, ra, sb, rb, o) {
   if (typeof o.cost === 'function' && o.cap > 0) {   // 統御上限(兩邊都檢查;超過且變高才擋)
     sum = function (L) { var t = 0; L.forEach(function (s) { t += o.cost(s.id); }); return t; };
     oa = sum(A); ob = sum(B); na = oa - o.cost(x.id) + (y ? o.cost(y.id) : 0); nb = ob - (y ? o.cost(y.id) : 0) + o.cost(x.id);
-    if (nb > o.cap && nb > ob) return bad('那一隊統御超過上限 ' + o.cap + '(會變 ' + nb + ')');
-    if (na > o.cap && na > oa) return bad('這一隊統御超過上限 ' + o.cap + '(會變 ' + na + ')');
+    if (nb > o.cap && nb > ob) return bad('統御不足,無法替換:那一隊統御超過上限 ' + o.cap + '(會變 ' + nb + ')');
+    if (na > o.cap && na > oa) return bad('統御不足,無法替換:這一隊統御超過上限 ' + o.cap + '(會變 ' + na + ')');
   }
   A.splice(A.indexOf(x), 1); if (y) B.splice(B.indexOf(y), 1);
   B.push({ id: x.id, row: rb, col: 0, troop: x.troop || '' });
@@ -406,6 +420,7 @@ function ldTeamPickRow(slots, row) {
 // 其他隊(不含第 n 隊)已用的武將:{鍵: 隊號}
 function ldTeamUsedMap(st, n) {
   var cap = (typeof bnTeamN === 'function') ? bnTeamN() : 1, m, map = {};
+  if (n === 0) return map;   // 代表隊伍:不受「同一武將只能在一隊」限制
   for (m = 1; m <= cap; m++) if (m !== n) ldTeamSlotsOf(st, m).forEach(function (s) { var k = ldTeamKeyOf(s.id); if (!map[k]) map[k] = m; });
   return map;
 }
@@ -424,6 +439,7 @@ function ldTeamDropPlan(st, src, dst) {
     if (!r.ok) return no(dst.k === 'team' && /已滿/.test(r.msg) ? '那一隊已滿,請直接拖到要換下的位置' : r.msg);
     return { ok: true, msg: '', writes: [{ n: dst.n, slots: r.slots }], land: { n: dst.n, row: r.row }, note: dst.n === st.n ? '' : '「' + ldTeamNameOfId(src.id) + '」已加入「' + ldTeamName(dst.n) + '」', kind: 'add' };
   }
+  if ((src.n === 0 || dst.n === 0) && src.n !== dst.n && dst.k !== 'cards') return no('代表隊伍是獨立的一隊,不能與其他隊互換');
   sa = ldTeamSlotsOf(st, src.n); a = ldTeamAt(sa, src.row);
   if (!a) return no('');
   if (dst.k === 'cards') return { ok: true, msg: '', writes: [{ n: src.n, slots: sa.filter(function (s) { return s.row !== src.row; }) }], land: null, note: '', kind: 'drop' };
@@ -443,6 +459,13 @@ function ldTeamDropPlan(st, src, dst) {
 // 寫入計畫(每隊一次 bnTeamPresetSet;任一隊寫失敗 → 全部還原)。回 true/false
 function ldTeamApplyPlan(st, plan) {
   var olds = [], i, w, ok = true, prev;
+  if (plan.writes.length && plan.writes.every(function (x) { return x.n === 0; })) {   // 代表隊伍:獨立存檔
+    prev = ldTeamCloneSlots(st.slots);
+    st.slots = ldTeamCloneSlots(plan.writes[0].slots);
+    ok = (typeof bnRepSet !== 'function') || bnRepSet(st.slots) !== false;
+    if (!ok) st.slots = prev;
+    return ok;
+  }
   if (typeof bnTeamPresetSetMany === 'function') {   // 一次驗證「寫完後同一武將沒有出現在兩隊」再寫入(跨隊互換不會中途衝突)
     prev = ldTeamCloneSlots(st.slots);
     plan.writes.forEach(function (x) { if (x.n === st.n) st.slots = ldTeamCloneSlots(x.slots); });
@@ -477,11 +500,11 @@ function ldTeamSwitch(n) {
   var st = LDTEAM.st, ctx, el, nst, cap;
   if (!st) return null;
   n = n | 0; cap = (typeof bnTeamN === 'function') ? bnTeamN() : 1;
-  if (n === st.n || n < 1 || n > cap) return st;
+  if (n === st.n || n < 0 || n > cap) return st;
   ctx = st.ctx; el = st.el; ctx.n = n; ctx.__t = null;
   nst = ldTeamState(ctx);
   nst.el = el; nst.sort = st.sort; nst.troop = st.troop; nst.fac = st.fac; nst.carry = st.carry; nst.started = st.started;
-  if (ctx.titleEl && !ctx.title) ctx.titleEl.textContent = '隊伍 ' + n;
+  if (ctx.titleEl && !ctx.title) ctx.titleEl.textContent = n === 0 ? '代表隊伍' : '隊伍 ' + n;
   ldTeamRender(el, nst);
   return nst;
 }
@@ -695,9 +718,9 @@ ldNavRegister({
   id: 'team', title: '隊伍',
   bg: function () { return (typeof window !== 'undefined' && window.innerWidth > window.innerHeight) ? 'bg_team_land' : 'bg_team_port'; },
   build: function (el, ctx) {
-    var st, n = ctx.n | 0 || 1, cap = (typeof bnTeamN === 'function') ? bnTeamN() : 3, lock, c;
-    if (ctx.titleEl) ctx.titleEl.textContent = ctx.title || ('隊伍 ' + n);
-    if (n > cap || n < 1) {
+    var st, n = ctx.n === 0 ? 0 : (ctx.n | 0 || 1), cap = (typeof bnTeamN === 'function') ? bnTeamN() : 3, lock, c;
+    if (ctx.titleEl) ctx.titleEl.textContent = ctx.title || (n === 0 ? '代表隊伍' : '隊伍 ' + n);
+    if (n > cap || n < 0) {
       lock = (typeof fameTeamLockText === 'function') ? fameTeamLockText(n) : '';
       el.innerHTML = '<p class="ldp-empty">這一隊尚未開放' + (lock ? '(' + ldTeamEsc(lock) + ')' : '') + '</p>';
       LDTEAM.st = null;

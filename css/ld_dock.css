@@ -1,0 +1,37 @@
+/* css/ld_dock.css — 首頁底列「Q 版方格按鈕」(旗標 ldui;js/shell.js 底列 dock 的 .sh-dk)。載入順序在 ld_home.css 之後,覆蓋其底列圓圖示樣式。
+   純 CSS:深木外框 + 橘木框 + 米紙底 + 四角金鉚釘 + 上緣高光 + 下緣厚度;按下下沉;紅點在方格右上角外緣。圖示仍是 ldArt 的圓形 .ldh-dic。 */
+#shellRoot.sh-ld .sh-dock { align-items: flex-start; padding-top: 1px; justify-content: space-evenly; padding-left: calc(4px + env(safe-area-inset-left, 0px)); padding-right: calc(4px + env(safe-area-inset-right, 0px)); }
+#shellRoot.sh-ld .sh-dock .sh-dk {
+  --dk-s: 52px;
+  flex: 0 0 var(--dk-s); width: var(--dk-s); height: var(--dk-s); min-width: 44px; min-height: 44px; margin: 0; padding: 3px 0 2px; gap: 1px; box-sizing: border-box; position: relative; cursor: pointer;
+  border: 3px solid #2a170a; border-radius: 14px; color: #3b2410; justify-content: center;
+  background: linear-gradient(#fff6dc, #f1d89f);
+  box-shadow: inset 0 2px 0 #fff3cf, inset 0 0 0 3px #d98a33, inset 0 -4px 0 3px #00000018, 0 4px 0 #2a170a, 0 5px 5px #0006;
+  transition: transform .06s, box-shadow .06s;
+}
+/* 四角金鉚釘 */
+#shellRoot.sh-ld .sh-dock .sh-dk::before {
+  content: ""; position: absolute; left: 0; top: 0; right: 0; bottom: 0; pointer-events: none; border-radius: 11px;
+  background:
+    radial-gradient(circle at 5px 5px, #ffe38a 0 1.5px, #c98c1e 2.2px, transparent 2.8px),
+    radial-gradient(circle at calc(100% - 5px) 5px, #ffe38a 0 1.5px, #c98c1e 2.2px, transparent 2.8px),
+    radial-gradient(circle at 5px calc(100% - 5px), #ffe38a 0 1.5px, #c98c1e 2.2px, transparent 2.8px),
+    radial-gradient(circle at calc(100% - 5px) calc(100% - 5px), #ffe38a 0 1.5px, #c98c1e 2.2px, transparent 2.8px);
+}
+#shellRoot.sh-ld .sh-dock .sh-dk:active { transform: translateY(3px); box-shadow: inset 0 2px 0 #fff3cf, inset 0 0 0 3px #d98a33, inset 0 -4px 0 3px #00000018, 0 1px 0 #2a170a; }
+#shellRoot.sh-ld .sh-dock .sh-dk:active .ldh-dic { transform: none; }
+#shellRoot.sh-ld .sh-dock .sh-dk .ldh-dic { width: 26px; height: 26px; flex: 0 0 26px; border: 2px solid #2a170a; box-shadow: 0 1px 0 #0004; background-color: #f6e2b0; }
+#shellRoot.sh-ld .sh-dock .sh-dl { font: 900 11px/12px var(--ld-font); color: #3b2410; letter-spacing: 0; }
+/* 開著子浮層 / 目前頁:金色外光 */
+#shellRoot.sh-ld .sh-dock .sh-dk[aria-expanded="true"], #shellRoot.sh-ld .sh-dock .sh-dk.on { box-shadow: inset 0 2px 0 #fff3cf, inset 0 0 0 3px #ffd86b, inset 0 -4px 0 3px #00000018, 0 4px 0 #2a170a, 0 0 8px 3px #ffd86bcc; }
+#shellRoot.sh-ld .sh-dock .sh-dk[aria-expanded="true"] .ldh-dic, #shellRoot.sh-ld .sh-dock .sh-dk.on .ldh-dic { transform: none; box-shadow: 0 1px 0 #0004; }
+#shellRoot.sh-ld .sh-dock .sh-dk[aria-expanded="true"] .sh-dl, #shellRoot.sh-ld .sh-dock .sh-dk.on .sh-dl { color: #8a4a0c; }
+/* 紅點:方格右上角外緣 */
+#shellRoot.sh-ld .sh-dock .sh-dkdot { right: -6px; top: -6px; width: 14px; height: 14px; border: 2px solid #2a170a; background: #e0463c; box-shadow: 0 1px 0 #0005; z-index: 2; }
+/* 橫式:底列變透明浮動,方格直接站在場景上 */
+#shellRoot.sh-ld.sh-l .sh-dock { background: none; border: 0; border-radius: 0; box-shadow: none; padding-bottom: env(safe-area-inset-bottom, 0px); align-items: flex-start; padding-top: 0; }
+#shellRoot.sh-ld.sh-l .sh-dock .sh-dk { --dk-s: 52px; }   /* 橫版底列 60(原 52),方格 46 → 52,與直版同尺寸 */
+/* 直式也改成透明浮動(2026-11-15 統一):去掉木條底與上邊框,方格鈕自帶深色外框 + 落影;底列仍佔 60 高(場景幾何不變),貼在隊伍欄 / 圓鈕列下方 */
+#shellRoot.sh-ld.sh-p .sh-dock { background: none; border: 0; box-shadow: none; padding-top: 4px; align-items: flex-start; }
+#shellRoot.sh-ld.sh-p .ldh-band { background: none; border: 0; }
+/* 預留:ui_dock_btn / ui_dock_btn_down 圖到後改 border-image 九宮格 [28,28,36,28](ld_art.js has:true 後再開),沒圖維持上面的 CSS 方格鈕 */

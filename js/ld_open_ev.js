@@ -369,21 +369,22 @@ function ldOpenPoll(name) {
   var i, t;
   try {
     if (name === 'team1') { t = typeof wdTeams === 'function' ? wdTeams() : []; for (i = 0; i < t.length; i++) if (t[i].n === 1) return true; return false; }
-    if (name === 'tower5') { t = typeof twRead === 'function' ? twRead() : null; return !!t && (t.top | 0) >= 5; }
   } catch (e) { return false; }
   return false;
 }
 function ldOpenHasFn(name) { try { return /^[A-Za-z_$][\w$]*$/.test(name) && Function('return typeof ' + name + ' === "function"')(); } catch (e) { return false; } }
-function evMainAvail(q) { return !q.need || ldOpenHasFn(q.need); }
+function evMainAvail(q) { if (q.feat && !(typeof featureOn === 'function' && featureOn(q.feat))) return false; return !q.need || ldOpenHasFn(q.need); }   // feat:該功能旗標關閉 = 視為不存在(目前無主線使用)
+// 主線計數:mapWin 為 2026-11-15 新增,舊存檔沒有 → 以山寨 + 野怪集結 + 縣的舊計數墊底
+function evMainHave(q, o) { var h = o.cnt[q.k] | 0; if (q.k === 'mapWin') h = Math.max(h, (o.cnt.campWin | 0) + (o.cnt.beastKill | 0) + (o.cnt.countyWin | 0)); return h; }
 function evMainMet(q, o) {
   if (q.poll) return ldOpenPoll(q.poll);
-  return (o.cnt[q.k] | 0) >= q.n;
+  return evMainHave(q, o) >= q.n;
 }
 // 主線清單:[{id, t, done, cur, skip, give, n, have}]
 function evMainList() {
   var o = evRead(), curId = 0, out = [];
   EV_MAIN.forEach(function (q) { if (!curId && !o.main.done[q.id] && evMainAvail(q)) curId = q.id; });
-  EV_MAIN.forEach(function (q) { out.push({ id: q.id, t: q.t, done: !!o.main.done[q.id], cur: q.id === curId, skip: !evMainAvail(q), give: q.give, n: q.n || 1, have: q.k ? Math.min(q.n, o.cnt[q.k] | 0) : 0, text: evGiveText(q.give) }); });
+  EV_MAIN.forEach(function (q) { out.push({ id: q.id, t: q.t, done: !!o.main.done[q.id], cur: q.id === curId, skip: !evMainAvail(q), give: q.give, n: q.n || 1, have: q.k ? Math.min(q.n, evMainHave(q, o)) : 0, text: evGiveText(q.give) }); });
   return out;
 }
 function evMainCur() { var l = evMainList(), i; for (i = 0; i < l.length; i++) if (l[i].cur) return l[i]; return null; }
@@ -425,9 +426,9 @@ function ldOpenNote(kind, o) {
       opened = opened.concat(unlockMark('firstBattle', t));
       if (o.win) {
         if (o.cat === 'res') { evNote('resWin'); if (!o.auto) { evNote('resWinMan'); if ((evRead().cnt.resWinMan | 0) >= 3) opened = opened.concat(unlockMark('res3', t)); } }
-        else if (o.cat === 'camp') { evNote('campWin'); if (o.tut) { evNote('tut'); if (o.W && o.W.harv && !(evRead().cnt.tutGrain | 0)) { o.W.harv['糧'] = (o.W.harv['糧'] || 0) + EV_CFG.tutGrain; evNote('tutGrain'); } } }
-        else if (o.cat === 'beast' && o.rally) evNote('beastKill');
-        else if (o.cat === 'county') evNote('countyWin');
+        else if (o.cat === 'camp') { evNote('mapWin'); evNote('campWin'); if (o.tut) { evNote('tut'); if (o.W && o.W.harv && !(evRead().cnt.tutGrain | 0)) { o.W.harv['糧'] = (o.W.harv['糧'] || 0) + EV_CFG.tutGrain; evNote('tutGrain'); } } }
+        else if (o.cat === 'beast') { evNote('mapWin'); if (o.rally) evNote('beastKill'); }
+        else if (o.cat === 'county') { evNote('mapWin'); evNote('countyWin'); }
       }
     } else if (kind === 'garrison') evNote('garrison');
     else if (kind === 'collect') { evNote('harv'); opened = opened.concat(unlockMark('harvest', t)); }

@@ -29,7 +29,7 @@ var WD_CFG = {
   lossWin: [0.1, 0.3], lossLose: [0.4, 0.6], trpMin: 0.05, hurtMs: 15 * 60000, regenPerHour: 0.25,   // 補兵占位:在城每小時回 25%(wdTroopRegen;rsv.js 存在時改由校場預備兵補)
   minGoR: 0.2,                                // 隊伍裡有人兵力低於 20% 不能出征 / 集結(請到校場補兵)
   // 產出:每小時 = yield[ty] × lv × (1 + starBonus × 星階) × (契合 ? fitMul : 1)
-  yield: { '林場': 120, '礦坑': 100, '獵場': 90, '農田': 110, '採石場': 100 },
+  yield: { '林場': 1.1, '礦坑': 0.7, '獵場': 0.7, '農田': 110, '採石場': 0.4 },   // 方案 A(資源盤點):農田產糧;其餘產鍛造白材,量 = 糧 × GRID_RES 比例(生鐵 / 獸皮 0.044、木炭 0.066、礪石 0.022 對糧 6.6),占位,之後由大地圖 B 包取代
   starBonus: 0.1, fitMul: 1.2,
   fit: { '盾': '林場', '槍': '礦坑', '弓': '獵場', '騎': '農田', '謀': '採石場' },   // 兵種契合(占位)
   // 自動派遣:我方戰力 ≥ 守軍戰力 × autoMul 才派
@@ -43,11 +43,13 @@ var WD_CFG = {
   // 打贏加名聲:數量查 fameFor(kind, lv)(fame.js FAME_CFG.src,數值只放一處);fame.js 不存在就不加
 };
 
-// 資源點種類 → 收成種類(harv 的 key)與 res4 資源鍵(木鐵石糧都放 world.res,經 res4Add)
+// 資源點種類 → 收成種類(harv 的 key)
 var WD_RES_TYPES = ['林場', '礦坑', '獵場', '農田', '採石場'];
-var WD_RES_KEY = { '林場': '木', '礦坑': '鐵', '獵場': '糧', '農田': '糧', '採石場': '石' };
-var WD_HARV_KEYS = ['木', '鐵', '石', '糧'];
-var WD_HARV_RES4 = { '木': 'wood', '鐵': 'iron', '石': 'stone', '糧': 'grain' };   // 一鍵收成經 res4Add 轉入 world.res(res4.js);鐵、糧不再走庫房 g_tiekuang / g_liang(GOODS.g_liang 有 cap 200 會被裁)
+// 方案 A:木、石、鐵已刪除。農田 → 糧(res4Add,world.res.grain);礦坑 → 生鐵、獵場 → 獸皮、林場 → 木炭、採石場 → 礪石(matGrant,材料 id 見 mat.js)
+var WD_RES_KEY = { '林場': '木炭', '礦坑': '生鐵', '獵場': '獸皮', '農田': '糧', '採石場': '礪石' };
+var WD_HARV_KEYS = ['糧', '生鐵', '獸皮', '木炭', '礪石'];
+var WD_HARV_RES4 = { '糧': 'grain' };   // 只有糧走 res4Add(world.res);GOODS.g_liang 有 cap 200 會被裁,所以不走庫房
+var WD_HARV_MAT = { '生鐵': 'm_iron1', '獸皮': 'm_hide1', '木炭': 'm_coal', '礪石': 'm_whet' };   // 其餘走 matGrant(lorddomain.mat.v1)
 var WD_ICON = { '林場': '🪵', '礦坑': '⛏️', '獵場': '🦌', '農田': '🌾', '採石場': '🧱', beast: '🐗', camp: '🏕️', county: '🏘️', jun: '🏯', pass: '🚪' };
 
 // 名稱池(山寨 / 野怪 / 縣郡關口)

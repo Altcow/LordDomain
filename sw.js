@@ -1,4 +1,4 @@
-const VERSION = 'v63';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v64';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -21,6 +21,7 @@ const PRECACHE = [
   './css/shell.css',
   './css/ld_page.css',
   './css/ld_home.css',
+  './css/ld_dock.css',
   './css/ld_open.css',
   './css/ld_hero.css',
   './css/ld_skilldex.css',
@@ -28,6 +29,7 @@ const PRECACHE = [
   './css/ld_tower.css',
   './css/ld_equip.css',
   './css/title_cover.css',
+  './css/ld_skin.css',
   './js/ui_assets.js',
   './js/features.js',
   './js/data.js',
@@ -210,6 +212,7 @@ const PRECACHE = [
   './js/mat.js',
   './js/rsvui.js',
   './js/wd_data.js',
+  './js/wd_grid_data.js',
   './js/wd_core.js',
   './js/wd_ui.js',
   './js/ld_open_data.js',

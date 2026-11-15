@@ -272,7 +272,7 @@ function cuCodexFiltHtml() {
       cuCxChip('cat', '兵種卡', CUX.cat, '兵種卡', 'legion/legion_cover.webp') + '</div>';
     h += '<div class="cux-cats">' + cuCxChip('tier', '', CUX.tier, '全部階級') + CUX_TIERS.map(function (t) { return cuCxChip('tier', t, CUX.tier, t + '・' + CUX_TIER_NAME[t]); }).join('') + '</div>';
     h += '<div class="cux-fs">' + cuCxSel('sown', CUX.sown, [['', '全部'], ['y', '已得'], ['n', '未得']], '擁有') + '</div>';
-  } else {
+  } else if (CUX.tab === 'team') {
     if (typeof cxTeamFacs === 'function') {
       h = '<div class="cux-cats">' + cuCxChip('tfac', '-1', CUX.tfac, '全部陣營') + cxTeamFacs().map(function (f) { return cuCxChip('tfac', String(f), CUX.tfac, (typeof cxTeamFacName === 'function') ? cxTeamFacName(f) : String(f)); }).join('') + '</div>';
     }
@@ -306,6 +306,8 @@ function cuCodexBodyHtml() {
       grid += cuCxSkCard(r);
     });
     h += '<div class="cux-grid">' + grid + '</div>' + cuCxPager(pages);
+  } else if (CUX.tab === 'rec') {
+    h += (typeof cxEmbedHtml === 'function') ? cxEmbedHtml() : '<div class="cusub">配隊建議尚未載入。</div>';
   } else {
     teams = cuCxTeams();
     h += cuCodexHintHtml();
@@ -453,8 +455,8 @@ function cuCodexHtml(cs) {
   if (!cs) return '<div class="cusub">尚無城邦資料</div>';
   cuCodexCss();
   h = '<div class="cux">' + cuCxProgHtml() +
-    '<input id="cuxq" class="cux-q" type="search" placeholder="搜尋人物、戰法、兵種卡(姓名、字、典故)" aria-label="搜尋大全" autocomplete="off" enterkeyhint="search" value="' + cuEsc(CUX.q) + '">' +
-    '<div class="cux-sub">' + [['fig', '人物'], ['sk', '戰法'], ['team', '隊伍']].map(function (t) { return '<button type="button" class="cux-sb' + (CUX.tab === t[0] ? ' on' : '') + '" data-kx="sub" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+    '<input id="cuxq" class="cux-q" type="search" placeholder="搜尋人物、戰法、兵種卡(姓名、字、典故)" aria-label="搜尋大全" autocomplete="off" enterkeyhint="search"' + (CUX.tab === 'rec' ? ' hidden' : '') + ' value="' + cuEsc(CUX.q) + '">' +
+    '<div class="cux-sub">' + [['fig', '人物'], ['sk', '戰法'], ['team', '隊伍'], ['rec', '配隊建議']].map(function (t) { return '<button type="button" class="cux-sb' + (CUX.tab === t[0] ? ' on' : '') + '" data-kx="sub" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
     '<div id="cuxf">' + cuCodexFiltHtml() + '</div><div id="cuxb">' + cuCodexBodyHtml() + '</div></div>';
   cuCodexSheetSync();
   return cuCxTxt(h);
@@ -463,7 +465,7 @@ function cuCodexHtml(cs) {
 function cuCodexClick(a, b, cs) {
   var at = function (k) { return (b && b.getAttribute) ? (b.getAttribute(k) || '') : ''; }, v = at('data-v'), id = at('data-id'), kt = at('data-kt');
   if (!cs) return false;
-  if (a === 'sub') { if (['fig', 'sk', 'team'].indexOf(v) < 0) return false; CUX.tab = v; CUX.page = 0; CUX.pop = null; CUX.stack = []; return true; }
+  if (a === 'sub') { if (['fig', 'sk', 'team', 'rec'].indexOf(v) < 0) return false; CUX.tab = v; CUX.page = 0; CUX.pop = null; CUX.stack = []; return true; }
   if (a === 'cat') { CUX.cat = v; CUX.page = 0; return true; }
   if (a === 'tier') { CUX.tier = v; CUX.page = 0; return true; }
   if (a === 'tfac') { CUX.tfac = v || '-1'; return true; }
@@ -486,12 +488,21 @@ function cuCodexClick(a, b, cs) {
   if (a === 'roster') { CUX.pop = null; CUX.stack = []; if (typeof codexGoRoster === 'function') codexGoRoster(id); return true; }
   return false;
 }
+// 開大全的「配隊建議」分頁(原卡包「圖鑑」鈕的入口)
+function cuCodexOpenRec() {
+  if (typeof cardsUiOpen !== 'function') return false;
+  cardsUiOpen('X');
+  CUX.tab = 'rec'; CUX.pop = null; CUX.stack = []; CUX.page = 0;
+  if (typeof cardsUiRender === 'function') cardsUiRender();
+  return true;
+}
 // 外部入口(search.js / codex.js):f:<人物 id> 或 s:<戰法 id> → 開卡包『大全』並展開詳情。查無則回 false
 function cuCodexOpenKey(k) {
-  var p = String(k || '').split(':'), id = p[1] || '', kind = p[0] === 's' ? 'sk' : (p[0] === 'f' ? 'fig' : '');
+  var p = String(k || '').split(':'), id = p[1] || '', kind = p[0] === 's' ? 'sk' : (p[0] === 'f' ? 'fig' : ''), keep;
   if (!kind || typeof cardsUiOpen !== 'function' || !cuCodexExists(kind, id)) return false;
+  keep = CUX.tab === 'rec' && typeof cu !== 'undefined' && cu.open && cu.tab === 'X';   // 從配隊建議點人名 / 戰法名:留在原分頁,詳情疊在上面
   cardsUiOpen('X');
-  CUX.tab = kind === 'sk' ? 'sk' : 'fig';
+  if (!keep) CUX.tab = kind === 'sk' ? 'sk' : 'fig';
   CUX.q = ''; CUX.page = 0;
   CUX.stack = [];
   CUX.pop = { kind: kind, id: id };

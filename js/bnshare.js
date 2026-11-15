@@ -123,8 +123,10 @@ function bnsTeamFromSnap(snap, slots) {
   return u;
 }
 function bnsMyTeam() {
-  var slots = (typeof bnu !== 'undefined' && bnu.slots) || [], u = [], i, s, e, tr, sp, nat, snap = null;
-  if (typeof bnTeamSnapshot === 'function') { try { snap = bnTeamSnapshot(); } catch (er) { snap = null; } }
+  var slots = (typeof bnu !== 'undefined' && bnu.slots) || [], u = [], i, s, e, tr, sp, nat, snap = null, rep = null;
+  if (typeof bnRepGet === 'function') { try { rep = bnRepGet(); } catch (er) { rep = null; } }
+  if (rep && !rep.empty && rep.slots.length) slots = rep.slots;   // 代表隊伍(bnteam.js)優先;空 = 沿用目前布陣
+  if (typeof bnTeamSnapshot === 'function') { try { snap = bnTeamSnapshot(slots); } catch (er) { snap = null; } }
   if (snap) return { u: bnsTeamFromSnap(snap, slots) };
   for (i = 0; i < slots.length && u.length < 5; i++) {
     s = slots[i]; e = typeof bnUiEntry === 'function' ? bnUiEntry(s.id) : null;
@@ -445,7 +447,7 @@ function bnsShareLink() {
   if (!BNS.myCode) return Promise.resolve(false);
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-      return navigator.share({ title: '東漢卡卡 對戰練習', text: '來挑戰我的隊伍!', url: url }).then(function () { return true; }, function (e) {
+      return navigator.share({ title: '東漢Q卡 對戰練習', text: '來挑戰我的隊伍!', url: url }).then(function () { return true; }, function (e) {
         if (e && e.name === 'AbortError') return false;
         return bnsCopy(url, 'bnsMyCode');
       });

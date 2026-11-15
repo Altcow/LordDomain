@@ -10,7 +10,7 @@ function eqfFacts(ctx) {
 }
 function eqfHtml(ctx) {
   var f = eqfFacts(ctx), h = '', cost, can, k, have = (typeof matAll === 'function') ? matAll() : {}, coin = (typeof res4Get === 'function') ? res4Get('coin') : 0, fails, open = forgeOpen();
-  if (!open) return '<div class="eq-page"><div class="eq-none">鍛造坊還沒開放:名聲達 ' + GEAR_CFG.forge.openFame + ',或拿到第一份鍛造材料(野怪、山寨、高塔會掉)。</div></div>';
+  if (!open) return '<div class="eq-page"><div class="eq-none">鍛造坊還沒開放:名聲達 ' + GEAR_CFG.forge.openFame + ',或拿到第一份鍛造材料(野怪、山寨' + (featureOn('tower') ? '、高塔' : '') + '會掉)。</div></div>';   // @DORMANT tower
   cost = forgeCost(f.kind, f.q, f.soul);
   can = forgeCan(f.kind, f.q, f.soul);
   fails = forgeFails(f.q);

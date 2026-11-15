@@ -129,7 +129,9 @@ const ETHNIC_BY_FIG = {
   // 2026-11-10 新名人 7 位
   taoqian: ['han', 'han'], wangping: ['han', 'han'], gaoshun: ['han', 'han'], caochun: ['han', 'han'], chendao: ['han', 'han'], quyi: ['han', 'liang'], liuzhang: ['han', 'han'],
   // 2026-11-13 第一季新配 21 位
-  caohong: ['han', 'han'], lidian: ['han', 'han'], shihuan: ['han', 'han'], hanhao: ['han', 'han'], weizi: ['han', 'han'], renjun: ['han', 'han'], jianyong: ['han', 'han'], sunqian: ['han', 'han'], mifang: ['han', 'han'], liaohua: ['han', 'han'], zoujing: ['han', 'han'], tianyu: ['han', 'han'], handang: ['han', 'han'], zumao: ['han', 'han'], zhuzhi: ['han', 'han'], wujing: ['han', 'han'], sunben: ['han', 'han'], sunjing: ['han', 'han'], lvfan: ['han', 'han'], lijue: ['han', 'liang'], guosi: ['han', 'liang']
+  caohong: ['han', 'han'], lidian: ['han', 'han'], shihuan: ['han', 'han'], hanhao: ['han', 'han'], weizi: ['han', 'han'], renjun: ['han', 'han'], jianyong: ['han', 'han'], sunqian: ['han', 'han'], mifang: ['han', 'han'], liaohua: ['han', 'han'], zoujing: ['han', 'han'], tianyu: ['han', 'han'], handang: ['han', 'han'], zumao: ['han', 'han'], zhuzhi: ['han', 'han'], wujing: ['han', 'han'], sunben: ['han', 'han'], sunjing: ['han', 'han'], lvfan: ['han', 'han'], lijue: ['han', 'liang'], guosi: ['han', 'liang'],
+  // 2026-11-15 第一季換人
+  zhanghong: ['han', 'scholar'], chengyu: ['han', 'scholar'], liru: ['han', 'scholar']
 
 };
 const ETHNIC_DRESS = ['han', 'liang', 'bei', 'south', 'daoist', 'scholar', 'nanman', 'shanyue', 'xiongnu'];

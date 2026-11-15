@@ -100,8 +100,8 @@
 #shellRoot.sh-ld.sh-l .ldh-hp { left: 58px; top: auto; bottom: 5px; }
 #shellRoot.sh-ld.sh-l .ldh-lkt { left: 58px; bottom: 21px; text-align: left; }
 #shellRoot.sh-ld.sh-l .sh-main { margin-bottom: 0; }
-#shellRoot.sh-ld.sh-l .sh-dock { position: absolute; z-index: 5; left: 50%; bottom: 0; transform: translateX(-50%); width: 440px; height: calc(52px + env(safe-area-inset-bottom, 0px)); border-radius: 14px 14px 0 0; border-left: 3px solid var(--ink); border-right: 3px solid var(--ink); box-sizing: border-box; }
-#shellRoot.sh-ld.sh-l .sh-dk { height: 49px; }   /* 底列 52 含上邊框 3,按鈕 49,不再超出視窗 3px */
+#shellRoot.sh-ld.sh-l .sh-dock { position: absolute; z-index: 5; left: 50%; bottom: 0; transform: translateX(-50%); width: 440px; height: calc(60px + env(safe-area-inset-bottom, 0px)); border-radius: 14px 14px 0 0; border-left: 3px solid var(--ink); border-right: 3px solid var(--ink); box-sizing: border-box; }
+#shellRoot.sh-ld.sh-l .sh-dk { height: 57px; }   /* 底列 60(2026-11-15 由 52 提高);方格鈕尺寸以 css/ld_dock.css 為準 */
 #shellRoot.sh-ld.sh-l .sh-dk .ldh-dic { width: 34px; height: 34px; font-size: 16px; }
 #shellRoot.sh-ld.sh-l .ldh-rg { width: 56px; height: 56px; left: calc(8px + env(safe-area-inset-left, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
 /* 活動頁 / 任務頁(堆疊頁內容) */

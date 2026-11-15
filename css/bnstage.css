@@ -131,7 +131,8 @@
 #bnCB .bst-rot{display:none;font-family:var(--ld-font)}
 @media (orientation:portrait) and (max-width:600px){
   #bnCB .bst-stage{display:none}
-  #bnCB .bst-rot{display:flex;position:absolute;left:0;top:0;right:0;bottom:0;z-index:99;background:#120d12;color:#ffe9a8;align-items:center;justify-content:center;font-size:18px}
+  #bnCB .bst-rot{display:flex;position:absolute;left:0;top:0;right:0;bottom:0;z-index:99;background:#120d12;color:#ffe9a8;align-items:center;justify-content:center;flex-direction:column;gap:22px;font-size:18px}
+  #bnCB .bst-rot button{min-height:48px;min-width:120px;font-size:18px}
 }
 @keyframes bstFlash{0%{filter:brightness(3.2) saturate(0)}100%{filter:none}}
 @keyframes bstShake{0%,100%{margin-left:0}25%{margin-left:-6px}50%{margin-left:5px}75%{margin-left:-3px}}

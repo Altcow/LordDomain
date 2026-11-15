@@ -7,12 +7,13 @@
 // 全域名稱:cuRosterLine cuDrawHtml cuPullsHtml cuPullBtns cuGateTxt cuDoPull cuPullRun cuJoinToast cardsUiOpen cardsUiClose cardsUiToggle cardsUiTap cardsUiRender cardsUiHtmlCard cardsUiCtx cardsUiFmtCd cardsUiInfo cardsUiInfoHtml cardsUiAvatarVar cuRevealThen cuDoOpen cuFinishBatch cuLastHtml cuPortraitImg cuArtOn cuArtThumb cuArtCard cuArtReady CU_SIL
 var CU_TAB_NAME = { O: '總覽', T: 'S01卡池', E: 'S01卡池', B: '卡片', R: '卡包' };   // 2026-11-11 v59:指名池 N 已刪除;舊代號 G / N 由 cuSetTab 轉到抽卡分頁
 var CU_TAB_NEW = { D: '抽卡', R: '卡包', F: '熔爐', S: '傳承', X: '大全' };   // 卡片面板 5 分頁:D 抽卡 / R 卡包(原卡包)/ F 熔爐 / S 傳承 / X 大全;舊代號由 cuSetTab 對映
+function cuTabIcon(t) { var k = { D: 'nav_recruit', R: 'nav_cards', F: 'ic_starup', S: 'hd_inh', X: 'ic_bond' }[t]; try { return (k && typeof ldArt === 'function') ? ldArt(k, 'cu-tabic').outerHTML : ''; } catch (e) { return ''; } }   // 第二層美術:分頁圓形圖示(ld_art 沒圖時顯示佔位漢字);放在文字與紅點之後,新介面由 css/ld_skin.css 用 order 排到最前、舊介面隱藏
 var CU_HELP_KEY = { R: 'roster', F: 'furnace', S: 'skills', X: 'codex' };   // 各分頁的『說明』按鈕 → CU_HELP(說明內容只在浮層,頁面不展開)
 var CU_HELP = {
   roster: { t: '卡包說明', l: [['人數', '卡包格數固定(300),滿了停止抽卡;先到『熔爐』熔鍊,或在人物詳情遣散騰出空位。'], ['堆疊', '同一種卡會疊成一疊(名人同人、路人同兵種品階星階),右上 ×N 為張數;點疊開頂層卡,詳情內可切換本疊各張。'], ['篩選', '🔍 搜尋名字 / 職業 / 陣營 / 兵種;兵種、品階、排序在列上下拉,選後縮成標籤,點標籤或 ✕ 清除。'], ['同名副卡', '同名名人可有多張,多餘的可拿來傳承或熔鍊;預設會選副卡。']] },
   furnace: { t: '熔爐說明', l: [['熔鍊', '勾選要熔的路人後按『熔鍊』,換成碎片;沒勾選時,熔鍊熔掉『熔爐設定』裡一鍵熔品階以下的路人。'], ['碎片用途', '卡包人物升星(強化)、請回流浪名人。'], ['不入熔爐', '名人不入(需到人物詳情手動熔,二次確認);派駐中與鎖定者不入。'], ['自動熔爐', '在熔爐設定裡設品階:卡包外新抽到的路人,品階不超過此值會直接熔成碎片。']] },
   skills: { t: '傳承說明', l: [['解鎖', '拆名人卡(傳承)後,該名人的全部戰法永久解鎖;解鎖後可裝進任一選擇槽。'], ['持有', '左側已傳承(金字)在上、未傳承在下;灰字為可傳承(卡包有卡可拆),深灰為目前無卡。點戰法名看右側說明。'], ['上限', '每個戰法有同時裝備人數上限,說明中顯示『使用 n/上限』,已滿需先從對方卸下。'], ['研兵', '全卡包同兵種共享,討伐中兵力 / 攻擊 / 謀略 / 治療每級增加(敵人不吃)。']] },
-  codex: { t: '大全說明', l: [['內容', '人物、戰法、隊伍的完整介紹與收集進度。'], ['搜尋', '可搜尋人物姓名、字、典故或戰法名稱;點項目看詳情。']] }
+  codex: { t: '大全說明', l: [['內容', '人物、戰法、隊伍的完整介紹與收集進度;「配隊建議」分頁有各陣營推薦隊伍,可一鍵套用到布陣。'], ['搜尋', '可搜尋人物姓名、字、典故或戰法名稱;點項目看詳情。']] }
 };
 var CU_TYPE_TAB = { tavern: 'E', kao_chang: 'E', dian_shi_tai: 'D' };   // 酒館建築另由 tavern_scene.js 優先進入室內;考場 / 殿試台只開本介面
 var CU_CLS = { war: '戰', cmd: '統', plan: '謀', econ: '經', life: '生', trait: '性', odd: '怪' };
@@ -522,7 +523,7 @@ function cardsUiRender() {
   if (tabs.indexOf(cu.tab) < 0) cuSetTab(cu.tab);   // 舊代號(例如 'O')先對映
   sv = cuScrollSave(el);
   if (typeof pfSetTitle === 'function' && cu.frame) pfSetTitle('cards', '🃏 卡片 · 卡包 ' + cs.roster.length + '/' + cardsCap());   // 標題與關閉在外框標題列(panelui.js)
-  h = '<div class="cuhd">' + (typeof codexBtnHtml === 'function' ? codexBtnHtml() : '') + '<button class="cuq" data-a="info" data-k="legend" data-key="all" aria-label="圖例說明">?</button><div class="cutabs">' + tabs.map(function (t) { return '<button class="cutab' + (cu.tab === t ? ' on' : '') + '" data-a="tab" data-t="' + t + '">' + CU_TAB_NEW[t] + (t === 'R' && typeof itemsDotHtml === 'function' ? itemsDotHtml() : '') + '</button>'; }).join('') + '</div></div><div class="cubd">';
+  h = '<div class="cuhd"><div class="cutabs">' + tabs.map(function (t) { return '<button class="cutab' + (cu.tab === t ? ' on' : '') + '" data-a="tab" data-t="' + t + '">' + CU_TAB_NEW[t] + (t === 'R' && typeof itemsDotHtml === 'function' ? itemsDotHtml() : '') + cuTabIcon(t) + '</button>'; }).join('') + '</div><button class="cuq" data-a="info" data-k="legend" data-key="all" aria-label="圖例說明">?</button></div><div class="cubd">';
   if (cu.tab !== 'D') h += cuHelpBtn(cu.tab);
   if (cu.tab === 'R') h += cuRosterTabHtml(cs);
   else if (cu.tab === 'F') h += cuFurnaceTabHtml(cs);   // 熔爐分頁(cardsui_furnace.js)
@@ -559,7 +560,7 @@ function cuClick(ev) {
   a = b.getAttribute('data-a'); v = b.getAttribute('data-v'); id = b.getAttribute('data-id');
   cu.msg = '';
   if (a === 'close') { cardsUiClose(); return; }
-  if (a === 'codex') { if (typeof codexOpen === 'function') codexOpen(); return; }   // 武將 / 戰法圖鑑(js/codex.js)
+  if (a === 'codex') { if (typeof cuCodexOpenRec === 'function') cuCodexOpenRec(); else if (typeof codexOpen === 'function') codexOpen(); return; }   // 武將 / 戰法圖鑑(js/codex.js)
   if (cu.revealing) return;   // 抽卡特效播放中:不處理面板操作(特效結束 / 略過後才入包)
   if (a === 'info') { cu.info = { k: b.getAttribute('data-k'), key: b.getAttribute('data-key') }; cardsUiRender(); return; }
   if (a === 'infox') { cu.info = null; cardsUiRender(); return; }

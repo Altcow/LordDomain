@@ -95,7 +95,7 @@ function skrSource(cs, id) {
       }
       return { k: 'draw', fig: fig, text: '抽到' + skrFigName(fig) + '後拆他的卡可得' };
     }
-    // 通用戰法:紫路人卡面帶它 → 拆路人;否則兵書
+    // 通用戰法:紫路人卡面帶它 → 拆路人;否則通用戰法
     roster = (cs && Array.isArray(cs.roster)) ? cs.roster : [];
     for (i = 0; i < roster.length; i++) {
       e = roster[i];
@@ -104,7 +104,7 @@ function skrSource(cs, id) {
       if (rows.indexOf(id) >= 0 && skrCanInherit(cs, e).ok) return { k: 'inhRoster', e: e, text: '拆紫路人' + (e.name || '') + '可得' };
     }
     if (typeof BN_CHAPTERS !== 'undefined') BN_CHAPTERS.forEach(function (c, idx) { if (c.books && c.books.indexOf(id) >= 0) ch.push(c.n || idx + 1); });
-    if (ch.length) return { k: 'book', ch: ch, text: '討伐第 ' + ch.join('、') + ' 章掉落兵書' };
+    if (ch.length) return { k: 'book', ch: ch, text: '討伐第 ' + ch.join('、') + ' 章掉落通用戰法' };
     return { k: 'none', text: '目前無法取得' };
   } catch (er) { return { k: 'none', text: '目前無法取得' }; }
 }

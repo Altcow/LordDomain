@@ -35,8 +35,7 @@ var SEASON_CFG = {
     { max: 6, pulls: 10, shards: 25, mats: { m_whet: 2 } },
     { max: 10, pulls: 5, shards: 15, mats: { m_whet: 1 } }
   ],
-  convPer: 5000, convMax: 30,                        // 季末四資源合計換碎片:每 5000 → 1,上限 30
-  startRes: { wood: 0, iron: 0, stone: 0, grain: 0 }, // 新季起始資源(homeSeasonStartRes 不存在時用)
+  startRes: { grain: 0 }, // 新季起始資源(homeSeasonStartRes 不存在時用)
   histMax: 12, pendMax: 8, partKeep: 3,
   foeWeekMul: 1                                       // 城池守軍隨週變強倍率(本版留 1)
 };

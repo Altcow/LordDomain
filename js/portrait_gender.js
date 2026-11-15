@@ -42,7 +42,9 @@ var PORTRAIT_GENDER = {
   // 2026-11-10 新名人 7 位(皆男)
   'taoqian': 'm', 'wangping': 'm', 'gaoshun': 'm', 'caochun': 'm', 'chendao': 'm', 'quyi': 'm', 'liuzhang': 'm',
   // 2026-11-13 第一季新配 21 位(皆男)
-  'caohong': 'm', 'lidian': 'm', 'shihuan': 'm', 'hanhao': 'm', 'weizi': 'm', 'renjun': 'm', 'jianyong': 'm', 'sunqian': 'm', 'mifang': 'm', 'liaohua': 'm', 'zoujing': 'm', 'tianyu': 'm', 'handang': 'm', 'zumao': 'm', 'zhuzhi': 'm', 'wujing': 'm', 'sunben': 'm', 'sunjing': 'm', 'lvfan': 'm', 'lijue': 'm', 'guosi': 'm'
+  'caohong': 'm', 'lidian': 'm', 'shihuan': 'm', 'hanhao': 'm', 'weizi': 'm', 'renjun': 'm', 'jianyong': 'm', 'sunqian': 'm', 'mifang': 'm', 'liaohua': 'm', 'zoujing': 'm', 'tianyu': 'm', 'handang': 'm', 'zumao': 'm', 'zhuzhi': 'm', 'wujing': 'm', 'sunben': 'm', 'sunjing': 'm', 'lvfan': 'm', 'lijue': 'm', 'guosi': 'm',
+  // 2026-11-15 第一季換人(皆男)
+  'zhanghong': 'm', 'chengyu': 'm', 'liru': 'm'
 };
 // 查表:key 為上述鍵;查無回 null。魔幻英雄(js/fx_cards.js 登錄進 CARD_FIG_BY_ID,帶 sex)不列在本表,改查其 sex 欄
 function portraitGenderOf(key) {

@@ -86,6 +86,6 @@ function ldTipsAfter(S, side, o) {
   if (firstKill && firstKill.row === 0 && ldTipsIsSoft(firstKill.troop)) return { code: 'softFrontDied', text: '前鋒太脆、第一個倒。換盾或槍站前鋒' };
   mine.forEach(function (m) { foe.forEach(function (f) { var x = ldTipsPreyRel(m.troop, f.troop); if (x > 0) up++; else if (x < 0) down++; }); });
   if (down > up) return { code: 'preyDown', text: '對面兵種剋你。看隊伍頁的 ▲▼,換一個剋他的兵種' };
-  if (o.myPower > 0 && o.foePower > 0 && o.myPower < o.foePower * 0.85) return { code: 'weaker', text: '戰力差太多。先去高塔或練兵練一練' };
+  if (o.myPower > 0 && o.foePower > 0 && o.myPower < o.foePower * 0.85) return { code: 'weaker', text: (featureOn('tower') ? '戰力差太多。先去高塔或練兵練一練' : '戰力差太多。先去練兵練一練') }   // @DORMANT tower;
   return null;
 }

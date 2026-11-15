@@ -9,9 +9,8 @@ var UNLOCK_CFG = [
   { id: 'gate', label: '城門', fame: null, ev: null, start: 1 },
   { id: 'drill', label: '校場', fame: 50, ev: 'firstBattle', start: 0, txt: '打完第一場戰鬥開放' },
   { id: 'forge', label: '鍛造坊', fame: 500, ev: 'firstMat', start: 0, txt: '拿到第一份鍛造材料開放' },
-  { id: 'tower', label: '高塔', fame: 800, ev: null, start: 0 },
   { id: 'study', label: '書院', fame: 1200, ev: null, start: 0 },
-  { id: 'arena', label: '擂台', fame: 1800, ev: null, start: 0 },
+  { id: 'arena', label: '擂台報名', fame: 1800, ev: null, start: 0 },   // 只擋『報名』(公告 / 自動報名 / 報名鈕,bn_tourney_ui.js bnTourLocked);擂台入口與木牌不鎖,可進去觀看
   { id: 'mapFull', label: '地圖資源', fame: null, ev: 'harvest', start: 0, txt: '打下新手寨並收成開放' },
   { id: 'auto', label: '自動派遣', fame: 100, ev: 'res3', start: 0, txt: '手動打下 3 個資源點開放' },
   { id: 'camp', label: '山寨', fame: 100, ev: null, start: 0 },
@@ -22,7 +21,7 @@ var UNLOCK_CFG = [
   { id: 'junpass', label: '郡與關口', fame: 3200, ev: null, start: 0 }
 ];
 // 首頁木牌 id(ld_home.js LD_BLD)→ 解鎖 id。城主府固定「即將開放」,不在此表
-var UNLOCK_PLAQUE = { tavern: 'draw', camp: 'team', gate: 'gate', yard: 'drill', forge: 'forge', tower: 'tower', acad: 'study', arena: 'arena' };
+var UNLOCK_PLAQUE = { tavern: 'draw', camp: 'team', gate: 'gate', yard: 'drill', forge: 'forge', acad: 'study' };   // 擂台木牌不鎖(入口可進,只有報名要名聲 1800;unlockIs('arena') 仍供報名判斷)
 
 var EV_CFG = {
   DAY: 86400000, HOUR: 3600000, tz: 8 * 3600000,
@@ -73,7 +72,7 @@ var EV_MAIN = [
   { id: 9, t: '打下 1 個山寨', k: 'campWin', n: 1, give: { shards: 20 } },
   { id: 10, t: '集結打死 1 隻野怪', k: 'beastKill', n: 1, give: { mats: { m_whet: 2 } } },
   { id: 11, t: '鍛造 1 件武器', k: 'forge', n: 1, need: 'ldOpenForgeDone', give: { mats: { m_iron1: 10 } } },
-  { id: 12, t: '高塔打到第 5 層', poll: 'tower5', need: 'twRead', give: { shards: 30 } },
+  { id: 12, t: '在地圖打贏 5 場山寨 / 野怪 / 縣城戰', k: 'mapWin', n: 5, give: { shards: 30 } },   // 2026-11-15:原「高塔打到第 5 層」(高塔休眠)改成地圖戰鬥計數;山寨 / 野怪(含自動派遣)/ 縣各算一場,資源點不算
   { id: 13, t: '預約一次集結', k: 'rsvAdd', n: 1, give: { grain: 3000 } },
   { id: 14, t: '攻下 1 座縣', k: 'countyWin', n: 1, give: { shards: 50 } }
 ];

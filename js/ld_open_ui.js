@@ -162,10 +162,9 @@ function ldoShellAct(act) {
 }
 // 主線「點了直接跳過去」
 function ldoMainGo(q) {
-  var go = { 1: 'gift', 2: 'cards:D', 5: 'wm', 6: 'wm', 7: 'wm', 8: 'wm', 9: 'wm', 10: 'wm', 13: 'wm', 14: 'wm', 4: 'wm' };
+  var go = { 1: 'gift', 2: 'cards:D', 5: 'wm', 6: 'wm', 7: 'wm', 8: 'wm', 9: 'wm', 10: 'wm', 12: 'wm', 13: 'wm', 14: 'wm', 4: 'wm' };
   if (!q) { ldoToast('主線都完成了'); return false; }
   if (q.id === 3) return typeof ldNavPush === 'function' ? ldNavPush('team', { n: 1, mode: 'edit' }) : false;
-  if (q.id === 12) return typeof ldNavPush === 'function' ? ldNavPush('tower') : false;
   if (q.id === 11) { if (typeof shellAct === 'function') return shellAct('cards:F'); return false; }
   if (go[q.id] && typeof shellAct === 'function') return shellAct(go[q.id]);
   return false;

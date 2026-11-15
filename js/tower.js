@@ -80,6 +80,7 @@ function twRewardText(n) {
 //   勝且 n === top + 1 → 首通:top = n、記星、給名聲;勝且 n <= top → 重打,只在星數更高時更新、不給名聲;n > top + 1 或敗 = 不變
 function twSettle(n, win, S) {
   var st = twRead(), res = { n: n, win: !!win, first: false, stars: 0, fame: 0, top: st.top }, stars, k, key, r;
+  if (!featureOn('tower')) return res;   // @DORMANT tower(休眠:不記層數、不給名聲)
   n = twInt(n, 1, TOWER_CFG.max, 0);
   if (!win || n < 1 || n > st.top + 1) return res;
   stars = Math.max(1, twStars(S) || 1);

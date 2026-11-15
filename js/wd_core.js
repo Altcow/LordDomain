@@ -8,7 +8,7 @@
 //             foeHp:[[3 個單位 hpR]…], foeT(城池傷勢回血基準時刻;0 = 不回血), cl(山寨已討平), rs(山寨補新時刻)},
 //   trips[]  行程 {id, team, name, pt, t0, tArrive, tHome, st:'go'|'back', rally, slots:[{id,row,col,troop}], auto, mins}
 //   rallies[] 集結(行進中) {id, pt, order:[隊號…], t0, tArrive}
-//   hurt{卡id:到期ms}、trp{卡id:{r:兵力比例 0~1, t:基準時刻}}、harv{木,鐵,石,糧}(駐守產出,已結算未收成)、rp[](戰報,新→舊,最多 rpMax)、rc[]({i:recIdx, rec},最多 rcMax)、nw(未讀回城 / 到期數)。
+//   hurt{卡id:到期ms}、trp{卡id:{r:兵力比例 0~1, t:基準時刻}}、harv{糧,生鐵,獸皮,木炭,礪石}(駐守產出,已結算未收成;舊存檔的 木 / 鐵 / 石 鍵讀入時丟棄)、rp[](戰報,新→舊,最多 rpMax)、rc[]({i:recIdx, rec},最多 rcMax)、nw(未讀回城 / 到期數)。
 // 時間一律絕對 ms;wdAdvance(W, cs, now) 依時間順序處理事件;now < W.now(時鐘倒退)→ 凍結不動(仿 wmAdvance)。
 // 卡片占用:出發 cardsUseSet(e,'field','wd:'+tripId)、駐守 cardsUseSet(e,'garrison','wd:'+ptId);回城 / 到期解除。
 var WD_SAVE_KEY = 'lorddomain.world.v2';
@@ -69,7 +69,7 @@ function wdGenPt(W, cat, o) {
   };
 }
 function wdNew(seed, now) {
-  var W = { v: 2, seed: seed >>> 0, now: now, sd: 0, rn: 0, pc: 0, tc: 0, kc: 0, nr: wdNextRefresh(now), nb: now + WD_CFG.beastEvery, pts: [], trips: [], rallies: [], hurt: {}, trp: {}, harv: { '木': 0, '鐵': 0, '石': 0, '糧': 0 }, rp: [], rc: [], nw: 0, rsv: [], rsvLog: [], hs: 0 }, i;   // rsv / rsvLog / hs:預約、預約結果、寶地碎片(js/ld_open_wd.js)
+  var W = { v: 2, seed: seed >>> 0, now: now, sd: 0, rn: 0, pc: 0, tc: 0, kc: 0, nr: wdNextRefresh(now), nb: now + WD_CFG.beastEvery, pts: [], trips: [], rallies: [], hurt: {}, trp: {}, harv: wdHarvZero(), rp: [], rc: [], nw: 0, rsv: [], rsvLog: [], hs: 0 }, i;   // rsv / rsvLog / hs:預約、預約結果、寶地碎片(js/ld_open_wd.js)
   for (i = 0; i < WD_CFG.resCount; i++) W.pts.push(wdGenPt(W, 'res'));
   W.pts.push(wdGenPt(W, 'beast'));
   for (i = 0; i < WD_CFG.campCount; i++) W.pts.push(wdGenPt(W, 'camp'));
@@ -710,8 +710,10 @@ function wdRun(W, cs, now) {
 function wdAdvance(W, cs, now) { return wdRun(W, cs, now); }
 
 // ───────── 收成 ─────────
+function wdHarvZero() { var o = {}; WD_HARV_KEYS.forEach(function (k) { o[k] = 0; }); return o; }
 function wdHarvPending(W, now) {
-  var o = { '木': W.harv['木'] || 0, '鐵': W.harv['鐵'] || 0, '石': W.harv['石'] || 0, '糧': W.harv['糧'] || 0 };
+  var o = wdHarvZero();
+  WD_HARV_KEYS.forEach(function (k) { o[k] = W.harv[k] || 0; });
   W.pts.forEach(function (p) {
     var g = p.guard, dt, key;
     if (!g) return;
@@ -721,9 +723,9 @@ function wdHarvPending(W, now) {
   });
   return o;
 }
-// 一鍵收成:結算進行中的駐守,把整數部分取出(小數留著)。回 {木,鐵,石,糧}(整數);呼叫端轉入遊戲資源庫
+// 一鍵收成:結算進行中的駐守,把整數部分取出(小數留著)。回 {糧,生鐵,獸皮,木炭,礪石}(整數);呼叫端轉入遊戲資源庫
 function wdCollect(W, now) {
-  var got = { '木': 0, '鐵': 0, '石': 0, '糧': 0 };
+  var got = wdHarvZero();
   W.pts.forEach(function (p) { if (p.guard) wdGuardSettle(W, p, now); });
   WD_HARV_KEYS.forEach(function (k) {
     var n = Math.floor((W.harv[k] || 0) + 1e-9);

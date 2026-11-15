@@ -2,19 +2,21 @@
 // 由 shell.js 在旗標 ldui 開啟時呼叫:ldHomeInit(sceneEl) 建 9 塊建築木牌層、3 格隊伍欄、金 / 綠圓鈕與圓鈕列;ldHomeLayout() 依場景尺寸 / 方向重排;ldHomeRefresh() 每秒更新紅點與隊伍狀態。
 // 另登錄兩個堆疊頁:'event'(活動)、'quest'(任務,空頁)。素材走 ld_art.js(has:false → CSS 佔位 + 單一漢字徽章)。ES2017,不用 ?. ??。
 // 木牌座標單位:背景圖寬高的百分比;木牌以中心點定位(寬 64、高 60)。舊背景(assets/ui 的 home_bg_*)用 old 座標,新背景(bg_home2_*,has:true)用 new 座標。
-var LDH_PLQ_W = 64, LDH_PLQ_H = 60, LDH_MIN_D = 48, LDH_COL_W = 200, LDH_COL_GAP = 8, LDH_DOCK_LAND_H = 52;
+var LDH_PLQ_W = 64, LDH_PLQ_H = 60, LDH_MIN_D = 48, LDH_COL_W = 200, LDH_COL_GAP = 8, LDH_DOCK_LAND_H = 60;
 // 9 塊建築:act 為 shellAct 字串;fn 為特殊動作;lock 有字 = 灰色 + 小字(點了只出 Toast)。P = 直式、L = 橫式;new 座標 = 2026-11-14 接圖後依 bg_home2_port / bg_home2_land 實際建築中心量的(橫式建築都在圖左 ~70%,右側草地留給隊伍欄)。
 var LD_BLD = [
   { id: 'tavern', n: '招賢館', art: 'bld_zhao', act: 'cards:D', P: { old: [17, 26], 'new': [78, 41] }, L: { old: [25, 27], 'new': [37, 50] } },
   { id: 'hall', n: '城主府', art: 'bld_fu', lock: '即將開放', P: { old: [50, 23], 'new': [50, 22] }, L: { old: [50, 24], 'new': [38, 24] } },
   { id: 'acad', n: '書院', art: 'bld_shu', fn: 'study', P: { old: [82, 28], 'new': [10, 25] }, L: { old: [73, 28], 'new': [18, 36] } },
-  { id: 'tower', n: '高塔', art: 'bld_ta', fn: 'tower', P: { old: [80, 11], 'new': [85, 23] }, L: { old: [82, 12], 'new': [62, 26] } },
+  { id: 'tower', n: '高塔', dorm: 'tower', art: 'bld_ta', fn: 'tower', P: { old: [80, 11], 'new': [85, 23] }, L: { old: [82, 12], 'new': [62, 26] } },
   { id: 'yard', n: '校場', art: 'bld_chang', fn: 'yard', P: { old: [17, 42], 'new': [20, 43] }, L: { old: [22, 47], 'new': [24, 47] } },
   { id: 'camp', n: '軍營', art: 'bld_ying', fn: 'camp', P: { old: [48, 46], 'new': [82, 56] }, L: { old: [50, 51], 'new': [60, 50] } },
   { id: 'forge', n: '鍛造坊', art: 'bld_fang', fn: 'forge', P: { old: [83, 44], 'new': [19, 62] }, L: { old: [80, 47], 'new': [15, 72] } },
   { id: 'arena', n: '擂台', art: 'bld_tai', act: 'tour', P: { old: [76, 57], 'new': [85, 64] }, L: { old: [80, 69], 'new': [61, 72] } },
   { id: 'gate', n: '城門', art: 'bld_men', fn: 'gate', P: { old: [50, 67], 'new': [50, 68] }, L: { old: [50, 80], 'new': [40, 73] } }
 ];
+// 目前有效的建築清單:休眠功能(dorm)關閉時整塊排除(不建木牌、不佔版面;高塔 FEATURES.tower)
+function ldHomeBlds() { return LD_BLD.filter(function (b) { return !b.dorm || (typeof featureOn === 'function' && featureOn(b.dorm)); }); }   // @DORMANT tower
 var LDH = { scene: null, root: null, layer: null, team: null, band: null, rg: null, rb: null, plq: {}, dot: {}, tm: [], key: '', dkey: '', geo: null, dbg: false };
 
 // ───────── 純函式 ─────────
@@ -118,13 +120,13 @@ function ldHomeGeo(W, H, land, newBg, opt) {
 }
 // 回 [{id, x, y}](依 LD_BLD 順序);use = 'old' | 'new'。橫式:先換算期望點,再用 ldHomePack 避開分區(直式維持原本的 ldHomeSpread)
 function ldHomeAll(geo, use) {
-  var k = geo.land ? 'L' : 'P', pts = [], items = [], i, b, p, l;
-  for (i = 0; i < LD_BLD.length; i++) { b = LD_BLD[i]; p = ldHomePlace(geo.field, geo.H, 0, geo.iw, geo.ih, b[k][use], geo.botH); pts.push(p); }
+  var k = geo.land ? 'L' : 'P', pts = [], items = [], i, b, p, l, BL = ldHomeBlds();
+  for (i = 0; i < BL.length; i++) { b = BL[i]; p = ldHomePlace(geo.field, geo.H, 0, geo.iw, geo.ih, b[k][use], geo.botH); pts.push(p); }
   if (geo.land && geo.zones) {
-    for (i = 0; i < LD_BLD.length; i++) { l = geo.labels && geo.labels[LD_BLD[i].id]; items.push({ w: Math.max(LDH_PLQ_W, l ? l.w : 0), ex: l ? l.h : 0 }); }
+    for (i = 0; i < BL.length; i++) { l = geo.labels && geo.labels[BL[i].id]; items.push({ w: Math.max(LDH_PLQ_W, l ? l.w : 0), ex: l ? l.h : 0 }); }
     pts = ldHomePack(pts, items, geo.zones, { x0: 0, x1: geo.field, y0: 8, y1: geo.H - 4 }, LDH_ZONE_GAP);
   } else pts = ldHomeSpread(pts, LDH_MIN_D, { x0: LDH_PLQ_W / 2, x1: geo.field - LDH_PLQ_W / 2, y0: 8 + LDH_PLQ_H / 2, y1: Math.max(8 + LDH_PLQ_H / 2, geo.H - geo.botH - 4 - LDH_PLQ_H / 2) });
-  return pts.map(function (p, n) { return { id: LD_BLD[n].id, x: p.x, y: p.y }; });
+  return pts.map(function (p, n) { return { id: BL[n].id, x: p.x, y: p.y }; });
 }
 // 第 n 隊的顯示資料(全部有防呆:缺模組就用預設)。回 { n, locked, lockText, empty, main, subs, troop, ratio, state, stateText }
 function ldHomeTeamInfo(n, now) {
@@ -207,7 +209,7 @@ function ldHomeYard() {
 }
 function ldHomeBldDo(b) {
   if (b.lock) { ldHomeToast(b.n + ':' + b.lock); return false; }
-  if (b.fn === 'tower') return typeof ldNavPush === 'function' ? ldNavPush('tower') : false;
+  if (b.fn === 'tower') return (typeof featureOn === 'function' && !featureOn('tower')) ? false : typeof ldNavPush === 'function' ? ldNavPush('tower') : false;   // @DORMANT tower
   if (b.fn === 'camp') return typeof ldNavPush === 'function' ? ldNavPush('team', { n: 1, mode: 'edit' }) : false;
   if (b.fn === 'yard') return ldHomeYard();
   if (b.fn === 'gate') return typeof ldNavPush === 'function' ? ldNavPush('battle') : false;   // 城門 = 新的滿版戰鬥入口頁(副本 / 對戰 / 戰報 / 擂台 / 訓練場 / 地圖)
@@ -229,8 +231,9 @@ function ldHomeInit(sceneEl) {
   LDH.scene = sceneEl; LDH.root = root;
   try { LDH.dbg = typeof location !== 'undefined' && /[?&]plqdbg=1/.test(location.search); } catch (e) { LDH.dbg = false; }
   LDH.layer = ldHomeEl('div', 'ldh-plqs');
-  for (i = 0; i < LD_BLD.length; i++) {
-    b = LD_BLD[i];
+  var BL = ldHomeBlds();
+  for (i = 0; i < BL.length; i++) {
+    b = BL[i];
     btn = ldHomeEl('button', 'ldh-plq' + (b.lock ? ' lock' : ''));
     btn.setAttribute('type', 'button');
     btn.setAttribute('data-bld', b.id);
@@ -428,7 +431,7 @@ function ldHomeBattleLogCount() {
   return o && Array.isArray(o.recent) ? o.recent.length : 0;
 }
 function ldHomeBattleRows() {
-  var rows = [], ok = ldHomeBattleRoster(), need = '卡包至少 ' + (typeof BNUI !== 'undefined' && BNUI.minRoster ? BNUI.minRoster : 3) + ' 人才能出戰', st, cd, arenaLock = '', n, d, tot;
+  var rows = [], ok = ldHomeBattleRoster(), need = '卡包至少 ' + (typeof BNUI !== 'undefined' && BNUI.minRoster ? BNUI.minRoster : 3) + ' 人才能出戰', st, br, n, d, tot;
   if (typeof featureOn !== 'function' || featureOn('stages') || featureOn('shell')) {   // @DORMANT stages @DORMANT shell
     st = '';
     try {
@@ -439,10 +442,9 @@ function ldHomeBattleRows() {
   rows.push({ id: 'share', k: '對戰', sub: '用對戰碼和朋友比一場(不計進度、不給獎勵)', art: 'nav_event', to: 'share', lock: ok ? '' : need, stat: '', dot: false });
   n = ldHomeBattleLogCount();
   rows.push({ id: 'log', k: '戰報', sub: '最近的戰報,可查看、重播與儲存', art: 'nav_log', to: 'log', lock: ok ? '' : need, stat: n ? '最近 ' + n + ' 場' : '還沒有戰報', dot: false });
-  try { if (typeof unlockIs === 'function' && !unlockIs('arena') && typeof unlockLockText === 'function') arenaLock = unlockLockText('arena'); } catch (e1) { arenaLock = ''; }
-  cd = null;
-  try { if (typeof bnTourLoad === 'function' && typeof bnTourCooldown === 'function') cd = bnTourCooldown(bnTourLoad(), Date.now()); } catch (e2) { cd = null; }
-  rows.push({ id: 'tour', k: '擂台', sub: '16 隊單淘汰,比出前三名;系統隊伍補滿,每 2 小時一屆', art: 'bld_tai', to: 'tour', lock: arenaLock || (ok ? '' : need), stat: cd ? (cd.ok ? '可開新一屆' : '下一屆 ' + (typeof bnTourFmt === 'function' ? bnTourFmt(cd.left) : '')) : '', dot: !!(cd && cd.ok && !arenaLock) });
+  br = null;
+  try { if (typeof bnTourBrief === 'function') br = bnTourBrief(Date.now()); } catch (e2) { br = null; }
+  rows.push({ id: 'tour', k: '擂台', sub: '每日固定時間開賽,報名用代表隊伍;16 隊單淘汰,系統隊伍補滿', art: 'bld_tai', to: 'tour', lock: ok ? '' : need, stat: br ? br.stat : '', dot: !!(br && br.dot) });   // 擂台入口不鎖名聲(可進去觀看);名聲不足只是不能報名(bnTourLocked)
   rows.push({ id: 'prac', k: '訓練場', sub: '編隊後試打山賊:不計戰績、不給獎勵,敵將依我方戰力縮放', art: 'bld_chang', to: 'team', ctx: { n: 1, mode: 'edit' }, lock: '', stat: '', dot: false });
   if (typeof featureOn !== 'function' || (featureOn('worldmap') && featureOn('world'))) rows.push({ id: 'map', k: '地圖', sub: '派部隊占領資源點、討伐山寨野怪、集結攻城', art: 'bld_men', to: 'map', lock: ok ? '' : need, stat: '', dot: false });   // @DORMANT worldmap @DORMANT world
   return rows;

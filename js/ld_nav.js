@@ -58,7 +58,7 @@ function ldNavEl(tag, cls, txt) {
 }
 function ldNavReduced() { try { return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
 // ───────── 舊頁共用頂列(2026-11-15 橫版首頁外殼 / WP-5) ─────────
-// 舊頁(卡包 / 庫房 / 設定 / 擂台 / 對戰 / 戰報 / 地圖)在堆疊頂端時,顯示一條固定在最上面的頂列(樣式同新頁 .ldp-top):左上 ‹ 返回、頁名、右上 ✕ 回首頁;
+// 舊頁(卡包 / 設定 / 擂台 / 對戰 / 戰報 / 地圖)在堆疊頂端時,顯示一條固定在最上面的頂列(樣式同新頁 .ldp-top):左上 ‹ 返回、頁名、右上 ✕ 回首頁;
 //   body 同時加 ld-leg 與 ld-leg-<id>,css/ld_page.css 據此把各舊頁內容讓到頂列之下、藏起各頁自己的返回 / 關閉鈕。副本(stage)是戰鬥畫面,不套。
 // ‹ 先問舊頁有沒有「頁內返回」(def.legacy.back():例 地圖子頁、戰報檢視 → 回上一個畫面,回 true = 已處理),沒有才退一層。
 var LDNAV_LEG = { cards: 1, goods: 1, settings: 1, log: 1, tour: 1, share: 1, map: 1 };
@@ -91,6 +91,17 @@ function ldNavLegBarEl() {
   LDNAV.bar = bar; LDNAV.barTitle = title;
   return bar;
 }
+// 舊頁共用背景(css/ld_skin.css 讀 --ld-pgbg):有 ld_art 鍵 bg_page_land / bg_page_port 的圖就用圖,沒圖清掉變數 → CSS 木紋漸層
+function ldNavSetPageBg() {
+  var port, url, st;
+  try {
+    if (typeof ldArtUrl !== 'function' || !document.documentElement) return;
+    port = typeof window !== 'undefined' && window.innerHeight > window.innerWidth;
+    url = ldArtUrl(port ? 'bg_page_port' : 'bg_page_land');
+    st = document.documentElement.style;
+    if (url) st.setProperty('--ld-pgbg', 'url(' + url + ') center / cover no-repeat'); else st.removeProperty('--ld-pgbg');
+  } catch (er) { /* 顯示用 */ }
+}
 // 依堆疊頂端同步頂列與 body class(每次堆疊變動都會呼叫)
 function ldNavSyncBar() {
   var n = LDNAV.stack.length, e = n ? LDNAV.stack[n - 1] : null, show = !!(e && e.legacy && LDNAV_LEG[e.id]), bar, d, cl, k, want;
@@ -101,6 +112,7 @@ function ldNavSyncBar() {
     for (k in LDNAV_LEG) if (('ld-leg-' + k) !== want) cl.remove('ld-leg-' + k);
     if (want) cl.add(want);
     if (show) cl.add('ld-leg'); else cl.remove('ld-leg');
+    if (show) ldNavSetPageBg();
     bar = show ? ldNavLegBarEl() : LDNAV.bar;   // 第一次需要時才建
     if (!bar) return show;
     bar.hidden = !show;
@@ -391,12 +403,18 @@ function ldNavBnOpen(fn) {
 function ldNavRegLegacy() {
   ldNavRegister({ id: 'cards', title: '卡包', legacy: {
     open: function (c) { if (typeof cardsUiOpen === 'function') cardsUiOpen(c && c.tab); },
+    // ‹ 先收卡包內的上層浮層(大全詳情 / 說明 / 熔爐設定 / 道具選單),都收完才退一層
+    back: function () {
+      try {
+        if (typeof CUX !== 'undefined' && CUX && CUX.pop) { CUX.pop = CUX.stack.pop() || null; if (typeof cuCodexSheetSync === 'function') cuCodexSheetSync(); return true; }
+        if (typeof cu !== 'undefined' && cu && (cu.info || cu.fset)) { cu.info = null; cu.fset = false; if (typeof cardsUiRender === 'function') cardsUiRender(); return true; }
+        if (typeof IU !== 'undefined' && IU && IU.pick) { IU.pick = null; IU.det = false; if (typeof cardsUiRender === 'function') cardsUiRender(); return true; }
+      } catch (er) { /* 略過 */ }
+      return false;
+    },
     close: function () { if (typeof cardsUiClose === 'function') cardsUiClose(); },
     isOpen: function () { return typeof cu !== 'undefined' && !!cu && !!cu.open && (typeof panelIsOpen !== 'function' || panelIsOpen('cards') || !!(cu.el && !cu.el.hidden)); } } });
-  ldNavRegister({ id: 'goods', title: '背包', legacy: {
-    open: function () { if (typeof goodsPanelToggle === 'function') goodsPanelToggle(true); },
-    close: function () { if (typeof goodsPanelToggle === 'function') goodsPanelToggle(false); },
-    isOpen: function () { return typeof panelIsOpen === 'function' ? panelIsOpen('goods') : false; } } });
+  // 配隊建議已併入卡包「大全」分頁(cardsui_codex.js 的 rec 子分頁),不再是獨立的第二層頁
   ldNavRegister({ id: 'settings', title: '設定', legacy: {
     open: function () { if (typeof stOpenPanel === 'function') stOpenPanel(); },
     close: function () { if (typeof stClosePanel === 'function') stClosePanel(); },

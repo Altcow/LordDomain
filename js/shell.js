@@ -12,8 +12,8 @@ var SHELL = { inited: false, tab: 'home', lo: '', el: null, cv: null, raf: 0, la
 var SHELL_DOCK = [
   { id: 'cards', label: '卡包', asset: 'nav_draw', glyph: '🃏', color: '#3d6a8a', kids: [{ k: '卡包', act: 'cards:R' }, { k: '卡冊', act: 'cards:X' }, { k: '傳承', act: 'cards:S' }] },
   { id: 'field', label: '出征', asset: 'nav_march', glyph: '⚔', color: '#8a4b2a', kids: [{ k: '戰役', act: 'battle' }, { k: '地圖', act: 'wm' }] },
-  { id: 'event', label: '活動', asset: 'nav_event', glyph: '🎪', color: '#7a3a5a', kids: [{ k: '擂台', act: 'tour' }, { k: '試煉塔', soon: true }, { k: '切磋(對戰碼)', act: 'share' }, { k: '地圖', act: 'wm' }] },
-  { id: 'pack', label: '背包', asset: 'nav_pack', glyph: '🎒', color: '#6a4a7a', kids: [{ k: '背包', act: 'goods' }, { k: '裝備', soon: true }] },
+  { id: 'event', label: '活動', asset: 'nav_event', glyph: '🎪', color: '#7a3a5a', kids: [{ k: '擂台', act: 'tour' }, { k: '切磋(對戰碼)', act: 'share' }, { k: '地圖', act: 'wm' }] },
+  { id: 'pack', label: '背包', asset: 'nav_pack', glyph: '🎒', color: '#6a4a7a', kids: [{ k: '背包', act: 'ldbag' }, { k: '裝備', soon: true }] },
   { id: 'workshop', label: '工坊', asset: 'home_熔爐', glyph: '🔨', color: '#8a3a2a', kids: [{ k: '熔爐', act: 'cards:F' }, { k: '鍛造', soon: true }] },
   { id: 'report', label: '戰報', asset: 'short_mail', glyph: '📰', color: '#4a6a7a', act: 'log' },
   { id: 'set', label: '設定', asset: 'short_settings', glyph: '⚙', color: '#555b66', act: 'settings' }
@@ -40,7 +40,7 @@ var SHELL_MAP = [
   { k: '擂台', tab: 'event', act: 'tour' },
   { k: '切磋(對戰碼)', tab: 'event', act: 'share' },
   { k: '地圖', tab: 'event', act: 'wm' },
-  { k: '庫房 / 背包', tab: 'pack', act: 'goods' },
+  { k: '背包', tab: 'pack', act: 'ldbag' },
   { k: '設定', tab: 'set', act: 'settings' },
   { k: '說明', tab: null, act: 'help' },
   { k: '拍照', tab: null, act: 'photo' },
@@ -52,7 +52,7 @@ var SHELL_TOP_H = { p: 52, l: 44 }, SHELL_DOCK_H = 52, SHELL_FPS = 30, SHELL_TIC
 // 新介面骨架(旗標 ldui,預設關):首頁換成 5 格 dock + 建築木牌 + 隊伍欄 + 圓鈕(js/ld_home.js、css/ld_home.css);關閉時以下所有 ld 分支都不執行。
 var SHELL_DOCK_LD = [
   { id: 'cards', label: '卡包', art: 'nav_recruit', act: 'cards:R' },   // 圖示沿用原首頁右側「招募」圓鈕(該鈕已移除);卡包頁內有抽卡分頁
-  { id: 'bag', label: '背包', art: 'nav_bag', act: 'ldbag' },   // 新背包頁(裝備 / 材料 / 庫房;js/ld_equip_ui.js);庫房仍是舊的 goods 頁
+  { id: 'bag', label: '背包', art: 'nav_bag', act: 'ldbag' },   // 新背包頁(裝備 / 材料;js/ld_equip_ui.js)
   { id: 'event', label: '活動', art: 'nav_event', act: 'ldevent' },
   { id: 'report', label: '戰報', art: 'nav_log', act: 'log' },
   { id: 'set', label: '設定', art: 'nav_set', act: 'settings' }
@@ -103,7 +103,7 @@ function shellBuildTopLd(top) {
   var i, t, b, lab = { money: '錢', pulls: '抽', power: '戰' };
   for (i = 0; i < SHELL_TOP_ITEMS.length; i++) {
     t = SHELL_TOP_ITEMS[i];
-    b = shellBtn('', t.id === 'av' ? 'sh-item sh-lav' : 'sh-item sh-lslot', (t.id === 'money' || t.id === 'pulls') ? null : t.id);   // 錢 / 抽:純顯示不可點(庫房走 背包→庫房、抽卡走 卡包→抽卡分頁)
+    b = shellBtn('', t.id === 'av' ? 'sh-item sh-lav' : 'sh-item sh-lslot', (t.id === 'money' || t.id === 'pulls') ? null : t.id);   // 錢 / 抽:純顯示不可點(抽卡走 卡包→抽卡分頁)
     if (t.id === 'money' || t.id === 'pulls') { b.disabled = true; b.style.pointerEvents = 'none'; }
     b.id = 'sh_' + t.id;
     b.setAttribute('aria-label', t.id);
@@ -162,7 +162,7 @@ function shellBuild() {
   }
   SHELL.stB = shellEl('div', 'sh-stb');
   SHELL.stV = {};
-  rows = [['troops', '出征兵數'], ['power', '出征戰力'], ['faction', '勢力'], ['fame', '名聲'], ['land', '領地'], ['rsv', '預備兵'], ['res', '木鐵石糧']];
+  rows = [['troops', '出征兵數'], ['power', '出征戰力'], ['faction', '勢力'], ['fame', '名聲'], ['land', '領地'], ['rsv', '預備兵'], ['res', '糧']];
   for (i = 0; i < rows.length; i++) {
     row = shellEl('div', 'sh-str');
     row.appendChild(shellEl('span', 'sh-stk', rows[i][1]));
@@ -260,10 +260,10 @@ function shellStatToggle() {
 // 基本數據值:城主等級、出征兵數 / 戰力(出征隊伍);勢力 / 名聲 / 領地 目前無資料來源,標 --
 function shellStatRender(lv, n, pw) {
   var txt = { troops: String(n || 0), power: (pw || 0).toLocaleString(), faction: '--', fame: '--', land: '--', rsv: '--', res: '--' }, k, key, t;
-  try {   // 名聲 / 預備兵 / 木鐵石糧:模組存在才顯示(fame.js rsv.js res4.js);領地讀地圖
+  try {   // 名聲 / 預備兵 / 糧:模組存在才顯示(fame.js rsv.js res4.js);領地讀地圖
     if (typeof fameGet === 'function') txt.fame = fameGet().toLocaleString();
     if (typeof rsvGet === 'function') { if (typeof rsvSettle === 'function') rsvSettle(Date.now()); txt.rsv = rsvGet().n.toLocaleString() + '/' + rsvCap().toLocaleString(); }
-    if (typeof res4All === 'function') { t = res4All(); txt.res = shellFmtMoney(t.wood) + ' / ' + shellFmtMoney(t.iron) + ' / ' + shellFmtMoney(t.stone) + ' / ' + shellFmtMoney(t.grain); }
+    if (typeof res4All === 'function') { t = res4All(); txt.res = shellFmtMoney(t.grain); }
     if (typeof wdTerritoryOf === 'function' && typeof WDUI !== 'undefined' && WDUI && WDUI.W) txt.land = String(wdTerritoryOf(WDUI.W).total);
   } catch (e) { /* 顯示用,失敗保持 -- */ }
   key = JSON.stringify(txt);
@@ -338,7 +338,7 @@ function shellBattleMap() {
 }
 // ld 模式(旗標 ldui):卡包 / 背包 / 設定 / 戰報 / 擂台 / 對戰入口改經頁面堆疊(ld_nav.js 的舊頁登錄),統一返回 / 5 層上限 / 手機返回鍵。回 null = 不處理,走原本分支。
 function shellLdRoute(act) {
-  var m = { goods: 'goods', money: 'goods', settings: 'settings', log: 'log', tour: 'tour', share: 'share', ldbag: 'bag' };
+  var m = { settings: 'settings', log: 'log', tour: 'tour', share: 'share', ldbag: 'bag' };
   if (!SHELL.ld || typeof ldNavPush !== 'function') return null;
   if (act.indexOf('cards:') === 0) return ldNavPush('cards', { tab: act.slice(6) });
   if (m[act]) return ldNavPush(m[act]);
@@ -364,7 +364,6 @@ function shellAct(act) {
     case 'ldevent': return typeof ldNavPush === 'function' ? ldNavPush('event') : false;   // 新首頁底列「活動」
     case 'log': shellOpenBattle(function () { if (typeof bnLogOpen === 'function') bnLogOpen(); }); return true;
     case 'share': shellOpenBattle(function () { if (typeof bnsOpen === 'function') bnsOpen('share'); }); return true;
-    case 'goods': if (typeof goodsPanelToggle === 'function') goodsPanelToggle(true); return true;
     case 'settings': if (typeof stOpenPanel === 'function') stOpenPanel(); return true;
     case 'help': if (typeof guideListOpen === 'function') guideListOpen(); return true;
     case 'photo': if (typeof uiSetMode === 'function') uiSetMode('photo'); return true;
@@ -373,7 +372,7 @@ function shellAct(act) {
     case 'fish': if (typeof fishEnter === 'function') fishEnter('shell'); return true;
     case 'soon': if (typeof showToast === 'function') showToast('即將開放'); return true;
     case 'av': if (typeof showToast === 'function') showToast('城主頭像'); return true;
-    case 'money': if (typeof goodsPanelToggle === 'function') goodsPanelToggle(true); return true;
+    case 'money': return true;   // 純顯示,不開任何頁
     case 'pulls': return shellAct('cards:D');
     case 'power': return shellDockOpen('field');
   }
@@ -395,6 +394,7 @@ function shellRefresh() {
     SHELL.pv = JSON.stringify(txt);
     for (k in txt) if (SHELL.txt[k]) SHELL.txt[k].textContent = txt[k];
   }
+  if (typeof bnTourPulse === 'function') bnTourPulse(now);   // 擂台:開賽結算 / 自動報名 / 報名公告(js/bn_tourney_ui.js;內部自帶 try/catch)
   var evs = shellEvents(now);
   shellRenderEvents(evs);
   shellDockDots(evs);
@@ -402,19 +402,18 @@ function shellRefresh() {
   if (SHELL.ld && typeof ldNavPrune === 'function') ldNavPrune();   // 舊頁自己關閉後同步堆疊(另有 ld_nav 自己的 250 ms 輪詢)
   if (SHELL.ld && typeof ldHomeRefresh === 'function') ldHomeRefresh();
 }
-// 活動圖示列:只列有真實內容的項目(最多 5 個)。新手禮包持有中 → 紅點;免費抽 = 小池可抽或已滿待領;擂台 = 可開新一屆 / 冷卻倒數。
+// 活動圖示列:只列有真實內容的項目(最多 5 個)。新手禮包持有中 → 紅點;免費抽 = 小池可抽或已滿待領;擂台 = 固定時間開賽(可報名 / 有獎勵可領 → 紅點;入口不鎖,名聲不足只是不能報名)。
 function shellEvents(now) {
-  var out = [], cs = (typeof cardsGet === 'function') ? cardsGet() : null, n, w, st, cd;
+  var out = [], cs = (typeof cardsGet === 'function') ? cardsGet() : null, n, w, br;
   if (typeof itemCount === 'function' && itemCount('gift_newbie') > 0) out.push({ id: 'gift', label: '新手禮包', asset: 'item_newbie_pack', glyph: '🎁', act: 'gift', dot: true, sub: '點此使用' });
   if (cs && typeof cardsVenueOpen === 'function' && cardsVenueOpen('E') && typeof cardsPulls === 'function') {
     n = cardsPulls(cs, 'E');
     w = !!(cs.pl && cs.pl.E && cs.pl.E.w);
     if (n > 0 || w) out.push({ id: 'draw', label: '免費抽', asset: 'nav_draw', glyph: '🎴', act: 'cards:D', dot: true, sub: n > 0 ? '可抽 ' + n : '已滿 · 待領' });
   }
-  if (typeof bnTourLoad === 'function' && typeof bnTourCooldown === 'function') {
-    st = bnTourLoad();
-    cd = bnTourCooldown(st, now || Date.now());
-    out.push({ id: 'tour', label: '擂台', asset: 'short_arena', glyph: '🏟', act: 'tour', dot: !!cd.ok, sub: cd.ok ? '可開新一屆' : (typeof bnTourFmt === 'function' ? bnTourFmt(cd.left) : '') });
+  if (typeof bnTourBrief === 'function') {
+    br = bnTourBrief(now || Date.now());
+    out.push({ id: 'tour', label: '擂台', asset: 'short_arena', glyph: '🏟', act: 'tour', dot: !!br.dot, sub: br.stat });
   }
   return out.slice(0, SHELL_EV_MAX);
 }
