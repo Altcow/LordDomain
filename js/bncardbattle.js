@@ -182,7 +182,7 @@ function bncbShellHtml(plan, title) {
   return '<div class="bst-stage" id="bstStage">' + bnstStageHtml() +
     '<div class="bst-top"><span class="bst-ttl">' + bnRptEsc(title || '戰鬥') + '</span>' +
     '<button type="button" data-act="leave" class="bcb-exit" aria-label="離開">離</button></div>' +
-    '<div class="bst-spd"><button type="button" data-act="spd1" class="ld-btn on" aria-label="1倍速">1×</button><button type="button" data-act="spd2" class="ld-btn sub" aria-label="2倍速">2×</button><button type="button" data-act="spd3" class="ld-btn sub" aria-label="3倍速">3×</button></div>' +
+    '<div class="bst-spd"><button type="button" data-act="spd1" class="ld-btn on" aria-label="1倍速">1×</button><button type="button" data-act="spd2" class="ld-btn sub" aria-label="2倍速">2×</button><button type="button" data-act="spd3" class="ld-btn sub" aria-label="3倍速">3×</button><button type="button" data-act="cutin" class="ld-btn sub cutin" aria-label="大招演出:開 / 關">大招演出<br><b>' + (typeof bnstCutinGet === 'function' ? BNST_CUTIN_NAME[bnstCutinGet()] : '開') + '</b></button></div>' +
     '<div class="bcb-log ld-panel collapsed"><div class="bcb-lh"><button type="button" class="ld-btn sub" data-act="log">戰報 ▲</button><span class="bcb-last"></span></div><div class="bcb-ll"></div></div>' +
     '<div class="bcb-dim" data-act="noop"></div><div class="bcb-dlg" role="alertdialog" aria-label="離開確認"><b>確定要離開戰鬥嗎?</b><div class="bcb-db"><button type="button" class="ld-btn" data-act="leave-ok">確認</button><button type="button" class="ld-btn sub" data-act="leave-no">取消</button></div></div><div class="bcb-black"></div></div><div class="bst-rot"><span>請將手機轉橫</span><button type="button" data-act="leave-rot" class="ld-btn sub" aria-label="離開">離開</button></div>';
 }
@@ -197,6 +197,16 @@ function bncbSpeedUi() {
   if (!BNCB.el) return;
   list = BNCB.el.querySelectorAll('[data-act^="spd"]');
   for (i = 0; i < list.length; i++) list[i].className = list[i].getAttribute('data-act') === 'spd' + BNCB.speed ? 'ld-btn on' : 'ld-btn sub';
+}
+// 大招演出 開 / 關切換鈕(設定頁同步,偏好鍵 lorddomain.ui.cutin;對下一次大招立即生效)
+function bncbCutinUi() {
+  var b = BNCB.el ? BNCB.el.querySelector('[data-act="cutin"]') : null;
+  if (b && typeof bnstCutinGet === 'function') b.innerHTML = '大招演出<br><b>' + BNST_CUTIN_NAME[bnstCutinGet()] + '</b>';
+}
+function bncbCutin() {
+  var m = bnstCutinNext();
+  bncbCutinUi();
+  if (typeof showToast === 'function') showToast('大招演出:' + BNST_CUTIN_NAME[m] + (m === 'none' ? '(不播演出幕)' : '(單張立繪演出幕)'), 1600);
 }
 function bncbSpeed(n) {
   BNCB.speed = bncbSpeedNorm(n);
@@ -283,6 +293,7 @@ function bncbOnClick(e) {
   if (a === 'spd1') bncbSpeed(1);
   else if (a === 'spd2') bncbSpeed(2);
   else if (a === 'spd3') bncbSpeed(3);
+  else if (a === 'cutin') bncbCutin();
   else if (a === 'log') bncbToggleLog();
   else if (a === 'replay') { var rpl = BNCB.rec, rs = BNCB.mySide, ra = BNCB.autoReport, ro = BNCB.rptOpts; bncbOpen(rpl, { mySide: rs, autoReport: ra, rptOpts: ro }); }
   else if (a === 'report') bncbToReport();

@@ -144,7 +144,7 @@ function bnstUltLine(fig) { return Object.prototype.hasOwnProperty.call(BNST_ULT
 // ───────── 戰法演出幕(設計_戰法演出幕.md S1~S3;S4 短版 / S5 選圖預載 / S6 換真圖尚未做)─────────
 // 圖層 .bst-scr 在 .bst-world 內、鏡頭層 .bst-cam 外(不吃鏡頭推近與震動):L0 雙層模糊戰場 / L1 筆刷色帶 + 墨點 / L2 效果圖(目前:類別色漸層) / L3 立繪(可多格) / L4 金色戰法名
 // 時序表 BNST_SCR_BASE 單位 = 「規劃毫秒」(1× 實際毫秒);實際毫秒 = 規劃毫秒 × plan.k(1× → 1、2× → 0.5、3× 首次 → 固定 500 ms 總長)
-var BNST_SCR_BASE = { l0In: 140, pan: 40, panIn: 180, fig: 80, figIn: 220, ttl: 220, ttlIn: 120, nm: 240, nmIn: 160, shake: 340, shakeD: 80, out: 900, outD: 160, l0out: 940, l0outD: 160, end: 1100 };
+var BNST_SCR_BASE = { l0In: 140, pan: 40, panIn: 180, fig: 80, figIn: 220, ttl: 220, ttlIn: 120, nm: 240, nmIn: 160, shake: 340, shakeD: 80, out: 580, outD: 160, l0out: 620, l0outD: 160, end: 780 };   // 立繪停留 = out - fig = 500 ms(2026-11-16 由 820 改 500;線稿特寫撤回後單張立繪)
 var BNST_SCR_FAST_MS = 500;   // 3× 首次:固定實際毫秒
 var BNST_SCR_FRAME_MS = 270, BNST_SCR_FRAME_MAX = 3, BNST_SCR_SW = ['cut', 'fade', 'flash', 'slide'];
 // 動態立繪多格(預留介面):BNST_SCR_POSE[fig] = { frames: [ 圖路徑 | { src: 路徑, ms: 這一格停留毫秒(1×), sw: 切入方式 }, ... 最多 3 格 ], ms: 預設每格毫秒, sw: 預設切入方式 }
@@ -152,9 +152,81 @@ var BNST_SCR_FRAME_MS = 270, BNST_SCR_FRAME_MAX = 3, BNST_SCR_SW = ['cut', 'fade
 //   使用者要的「側面動畫 → 正面立繪連續格 → 回到側面接大招」:側面動畫 = 接觸格以前的畫格,連續格 = 這裡,之後畫格續播(由 bnstUltCut 的凍結 / 接續流程負責)
 // 關羽:舉刀 12 格翻頁(以前翻漫畫格子的手繪翻頁感):硬切、不補間,±2px / ±0.5° 確定性抖動;圖源 = 12 格拼版圖集(4 欄 × 3 列,tools/art/unmult_white.py 去白底後存 assets/cutin/guanyu_cutin_sheet.webp)。
 //   reg:true = 圖集登記到 BNST_SCR_FILES 後才使用(避免對不存在的檔打 404),未登記 / 缺檔 → 單張立繪 guanyu 原圖。改成多個單格檔:把 sheet 換成 files:['assets/cutin/guanyu_cutin_1.webp', …];節奏 / 重複格 / 抖動開關見 bnstScrFrames 說明
-var BNST_SCR_POSE = { guanyu: { reg: true, flip: true, jitter: true, sheet: { src: 'assets/cutin/guanyu_cutin_sheet.webp', cols: 4, rows: 3 } } };
-var BNST_SCR_FILES = { 'assets/cutin/guanyu_cutin_sheet.webp': 1 };   // 關羽圖集為透明底(含 alpha,程式手繪線稿直接合成);翻頁模式立繪窗有米色紙底(css);其他立繪格檔到齊後在此登記(或由 js/bnst_scr_list.js 填)
+// 線稿特寫實驗已撤回 2026-11-16:關羽翻頁圖集 12 格 / 56 格登記取消(程式碼保留但休眠);大招演出幕回到單張立繪(portraits → fullbody 退路)。原登記備查:
+//   var BNST_SCR_POSE = { guanyu: { reg: true, flip: true, jitter: true, sheet: { src: 'assets/cutin/guanyu_cutin_sheet.webp', cols: 4, rows: 3 } } };
+//   var BNST_SCR_FILES = { 'assets/cutin/guanyu_cutin_sheet.webp': 1 };   // 關羽圖集為透明底(含 alpha,程式手繪線稿直接合成);翻頁模式立繪窗有米色紙底(css);其他立繪格檔到齊後在此登記(或由 js/bnst_scr_list.js 填)
+var BNST_SCR_POSE = {};
+var BNST_SCR_FILES = {};
 var BNST_SCR_CUTIN = {};   // 已有 assets/cutin/<fig>.webp 的名單(fig → 1);登記後立繪優先用它,避免對不存在的檔打 404
+// ───────── 大招演出 開 / 關(使用者決議 2026-11-16,取代原三檔):開 = 演出幕 + 單張立繪;關 = 不播演出幕 / 不凍結 / 不預載(保留側面衝刺 + 大招格 + 命中 + 收招)─────────
+// 偏好鍵 lorddomain.ui.cutin(偏好類,已登記 saveslots.js):值 'none' = 關,其餘一律視為開(舊存值 'few' / 'many' 相容為開);BNST.cutin = 測試 / 除錯覆寫('none' 或其他非空值)。切換對下一次大招立即生效
+// 線稿特寫實驗已撤回 2026-11-16:下方「多」檔資料載入、頂點定格、56 格補間整套休眠(不載入、不預載)
+var BNST_CUTIN_KEY = 'lorddomain.ui.cutin', BNST_CUTIN_MODES = ['on', 'none'], BNST_CUTIN_NAME = { on: '開', none: '關' };
+function bnstCutinGet() {
+  var v = '';
+  if (typeof BNST !== 'undefined' && BNST.cutin) return BNST.cutin === 'none' ? 'none' : 'on';
+  try { v = typeof localStorage !== 'undefined' ? localStorage.getItem(BNST_CUTIN_KEY) : ''; } catch (e) { v = ''; }
+  return v === 'none' ? 'none' : 'on';
+}
+function bnstCutinSet(m) {
+  m = m === 'none' ? 'none' : 'on';
+  try { if (typeof localStorage !== 'undefined') localStorage.setItem(BNST_CUTIN_KEY, m); } catch (e) { /* 無法寫入時略過 */ }
+  if (typeof BNST !== 'undefined') BNST.cutin = '';
+  return m;
+}
+function bnstCutinNext() { return bnstCutinSet(bnstCutinGet() === 'none' ? 'on' : 'none'); }
+// 「多」檔資料:assets/cutin/guanyu_slow.json(tools/art/lineart_inbetween.py 產出:cell / pages / frames[{c,ms}] / apex)。bnstSlowSet 登記圖集頁 + 驗證;bnstSlowLoad 在瀏覽器 fetch + 預載頁圖,任何失敗(缺檔 / 圖載入錯誤)→ BNST_SLOW 清空 / bad,「多」退回「少」
+var BNST_SLOW = null, BNST_SLOW_URL = 'assets/cutin/guanyu_slow.json', BNST_SLOW_TRIED = false;
+function bnstSlowSet(d) {
+  var ok = d && d.pages && d.pages.length && d.frames && d.frames.length && d.cell && d.cell.length === 2;
+  if (!ok) { BNST_SLOW = null; return false; }
+  BNST_SLOW = d; BNST_SLOW.bad = false;
+  d.pages.forEach(function (p) { BNST_SCR_FILES[p.src] = 1; });
+  return true;
+}
+function bnstSlowLoad() {
+  if (BNST_SLOW_TRIED || BNST_SLOW || typeof fetch !== 'function') return;
+  BNST_SLOW_TRIED = true;
+  try {
+    fetch(BNST_SLOW_URL).then(function (r) { if (!r.ok) throw new Error('slow json'); return r.json(); }).then(function (d) {
+      if (!bnstSlowSet(d) || typeof Image === 'undefined') return;
+      d.pages.forEach(function (p) { var im = new Image(); im.onerror = function () { if (BNST_SLOW) BNST_SLOW.bad = true; }; im.src = p.src; });
+    }).catch(function () { BNST_SLOW = null; });
+  } catch (e) { BNST_SLOW = null; }
+}
+// 頂點定格(最後一格)特效所需座標(特寫窗內 px,窗 360 × 384):face = 臉中心(集中線瞄準)、blade = 刀刃兩端(刀光閃、集中線避開)。少檔用 12 格圖集第 12 格的目測值
+var BNST_SCR_APEX_FEW = { face: [171, 165], blade: [[75, 18], [165, 85]] };
+// 「多」檔畫格:每格 {c:[頁圖], ms, sw:'flip', k:0, cell:{src,col,row,cols,rows,dw,dh}, j}(圖集頁內顯示 360 × 480,與立繪窗同寬);最後一格 = 頂點定格(apex,無抖動)
+function bnstScrManyFrames(fig) {
+  var d = BNST_SLOW, out = [], seed = bnstScrSeed(fig), cols, rows, per, last;
+  if (!d || d.bad || !d.frames || !d.frames.length) return null;
+  last = d.frames.length - 1;
+  d.frames.forEach(function (f, q) {
+    var c = Math.max(0, (f.c | 0) - 1), pg, k;
+    pg = d.pages[Math.floor(c / ((d.pages[0].cols | 0) * (d.pages[0].rows | 0)))] || d.pages[d.pages.length - 1];
+    cols = pg.cols | 0; rows = pg.rows | 0; per = cols * rows; k = c % per;
+    out.push({ c: [pg.src], ms: Math.max(30, Math.min(1500, f.ms > 0 ? f.ms : 60)), sw: 'flip', k: 0, cell: { src: pg.src, col: k % cols, row: Math.floor(k / cols), cols: cols, rows: rows, dw: 360, dh: 480, neo: d.style !== 'ink' }, j: q === last ? null : bnstScrJitter(q, seed), apex: q === last });
+  });
+  return out;
+}
+// 依檔位取畫格:none → null(不播);few → 12 格翻頁(最後一格改 150 ms 頂點定格);many → 56 格(3× 速度、缺檔 → few);非關羽 → 單張立繪
+function bnstScrFramesFor(fig, mode, spd) {
+  var m = mode || bnstCutinGet(), fr, last;
+  if (m === 'none') return null;
+  if (m === 'many' && fig === 'guanyu' && !(spd >= 3)) { fr = bnstScrManyFrames(fig); if (fr) return fr; }
+  fr = bnstScrFrames(fig);
+  last = fr[fr.length - 1];
+  if (last && last.sw === 'flip' && fr.length > 1) { last.apex = true; last.ms = Math.min(last.ms, BNST_SCR_HS_FEW); last.j = null; }
+  return fr;
+}
+var BNST_SCR_HS_FEW = 150;
+// 依檔位排程:none → play:false 且 none:true(不凍結、不載入圖集);3× 非首次規則照舊
+function bnstScrPlanFor(fig, spd, first) {
+  var fr = bnstScrFramesFor(fig, null, spd), p;
+  if (!fr) return { play: false, fast: false, k: 0, total: 0, real: 0, pause1x: 0, ext: 0, t: null, fr: [], none: true, frames: [] };
+  p = bnstScrPlan(spd, first, fr); p.frames = fr; p.mode = 'few';
+  return p;
+}
 // 效果插畫登記:key → 路徑(1536×544 成品);未登記 / 載入失敗 = 類別色漸層。S6 換真圖時填
 var BNST_SCR_ART = {};
 // 效果類別主色(設計 L2 表):缺插畫時用 linear-gradient(100deg,#1a1012,<主色> 55%,#1a1012)
@@ -253,7 +325,7 @@ function bnstScrHtml() {
   return '<div class="bst-scr" aria-hidden="true"><div class="scr-l0"><canvas class="a" width="106" height="49"></canvas><canvas class="b" width="40" height="18"></canvas><div class="scr-l0c"></div></div>' +
     '<div class="scr-ink">' + ink + '</div>' +
     '<div class="scr-pan" style="clip-path:' + BNST_SCR_CLIP + '"><div class="scr-art"></div><div class="scr-edge"></div></div>' +
-    '<div class="scr-fig"><div class="stk">' + new Array(BNST_SCR_SLOTS + 1).join('<img alt="">') + '<div class="scr-sheet"></div></div><div class="scr-fl"></div></div>' +
+    '<div class="scr-fig"><div class="stk">' + new Array(BNST_SCR_SLOTS + 1).join('<img alt="">') + '<div class="scr-sheet"></div></div><canvas class="scr-rays" width="360" height="384"></canvas><i class="scr-vg"></i><i class="scr-gl"><b></b></i><div class="scr-fl"></div><i class="scr-wf"></i></div>' +
     '<div class="scr-nm"><b></b></div>' +
     '<div class="scr-ttl"><i class="br"></i><span class="t" data-t=""></span></div></div>';
 }
@@ -315,9 +387,11 @@ function bnstScrLoad(im, cands) {
 }
 // 圖集格:div 背景圖 + 位置(格顯示 432×384;窗 360 寬,左右各裁 36)
 function bnstScrSheetSet(sh, cell) {
-  var W = 432, H = 384;
+  var W = cell && cell.dw > 0 ? cell.dw : 432, H = cell && cell.dh > 0 ? cell.dh : 384;   // 新「多」檔圖集:顯示 360 × 480、貼窗左緣;舊 12 格圖集:432 × 384、左右各裁 36
   if (!sh || !cell) return;
-  if (sh.getAttribute && sh.getAttribute('data-s') !== cell.src) { if (sh.setAttribute) sh.setAttribute('data-s', cell.src); sh.style.backgroundImage = 'url(' + cell.src + ')'; sh.style.backgroundSize = (cell.cols * W) + 'px ' + (cell.rows * H) + 'px'; }
+  if (sh.getAttribute && sh.getAttribute('data-s') !== cell.src) { if (sh.setAttribute) sh.setAttribute('data-s', cell.src); sh.style.backgroundImage = 'url(' + cell.src + ')'; }
+  sh.style.backgroundSize = (cell.cols * W) + 'px ' + (cell.rows * H) + 'px';
+  sh.style.left = (cell.dw > 0 ? 0 : -36) + 'px'; sh.style.width = W + 'px'; sh.style.height = H + 'px';
   sh.style.backgroundPosition = (-cell.col * W) + 'px ' + (-cell.row * H) + 'px';
 }
 // 顯示第 i 格立繪:一般格依 sw 切入(前面的格在淡入 / 滑入完成後移除,立繪有透明邊不能疊著);翻頁格(sw flip)硬切:只留這一格,不補間,套用抖動(--jx / --jy / --jr)
@@ -347,6 +421,57 @@ function bnstScrClear() {
   ims = el.querySelectorAll ? el.querySelectorAll('.scr-fig img, .scr-sheet') : [];
   for (i = 0; i < ims.length; i++) ims[i].classList.remove('on');
 }
+// ───────── 頂點定格特效(舉到最高、要劈下之前;最後一格 = hit-stop,全程式 + CSS,只動 transform / opacity)─────────
+// 少檔(150 ms):1 集中線 + 4 白閃;多檔(最後一格 ms 表值,預設 300):1 ~ 6 全做:定格不抖、集中線(淡入 + 向內收縮)、刀光閃(120 ms × 2)、白閃 ~ 48 ms、推近 1.00 → 1.06 + 暗角 / 紅邊加深 + 色帶 / 戰法名高頻微震、結束前 60 ms 縮 0.98(收);ql-low 只留靜態(集中線 / 暗角直接顯示,無推近 / 刀光 / 微震)
+function bnstScrHash(i) { var v = Math.sin(i * 12.9898 + 4.1) * 43758.5453; return v - Math.floor(v); }
+function bnstScrAngD(a, b) { var d = Math.abs(a - b) % (Math.PI * 2); return d > Math.PI ? Math.PI * 2 - d : d; }
+// 集中線(只畫一次,同目標不重畫):放射狀黑色細三角,內端尖、外端寬;避開臉(內徑 ≥ 112 px)與刀刃方位(不遮刀)
+function bnstScrRays(cv, fx, fy, bl, neo) {
+  var key = [fx, fy, bl[0][0], bl[0][1], bl[1][0], bl[1][1], neo ? 1 : 0].join(','), g, a0, a1, mid, half, i, N = 76, a, r0, w, r1 = 560;
+  if (!cv || typeof cv.getContext !== 'function') return false;
+  if (cv.getAttribute && cv.getAttribute('data-r') === key) return true;
+  try {
+    g = cv.getContext('2d'); if (!g) return false;
+    g.clearRect(0, 0, 360, 384);
+    a0 = Math.atan2(bl[0][1] - fy, bl[0][0] - fx); a1 = Math.atan2(bl[1][1] - fy, bl[1][0] - fx);
+    mid = Math.atan2(Math.sin(a0) + Math.sin(a1), Math.cos(a0) + Math.cos(a1)); half = bnstScrAngD(a0, a1) / 2 + 0.16;
+    for (i = 0; i < N; i++) {
+      a = i / N * Math.PI * 2 + (bnstScrHash(i) - 0.5) * 0.05;
+      if (bnstScrAngD(a, mid) < half) continue;
+      r0 = 112 + bnstScrHash(i + 50) * 60; w = 0.013 + bnstScrHash(i + 99) * 0.022;
+      g.fillStyle = neo ? (i % 3 === 0 ? 'rgba(255,236,190,.9)' : (i % 3 === 1 ? 'rgba(255,150,40,.88)' : 'rgba(235,45,40,.88)')) : '#15100c';   // 黑底:紅 / 金橘 + 金白細線;紙底:黑線
+      g.beginPath(); g.moveTo(fx + Math.cos(a) * r0, fy + Math.sin(a) * r0);
+      g.lineTo(fx + Math.cos(a - w) * r1, fy + Math.sin(a - w) * r1); g.lineTo(fx + Math.cos(a + w) * r1, fy + Math.sin(a + w) * r1);
+      g.closePath(); g.fill();
+    }
+    if (cv.setAttribute) cv.setAttribute('data-r', key);
+    return true;
+  } catch (e) { return false; }
+}
+function bnstScrApex(el, plan, frames, S, ql, mode) {
+  var n = frames.length, f = plan.fr[n - 1], T = f.ms, at = f.at, many = mode === 'many', low = ql === 'low', ap = BNST_SCR_APEX_FEW, mir = !S.isMine, fx, fy, bl, g0, g1, wf, gl, ang, len, dd, tms = [];
+  if (many && BNST_SLOW && BNST_SLOW.apex && BNST_SLOW.apex.face) ap = { face: [BNST_SLOW.apex.face[0] * 360, BNST_SLOW.apex.face[1] * 480], blade: BNST_SLOW.apex.blade.map(function (q) { return [q[0] * 360, q[1] * 480]; }) };
+  fx = mir ? 360 - ap.face[0] : ap.face[0]; fy = ap.face[1];
+  bl = ap.blade.map(function (q) { return [mir ? 360 - q[0] : q[0], q[1]]; });
+  g0 = bl[0]; g1 = bl[1]; dd = [g1[0] - g0[0], g1[1] - g0[1]]; len = Math.sqrt(dd[0] * dd[0] + dd[1] * dd[1]); ang = Math.atan2(dd[1], dd[0]) * 180 / Math.PI;
+  el.style.setProperty('--fx', Math.round(fx) + 'px'); el.style.setProperty('--fy', Math.round(fy) + 'px'); el.style.setProperty('--ah', String(Math.max(60, T - 60)));
+  el.style.setProperty('--gx', Math.round(g0[0]) + 'px'); el.style.setProperty('--gy', Math.round(g0[1]) + 'px'); el.style.setProperty('--ga', ang.toFixed(1) + 'deg'); el.style.setProperty('--gl', Math.round(len) + 'px');
+  bnstScrRays(el.querySelector('.scr-rays'), fx, fy, bl, !!(frames[0].cell && frames[0].cell.neo));
+  wf = el.querySelector('.scr-wf'); gl = el.querySelector('.scr-gl');
+  bnstScrAt(plan, at, function () {
+    el.classList.add('apex');
+    if (many && !low) el.classList.add('apex-z', 'apex-sk');
+    bnstRestart(wf, 'go');
+  });
+  if (many && !low) {
+    bnstScrAt(plan, at + 40, function () { bnstRestart(gl, 'go'); });
+    if (T >= 280) bnstScrAt(plan, at + 170, function () { bnstRestart(gl, 'go'); });
+    bnstScrAt(plan, at + Math.max(30, T - 70), function () { el.classList.remove('apex-sk'); });
+    bnstScrAt(plan, at + Math.max(40, T - 60), function () { el.classList.add('apex-rec'); });
+  }
+  tms = [at, at + 40, at + 170, at + T - 70, at + T - 60];
+  BNST.scrApexAt = tms;   // 除錯 / 測試:各階段時間點(規劃 ms)
+}
 // 播演出幕:S = 出手單位 rec,u = 單位資料,id = 戰法 id,plan = bnstScrPlan 結果(play 為 true)。取代舊的 暗場 / cut-in / 大字戰法名
 function bnstScrShow(S, u, id, name, plan) {
   var el = bnstScrEl(), B = plan.t, ql = bnstScrQL(), sk = (typeof BN_SKILLS !== 'undefined' && BN_SKILLS && id && BN_SKILLS[id]) || {}, key, col, art, ttl, nm, ims, sheet, frames, i, ok, tt = String(name || ''), slots = {}, flip, noj = BNST.noJitter || ql === 'low';
@@ -354,11 +479,11 @@ function bnstScrShow(S, u, id, name, plan) {
   bnstScrClear();
   key = bnstScrKey(sk.theme || sk.th || '', sk.kind || '', u && u.dt === 'strat' ? 'strat' : sk.dmg, u ? u.troop : '', sk.tags);
   col = BNST_SCR_COLOR[key] || BNST_SCR_COLOR.slash;
-  frames = bnstScrFrames(u ? u.fig : '');
+  frames = plan.frames && plan.frames.length ? plan.frames : bnstScrFrames(u ? u.fig : '');
   flip = frames[0].sw === 'flip';
   if (noj) frames.forEach(function (f) { f.j = null; });
   ok = ql === 'low' ? false : bnstScrSnap(el, ql);
-  el.className = 'bst-scr ql-' + ql + (S.isMine ? '' : ' foe') + (plan.fast ? ' fast' : '') + (ok ? '' : ' nosnap') + (flip ? ' flip' : '');
+  el.className = 'bst-scr ql-' + ql + (S.isMine ? '' : ' foe') + (plan.fast ? ' fast' : '') + (ok ? '' : ' nosnap') + (flip ? ' flip' : '') + (flip && frames[0].cell && frames[0].cell.neo ? ' neo bg' + (BNST.neoBg === 'b' ? 'B' : 'A') : '');
   el.style.setProperty('--k', String(plan.k));
   el.style.setProperty('--pn', String(B.out - B.pan));
   el.style.setProperty('--dn', String(B.out - B.fig));
@@ -380,6 +505,7 @@ function bnstScrShow(S, u, id, name, plan) {
   bnstScrAt(plan, B.pan, function () { el.classList.add('s-pan'); });
   bnstScrAt(plan, B.fig, function () { el.classList.add('s-fig'); bnstScrFrameOn(el, plan, frames, 0); });
   for (i = 1; i < frames.length; i++) (function (k) { bnstScrAt(plan, plan.fr[k].at, function () { bnstScrFrameOn(el, plan, frames, k); }); })(i);
+  if (frames[frames.length - 1].apex && plan.fr.length === frames.length) bnstScrApex(el, plan, frames, S, ql, plan.mode || 'few');
   bnstScrAt(plan, B.ttl, function () { el.classList.add('s-ttl'); });
   bnstScrAt(plan, B.nm, function () { el.classList.add('s-nm'); });
   if (B.shake >= 0) bnstScrAt(plan, B.shake, function () { bnstRestart(el, 's-shake'); });
@@ -395,7 +521,7 @@ function bnstPreloadList(plan) {
   function add(s) { if (s && !seen[s]) { seen[s] = 1; out.push(s); } }
   (plan.mine || []).concat(plan.enemy || []).forEach(function (u) {
     add(bnstFigSrc(u)); add(bnstTroopSrc(u.troop, u.dt));
-    if (u.fig) bnstScrFrames(u.fig).forEach(function (f) { f.c.forEach(function (s, i) { if (i === 0 || f.c.length === 1) add(s); }); });   // 演出幕立繪(每格取第一候選,避免對不存在的檔打 404)
+    if (u.fig && bnstCutinGet() !== 'none') (bnstScrFramesFor(u.fig, null, 1) || []).forEach(function (f) { f.c.forEach(function (s, i) { if (i === 0 || f.c.length === 1) add(s); }); });   // 演出幕立繪(每格取第一候選,避免對不存在的檔打 404)
     var an = bnstAnimOf(u.fig);
     if (an) { bnstFrames(an.atk, an.atkN).forEach(add); bnstUltFrames(an).forEach(add); }
   });
@@ -667,7 +793,7 @@ function bnstBasic(src, tgt, x) {
 function bnstAnimSize(S, an, k) { var h = BNST_ANIM_H * k * (S.sc > 0 ? S.sc : 1); S.anim.style.height = h + 'px'; S.anim.style.bottom = bnstFootBottom({ foot: an.foot, k: k }, S.sc) + 'px'; }
 function bnstUltCut(S, u, an, name, id) {
   var fr = bnstUltFrames(an), dur = an.dur || [], d = function (i) { return dur[i] > 0 ? dur[i] : 100; }, cut = an.cutAt, hit = an.ultHit, st = [], t = 0, i, bid, B, T = null, best = 1e9, dx = 0, dy = 0, ds = 1, cam = bnstCam(),
-    sp = BNST.spd() || 1, scr = bnstScrPlan(sp, !BNST.scrSeen[u.id], bnstScrFrames(u.fig)), pause = scr.play ? scr.pause1x : 0, ku = an.ku > 0 ? an.ku : 1.3, bk = an.back > 0 ? an.back : cut - 1,
+    sp = BNST.spd() || 1, scr = bnstScrPlanFor(u.fig, sp, !BNST.scrSeen[u.id]), pause = scr.play ? scr.pause1x : 0, ku = an.ku > 0 ? an.ku : 1.3, bk = an.back > 0 ? an.back : cut - 1,
     tc, tend;
   if (scr.play) BNST.scrSeen[u.id] = 1;
   for (i = 0; i < fr.length; i++) { st.push(t + (i >= cut ? pause : 0)); t += d(i); }
@@ -726,7 +852,7 @@ function bnstUlt(u, id, frames) {
     return impact;
   }
   // 無畫格:有 fig 先播完整版演出幕(3× 非首次略過),再接 原地放大 1.3 倍 + 身後品質色光 + 戰法名牌 + 共用特效;沒 fig(一般兵)維持原樣
-  scr = u.fig ? bnstScrPlan(BNST.spd() || 1, !BNST.scrSeen[u.id], bnstScrFrames(u.fig)) : null;
+  scr = u.fig ? bnstScrPlanFor(u.fig, BNST.spd() || 1, !BNST.scrSeen[u.id]) : null;
   if (scr && scr.play && bnstScrShow(S, u, id, name, scr)) { BNST.scrSeen[u.id] = 1; pause = scr.pause1x; }
   function big() {
     S.el.classList.add('ult-big');

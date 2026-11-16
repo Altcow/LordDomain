@@ -412,6 +412,17 @@ function stQualitySec() {
   return stSec('畫質', nodes, 'sound');
 }
 
+// 大招演出:開 / 關(偏好鍵 lorddomain.ui.cutin,與戰鬥畫面的切換鈕同步;對下一次大招立即生效)
+function stCutinSec() {
+  if (typeof bnstCutinGet !== 'function' || typeof bnstCutinSet !== 'function') return null;
+  const nodes = [];
+  stAdd(nodes, '大招演出', stSeg([['on', '開'], ['none', '關']], bnstCutinGet(), function (v) {
+    bnstCutinSet(v);
+    stRender();
+  }), '戰鬥中名人放大招時,插入一小段演出(模糊戰場、色帶、立繪、金色戰法名)。開:播演出幕(預設)。關:不插演出、不暫停,角色衝刺後直接出大招(最省時間)。戰鬥畫面的「大招演出」鈕也能切換。');
+  return stSec('大招演出', nodes, 'sound');
+}
+
 // 清理快取:清掉下載的圖片 / 音效快取 / 程式快取並重新載入。只動 Cache Storage、Service Worker、音效快取資料庫;
 // 不碰 localStorage(lorddomain.* 存檔與偏好)與存檔用的 IndexedDB(lorddomain-saves)
 function stCacheClear() {
@@ -528,8 +539,9 @@ function stRender() {
   const secs = [];
   const add = function (sec) { if (sec) secs.push(sec); };
   add(stQualitySec());
+  add(stCutinSec());
   add(stSoundSec());
-  const builtin = ['聲音', '畫面', '拍攝', '說明', '關於', '危險區', '世界與重新開始', '目前世界的陣地', '畫質', '清理快取', '圖鑑'];
+  const builtin = ['聲音', '畫面', '拍攝', '說明', '關於', '危險區', '世界與重新開始', '目前世界的陣地', '畫質', '大招特寫', '清理快取', '圖鑑'];
   stExtraRows.forEach(function (r) {
     if (builtin.indexOf(r.group) >= 0) return;
     const nodes = stExtraNodes(r.group);
