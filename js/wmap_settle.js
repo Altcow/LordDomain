@@ -37,6 +37,7 @@ function wmapSettleNorm(raw, now) {
   var g = { v: 1, own: {}, n: 0, oh: {} }, k, r, fr, fk, v;
   if (!raw || typeof raw !== 'object') return g;
   g.n = wmapSettleInt(raw.n, 0, 1e9, 0);
+  if (raw.gv > 0) g.gv = wmapSettleInt(raw.gv, 1, 1e6, 1);   // 世界版本(wm_gen gv);沒記 = 舊世界 gv 2,由 wmapGoMigrate 判斷
   if (raw.own && typeof raw.own === 'object') {
     for (k in raw.own) {
       if (!/^\d{1,8}$/.test(k)) continue;
@@ -236,8 +237,8 @@ function wmapSettleLootTxt(loot) {
 }
 function wmapSettleBrief(W, rp, o) {
   o = o || {};
-  var size = o.size || 64, gi = wmapSettleIsPtId(rp.pt) ? wmapSettleGiOf(rp.pt) : -1, kind = rp.cat === 'res' ? 'res' : (rp.cat === 'pass' ? 'pass' : (rp.cat === 'county' ? 'county' : 'other')), name, head, lines = [], tone, lt, occ;
-  name = (gi >= 0 ? wmapSettleCoord(gi, size) + ' ' : '') + (kind === 'res' ? 'Lv' + rp.lv + ' ' + rp.ptName : rp.ptName + (kind === 'pass' ? '(關口)' : (kind === 'county' ? '(縣城)' : '')));
+  var size = o.size || 64, gi = wmapSettleIsPtId(rp.pt) ? wmapSettleGiOf(rp.pt) : -1, kind = rp.cat === 'res' ? 'res' : (rp.cat === 'pass' ? 'pass' : (rp.cat === 'county' ? 'county' : (rp.cat === 'jun' ? 'jun' : 'other'))), name, head, lines = [], tone, lt, occ;
+  name = (gi >= 0 ? wmapSettleCoord(gi, size) + ' ' : '') + (kind === 'res' ? 'Lv' + rp.lv + ' ' + rp.ptName : rp.ptName + (kind === 'pass' ? '(關口)' : (kind === 'county' ? '(縣城)' : (kind === 'jun' ? '(郡城)' : ''))));
   if (rp.win) {
     if (kind === 'res') {
       if (rp.noocc) { head = '勝・占領已滿 ' + rp.noocc.used + '/' + rp.noocc.cap + ',未占領'; tone = 'mid'; }

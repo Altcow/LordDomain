@@ -50,7 +50,7 @@ function wmapPnlTargetText(pt, size) {
   if (typeof pt.id === 'string' && /^w\d+$/.test(pt.id)) gi = +pt.id.slice(1);
   if (gi >= 0) s = ' ' + wmapPnlCoord(gi, size || 64);
   if (pt.cat === 'res') return 'Lv' + pt.lv + ' ' + pt.ty + s;
-  return String(pt.ty || '') + (pt.cat === 'pass' ? '(關口)' : (pt.cat === 'county' ? '(縣城)' : '')) + s;
+  return String(pt.ty || '') + (pt.cat === 'pass' ? '(關口)' : (pt.cat === 'county' ? '(縣城)' : (pt.cat === 'jun' ? '(郡城)' : ''))) + s;
 }
 // 一隊的狀態:trip = 這隊的行程(沒有 = null);st = wmapGoStatus(trip, now);hurtLeft = 全隊最長重傷剩餘毫秒
 function wmapPnlState(trip, st, hurtLeft, now) {
@@ -424,12 +424,13 @@ function wmapPnlMiniRender(c, now) {
   if (WMAPPNL.miniBase) g.drawImage(WMAPPNL.miniBase, 0, 0);
   g.fillStyle = '#d03a22';   // 已占領領地
   for (i = 0; i < cells.length; i++) { p = wmapPnlMiniXY(cells[i], N, px); g.fillRect(Math.floor(p.x) - 1, Math.floor(p.y) - 1, 3, 3); }
-  g.fillStyle = '#7a3fc4';   // 縣城 / 關口
-  for (i = 0; i < WG.nodes.length; i++) { p = wmapPnlMiniXY(WG.nodes[i].gi, N, px); g.fillRect(Math.floor(p.x) - 1, Math.floor(p.y) - 1, 3, 3); }
-  g.fillStyle = '#ffd24a';   // 主城
-  p = wmapPnlMiniXY(WG.c0, N, px);
-  g.fillRect(Math.floor(p.x) - 2, Math.floor(p.y) - 2, 5, 5);
-  g.strokeStyle = '#3b2410'; g.lineWidth = 1; g.strokeRect(Math.floor(p.x) - 2.5, Math.floor(p.y) - 2.5, 6, 6);
+  for (i = 0; i < WG.nodes.length; i++) {   // 城池占地(縣 3×3 青灰、郡 4×4 黛藍、關 2×3 灰褐),1 格 = 小方塊;不寫字
+    k = WG.nodes[i]; g.fillStyle = k.type === 'jun' ? '#3f5d7a' : (k.type === 'pass' ? '#8f8676' : '#6f7f86');
+    g.fillRect(Math.floor(k.c0 * px / N), Math.floor(k.r0 * px / N), Math.max(2, Math.round(k.fw * px / N)), Math.max(2, Math.round(k.fh * px / N)));
+  }
+  g.fillStyle = '#d03a22';   // 主城 3×3(朱紅,深褐外框)
+  g.fillRect(Math.floor((WG.cx - 1) * px / N), Math.floor((WG.cy - 1) * px / N), Math.max(3, Math.round(3 * px / N)), Math.max(3, Math.round(3 * px / N)));
+  g.strokeStyle = '#3b2410'; g.lineWidth = 1; g.strokeRect(Math.floor((WG.cx - 1) * px / N) + 0.5, Math.floor((WG.cy - 1) * px / N) + 0.5, Math.max(3, Math.round(3 * px / N)) - 1, Math.max(3, Math.round(3 * px / N)) - 1);
   for (i = 0; i < pts.length; i++) { g.fillStyle = pts[i][2] ? '#9fb7c8' : '#ffffff'; g.fillRect(pts[i][0] * px / N - 1, pts[i][1] * px / N - 1, 3, 3); g.strokeStyle = '#1b1b1b'; g.strokeRect(pts[i][0] * px / N - 0.5, pts[i][1] * px / N - 0.5, 2, 2); }
   g.strokeStyle = '#ffffff'; g.lineWidth = 1;   // 鏡頭位置(十字)
   p = { x: cam.u * px / N, y: cam.v * px / N };

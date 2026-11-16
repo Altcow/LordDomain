@@ -12,8 +12,11 @@
 //   wmapGoSpd(slots) → 係數                   全隊最慢兵種係數(WMG_CFG.spd:騎 0.85 弓 1 槍 1 械 1.25 盾 1.10;預設 1)
 //   wmapGoPtId(gi) → 'w'+gi
 //   wmapGoRoute(WG, src, goal) → {cells, cost}|null   Dijkstra(8 向、不切牆角、道路 ×0.5、淺灘 ×1.5);goal = gi(可為縣 / 關單格)或 'home'(任一主城格)
-//   wmapGoTarget(WG, gi, info) → {ok, reason, kind:'res'|'county'|'pass', gi, cost, cells, path, ty, lv, node}   info = {ty:'farm'..., lv}(資源格;wmapInfoOf(gi))
-//        縣城 / 關口:cells = 主城 → node.adj 的路徑 + 該格(終點為不可走的單格建築),cost = node.d + 1
+//   wmapGoTarget(WG, gi, info) → {ok, reason, kind:'res'|'county'|'jun'|'pass', gi, cost, cells, path, ty, lv, node}   info = {ty:'farm'..., lv}(資源格;wmapInfoOf(gi))
+//        城池(gv 3):點城內任何格 / 關門道都算打這座;gi = node.gi(主城門格)。縣 / 郡:cells = 主城 → node.adj(主城門前格)的路徑 + node.gi(最後一步進門),cost = node.d + 1;
+//        關:規格 1.5,走到朝主城端的門外格 node.adj 開打、不進門道:cells 止於 adj,cost = node.d。tg.end = cells 最後一格(改目標 / 繞路重算用)
+//   wmapGoNeedMigrate(W, WG) → bool           存檔世界版本 g2.gv(沒記 = 2)≠ WG.gv
+//   wmapGoMigrate(W, cs, WG, now) → {changed, from, to, home, node, res, keep}   gv 重排:g2 行程立即回城、縣 / 郡 / 關舊點清掉、資源點新地圖上不是平地或在城郊 → 刪點與 g2.own(不補償);備份 .bak_gv2 由 UI 層寫
 //   wmapGoPlan(W, WG, tg, team, now, o) → {goMs, backMs, goMins, backMins, cost, spd}   預估(不改任何狀態)
 //   wmapGoDraft(W, WG, tg) → pt               目標的實體化草稿(不放進 W、不動 W.pc;算守軍戰力 / 勝算用)
 //   wmapGoOdds(W, cs, team, tg, now) → {my, foe, tag:'穩勝'|'五五'|'難勝', cls}
@@ -79,27 +82,27 @@ function wmapGoRoute(WG, src, goal) {
 
 // ───────── 目標 ─────────
 function wmapGoTarget(WG, gi, info) {
-  var N, k, nd, cells, base, cost;
+  var N, k, nd, cells, base, cost, pass;
   if (!WG || !(gi >= 0 && gi < WG.k.length)) return { ok: false, reason: 'target' };
   N = WG.size; k = WG.k[gi];
-  if (k === 9 || k === 10) {
-    nd = wmNodeAt(WG, gi);
-    if (!nd) return { ok: false, reason: 'unreach' };
+  nd = wmNodeAt(WG, gi);
+  if (nd) {
+    gi = nd.gi; pass = nd.type === 'pass';
     base = (nd.adj >= 0 && isFinite(nd.d)) ? wmPathCells(WG, nd.adj) : null;
-    if (base) { cells = base.concat([gi]); cost = nd.d + 1; }
+    if (base) { cells = pass ? base : base.concat([gi]); cost = pass ? nd.d : nd.d + 1; }
     else {   // 超出可達上限(d = Infinity):另算整條路,去程時間由 wmGoMins 夾在最大 10 分
-      base = wmapGoRoute(WG, WG.c0, gi);
+      base = wmapGoRoute(WG, WG.c0, pass ? nd.adj : gi);
       if (!base) return { ok: false, reason: 'unreach' };
       cells = base.cells; cost = base.cost;
     }
-    return { ok: true, reason: '', kind: nd.type === 'pass' ? 'pass' : 'county', gi: gi, WG: WG, node: nd, cost: cost, cells: cells, path: wmMarchTurns(cells, N), ty: '', lv: 0 };
+    return { ok: true, reason: '', kind: nd.type, gi: gi, WG: WG, node: nd, cost: cost, cells: cells, end: cells[cells.length - 1], path: wmMarchTurns(cells, N), ty: '', lv: 0 };
   }
   if (k === 0) {
     if (!info) return { ok: false, reason: 'empty' };
     if (!isFinite(WG.d[gi])) return { ok: false, reason: 'unreach' };
     cells = wmPathCells(WG, gi);
     if (!cells) return { ok: false, reason: 'unreach' };
-    return { ok: true, reason: '', kind: 'res', gi: gi, WG: WG, node: null, cost: WG.d[gi], cells: cells, path: wmMarchTurns(cells, N), ty: WMAPGO_TY[info.ty] || String(info.ty || '農田'), lv: info.lv | 0 };
+    return { ok: true, reason: '', kind: 'res', gi: gi, WG: WG, node: null, cost: WG.d[gi], cells: cells, end: gi, path: wmMarchTurns(cells, N), ty: WMAPGO_TY[info.ty] || String(info.ty || '農田'), lv: info.lv | 0 };
   }
   return { ok: false, reason: 'terrain' };
 }
@@ -107,7 +110,7 @@ function wmapGoCat(tg) { return tg.kind === 'res' ? 'res' : tg.kind; }
 // 草稿:呼叫 wdGenPt 但還原 W.pc,不放進 W.pts
 function wmapGoDraft(W, WG, tg) {
   var pc = W.pc, o, pt;
-  o = tg.kind === 'res' ? { lv: Math.max(1, Math.min(9, tg.lv)), ty: tg.ty } : { idx: tg.node ? tg.node.id : 0 };
+  o = tg.kind === 'res' ? { lv: Math.max(1, Math.min(9, tg.lv)), ty: tg.ty } : { idx: tg.node ? tg.node.ti : 0 };
   pt = wdGenPt(W, wmapGoCat(tg), o);
   W.pc = pc;
   pt.id = wmapGoPtId(tg.gi);
@@ -146,6 +149,7 @@ function wmapGoDispatch(W, cs, team, gi, now, o) {
   if (r.frozen) return { ok: false, reason: 'frozen', events: r.events };
   tg = wmapGoTarget(WG, gi, o.info);
   if (!tg.ok) return { ok: false, reason: tg.reason, events: r.events };
+  gi = tg.gi;
   pt0 = wdPt(W, wmapGoPtId(gi));
   if (pt0 && (pt0.owner || pt0.cl)) return { ok: false, reason: 'owned', events: r.events };
   if (pt0 && wdPtBusy(W, pt0.id)) return { ok: false, reason: 'busy', events: r.events };
@@ -210,13 +214,14 @@ function wmapGoPlanRedirect(W, WG, trip, gi, info, now, o) {
   if (!lg) return { ok: false, err: 'nopath' };
   tg = wmapGoTarget(WG, gi, info);
   if (!tg.ok) return { ok: false, err: 'target', reason: tg.reason };
+  gi = tg.gi;
   pt0 = wdPt(W, wmapGoPtId(gi));
   if (pt0 && (pt0.owner || pt0.cl)) return { ok: false, err: 'owned' };
   if (pt0 && wdTripsTo(W, pt0.id).some(function (x) { return x !== trip; })) return { ok: false, err: 'busy' };
   s = wmMarchAt(lg, now, size); seg = s.seg;
   if (!((s.phase === 'go' && seg.k === 'mv') || s.phase === 'idle')) return { ok: false, err: 'notmoving' };
   cut = wmMarchCut(seg, s.d, size);
-  rt = wmapGoRoute(WG, cut.gi, gi);
+  rt = wmapGoRoute(WG, cut.gi, tg.end);   // 關 = 門外格(不進門道)
   if (!rt) return { ok: false, err: 'route' };
   route = wmMarchTurns(rt.cells, size);
   sp = wmMarchSplice(cut, route);
@@ -310,4 +315,33 @@ function wmapGoSummary(events) {
     else if (e.k === 'miss') o.miss++;
   }
   return o;
+}
+
+// ───────── 世界版本重排(gv 2 → 3:縣 / 郡 / 關改占地,地形全變)─────────
+// 規則:g2 行程立即回城(兵力不損);cat county / jun / pass 的 'w…' 點全刪(新城池重新可打,名聲不追回);
+//   資源點(cat 'res')與 g2.own:新地圖上該格仍是平地(k 0)且不在城郊 / 占地 → 保留,否則刪點與 own 記錄,不補償;完成後 g2.gv = WG.gv。
+function wmapGoNeedMigrate(W, WG) {
+  var gv = W && W.g2 && W.g2.gv > 0 ? W.g2.gv : 2;   // 沒記錄的舊存檔 = gv 2(v66 以前的 wmap 世界都是 gv 2)
+  return !!(WG && WG.gv > 0 && gv !== WG.gv);
+}
+function wmapGoMigrate(W, cs, WG, now) {
+  var out = { changed: false, from: 0, to: 0, home: 0, node: 0, res: 0, keep: 0 }, g, i, p, gi, ev, trips, key, bad;
+  if (!W || !WG || !wmapGoNeedMigrate(W, WG)) return out;
+  g = typeof wmapSettleG2 === 'function' ? wmapSettleG2(W) : (W.g2 = W.g2 && W.g2.own ? W.g2 : { v: 1, own: {}, n: 0, oh: {} });
+  out.changed = true; out.from = g.gv > 0 ? g.gv : 2; out.to = WG.gv;
+  ev = [];
+  trips = W.trips.slice();
+  for (i = 0; i < trips.length; i++) if (trips[i].g2) { wdTripHome(W, cs, trips[i], now, ev, false); out.home++; }
+  bad = function (c) { return !(WG.k[c] === 0 && !(WG.zone && WG.zone[c])); };
+  W.pts = W.pts.filter(function (x) {
+    if (!wmapGoIsPtId(x.id)) return true;
+    gi = +x.id.slice(1);
+    if (x.cat === 'county' || x.cat === 'jun' || x.cat === 'pass') { out.node++; return false; }
+    if (x.cat === 'res' && bad(gi)) { out.res++; return false; }
+    if (x.cat === 'res') out.keep++;
+    return true;
+  });
+  for (key in g.own) if (bad(+key)) { delete g.own[key]; }
+  g.gv = WG.gv;
+  return out;
 }

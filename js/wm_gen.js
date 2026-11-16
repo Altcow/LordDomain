@@ -5,10 +5,13 @@
 //
 // ───────── 公開 API(W1 之後的人只靠這裡) ─────────
 //   WMG_CFG    參數表:size 64(改成 160 即共享世界大小;全部參數化)、border 4、reach 24、goBase 1、goK 0.375、goMin 2、goMax 10、spd{騎 弓 槍 械 盾}、mode{steady 1, rush 0.67}…
-//   WMG_K      格種類代號:{plain:0, mount:1, rock:2, river:3, ford:4, road:5, city:6, edge:7, yard:8, county:9, pass:10};可走 = 0 / 4 / 5 / 6;可占領 = 只有 0
-//   縣城 k 9 / 關口 k 10(gv 2 新增):固定單格特殊建築,不可走、不可占領、不進 d(d = Infinity、wmReach / wmCanTarget 皆 false);道路止於其旁。要出征縣 / 關請用 WG.nodes[i].adj(相鄰道路格)與 .d。
-//   WG.nodes = [{id:序號, type:'county'|'pass', gi:格, adj:相鄰可走格 gi(無 = -1), d:adj 的路徑成本(不可達 = Infinity)}]  縣 WMG_CFG.countyN(6)、關 WMG_CFG.passN(3);縣依 6 個扇區環繞主城(離主城 countyR 11~17 格),關靠邊界且貼著主城通往邊的道路(第 3 座在對邊)。
-//   wmNodeAt(WG, gi) → node | null;道路網 = 主城 → 縣 → 關的最小生成樹(A*,過河成橋)+ 原本主城 → 兩邊的路;道路格占可玩格 ≤ WMG_CFG.roadMax(8%)
+//   WMG_K      格種類代號:{plain:0, mount:1, rock:2, river:3, ford:4, road:5, city:6, edge:7, yard:8, county:9, pass:10, jun:11};可走 = 0 / 4 / 5 / 6;可占領 = 只有 0
+//   城池占地(gv 3,設計_地圖城池占地與美工_規格.md 第 1、2 節):縣 3×3 = k 9、郡 4×4 = k 11、關 = 兩側山壁 4 格 k 10 + 中間門道 2 格 k 5(道路,可通行,橫跨 3 沿路 2);城內格不可走、不可占領、不進 d(wmReach / wmCanTarget 皆 false),只有關的門道可通行。
+//   每座城池外圍 1 圈 = 城郊(zone 2):山 / 大石 / 領地都不放。縣 / 郡四面有門,道路只接一面(= 主城門);出征一律打主城門前格 node.adj,node.gi = 主城門那一格(城內),存檔點 id = 'w' + node.gi。
+//   WG.nodeOf = Int8Array(size²) 格 → 節點序號(城內 + 關門道;不屬於任何城池 = -1);WG.zone = Uint8Array(size²) 0 一般 / 1 城池占地(含門道)/ 2 城郊;WG.nfail = 放不下的原因(空 = 全放好)
+//   WG.nodes = [{id, type:'county'|'jun'|'pass', ti:同類序號 0.., c0, r0, fw, fh:占地矩形, cells:[gi…]占地全部格(含門道), gates:[{side 0=r−1 1=c+1 2=r+1 3=c−1, gi:城內門格, out:門外格}…], mg:主城門在 gates 的索引, gi:主城門格, adj:主城門前格(道路), d:adj 的全圖路徑成本(有限), axis:只有關 0 = 道路沿 c、1 = 沿 r}]
+//     縣 countyN(6)、郡 junN(2)、關 passN(3);縣依 6 扇區環繞主城(中心離主城 countyR 11~17),郡兩座相對(18~21),關前兩座跨在主城通邊的主路上、第 3 座靠邊另鋪路到邊界。
+//   wmNodeAt(WG, gi) → node | null(查 nodeOf,O(1):點城內任何格 / 關門道都回該城池);道路網 = 主城 → 城池門前格的最小生成樹(A*,過河成橋)+ 原本主城 → 兩邊的路;道路格占可玩格 ≤ WMG_CFG.roadMax(8%)
 //   主城足跡(H 形 7 格,2026-11-16 使用者決議):3×3 外框內左右兩直排各 3 格 + 正中央 1 格 = k 6(出發集合,d = 0);上下缺口 (中央欄, 上列) 與 (中央欄, 下列) 2 格 = 庭院 k 8(不可通行、不可占領、不計占領上限、不產生目標、d = Infinity)。
 //   WMG_CITY_CELLS  7 格相對主城中心的 [dc, dr];WMG_CITY_YARD  2 格庭院 [dc, dr];WMG_CITY_BOX  3×3 外框 9 格(山 / 石 / 河 / 道路起點生成一律避讓整個外框)
 //   wmCityCells(WG) → [gi×7](k=6,中心 c0 在內);wmCityYard(WG) → [gi×2];wmCityBox(WG) → [gi×9]
@@ -20,6 +23,7 @@
 //              g: Uint8Array(size²)    地面變體 0~2(依 hash),
 //              pm: Int16Array(size²)   山 / 石格所屬拼塊序號(pcs 索引),無 = -1,
 //              pcs: [{id:'M3l', gi:錨點}] 拼塊清單,錨點 = footprint 外框左上格(最小 r、最小 c)的 gi,格 = WMG_PIECES[id] 各 [dr, dc] 加上去,
+//              nodes, nodeOf, zone, nfail  見上,
 //              d: Float32Array(size²)  主城(3×3 任一格)到該格的路徑成本,成本 > reach 或不可達 = Infinity,主城格 = 0,
 //              pv: Int32Array(size²)   Dijkstra 前驅格(回溯路徑用),無 = -1,
 //              chk: {ok, reasons[], reachPlain, walkOk, pieceOk} }
@@ -38,7 +42,7 @@
 
 var WMG_CFG = {
   size: 64, border: 4, reach: 24, keep: 4,          // 世界邊長;邊界帶格數(不可點不可走);可達成本上限;主城外保留平地圈(切比雪夫距離 ≤ keep)
-  gv: 2,                                            // 生成器版本(改演算法就遞增;存檔記錄,不同 = 重新生成)
+  gv: 3,                                            // 生成器版本(改演算法就遞增;存檔記錄,不同 = 重新生成)
   mtnCount: 40, mtnRef: 3136,                       // 山拼塊數 40 / 3136 個可玩格(64×64 扣邊界帶 = 56×56);其他尺寸按可玩格數等比例
   mtnW: [['M1', 3], ['M2c', 1.5], ['M2r', 1.5], ['M3f', 1], ['M3b', 1], ['M3l', 1], ['M3r', 1], ['M4', 2]],   // 拼塊權重
   rockP: 0.02,                                      // 大石散佈機率(平地格)
@@ -48,9 +52,10 @@ var WMG_CFG = {
   spd: { '騎': 0.85, '弓': 1.0, '槍': 1.0, '械': 1.25, '謀': 1.05, '盾': 1.10 },
   mode: { steady: 1, rush: 0.67 },
   ringDiv: 2.7,
-  countyN: 6, passN: 3, countyR: [11, 17], nodeGap: 6, roadMax: 0.08   // 縣數、關數、縣離主城格數範圍、節點間最小距離(切比雪夫)、道路格占可玩格上限
+  countyN: 6, passN: 3, junN: 2, countyR: [11, 17], junR: [18, 21], gapE: 3, ring: 1, roadMax: 0.08,   // 縣數、關數、郡數、縣 / 郡中心離主城格數範圍、城池間最小間隔(占地矩形邊對邊空 3 格)、城郊圈數、道路格占可玩格上限
+  fp: { county: [3, 3], jun: [4, 4], pass: [2, 3] }   // 占地 [fw, fh];關 = [沿路, 橫跨](axis 1 時對調)
 };
-var WMG_K = { plain: 0, mount: 1, rock: 2, river: 3, ford: 4, road: 5, city: 6, edge: 7, yard: 8, county: 9, pass: 10 };
+var WMG_K = { plain: 0, mount: 1, rock: 2, river: 3, ford: 4, road: 5, city: 6, edge: 7, yard: 8, county: 9, pass: 10, jun: 11 };
 var WMG_CITY_CELLS = [[-1, -1], [-1, 0], [-1, 1], [1, -1], [1, 0], [1, 1], [0, 0]];   // [dc, dr]:左右兩直排各 3 格 + 中央
 var WMG_CITY_YARD = [[0, -1], [0, 1]];                                                // 庭院缺口(上、下)
 var WMG_CITY_BOX = [[-1, -1], [0, -1], [1, -1], [-1, 0], [0, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
@@ -165,6 +170,7 @@ function wmInCityBox(WG, gi) {
 function wmNodeAt(WG, gi) {
   var i;
   if (!WG.nodes) return null;
+  if (WG.nodeOf) { i = gi >= 0 && gi < WG.nodeOf.length ? WG.nodeOf[gi] : -1; return i >= 0 ? (WG.nodes[i] || null) : null; }
   for (i = 0; i < WG.nodes.length; i++) if (WG.nodes[i].gi === gi) return WG.nodes[i];
   return null;
 }
@@ -244,6 +250,12 @@ function wmGenCheck(WG) {
   // 3 主城可達(成本 ≤ reach)平地數
   for (i = 0; i < n; i++) if (k[i] === 0 && isFinite(WG.d[i])) reachPlain++;
   if (reachPlain < WMG_CFG.minPlain) reasons.push('可達平地 ' + reachPlain + ' < ' + WMG_CFG.minPlain);
+  // 4 城池:放得下(數量)、每座主城門前格主城到得了
+  if (WG.nfail && WG.nfail.length) for (i = 0; i < WG.nfail.length; i++) reasons.push(WG.nfail[i]);
+  if (WG.nodes) {
+    if (WG.nodes.length !== WMG_CFG.countyN + WMG_CFG.junN + WMG_CFG.passN) reasons.push('城池數量 ' + WG.nodes.length);
+    for (i = 0; i < WG.nodes.length; i++) if (!(WG.nodes[i].adj >= 0 && isFinite(WG.nodes[i].d))) { reasons.push('城池 ' + i + ' 主城到不了'); break; }
+  }
   return { ok: reasons.length === 0, reasons: reasons, reachPlain: reachPlain, walkOk: walkOk, pieceOk: pieceOk };
 }
 
@@ -263,7 +275,7 @@ function wmgRoadPath(k, N, seed, sx, sy, tx, ty) {   // 4 向 A*;平地 1(+雜�
       x = ux + WMG_DX8[j]; y = uy + WMG_DY8[j];
       if (x < 0 || y < 0 || x >= N || y >= N) continue;
       v = y * N + x; kk = k[v];
-      if (kk === 6 || kk === 7 || kk === 8 || kk === 1 || kk === 2 || ((kk === 9 || kk === 10) && v !== ti)) continue;
+      if (kk === 6 || kk === 7 || kk === 8 || kk === 1 || kk === 2 || kk === 9 || kk === 10 || kk === 11) continue;
       cost = kk === 5 ? 0.3 : (kk === 3 ? 8 : (kk === 4 ? 2 : 1 + 0.6 * wmGenHash01(seed, v, 11)));
       nd = gs[u] + cost;
       if (nd < gs[v]) { gs[v] = nd; pr[v] = u; h.push(nd + 0.8 * (Math.abs(x - tx) + Math.abs(y - ty)), v); }
@@ -274,23 +286,25 @@ function wmgRoadPath(k, N, seed, sx, sy, tx, ty) {   // 4 向 A*;平地 1(+雜�
   while (cur >= 0) { out.push(cur); cur = pr[cur]; }
   return out;
 }
-function wmgNodeAdj(WG) {   // 每個縣 / 關:相鄰(4 向)可走格中成本最小者 → adj、d
-  var N = WG.size, i, j, nd, x, y, v, best, bd;
+function wmgNodeAdj(WG) {   // 每座城池:全圖 Dijkstra(不受 reach 限制)→ 主城門 / 門前格 adj / d;關的主城門 = 門外格 d 較小的那一端(朝主城)
+  var all = wmDistCalc(WG, Infinity).d, i, j, nd, g, best, bd;
   for (i = 0; i < WG.nodes.length; i++) {
-    nd = WG.nodes[i]; x = nd.gi % N; y = (nd.gi - x) / N; best = -1; bd = Infinity;
-    for (j = 0; j < 4; j++) {
-      v = (y + WMG_DY8[j]) * N + x + WMG_DX8[j];
-      if (wmgWalk(WG.k[v]) && (best < 0 || WG.d[v] < bd)) { bd = WG.d[v]; best = v; }
+    nd = WG.nodes[i];
+    if (nd.type === 'pass' || nd.mg < 0) {
+      best = 0; bd = Infinity;
+      for (j = 0; j < nd.gates.length; j++) if (all[nd.gates[j].out] < bd) { bd = all[nd.gates[j].out]; best = j; }
+      nd.mg = best;
     }
-    nd.adj = best; nd.d = bd;
+    g = nd.gates[nd.mg];
+    nd.gi = g.gi; nd.adj = g.out; nd.d = all[g.out];
   }
 }
 function wmgBuild(seed, N) {
   var C = WMG_CFG, B = C.border, n = N * N, k = new Uint8Array(n), g = new Uint8Array(n), pm = new Int16Array(n), pcs = [], rng = wmgRng(seed),
-    nodesOut = null, cx = N >> 1, cy = N >> 1, c0 = cy * N + cx, lo = B, hi = N - 1 - B, i, x, y, dx, dy, WG, r, t;
+    nodesOut = null, zone = new Uint8Array(n), nodeOf = new Int8Array(n), nfail = [], mainPaths = [], cx = N >> 1, cy = N >> 1, c0 = cy * N + cx, lo = B, hi = N - 1 - B, i, x, y, dx, dy, WG, r, t;
   for (i = 0; i < n; i++) {
     x = i % N; y = (i - x) / N;
-    pm[i] = -1; g[i] = wmGenHash(seed, i, 3) % 3;
+    pm[i] = -1; nodeOf[i] = -1; g[i] = wmGenHash(seed, i, 3) % 3;
     if (x < B || y < B || x > hi || y > hi) k[i] = 7;
   }
   for (i = 0; i < WMG_CITY_CELLS.length; i++) k[(cy + WMG_CITY_CELLS[i][1]) * N + cx + WMG_CITY_CELLS[i][0]] = 6;
@@ -334,80 +348,154 @@ function wmgBuild(seed, N) {
       ty = s[3] !== null ? s[3] : clamp(cy + Math.floor(rng() * 25) - 12, lo, hi);
       path = wmgRoadPath(k, N, seed, s[0], s[1], tx, ty);
       if (!path) continue;
+      mainPaths.push(path);
       for (m = 0; m < path.length; m++) { q = path[m]; if (k[q] === 0 || k[q] === 3) k[q] = 5; }
     }
   })();
 
-  // 2b 縣城 / 關口:縣 6 座環繞主城(扇區各一)、關 3 座靠邊(前兩座貼著主城通邊的道路,第三座在對邊);全部放在平地,之後山 / 石避開;道路網主城 → 縣 → 關(最小生成樹),過河成橋
+  // 2b 縣 / 郡 / 關(gv 3):占地矩形 + 外圍 1 圈城郊(zone 2)。先放關(前兩座跨在兩條通邊主路上、第 3 座靠邊另鋪路到邊界),再放郡、縣;
+  //    道路網 = 主城 → 各城池「門前格」的最小生成樹(A*,過河成橋):縣 / 郡四面有門只接一面(= 主城門),關的門道本身就是道路
   (function () {
-    var nodes = [], tries, a, rr, tx, ty, c, ex, p, q, m, s0, best, bd, d, inN, dn, conn, e, bi, bj, sp, pt, pi, path, ports, h01 = function (a1, b1) { return wmGenHash01(seed, a1, b1 + 700); };
-    function free(gx, gy) {
-      var qq, jj;
-      if (gx < lo + 2 || gy < lo + 2 || gx > hi - 2 || gy > hi - 2) return false;
-      qq = gy * N + gx;
-      if (k[qq] !== 0 || Math.max(Math.abs(gx - cx), Math.abs(gy - cy)) <= C.keep) return false;
-      for (jj = 0; jj < nodes.length; jj++) if (Math.max(Math.abs(gx - nodes[jj].x), Math.abs(gy - nodes[jj].y)) < C.nodeGap) return false;
+    var nodes = [], FP = C.fp, npass = 0, h01 = function (a1, b1) { return wmGenHash01(seed, a1, b1 + 700); }, p, pa, j, c, a, rr, tx, ty, tries, R, R2, m, q, d, bd, bi, bj, inN, conn, pt, sp, ports, cl, path, s0, o0, fr, e, d1, d2, dir, ax, cc0, rr0, ord = { county: 0, jun: 1, pass: 2 };
+    function mk(type, c0b, r0, axis) {
+      var f = FP[type], sw = type === 'pass' && axis === 1;
+      return { type: type, c0: c0b, r0: r0, fw: sw ? f[1] : f[0], fh: sw ? f[0] : f[1], axis: type === 'pass' ? axis : -1 };
+    }
+    function gatesOf(Q) {   // 門格 = 該邊第 floor((n−1)/2) 格;關只有門道兩端
+      var mc, mr;
+      if (Q.type === 'pass') {
+        if (Q.axis === 0) { mr = Q.r0 + 1; return [{ side: 3, c: Q.c0, r: mr, oc: Q.c0 - 1, ro: mr }, { side: 1, c: Q.c0 + 1, r: mr, oc: Q.c0 + 2, ro: mr }]; }
+        mc = Q.c0 + 1; return [{ side: 0, c: mc, r: Q.r0, oc: mc, ro: Q.r0 - 1 }, { side: 2, c: mc, r: Q.r0 + 1, oc: mc, ro: Q.r0 + 2 }];
+      }
+      mc = Q.c0 + Math.floor((Q.fw - 1) / 2); mr = Q.r0 + Math.floor((Q.fh - 1) / 2);
+      return [{ side: 0, c: mc, r: Q.r0, oc: mc, ro: Q.r0 - 1 }, { side: 1, c: Q.c0 + Q.fw - 1, r: mr, oc: Q.c0 + Q.fw, ro: mr },
+        { side: 2, c: mc, r: Q.r0 + Q.fh - 1, oc: mc, ro: Q.r0 + Q.fh }, { side: 3, c: Q.c0, r: mr, oc: Q.c0 - 1, ro: mr }];
+    }
+    function edgeD(gi) { var gx = gi % N, gy = (gi - gx) / N; return Math.min(gx - lo, hi - gx, gy - lo, hi - gy); }
+    function canPlace(Q, free5) {   // 占地 + 城郊都在 lo+1..hi−1 內、全是平地(free5 內的道路格除外)、不碰主城保留圈與其他城池、與其他城池空 ≥ gapE 格
+      var gx, gy, gi, kk, j2, z;
+      if (Q.c0 - C.ring < lo + 1 || Q.r0 - C.ring < lo + 1 || Q.c0 + Q.fw - 1 + C.ring > hi - 1 || Q.r0 + Q.fh - 1 + C.ring > hi - 1) return false;
+      for (gy = Q.r0 - C.ring; gy <= Q.r0 + Q.fh - 1 + C.ring; gy++) for (gx = Q.c0 - C.ring; gx <= Q.c0 + Q.fw - 1 + C.ring; gx++) {
+        gi = gy * N + gx; kk = k[gi];
+        if (keep(gx, gy) || zone[gi]) return false;
+        if (kk !== 0 && !(kk === 5 && free5 && free5[gi])) return false;
+      }
+      for (j2 = 0; j2 < nodes.length; j2++) {
+        z = nodes[j2];
+        if (Math.max(Q.c0 - (z.c0 + z.fw - 1), z.c0 - (Q.c0 + Q.fw - 1), Q.r0 - (z.r0 + z.fh - 1), z.r0 - (Q.r0 + Q.fh - 1)) < C.gapE + 1) return false;
+      }
       return true;
     }
-    function put(type, gx0, gy0) {   // 在目標附近螺旋找可放的平地格
-      var rad, ox, oy, gx, gy;
-      for (rad = 0; rad <= 5; rad++) for (oy = -rad; oy <= rad; oy++) for (ox = -rad; ox <= rad; ox++) {
-        if (Math.max(Math.abs(ox), Math.abs(oy)) !== rad) continue;
-        gx = gx0 + ox; gy = gy0 + oy;
-        if (!free(gx, gy)) continue;
-        k[gy * N + gx] = type === 'county' ? 9 : 10;
-        nodes.push({ type: type, x: gx, y: gy, gi: gy * N + gx });
-        return true;
-      }
-      return false;
+    function put(Q) {
+      var gx, gy, gi, kv = Q.type === 'county' ? 9 : (Q.type === 'jun' ? 11 : 10), g, door = {};
+      Q.g = gatesOf(Q); Q.cells = []; Q.mg = -1;
+      if (Q.type === 'pass') for (g = 0; g < Q.g.length; g++) door[Q.g[g].r * N + Q.g[g].c] = 1;
+      for (gy = Q.r0; gy < Q.r0 + Q.fh; gy++) for (gx = Q.c0; gx < Q.c0 + Q.fw; gx++) { gi = gy * N + gx; k[gi] = door[gi] ? 5 : kv; zone[gi] = 1; Q.cells.push(gi); }
+      for (gy = Q.r0 - C.ring; gy <= Q.r0 + Q.fh - 1 + C.ring; gy++) for (gx = Q.c0 - C.ring; gx <= Q.c0 + Q.fw - 1 + C.ring; gx++) { gi = gy * N + gx; if (!zone[gi]) zone[gi] = 2; }
+      nodes.push(Q);
+      return Q;
     }
-    for (c = 0; c < C.countyN; c++) {   // 縣:扇區角度 + 抖動,半徑 countyR
+    function spiral(type, c0b, r0, axis, rad, free5) {   // 目標附近螺旋找可放的位置
+      var rd, ox, oy, Q;
+      for (rd = 0; rd <= rad; rd++) for (oy = -rd; oy <= rd; oy++) for (ox = -rd; ox <= rd; ox++) {
+        if (Math.max(Math.abs(ox), Math.abs(oy)) !== rd) continue;
+        Q = mk(type, c0b + ox, r0 + oy, axis);
+        if (canPlace(Q, free5)) return Q;
+      }
+      return null;
+    }
+    function lay(pth) { var z; for (z = 0; z < pth.length; z++) if (k[pth[z]] === 0 || k[pth[z]] === 3) k[pth[z]] = 5; }
+
+    // 關 1~2:沿兩條主路(path[0] = 邊界端)從外往內找「門外 1 + 門道 2 + 門外 1」連續 4 格同向的直段,外端門外格離可玩區邊 1 起,最遠 14 格(1~4 優先)
+    for (p = 0; p < mainPaths.length; p++) {
+      pa = mainPaths[p]; R = null;
+      for (j = 1; j + 3 < pa.length && !R; j++) {
+        e = edgeD(pa[j]);
+        if (e > 14) break;
+        if (e < 1) continue;
+        d1 = pa[j + 1]; d2 = pa[j + 2];
+        if (d1 - pa[j] !== d2 - d1 || pa[j + 3] - d2 !== d2 - d1) continue;
+        ax = Math.abs(d2 - d1) === 1 ? 0 : 1;
+        if (ax === 0) { cc0 = Math.min(d1 % N, d2 % N); rr0 = Math.floor(d1 / N) - 1; } else { cc0 = d1 % N - 1; rr0 = Math.min(Math.floor(d1 / N), Math.floor(d2 / N)); }
+        fr = {}; fr[pa[j]] = 1; fr[d1] = 1; fr[d2] = 1; fr[pa[j + 3]] = 1;
+        R2 = mk('pass', cc0, rr0, ax);
+        if (canPlace(R2, fr)) R = R2;
+      }
+      if (R) { put(R); R.ti = npass++; }
+    }
+    // 關(其餘):靠邊的雜湊角度;軸 = 最近邊界方向;外端門外格離邊 2~3 格,另鋪一條路到邊界
+    for (tries = 0; npass < C.passN && tries < 12; tries++) {
+      a = h01(tries, 3) * 2 * Math.PI;
+      tx = Math.max(lo + 3, Math.min(hi - 3, Math.round(cx + Math.cos(a) * 60))); ty = Math.max(lo + 3, Math.min(hi - 3, Math.round(cy + Math.sin(a) * 60)));
+      d1 = tx - lo; d2 = hi - tx; e = ty - lo; dir = hi - ty; q = Math.min(d1, d2, e, dir);
+      m = 2 + (h01(tries, 4) < 0.5 ? 0 : 1);   // 外端門外格離邊 2 或 3
+      if (q === d1) { ax = 0; cc0 = lo + m + 1; rr0 = ty - 1; }
+      else if (q === d2) { ax = 0; cc0 = hi - m - 2; rr0 = ty - 1; }
+      else if (q === e) { ax = 1; cc0 = tx - 1; rr0 = lo + m + 1; }
+      else { ax = 1; cc0 = tx - 1; rr0 = hi - m - 2; }
+      R = null;
+      for (j = 0; j <= 6 && !R; j++) for (c = -j; c <= j && !R; c++) for (q = -j; q <= j && !R; q++) {
+        if (Math.max(Math.abs(c), Math.abs(q)) !== j) continue;
+        R2 = mk('pass', cc0 + c, rr0 + q, ax); R2.g = gatesOf(R2); fr = {};
+        R2.g.forEach(function (g) { fr[g.r * N + g.c] = 1; fr[g.ro * N + g.oc] = 1; });
+        if (canPlace(R2, fr)) R = R2;
+      }
+      if (!R) continue;
+      put(R); R.ti = npass++;
+      s0 = edgeD(R.g[0].ro * N + R.g[0].oc) <= edgeD(R.g[1].ro * N + R.g[1].oc) ? R.g[0] : R.g[1];   // 外端 = 離邊近的那一端
+      tx = s0.side === 3 ? lo : (s0.side === 1 ? hi : s0.oc); ty = s0.side === 0 ? lo : (s0.side === 2 ? hi : s0.ro);
+      path = wmgRoadPath(k, N, seed, s0.oc, s0.ro, tx, ty);
+      if (path) lay(path); else nfail.push('關 ' + R.ti + ' 外端鋪不到邊界');
+    }
+    while (npass < C.passN) { nfail.push('關放不下'); npass++; }
+    // 郡:兩座相對(a0 與 a0 + π),中心離主城 junR
+    for (j = 0; j < C.junN; j++) {
+      a = h01(0, 5) * 2 * Math.PI + j * Math.PI;
+      rr = C.junR[0] + h01(j, 6) * (C.junR[1] - C.junR[0]);
+      R = spiral('jun', Math.round(cx + Math.cos(a) * rr) - 1, Math.round(cy + Math.sin(a) * rr) - 1, 0, 6, null);
+      if (R) { put(R); R.ti = j; } else nfail.push('郡 ' + j + ' 放不下');
+    }
+    // 縣:6 個扇區環繞主城,角度加抖動,中心離主城 countyR
+    for (c = 0; c < C.countyN; c++) {
       a = ((c + 0.2 + 0.6 * h01(c, 1)) / C.countyN) * 2 * Math.PI;
       rr = C.countyR[0] + h01(c, 2) * (C.countyR[1] - C.countyR[0]);
-      put('county', Math.round(cx + Math.cos(a) * rr), Math.round(cy + Math.sin(a) * rr));
+      R = spiral('county', Math.round(cx + Math.cos(a) * rr) - 1, Math.round(cy + Math.sin(a) * rr) - 1, 0, 6, null);
+      if (R) { put(R); R.ti = c; } else nfail.push('縣 ' + c + ' 放不下');
     }
-    // 關:找兩條通邊道路在邊界內第 3 格的道路格,取其旁的平地;其餘關放在對邊
-    ex = [];
-    for (m = 0; m < n; m++) if (k[m] === 5) { gx0(m); }
-    function gx0(m2) {
-      var x2 = m2 % N, y2 = (m2 - x2) / N, dE = Math.min(x2 - lo, hi - x2, y2 - lo, hi - y2);
-      if (dE === 3) ex.push([x2, y2]);
-    }
-    ex.sort(function (u, v) { return u[0] - v[0] || u[1] - v[1]; });
-    for (m = 0; m < ex.length && nodes.length < C.countyN + C.passN; m++) {
-      if (nodes.filter(function (z) { return z.type === 'pass'; }).length >= 2) break;
-      put('pass', ex[m][0], ex[m][1]);
-    }
-    for (tries = 0; nodes.filter(function (z) { return z.type === 'pass'; }).length < C.passN && tries < 12; tries++) {
-      a = h01(tries, 3) * 2 * Math.PI;   // 其餘關:靠邊(第 3 格外)的隨機角度
-      put('pass', Math.max(lo + 3, Math.min(hi - 3, Math.round(cx + Math.cos(a) * 60))), Math.max(lo + 3, Math.min(hi - 3, Math.round(cy + Math.sin(a) * 60))));
-    }
-    // 道路網:Prim 最小生成樹(主城為根),A* 鋪路
-    conn = [{ x: cx, y: cy, city: true }];
+    // 道路網:Prim 最小生成樹(主城為根)。每座城池挑「已連上的接路格 → 門外格」曼哈頓距離最近的一組,A* 鋪到門外格;那一門 = 主城門
+    ports = [[cx + 2, cy], [cx - 2, cy], [cx + 2, cy + 1], [cx - 2, cy + 1], [cx + 2, cy - 1], [cx - 2, cy - 1]].filter(function (z) { return wmgWalk(k[z[1] * N + z[0]]); });
+    conn = [{ city: true, type: 'city', src: ports.length ? ports : [[cx + 2, cy]] }];
     inN = nodes.slice();
     while (inN.length) {
       bd = Infinity; bi = -1; bj = -1;
       for (m = 0; m < inN.length; m++) for (q = 0; q < conn.length; q++) {
-        d = Math.abs(inN[m].x - conn[q].x) + Math.abs(inN[m].y - conn[q].y);
+        d = Infinity;
+        for (j = 0; j < conn[q].src.length; j++) for (c = 0; c < inN[m].g.length; c++) d = Math.min(d, Math.abs(conn[q].src[j][0] - inN[m].g[c].oc) + Math.abs(conn[q].src[j][1] - inN[m].g[c].ro));
         if (conn[q].city) d += 4;   // 主城端偏好縣連主城、關接縣
         if (inN[m].type === 'pass' && conn[q].type === 'pass') d += 6;
         if (d < bd) { bd = d; bi = m; bj = q; }
       }
       pt = inN.splice(bi, 1)[0]; sp = conn[bj];
-      if (sp.city) {   // 主城 4 個出口取離目標最近者
-        ports = [[cx + 2, cy], [cx - 2, cy], [cx + 2, cy + 1], [cx - 2, cy + 1], [cx + 2, cy - 1], [cx - 2, cy - 1]]; best = null; bd = Infinity;
-        for (q = 0; q < ports.length; q++) { d = Math.abs(ports[q][0] - pt.x) + Math.abs(ports[q][1] - pt.y); if (d < bd && wmgWalk(k[ports[q][1] * N + ports[q][0]])) { bd = d; best = ports[q]; } }
-        if (!best) best = [cx + 2, cy];
-        path = wmgRoadPath(k, N, seed, best[0], best[1], pt.x, pt.y);
-      } else path = wmgRoadPath(k, N, seed, sp.px, sp.py, pt.x, pt.y);   // 從上游節點的接路格出發,道路才會彼此相連
-      if (path) {
-        for (m = 0; m < path.length; m++) { q = path[m]; if (k[q] === 0 || k[q] === 3) k[q] = 5; }
-        if (path.length > 1) { pt.px = path[1] % N; pt.py = (path[1] - pt.px) / N; }   // path[0] = 節點本身,path[1] = 它旁邊的道路格
+      cl = [];
+      for (j = 0; j < sp.src.length; j++) for (c = 0; c < pt.g.length; c++) cl.push({ d: Math.abs(sp.src[j][0] - pt.g[c].oc) + Math.abs(sp.src[j][1] - pt.g[c].ro), s: j, g: c });
+      cl.sort(function (u, v) { return u.d - v.d || u.g - v.g || u.s - v.s; });
+      path = null;
+      for (m = 0; m < cl.length && m < 8 && !path; m++) {
+        path = wmgRoadPath(k, N, seed, sp.src[cl[m].s][0], sp.src[cl[m].s][1], pt.g[cl[m].g].oc, pt.g[cl[m].g].ro);
+        if (path) { lay(path); pt.mg = cl[m].g; }
       }
-      if (pt.px === undefined) { pt.px = pt.x; pt.py = pt.y; }
-      conn.push(pt);
+      if (!path) nfail.push((pt.type === 'pass' ? '關 ' : (pt.type === 'jun' ? '郡 ' : '縣 ')) + pt.ti + ' 鋪不到路');
+      conn.push({ type: pt.type, src: pt.type === 'pass' || pt.mg < 0 ? pt.g.map(function (g) { return [g.oc, g.ro]; }) : [[pt.g[pt.mg].oc, pt.g[pt.mg].ro]] });
     }
-    nodesOut = nodes.map(function (z, idx) { return { id: idx, type: z.type, gi: z.gi, adj: -1, d: Infinity }; });
+    for (j = 0; j < nodes.length; j++) if (nodes[j].type === 'pass') for (c = 0; c < 2; c++) { q = nodes[j].g[c].ro * N + nodes[j].g[c].oc; if (k[q] === 0) k[q] = 5; }   // 關兩端門外格一定是路
+    // 輸出:縣 → 郡 → 關,同類依 ti;id = 序號
+    nodes.sort(function (u, v) { return ord[u.type] - ord[v.type] || u.ti - v.ti; });
+    nodesOut = nodes.map(function (z, idx) {
+      var o = { id: idx, type: z.type, ti: z.ti, c0: z.c0, r0: z.r0, fw: z.fw, fh: z.fh, cells: z.cells, gates: z.g.map(function (g) { return { side: g.side, gi: g.r * N + g.c, out: g.ro * N + g.oc }; }), mg: z.mg, gi: -1, adj: -1, d: Infinity }, u;
+      if (z.type === 'pass') o.axis = z.axis;
+      for (u = 0; u < o.cells.length; u++) nodeOf[o.cells[u]] = idx;
+      return o;
+    });
   })();
 
   // 3 山:依值雜訊高處蓋拼塊章(不重疊、只蓋平地、避開主城保留圈與邊界帶);每個山格必屬於某一拼塊
@@ -425,7 +513,7 @@ function wmgBuild(seed, N) {
       cells = WMG_PIECES[id]; ok = true;
       for (m = 0; m < cells.length; m++) {
         rr = r0 + cells[m][0]; cc = c0b + cells[m][1];
-        if (rr > hi || cc > hi || k[rr * N + cc] !== 0 || keep(cc, rr)) { ok = false; break; }
+        if (rr > hi || cc > hi || k[rr * N + cc] !== 0 || keep(cc, rr) || zone[rr * N + cc]) { ok = false; break; }
       }
       if (!ok) continue;
       addPiece(id, r0 * N + c0b); placed++;
@@ -436,11 +524,11 @@ function wmgBuild(seed, N) {
   for (i = 0; i < n; i++) {
     if (k[i] !== 0) continue;
     x = i % N; y = (i - x) / N;
-    if (keep(x, y)) continue;
+    if (keep(x, y) || zone[i]) continue;
     if (wmGenHash01(seed, i, 5) < C.rockP) addPiece('O1', i);
   }
 
-  // 5 連通:主城泛洪,封閉區的平地改成大石(淺灘改河、道路改石),保證所有可走格到得了
+  // 5 連通:主城泛洪,封閉區的平地改成大石(淺灘改河、道路改石;城池占地與城郊不改),保證所有可走格到得了
   (function () {
     var seen = new Uint8Array(n), q = new Int32Array(n), qh = 0, qt = 0, u, ux, uy, j, vx, vy, v;
     seen[c0] = 1; q[qt++] = c0;
@@ -455,13 +543,13 @@ function wmgBuild(seed, N) {
       }
     }
     for (u = 0; u < n; u++) {
-      if (!wmgWalk(k[u]) || seen[u]) continue;
+      if (!wmgWalk(k[u]) || seen[u] || zone[u]) continue;   // 城池占地 / 城郊不改石(封閉 → walkOk 失敗 → 重試)
       if (k[u] === 4) k[u] = 3; else addPiece('O1', u);
     }
   })();
 
   nodesOut = nodesOut || [];
-  WG = { gv: C.gv, size: N, seed: seed, seed0: seed, tries: 1, fallback: false, border: B, cx: cx, cy: cy, c0: c0, k: k, g: g, pm: pm, pcs: pcs, nodes: nodesOut, d: null, pv: null, chk: null };
+  WG = { gv: C.gv, size: N, seed: seed, seed0: seed, tries: 1, fallback: false, border: B, cx: cx, cy: cy, c0: c0, k: k, g: g, pm: pm, pcs: pcs, nodes: nodesOut, nodeOf: nodeOf, zone: zone, nfail: nfail, d: null, pv: null, chk: null };
   r = wmDistCalc(WG, C.reach);
   WG.d = r.d; WG.pv = r.pv;
   wmgNodeAdj(WG);

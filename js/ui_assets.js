@@ -195,6 +195,18 @@ var UI_ASSETS = {
       168,
       360
     ],
+    "home_logo": [
+      1600,
+      533
+    ],
+    "cover_bg_land": [
+      1672,
+      941
+    ],
+    "cover_bg_port": [
+      941,
+      1672
+    ],
     "bg_stage_land": [
       1280,
       720

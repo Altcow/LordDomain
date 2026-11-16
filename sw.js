@@ -1,4 +1,4 @@
-const VERSION = 'v67';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v68';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -292,10 +292,15 @@ const PRECACHE = [
   './icons/icon-maskable-512.png'
 ];
 
+// 封面背景與標題 logo:放進執行期圖片桶(IMG_CACHE),首次安裝後離線也能顯示封面;抓不到不擋安裝
+const COVER_PRECACHE = ['./assets/ui/cover_bg_land.webp', './assets/ui/cover_bg_port.webp', './assets/ui/home_logo.webp'];
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
       cache.addAll(PRECACHE.map((url) => new Request(url, { cache: 'reload' })))
+    ).then(() => caches.open(IMG_CACHE)).then((img) =>
+      Promise.all(COVER_PRECACHE.map((u) => img.add(new Request(u, { cache: 'reload' })).catch(() => null)))
     )
   );
 });

@@ -40,7 +40,20 @@ function wmapGoUiCtx() {   // {W, cs}:沿用舊地圖頁的狀態(第一次用�
     r = wdUiBoot(cs, ldNow());
     WMAPGO.boot = typeof wmapGoSummary === 'function' ? wmapGoSummary(r.events) : null;
   }
+  if (!WMAPGO.mig && WDUI.W && typeof wmapGoMigrate === 'function' && typeof WMAP !== 'undefined' && WMAP.WG) wmapGoUiMigrate();
   return { W: WDUI.W, cs: WDUI.cs };
+}
+// 世界版本重排(gv 2 → 3):先把 world.v2 備份成 .bak_gv2(只寫一次、不覆蓋),再重排並存檔、提示一次
+function wmapGoUiMigrate() {
+  var m, v;
+  WMAPGO.mig = 1;
+  if (!wmapGoNeedMigrate(WDUI.W, WMAP.WG)) return;
+  try {
+    v = localStorage.getItem(WDUI_KEY);
+    if (v && localStorage.getItem(WDUI_KEY + '.bak_gv2') === null) localStorage.setItem(WDUI_KEY + '.bak_gv2', v);
+  } catch (e) { /* 備份失敗(容量 / 無痕)不影響重排 */ }
+  m = wmapGoMigrate(WDUI.W, WDUI.cs, WMAP.WG, ldNow());
+  if (m.changed) { wmapGoUiSave(); wmapGoUiToast('地圖改版:縣城 / 郡城 / 關口重新排列' + (m.home ? ',出征中的 ' + m.home + ' 隊已回城' : '') + (m.res ? ',' + m.res + ' 塊領地因地形變動失效' : '')); }
 }
 function wmapGoUiSave() { if (typeof wdUiSave === 'function') wdUiSave(); }
 function wmapGoUiInfo(gi) { return typeof wmapInfoOf === 'function' ? wmapInfoOf(gi) : null; }
@@ -48,7 +61,7 @@ function wmapGoUiCoord(gi) { var N = WMAP.WG.size, c = gi % N; return '(' + c + 
 function wmapGoUiTitle(tg) {
   var W = wmapGoUiCtx(), pt = W ? wdPt(W.W, wmapGoPtId(tg.gi)) : null, nd = tg.node;
   if (tg.kind === 'res') return wmapGoUiCoord(tg.gi) + ' Lv' + tg.lv + ' ' + tg.ty;
-  return wmapGoUiCoord(tg.gi) + ' ' + (pt ? pt.ty : (nd && typeof WD_NAMES !== 'undefined' ? WD_NAMES[tg.kind][nd.id % WD_NAMES[tg.kind].length] : '')) + (tg.kind === 'pass' ? '(關口)' : '(縣城)');
+  return wmapGoUiCoord(tg.gi) + ' ' + (pt ? pt.ty : (nd && typeof WD_NAMES !== 'undefined' ? WD_NAMES[tg.kind][nd.ti % WD_NAMES[tg.kind].length] : '')) + (tg.kind === 'pass' ? '(關口)' : (tg.kind === 'jun' ? '(郡城)' : '(縣城)'));
 }
 function wmapGoUiTeamState(c, team, now) {
   if (typeof wdUiTeamState === 'function') return wdUiTeamState(c.W, c.cs, team, now);
@@ -357,23 +370,7 @@ function wmapGoUiOnTap(x, y) {
   wmapGoUiMenuOpen(ids[0]);
   return true;
 }
-// 縣城 / 關口優先:點到建築框內、但 wmapHit 因資源格點擊框優先而選到它前方的資源格時,改選縣關
-function wmapGoUiNodeTap(x, y) {
-  var h, WG = WMAP.WG, N = WG.size, c, r, p, wx, wy, o, i, gi, b, nd;
-  if (!WMAPGO.inited || typeof wmapHit !== 'function' || typeof wmapTall !== 'function') return false;
-  h = wmapHit(x, y);
-  if (h.gi < 0 || h.node || WG.k[h.gi] !== 0) return false;
-  c = h.gi % N; r = (h.gi - c) / N; p = wmapCamPxNow(); wx = p.px + x; wy = p.py + y;
-  o = [[-1, -1], [0, -1], [-1, 0]];
-  for (i = 0; i < o.length; i++) {
-    if (c + o[i][0] < 0 || r + o[i][1] < 0) continue;
-    gi = (r + o[i][1]) * N + c + o[i][0];
-    if (WG.k[gi] !== 9 && WG.k[gi] !== 10) continue;
-    b = wmapTall(c + o[i][0], r + o[i][1]);
-    if (b && wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) { wmapSelect(gi === WMAP.sel ? -1 : gi); return true; }
-  }
-  return false;
-}
+// 縣 / 郡 / 關:wmapHit 先測城池點選形(占地 + 往上拉高的六邊形),點城內任何格 / 關門道都回該座,不必再補判斷
 function wmapGoUiBack() {
   if (!WMAPGO.inited) return false;
   if (WMAPGO.mode) { wmapGoUiModeSet(null); wmapGoUiCardHide(); return true; }
@@ -399,7 +396,7 @@ function wmapGoUiInit() {
   WMAP.onSelect = function (gi, node) { if (typeof t0 === 'function') t0(gi, node); wmapGoUiOnSelect(gi); };
   if (typeof wmapTap === 'function' && !WMAPGO.tapHooked) {   // 點軍隊旗優先於選格(同 W4 包住 wmapFrame 的做法)
     tap0 = wmapTap;
-    wmapTap = function (x, y) { if (wmapGoUiOn() && (wmapGoUiOnTap(x, y) || wmapGoUiNodeTap(x, y))) return; tap0(x, y); };
+    wmapTap = function (x, y) { if (wmapGoUiOn() && wmapGoUiOnTap(x, y)) return; tap0(x, y); };
     WMAPGO.tapHooked = true;
   }
   try { if (typeof qualityLevel === 'function') ql = qualityLevel(); } catch (e) { ql = 'mid'; }

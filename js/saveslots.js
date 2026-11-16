@@ -30,7 +30,7 @@ var SAVE_PREF_KEYS = [
   'lorddomain.render', 'lorddomain.fps', 'lorddomain.powersave', 'lorddomain.cityonly', 'lorddomain.adv.mode', 'lorddomain.adv.faceHide', 'lorddomain.guide.v1', 'lorddomain.id.v1',
   'lorddomain.ui.top', 'lorddomain.ui.cat', 'lorddomain.ui.camptop', 'lorddomain.ui.campcat', 'lorddomain.ui.variant', 'lorddomain.ui.wallskin',
   'lorddomain.feature.shell', 'lorddomain.ui.mode', 'lorddomain.ui.prevMode','lorddomain.ui.compact', 'lorddomain.ui.bpreview', 'lorddomain.ui.fsTipDismissed', 'lorddomain.ui.worldtag', 'lorddomain.ui.settingsTab', 'lorddomain.extsprites', 'lorddomain.nextstep', 'lorddomain.uiicons', 'lorddomain.terraintex', 'lorddomain.ui.minimap', 'lorddomain.bn.pref', 'lorddomain.bnshare.pref', 'lorddomain.ui.autoBrowse', 'lorddomain.ui.installTip', 'lorddomain.ui.doorMarks',
-  'lorddomain.goods.mode', 'lorddomain.goods.auto', 'lorddomain.ui.titleServer', 'lorddomain.bncb.speed', 'lorddomain.quality.v1', 'lorddomain.ui.wmcam', 'lorddomain.ui.wmpnl', 'lorddomain.ui.cutin'
+  'lorddomain.goods.mode', 'lorddomain.goods.auto', 'lorddomain.ui.titleServer', 'lorddomain.ui.titleAutoStart', 'lorddomain.bncb.speed', 'lorddomain.quality.v1', 'lorddomain.ui.wmcam', 'lorddomain.ui.wmpnl', 'lorddomain.ui.cutin'
 ];
 // 世界管理鍵:不進槽、不清除(世界清單 / 跨分頁鎖)
 var SAVE_WORLD_KEYS = ['lorddomain.worlds.v1', 'lorddomain.worlds.lock', 'lorddomain.legacymig.v1'];

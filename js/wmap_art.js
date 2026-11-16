@@ -12,7 +12,26 @@
 //   wmapArtGet(key) → {c: canvas, cw, ch, fw, fh} | null     取圖(快取);key 例:'g_grass_a'(256×128 菱形地磚)、'mask_0'~'mask_7'(過渡遮罩)、'M1' 'M2c' 'M2r' 'M3f' 'M3b' 'M3l' 'M3r' 'M4' 'O1' 'T1' 'CITY'、'gt_<種類>'(512² 可平鋪紋理)、'ro_<種類>_<款>_<1~5>'(物件圖的 cw/ch/ax/ay 為格寬 256 邏輯單位,畫布 2 倍取樣,ax/ay = 腳點)
 //   wmapArtGroundKey(type, v) → 'g_' + type + '_' + 'abc'[v % n]   type:grass dirt wood road rammed rock;a / b / c 款數見 WMAP_GROUND_N
 //   wmapArtRiver(g, pass, nb, ford, h, dg) / wmapArtRoad(g, pass, nb, h)   在「單位 = 一格、原點 = 格頂點 (u=c, v=r)」的等角 transform 下畫河 / 路單格(pass:'bank' 'water' 'hi' / 'edge' 'fill';nb = [r−1, c+1, r+1, c−1] 四鄰是否同類)
-//   'COUNTY' 縣城、'PASS0' / 'PASS1' 關口(1×1 單格建築圖,PASSn = 道路沿 u / v 走的兩款);'gt_road' = 土道路紋理(路面用,世界錨定平鋪)
+//   城池 5 鍵 'CITY' 'COUNTY' 'JUN' 'PASS0' 'PASS1':wmapArtGet(key, q) 按倍率 q 重畫向量(見下方「城池圖介面表」);'gt_road' = 土道路紋理(路面用,世界錨定平鋪)
+//
+// ───────── 城池圖介面表(2026-11-16 MV2;規格 設計_地圖城池占地與美工_規格.md 第 3 節) ─────────
+//   wmapArtGet(key, q) → {c: canvas, cw, ch, fw, fh, q, pw, ph} | null     key ∈ CITY COUNTY JUN PASS0 PASS1;cw × ch = 邏輯尺寸(1 格寬 = 256),pw × ph = canvas 實際像素 = round(cw × q) × round(ch × q);q 省略 = 1
+//   q 的算法:wmapArtCityQ(s, dpr, lowQ) = (s / 128) × min(dpr, lowQ ? 1 : 2)  → 貼圖時 drawImage(a.c, x, y, cw × G.W / 256, ch × G.W / 256)(CSS px;與 wmapDrawArt 同公式),canvas 1:1 不再縮放
+//   同時只留一個倍率層:換 q(差 > 0.0005)或低畫質旗標(wmapArtLowQ():WMAP.lowQ 或 navigator.deviceMemory ≤ 2)就整層清掉;沒有 1× 備份;缺 canvas / getContext 回 null(不丟例外)
+//   放置:wmapPieceBox(G, c0, r0, fw, fh, cw, ch)(圖左緣 = 占地左角 (c0, r0 + fh)、圖底 = 占地前角 (c0 + fw, r0 + fh))。錨點 = 占地菱形:左角 (0, ch − (fw+fh)×32)、前角 (cw/2 + (fw−fh)×64, ch)、上角 (cw/2 − ... ) 見 WMAP_PIECE
+//   | key    | 占地 fw×fh | cw × ch      | 往上可用 | 用途                                                    |
+//   | CITY   | 3 × 3      | 768 × 680    | 296      | 主城(朱紅 + 金脊;城門在右前牆 u+1 面、左後牆小門樓)       |
+//   | COUNTY | 3 × 3      | 768 × 560    | 176      | 縣城(青灰瓦、灰褐夯土牆;四面小門、前角哨樓)             |
+//   | JUN    | 4 × 4      | 1024 × 800   | 288      | 郡城(黛藍琉璃瓦 + 金脊、青磚灰牆;四角樓、正面兩座城樓)   |
+//   | PASS0  | 2 × 3      | 640 × 600    | 280      | 關(黑瓦石砌門樓 + 兩側山壁),道路沿 c;fw = 沿路 2、fh = 橫跨 3 |
+//   | PASS1  | 3 × 2      | 640 × 600    | 280      | 關,道路沿 r;node.axis 0 → PASS0、1 → PASS1             |
+//   圖內結構(邏輯座標,pt(u, v) = ((u − v + fh) × 128, ch − (fw+fh)×64 + (u + v) × 64);u = c 方向、v = r 方向、單位 = 格):
+//     縣 / 郡 / 主城:牆面在 u、v = 0.12 與 fw / fh − 0.12;四個門在邊長 n 的第 floor((n−1)/2) 格正中(side 0 = v−1 面、1 = u+1 面、2 = v+1 面、3 = u−1 面),與 wm_gen 的 gates 一致;主城門固定 side 1(+ side 3 小門樓)
+//     關:道路 = 沿路座標 s ∈ [0, 2]、橫跨座標 t ∈ [1, 2](PASS0:u = s、v = t;PASS1:u = t、v = s);門樓橫跨門道,門洞開在 +s 面
+//   wmapArtCityGateAnchor(key, side) → {x, y} | null     門(樓頂)位置,圖內邏輯座標(往右加 wmapPieceBox 的 x、y;乘 W/256);給 FLAG_ME 小旗腳點用
+//   'FLAG_ME'(64 × 96 邏輯、ax 14 / ay 92 = 旗桿腳,不分層):攻下後的朱紅小旗,畫在 wmapArtCityGateAnchor 上;朱紅只給我的
+//   wmapArtCityMem(q) → bytes   五鍵(關 2 款)同時存在的 RGBA 記憶體估算;wmapArtCityQ(s, dpr, lowQ) → q
+//   低畫質(lowQ):dpr 上限 1(由呼叫端用 wmapArtCityQ 傳 lowQ)、民居減半、不畫雉堞 / 攤棚 / 花
 //   wmapArtIsoT(g, G, c, r)                   設好上述 transform(畫完 g.restore());G = wmapGeom 的結果
 //   wmapArtClear()                            清快取(測試用)
 
@@ -27,6 +46,7 @@ var WMAP_PAL = {
   water: '#58a5d4', waterDeep: '#3d86b8', waterHi: '#a9def0', bank: '#c9b783'
 };
 var WMAP_GROUND_N = { grass: 3, dirt: 2, wood: 2, road: 2, rammed: 2, rock: 2 };
+function wmapArtCellsRect(fw, fh) { var a = [], r, c; for (r = 0; r < fh; r++) for (c = 0; c < fw; c++) a.push([r, c]); return a; }
 var WMAP_PIECE = {
   M1: { fw: 1, fh: 1, cw: 256, ch: 256, cells: [[0, 0]] },
   M2c: { fw: 2, fh: 1, cw: 384, ch: 352, cells: [[0, 0], [0, 1]] },
@@ -38,10 +58,12 @@ var WMAP_PIECE = {
   M4: { fw: 2, fh: 2, cw: 512, ch: 448, cells: [[0, 0], [0, 1], [1, 0], [1, 1]] },
   O1: { fw: 1, fh: 1, cw: 256, ch: 192, cells: [[0, 0]] },
   T1: { fw: 1, fh: 1, cw: 256, ch: 288, cells: [[0, 0]] },
-  COUNTY: { fw: 1, fh: 1, cw: 256, ch: 256, cells: [[0, 0]] },   // 縣城(單格小城鎮)
-  PASS0: { fw: 1, fh: 1, cw: 256, ch: 320, cells: [[0, 0]] },    // 關口:路沿 u(c 方向)走
-  PASS1: { fw: 1, fh: 1, cw: 256, ch: 320, cells: [[0, 0]] },    // 關口:路沿 v(r 方向)走
-  CITY: { fw: 3, fh: 3, cw: 768, ch: 680, cells: [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2]] }
+  // 城池圖(2026-11-16 MV2):cw = (fw + fh) × 128;圖左緣 = 占地左角、圖底 = 占地前角(wmapPieceBox);cells = 占地全部格 [dr, dc]
+  COUNTY: { fw: 3, fh: 3, cw: 768, ch: 560, cells: wmapArtCellsRect(3, 3) },   // 縣城 3×3
+  JUN: { fw: 4, fh: 4, cw: 1024, ch: 800, cells: wmapArtCellsRect(4, 4) },     // 郡城 4×4
+  PASS0: { fw: 2, fh: 3, cw: 640, ch: 600, cells: wmapArtCellsRect(2, 3) },    // 關:道路沿 c(u)走、沿路 2 格、橫跨 3 格(門道 = 中間 r 那排)
+  PASS1: { fw: 3, fh: 2, cw: 640, ch: 600, cells: wmapArtCellsRect(3, 2) },    // 關:道路沿 r(v)走
+  CITY: { fw: 3, fh: 3, cw: 768, ch: 680, cells: wmapArtCellsRect(3, 3) }
 };
 var WMAP_RES = { farm: '農田', mine: '礦坑', hunt: '獵場', lumber: '林場', quarry: '採石場' };
 var WMAP_ART_SRC = {};   // 正式圖到了:WMAP_ART_SRC['M1'] = 'assets/iso/M1_a.webp'(目前未使用,保留接口)
@@ -452,106 +474,313 @@ function wmapArtMakeRO(key) {   // 'ro_<種類>_<款>_<階>':只有自然物(樹
   return { c: o.c, cw: cw, ch: ch, ax: cx, ay: by, fw: 1, fh: 1 };
 }
 
-// ───────── 主城 3×3(城牆圈 + 四角塔 + 中央城樓 + 民居) ─────────
-function wmapArtMakeCity() {
-  var P = WMAP_PIECE.CITY, c = wmapArtCv(P.cw, P.ch), g = c.getContext('2d'), ink = WMAP_PAL.ink;
-  function pt(u, v) { return [(u - v + 3) * 128, P.ch - 384 + (u + v) * 64]; }
-  function wall(a, b, h, fill, topFill) {   // 牆段:a → b(畫面點),高 h
-    wmapArtFillStroke(g, [a, b, [b[0], b[1] - h], [a[0], a[1] - h]], fill, ink, 2.5);
-    g.strokeStyle = topFill; g.lineWidth = 7; g.setLineDash([9, 7]); g.beginPath(); g.moveTo(a[0], a[1] - h - 2); g.lineTo(b[0], b[1] - h - 2); g.stroke(); g.setLineDash([]);
-  }
-  var A = pt(0.14, 0.14), B = pt(2.86, 0.14), C = pt(2.86, 2.86), D = pt(0.14, 2.86), i, q, hh = 62, mid;
-  wmapArtShadow(g, 384, P.ch - 192, 330, 150, 0.3);
-  wall(A, B, hh, '#bfae8a', '#8f7d58'); wall(A, D, hh, '#cdbd9a', '#8f7d58');   // 後牆(看到內側面)
-  // 內部(H 形 7 格:左右兩直排各 3 格建築 + 正中央城樓;上下兩個缺口 = 庭院:水池 / 花園)
-  g.save(); g.transform(128, 64, -128, 64, 384, P.ch - 384);   // 單位 = 一格(u 往右下、v 往左下)
-  g.fillStyle = '#7fa2a0'; g.strokeStyle = ink; g.lineWidth = 0.03; g.beginPath(); g.ellipse(1.5, 0.5, 0.36, 0.3, 0, 0, 7); g.fill(); g.stroke();   // 庭院一:水池
-  g.fillStyle = '#58a5d4'; g.beginPath(); g.ellipse(1.5, 0.5, 0.28, 0.22, 0, 0, 7); g.fill();
-  g.fillStyle = '#6f9f3c'; g.strokeStyle = ink; g.beginPath(); g.rect(1.18, 2.2, 0.64, 0.6); g.fill(); g.stroke();   // 庭院二:花園
-  g.fillStyle = '#e07a9a'; for (i = 0; i < 6; i++) { g.beginPath(); g.arc(1.3 + (i % 3) * 0.2, 2.4 + ((i / 3) | 0) * 0.25, 0.04, 0, 7); g.fill(); }
-  g.restore();
-  var items = [], it;
-  for (i = 0; i < 3; i++) { items.push({ u: 0.55, v: i + 0.5, t: 'hall' }); items.push({ u: 2.45, v: i + 0.5, t: 'hall' }); }
-  items.push({ u: 1.5, v: 1.5, t: 'keep' });
-  items.sort(function (x, y) { return (x.u + x.v) - (y.u + y.v); });
-  for (i = 0; i < items.length; i++) {
-    it = items[i]; q = pt(it.u + 0.5 - 0.5 + 0, it.v + 0.0 + 0.0);
-    if (it.t === 'hall') {
-      q = pt(it.u, it.v);
-      wmapArtIsoBox(g, q[0], q[1], 40, 20, 46, '#e4d6b6', '#b9a77f', '#d6c59f', ink);
-      wmapArtRoof(g, q[0], q[1] - 46, 46, 23, 30, '#b4553a', '#8e3d2a', ink);
-    } else {
-      q = pt(1.5, 1.5);
-      wmapArtIsoBox(g, q[0], q[1] + 16, 84, 42, 80, '#e0d1ae', '#b2a07a', '#d0c09b', ink);
-      wmapArtIsoBox(g, q[0], q[1] - 64, 58, 29, 44, '#e6d9b8', '#b9a77f', '#d8c8a2', ink);
-      wmapArtRoof(g, q[0], q[1] - 108, 76, 38, 52, '#c44a30', '#99351f', ink);
-      g.strokeStyle = '#5a3d22'; g.lineWidth = 4; g.beginPath(); g.moveTo(q[0], q[1] - 160); g.lineTo(q[0], q[1] - 214); g.stroke();
-      wmapArtFillStroke(g, [[q[0], q[1] - 214], [q[0] + 46, q[1] - 200], [q[0] + 34, q[1] - 192], [q[0] + 46, q[1] - 182], [q[0], q[1] - 190]], '#c8321e', ink, 2);
-    }
-  }
-  wall(D, C, hh, '#d8c8a2', '#8f7d58'); wall(C, B, hh, '#a99677', '#7d6b4a');   // 前牆(外側面)
-  mid = [(D[0] + C[0]) / 2, (D[1] + C[1]) / 2];   // 城門(左前牆正中)
-  wmapArtFillStroke(g, [[mid[0] - 22, mid[1] + 11], [mid[0] - 22, mid[1] - 26], [mid[0] + 22, mid[1] - 48], [mid[0] + 22, mid[1] - 11]], '#3a2a1c', ink, 2.5);
-  var corners = [A, B, C, D];
-  for (i = 0; i < 4; i++) {   // 四角塔
-    q = corners[i];
-    wmapArtIsoBox(g, q[0], q[1], 30, 15, 98, '#d4c4a0', '#a99677', '#c9b891', ink);
-    wmapArtRoof(g, q[0], q[1] - 98, 38, 19, 40, '#b4402a', '#8a2f1f', ink);
-  }
-  return { c: c, cw: P.cw, ch: P.ch, fw: 3, fh: 3 };
+// 軸向長方體(城池圖共用):u / v 範圍、底 z0 頂 z1;只畫看得到的左前(v1 面)、右前(u1 面)與頂面
+function wmapArtBoxUV(g, pt, u0, u1, v0, v1, z0, z1, cl, cr, ct, ol) {   // 三面各自填色,輪廓合成一次 stroke(省光柵時間)
+  var a = pt(u0, v1), b = pt(u1, v1), c = pt(u1, v0), d = pt(u0, v0), P1 = [[a[0], a[1] - z0], [b[0], b[1] - z0], [b[0], b[1] - z1], [a[0], a[1] - z1]], P2 = [[b[0], b[1] - z0], [c[0], c[1] - z0], [c[0], c[1] - z1], [b[0], b[1] - z1]], P3 = [[d[0], d[1] - z1], [c[0], c[1] - z1], [b[0], b[1] - z1], [a[0], a[1] - z1]];
+  wmapArtPoly(g, P1); g.fillStyle = cl; g.fill(); wmapArtPoly(g, P2); g.fillStyle = cr; g.fill(); wmapArtPoly(g, P3); g.fillStyle = ct; g.fill();
+  g.beginPath(); g.moveTo(P1[0][0], P1[0][1]); g.lineTo(P1[1][0], P1[1][1]); g.lineTo(P2[1][0], P2[1][1]); g.lineTo(P2[2][0], P2[2][1]); g.lineTo(P3[0][0], P3[0][1]); g.lineTo(P1[3][0], P1[3][1]); g.closePath();   // 外輪廓
+  g.moveTo(P1[1][0], P1[1][1]); g.lineTo(P1[2][0], P1[2][1]); g.lineTo(P1[3][0], P1[3][1]); g.moveTo(P1[2][0], P1[2][1]); g.lineTo(P2[2][0], P2[2][1]);   // 中間稜線與頂面前緣
+  g.strokeStyle = ol; g.lineWidth = 2.5; g.lineJoin = 'round'; g.stroke();
 }
 
-// ───────── 縣城 / 關口(1×1 單格建築圖;風格同主城、小得多;烘焙時每個只 drawImage 一次) ─────────
-function wmapArtBoxUV(g, pt, u0, u1, v0, v1, z0, z1, cl, cr, ct, ol) {   // 軸向長方體:u / v 範圍、底 z0 頂 z1;只畫看得到的左前(v1 面)、右前(u1 面)與頂面
-  var a = pt(u0, v1), b = pt(u1, v1), c = pt(u1, v0), d = pt(u0, v0);
-  wmapArtFillStroke(g, [[a[0], a[1] - z0], [b[0], b[1] - z0], [b[0], b[1] - z1], [a[0], a[1] - z1]], cl, ol, 2.5);
-  wmapArtFillStroke(g, [[b[0], b[1] - z0], [c[0], c[1] - z0], [c[0], c[1] - z1], [b[0], b[1] - z1]], cr, ol, 2.5);
-  wmapArtFillStroke(g, [[d[0], d[1] - z1], [c[0], c[1] - z1], [b[0], b[1] - z1], [a[0], a[1] - z1]], ct, ol, 2.5);
+// ───────── 城池圖(CITY COUNTY JUN PASS0 PASS1):向量按倍率 q 重畫(設計_地圖城池占地與美工_規格.md 第 3 節) ─────────
+// 倍率 q = (s / 128) × min(dpr, 2)(低畫質 min(dpr, 1));畫布像素 = round(cw × q) × round(ch × q),直接在目標尺寸畫向量,不放大點陣。
+// 同一時間只留一個倍率層(換 q 或換低畫質旗標就清掉整層);沒有 1× 原圖備份。畫法只用 fill / stroke / fillRect(雉堞),不用 setLineDash。
+// 圖不超出占地菱形下緣(只往上長);陰影最多超出 0.15 格。座標 pt(u, v):u = c 方向(往右下)、v = r 方向(往左下),單位 = 一格,1 格 = 256 邏輯寬。
+var WMAP_CITY_KEYS = { CITY: 1, COUNTY: 1, JUN: 1, PASS0: 1, PASS1: 1 };
+var WMAP_CITY_LAYER = { q: 0, lo: false, m: {} };
+var WMAP_CITY_INS = 0.12;   // 縣 / 郡 / 主城牆面離占地邊緣的內縮(格)
+function wmapArtLowQ() {
+  var w = typeof WMAP !== 'undefined' ? WMAP : null;
+  if (w && w.lowQ) return true;
+  return typeof navigator !== 'undefined' && !!navigator && navigator.deviceMemory > 0 && navigator.deviceMemory <= 2;
 }
-function wmapArtMakeCounty() {
-  var P = WMAP_PIECE.COUNTY, c = wmapArtCv(P.cw, P.ch), g = c.getContext('2d'), ink = WMAP_PAL.ink, i, q, it, items = [], mid, wh = 24, corners;
-  function pt(u, v) { return [(u - v + 1) * 128, P.ch - 128 + (u + v) * 64]; }
-  function wall(a, b, h, fill, topFill) {
-    wmapArtFillStroke(g, [a, b, [b[0], b[1] - h], [a[0], a[1] - h]], fill, ink, 2.5);
-    g.strokeStyle = topFill; g.lineWidth = 5; g.setLineDash([7, 5]); g.beginPath(); g.moveTo(a[0], a[1] - h - 1.5); g.lineTo(b[0], b[1] - h - 1.5); g.stroke(); g.setLineDash([]);
+function wmapArtCityQ(s, dpr, lowQ) {   // 給 wmapArtGet(key, q) 用的倍率;s = 格大小(44 / 64 / 104)
+  var d = dpr > 0 ? dpr : 1, cap = lowQ ? 1 : 2;
+  return Math.round(s / 128 * Math.min(d, cap) * 1000) / 1000;
+}
+function wmapArtCityMem(q) {   // 五個鍵(關 2 款)同時存在的 RGBA 位元組數
+  var ks = ['CITY', 'COUNTY', 'JUN', 'PASS0', 'PASS1'], i, P, n = 0;
+  for (i = 0; i < ks.length; i++) { P = WMAP_PIECE[ks[i]]; n += Math.max(1, Math.round(P.cw * q)) * Math.max(1, Math.round(P.ch * q)) * 4; }
+  return n;
+}
+function wmapArtCityScene(key, q, lo) {
+  var P = WMAP_PIECE[key], pw = Math.max(1, Math.round(P.cw * q)), ph = Math.max(1, Math.round(P.ch * q)), c, g, S;
+  if (typeof document === 'undefined' || !document || !document.createElement) return null;
+  c = wmapArtCv(pw, ph); g = c.getContext ? c.getContext('2d') : null;
+  if (!g) return null;
+  g.setTransform(pw / P.cw, 0, 0, ph / P.ch, 0, 0);
+  S = { c: c, g: g, P: P, fw: P.fw, fh: P.fh, lo: lo, ink: WMAP_PAL.ink, rng: wmapArtRng(wmapArtStr(key)), base: P.ch - (P.fw + P.fh) * 64 };
+  S.pt = function (u, v) { return [(u - v + P.fh) * 128, S.base + (u + v) * 64]; };
+  g.lineJoin = 'round';
+  return S;
+}
+// 把「單位 = 一格」的方格 (u, v) 貼到畫面(地面平面;畫街道 / 地面色塊)
+function wmapArtCGround(S) { S.g.transform(128, 64, -128, 64, S.fh * 128, S.base); }
+function wmapArtCBox(S, u0, u1, v0, v1, z0, z1, pal) { wmapArtBoxUV(S.g, S.pt, u0, u1, v0, v1, z0, z1, pal[0], pal[1], pal[2], S.ink); }
+function wmapArtCRoof(S, u0, u1, v0, v1, z, rh, rl, rr, ridge, ov) {   // 廡殿頂:底 u / v 範圍(外擴 ov)、底高 z、屋頂高 rh;ridge = 脊色(沒有就不畫)
+  var g = S.g, pt = S.pt, o = ov === undefined ? 0.04 : ov, a0 = u0 - o, a1 = u1 + o, b0 = v0 - o, b1 = v1 + o, uw = a1 - a0, vw = b1 - b0, um = (a0 + a1) / 2, vm = (b0 + b1) / 2, ins, r1, r2, ea, eb, ec, f1, f2;
+  function E(u, v) { var p = pt(u, v); return [p[0], p[1] - z]; }
+  function H(u, v) { var p = pt(u, v); return [p[0], p[1] - z - rh]; }
+  ea = E(a0, b1); eb = E(a1, b1); ec = E(a1, b0);
+  if (uw >= vw) { ins = vw / 2; r1 = H(a0 + ins, vm); r2 = H(a1 - ins, vm); f1 = [ea, eb, r2, r1]; f2 = [eb, ec, r2]; }
+  else { ins = uw / 2; r1 = H(um, b0 + ins); r2 = H(um, b1 - ins); f1 = [ea, eb, r2]; f2 = [eb, ec, r1, r2]; }
+  wmapArtPoly(g, f1); g.fillStyle = rl; g.fill(); wmapArtPoly(g, f2); g.fillStyle = rr; g.fill();
+  wmapArtPoly(g, f1); for (ins = 0; ins < f2.length; ins++) { if (ins) g.lineTo(f2[ins][0], f2[ins][1]); else g.moveTo(f2[0][0], f2[0][1]); } g.closePath(); g.strokeStyle = S.ink; g.lineWidth = 2.5; g.stroke();
+  if (ridge) {
+    g.strokeStyle = ridge; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.moveTo(r1[0], r1[1]); g.lineTo(r2[0], r2[1]); g.stroke();
+    if (Math.abs(r1[0] - r2[0]) < 1) { g.fillStyle = ridge; g.beginPath(); g.arc(r1[0], r1[1] - 2, 5, 0, 7); g.fill(); }
+    g.lineCap = 'butt';
   }
-  var A = pt(0.12, 0.12), B = pt(0.88, 0.12), C = pt(0.88, 0.88), D = pt(0.12, 0.88);
-  wmapArtShadow(g, 128, P.ch - 60, 120, 52, 0.3);
-  wall(A, B, wh, '#bfae8a', '#8f7d58'); wall(A, D, wh, '#cdbd9a', '#8f7d58');   // 後牆(看到內側面)
-  items.push({ u: 0.3, v: 0.3, t: 'h' }, { u: 0.7, v: 0.3, t: 'h' }, { u: 0.3, v: 0.7, t: 'h' }, { u: 0.7, v: 0.7, t: 'h' }, { u: 0.5, v: 0.5, t: 'k' });
-  items.sort(function (x, y) { return (x.u + x.v) - (y.u + y.v); });
+}
+function wmapArtCFlag(S, x, y, h, color, sz) {   // 旗:桿底 (x, y)、桿高 h;sz = 旗大小倍率
+  var g = S.g, k = sz || 1, ty = y - h;
+  g.strokeStyle = '#5a3d22'; g.lineWidth = 4 * Math.max(0.7, k); g.lineCap = 'butt'; g.beginPath(); g.moveTo(x, y); g.lineTo(x, ty); g.stroke();
+  wmapArtFillStroke(g, [[x, ty], [x + 46 * k, ty + 14 * k], [x + 34 * k, ty + 22 * k], [x + 46 * k, ty + 32 * k], [x, ty + 24 * k]], color, S.ink, 2);
+}
+function wmapArtCArch(S, face, fixed, c0, hw, ah, z0) {   // 城門洞:face 'u' = 貼在 u = fixed 的面(中心 v = c0)、'v' = 貼在 v = fixed 的面(中心 u = c0)
+  var g = S.g, a, b;
+  if (face === 'u') { a = S.pt(fixed, c0 + hw); b = S.pt(fixed, c0 - hw); } else { a = S.pt(c0 - hw, fixed); b = S.pt(c0 + hw, fixed); }
+  g.beginPath(); g.moveTo(a[0], a[1] - z0); g.lineTo(a[0], a[1] - z0 - ah * 0.62);
+  g.quadraticCurveTo((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - z0 - ah * 1.38, b[0], b[1] - z0 - ah * 0.62);
+  g.lineTo(b[0], b[1] - z0); g.closePath(); g.fillStyle = '#33261a'; g.fill(); g.strokeStyle = S.ink; g.lineWidth = 2; g.stroke();
+}
+function wmapArtCWall(S, ua, va, ub, vb, h, fill, mer, rows) {   // 牆面(一個平面):(ua, va) → (ub, vb)、高 h;mer = 雉堞色(fillRect 小方塊,低畫質不畫);rows = 條石紋道數
+  var g = S.g, a = S.pt(ua, va), b = S.pt(ub, vb), i, n, len, t, x, y, dx = b[0] - a[0], dy = b[1] - a[1];
+  wmapArtFillStroke(g, [a, b, [b[0], b[1] - h], [a[0], a[1] - h]], fill, S.ink, 2.5);
+  if (rows) {
+    g.strokeStyle = 'rgba(50,40,28,.3)'; g.lineWidth = 1.6; g.beginPath();
+    for (i = 1; i <= rows; i++) { y = h * i / (rows + 1); g.moveTo(a[0], a[1] - y); g.lineTo(b[0], b[1] - y); }
+    g.stroke();
+  }
+  if (mer && !S.lo) {
+    len = Math.sqrt(dx * dx + dy * dy); n = Math.max(2, Math.round(len / 24));
+    g.beginPath();
+    for (i = 0; i < n; i++) { t = (i + 0.5) / n; g.rect(a[0] + dx * t - 7, a[1] + dy * t - h - 11, 14, 12); }
+    g.fillStyle = mer; g.fill(); g.strokeStyle = S.ink; g.lineWidth = 2; g.stroke();
+  }
+}
+function wmapArtCGateUV(S, side, ins) {   // 城門(牆面上)的 uv:side 0 = v−1 面(右上)、1 = u+1 面(右下)、2 = v+1 面(左下)、3 = u−1 面(左上);門在邊長 n 的第 floor((n−1)/2) 格正中
+  var gu = Math.floor((S.fw - 1) / 2) + 0.5, gv = Math.floor((S.fh - 1) / 2) + 0.5;
+  if (side === 0) return { u: gu, v: ins, face: 'v' };
+  if (side === 1) return { u: S.fw - ins, v: gv, face: 'u' };
+  if (side === 2) return { u: gu, v: S.fh - ins, face: 'v' };
+  return { u: ins, v: gv, face: 'u' };
+}
+function wmapArtCTower(S, u, v, hw, z1, bodyPal, roofL, roofR, ridge, rh, tiers) {   // 角樓 / 哨樓:tiers 2 = 兩層(下層 + 腰檐 + 上層 + 屋頂)
+  var h1 = tiers === 2 ? Math.round(z1 * 0.56) : z1, zt;
+  wmapArtCBox(S, u - hw, u + hw, v - hw, v + hw, 0, h1, bodyPal);
+  if (tiers === 2) {
+    wmapArtCRoof(S, u - hw, u + hw, v - hw, v + hw, h1, 12, roofL, roofR, null, 0.045);
+    zt = h1 + 8; wmapArtCBox(S, u - hw * 0.72, u + hw * 0.72, v - hw * 0.72, v + hw * 0.72, zt, z1, bodyPal);
+    wmapArtCRoof(S, u - hw * 0.72, u + hw * 0.72, v - hw * 0.72, v + hw * 0.72, z1, rh, roofL, roofR, ridge, 0.05);
+  } else wmapArtCRoof(S, u - hw, u + hw, v - hw, v + hw, z1, rh, roofL, roofR, ridge, 0.04);
+}
+function wmapArtCHouse(S, u, v, hw, hd, h, rh, wallPal, roofL, roofR, ridge) {
+  wmapArtCBox(S, u - hw, u + hw, v - hd, v + hd, 0, h, wallPal);
+  wmapArtCRoof(S, u - hw, u + hw, v - hd, v + hd, h, rh, roofL, roofR, ridge, 0.03);
+}
+function wmapArtCShadow(S, k) {   // 接觸陰影:占地菱形內接橢圓(k = 半徑比例)
+  var P = S.P, hwid = (S.fw + S.fh) * 64, hh = (S.fw + S.fh) * 32;
+  wmapArtShadow(S.g, hwid, S.base + hh, hwid * k, hh * k, 0.3);
+}
+
+// ── 主城 3×3:H 形格局不動;城門改在右前牆(u+1 面)正中、左後牆(u−1 面)加小門樓;朱紅屋頂 + 金脊 ──
+function wmapArtDrawCity(S) {
+  var g = S.g, pt = S.pt, ink = S.ink, ins = WMAP_CITY_INS, hh = 64, lo = S.lo, i, it, items = [], q, gu, GOLD = '#d9b44a', hallPal = ['#e4d6b6', '#b9a77f', '#d6c59f'], towPal = ['#d4c4a0', '#a99677', '#c9b891'], keepPal = ['#e0d1ae', '#b2a07a', '#d0c09b'];
+  wmapArtCShadow(S, 0.76);
+  wmapArtCWall(S, ins, ins, 3 - ins, ins, hh, '#bfae8a', '#d3c4a0');   // 後牆(看到內側面)
+  wmapArtCWall(S, ins, ins, ins, 3 - ins, hh, '#cdbd9a', '#dccdac');
+  wmapArtCTower(S, ins, ins, 0.12, 112, towPal, '#b4402a', '#8a2f1f', GOLD, 40, 1);   // 後角塔
+  g.save(); wmapArtCGround(S);   // 庭院:水池 / 花園(H 形上下缺口)
+  g.fillStyle = '#7fa2a0'; g.strokeStyle = ink; g.lineWidth = 0.03; g.beginPath(); g.ellipse(1.5, 0.5, 0.36, 0.3, 0, 0, 7); g.fill(); g.stroke();
+  g.fillStyle = '#58a5d4'; g.beginPath(); g.ellipse(1.5, 0.5, 0.28, 0.22, 0, 0, 7); g.fill();
+  g.fillStyle = '#6f9f3c'; g.strokeStyle = ink; g.beginPath(); g.rect(1.18, 2.2, 0.64, 0.6); g.fill(); g.stroke();
+  if (!lo) { g.fillStyle = '#e07a9a'; for (i = 0; i < 6; i++) { g.beginPath(); g.arc(1.3 + (i % 3) * 0.2, 2.4 + ((i / 3) | 0) * 0.25, 0.04, 0, 7); g.fill(); } }
+  g.restore();
+  for (i = 0; i < 3; i++) { items.push({ d: 0.55 + i + 0.5, t: 'h', u: 0.55, v: i + 0.5 }); items.push({ d: 2.45 + i + 0.5, t: 'h', u: 2.45, v: i + 0.5 }); }
+  items.push({ d: 3.25, t: 'k' });
+  items.push({ d: 1.65, t: 'g' });   // 左後牆小門樓
+  items.sort(function (x, y) { return x.d - y.d; });
   for (i = 0; i < items.length; i++) {
-    it = items[i]; q = pt(it.u, it.v);
-    if (it.t === 'h') { wmapArtIsoBox(g, q[0], q[1], 22, 11, 18, '#e4d6b6', '#b9a77f', '#d6c59f', ink); wmapArtRoof(g, q[0], q[1] - 18, 26, 13, 20, '#b4553a', '#8e3d2a', ink); }
-    else { wmapArtIsoBox(g, q[0], q[1], 28, 14, 30, '#e0d1ae', '#b2a07a', '#d0c09b', ink); wmapArtRoof(g, q[0], q[1] - 30, 34, 17, 26, '#c44a30', '#99351f', ink); }
+    it = items[i];
+    if (it.t === 'h') wmapArtCHouse(S, it.u, it.v, 0.156, 0.156, 46, 30, hallPal, '#b4553a', '#8e3d2a', GOLD);
+    else if (it.t === 'k') {   // 中央兩層主樓 + 大旗(最高)
+      wmapArtCBox(S, 1.625 - 0.328, 1.625 + 0.328, 1.625 - 0.328, 1.625 + 0.328, 0, 80, keepPal);
+      wmapArtCBox(S, 1.625 - 0.227, 1.625 + 0.227, 1.625 - 0.227, 1.625 + 0.227, 80, 124, hallPal);
+      wmapArtCRoof(S, 1.625 - 0.227, 1.625 + 0.227, 1.625 - 0.227, 1.625 + 0.227, 124, 56, '#c44a30', '#99351f', GOLD, 0.07);
+      q = pt(1.625, 1.625); wmapArtCFlag(S, q[0], q[1] - 124 - 56 + 4, 76, '#c8321e', 1.2);
+    } else {   // 左後牆(u−1 面)小門樓:門洞開在朝內的面
+      wmapArtCBox(S, 0, 0.26, 1.5 - 0.2, 1.5 + 0.2, 0, hh + 18, towPal);
+      wmapArtCRoof(S, 0, 0.26, 1.5 - 0.2, 1.5 + 0.2, hh + 18, 26, '#b4553a', '#8e3d2a', GOLD, 0.03);
+      wmapArtCArch(S, 'u', 0.26, 1.5, 0.14, 46, 0);
+    }
   }
-  wall(D, C, wh, '#d8c8a2', '#8f7d58'); wall(C, B, wh, '#a99677', '#7d6b4a');   // 前牆(外側面)
-  mid = [(D[0] + C[0]) / 2, (D[1] + C[1]) / 2];   // 城門(左前牆正中)
-  wmapArtFillStroke(g, [[mid[0] - 14, mid[1] - 7], [mid[0] - 14, mid[1] - 7 - 19], [mid[0] + 14, mid[1] + 7 - 25], [mid[0] + 14, mid[1] + 7]], '#3a2a1c', ink, 2);
-  corners = [A, B, C, D];
-  for (i = 0; i < 4; i++) { q = corners[i]; wmapArtIsoBox(g, q[0], q[1], 15, 7.5, 44, '#d4c4a0', '#a99677', '#c9b891', ink); wmapArtRoof(g, q[0], q[1] - 44, 20, 10, 20, '#b4402a', '#8a2f1f', ink); }
-  return { c: c, cw: P.cw, ch: P.ch, fw: 1, fh: 1 };
+  wmapArtCWall(S, ins, 3 - ins, 3 - ins, 3 - ins, hh, '#d8c8a2', '#e6d8b4');   // 前牆(外側面)
+  wmapArtCWall(S, 3 - ins, 3 - ins, 3 - ins, ins, hh, '#a99677', '#b9a685');
+  wmapArtCTower(S, ins, 3 - ins, 0.12, 112, towPal, '#b4402a', '#8a2f1f', GOLD, 40, 1);
+  wmapArtCTower(S, 3 - ins, ins, 0.12, 112, towPal, '#b4402a', '#8a2f1f', GOLD, 40, 1);
+  wmapArtCTower(S, 3 - ins, 3 - ins, 0.12, 112, towPal, '#b4402a', '#8a2f1f', GOLD, 40, 1);
+  gu = 3.0;   // 右前牆(u+1 面)城門:門樓 + 門洞(道路從這一面進來)
+  wmapArtCBox(S, 2.72, gu, 1.5 - 0.22, 1.5 + 0.22, 0, hh + 24, towPal);
+  wmapArtCRoof(S, 2.72, gu, 1.5 - 0.22, 1.5 + 0.22, hh + 24, 30, '#c44a30', '#99351f', GOLD, 0.03);
+  wmapArtCArch(S, 'u', gu, 1.5, 0.15, 52, 0);
 }
-function wmapArtMakePass(axis) {   // 兩側山 + 中間城門樓;axis 0 = 道路沿 u 走(門牆橫跨 v)、1 = 沿 v 走
-  var P = WMAP_PIECE['PASS' + axis], c = wmapArtCv(P.cw, P.ch), g = c.getContext('2d'), ink = WMAP_PAL.ink, rng = wmapArtRng(wmapArtStr('PASS' + axis)), q, a1, a2, xm, ym;
-  function pt(u, v) { return [(u - v + 1) * 128, P.ch - 128 + (u + v) * 64]; }
-  function at(s, t2) { return axis ? pt(t2, s) : pt(s, t2); }   // s = 沿路座標、t2 = 橫跨座標
-  wmapArtShadow(g, 128, P.ch - 64, 112, 48, 0.3);
-  q = at(0.5, 0.12); wmapArtPeak(g, q[0], q[1] + 8, 118, 170, rng, true);   // 後側山
-  if (axis) wmapArtBoxUV(g, pt, 0.2, 0.8, 0.38, 0.62, 0, 54, '#cdbd9a', '#a08e6b', '#bfae88', ink);
-  else wmapArtBoxUV(g, pt, 0.38, 0.62, 0.2, 0.8, 0, 54, '#cdbd9a', '#a08e6b', '#bfae88', ink);
-  // 城門洞:面向 +s 的那一面(axis 0 = 右前面、axis 1 = 左前面)
-  if (!axis) { a1 = pt(0.62, 0.62); a2 = pt(0.62, 0.38); } else { a1 = pt(0.38, 0.62); a2 = pt(0.62, 0.62); }
-  xm = (a1[0] + a2[0]) / 2; ym = (a1[1] + a2[1]) / 2;
-  wmapArtFillStroke(g, [[a1[0], a1[1]], [a1[0], a1[1] - 28], [xm, ym - 38], [a2[0], a2[1] - 28], [a2[0], a2[1]]], '#3a2a1c', ink, 2);
-  q = pt(0.5, 0.5); wmapArtIsoBox(g, q[0], q[1] - 54, 34, 17, 34, '#e0d1ae', '#b2a07a', '#d0c09b', ink); wmapArtRoof(g, q[0], q[1] - 88, 44, 22, 34, '#c44a30', '#99351f', ink);
-  q = at(0.5, 0.88); wmapArtPeak(g, q[0], q[1] + 8, 118, 150, rng, false);   // 前側山
-  return { c: c, cw: P.cw, ch: P.ch, fw: 1, fh: 1 };
+
+// ── 縣城 3×3:低矮樸素;灰褐夯土牆(主城 55% 高)、青灰瓦、衙署 1 + 民居 7、四面小門無門樓、只有前角 1 座矮哨樓、土黃小旗 ──
+function wmapArtDrawCounty(S) {
+  var g = S.g, ins = WMAP_CITY_INS, wh = 34, i, items = [], it, s, o, hp = ['#e1d6b8', '#b9ab88', '#d0c4a2'], rl = '#6f7f86', rr = '#56646b', houses, sd;
+  wmapArtCShadow(S, 0.76);
+  wmapArtCWall(S, ins, ins, 3 - ins, ins, wh, '#a99b7e');   // 後牆(內側面,略暗)
+  wmapArtCWall(S, ins, ins, ins, 3 - ins, wh, '#8f8268');
+  g.save(); wmapArtCGround(S); g.fillStyle = 'rgba(120,100,60,.28)';   // 十字街
+  g.fillRect(ins + 0.05, 1.5 - 0.1, 3 - 2 * ins - 0.1, 0.2); g.fillRect(1.5 - 0.1, ins + 0.05, 0.2, 3 - 2 * ins - 0.1); g.restore();
+  for (i = 0; i < 4; i++) { sd = [0, 1, 2, 3][i]; o = wmapArtCGateUV(S, sd, ins); if (sd === 0 || sd === 3) wmapArtCArch(S, o.face, o.face === 'u' ? o.u : o.v, o.face === 'u' ? o.v : o.u, 0.13, 28, 0); }
+  houses = [[0.5, 0.55], [1.05, 0.45], [1.0, 1.0], [2.0, 0.6], [2.5, 1.05], [0.55, 2.05], [0.95, 2.5]];
+  for (i = 0; i < houses.length; i++) {
+    if (S.lo && (i & 1)) continue;
+    s = S.rng(); items.push({ d: houses[i][0] + houses[i][1], t: 'h', u: houses[i][0], v: houses[i][1], hw: 0.13 + s * 0.03, h: 16 + (s * 8 | 0) });
+  }
+  items.push({ d: 4.0, t: 'o' });
+  items.sort(function (x, y) { return x.d - y.d; });
+  for (i = 0; i < items.length; i++) {
+    it = items[i];
+    if (it.t === 'h') wmapArtCHouse(S, it.u, it.v, it.hw, 0.12, it.h, 16, hp, rl, rr, null);
+    else {   // 衙署:稍大 + 土黃小旗
+      wmapArtCBox(S, 2.0 - 0.3, 2.0 + 0.3, 2.0 - 0.24, 2.0 + 0.24, 0, 34, ['#e0d1ae', '#b2a07a', '#d0c09b']);
+      wmapArtCRoof(S, 2.0 - 0.3, 2.0 + 0.3, 2.0 - 0.24, 2.0 + 0.24, 34, 30, rl, rr, null, 0.05);
+      o = S.pt(2.0, 2.0); wmapArtCFlag(S, o[0], o[1] - 34 - 30 + 4, 40, '#d9b44a', 0.8);
+    }
+  }
+  wmapArtCWall(S, ins, 3 - ins, 3 - ins, 3 - ins, wh, '#b9ab8e');   // 前牆(外側面)
+  wmapArtCWall(S, 3 - ins, 3 - ins, 3 - ins, ins, wh, '#8f8268');
+  for (i = 1; i <= 2; i++) { o = wmapArtCGateUV(S, i, ins); wmapArtCArch(S, o.face, o.face === 'u' ? o.u : o.v, o.face === 'u' ? o.v : o.u, 0.13, 28, 0); }
+  wmapArtCTower(S, 3 - ins, 3 - ins, 0.1, 58, ['#c4b79a', '#9a8d72', '#b6a98c'], rl, rr, null, 22, 1);   // 前角矮哨樓
+}
+
+// ── 郡城 4×4:大而氣派;青磚灰高牆(主城 90%)+ 明顯雉堞、黛藍琉璃瓦配金脊、四角兩層角樓、正面兩座重簷城樓、郡府大殿 + 民居 12 + 市街攤棚 + 市集旗 ──
+function wmapArtDrawJun(S) {
+  var g = S.g, pt = S.pt, ins = WMAP_CITY_INS, wh = 56, i, items = [], it, s, o, GOLD = '#d9b44a', wp = ['#a3a8a6', '#7c827f', '#b4b9b6'], hp = ['#e1d6b8', '#b9ab88', '#d0c09b'], rl = '#3f5d7a', rr = '#2f4a63', hs, stalls, cols = ['#4f8fb0', '#d9b44a', '#e8e0c8', '#6a9a58', '#8a6aa8'], F = 4 - ins, pal;
+  wmapArtCShadow(S, 0.74);
+  wmapArtCWall(S, ins, ins, F, ins, wh, '#8f9593', '#b4bab7', 1);   // 後牆(內側面)
+  wmapArtCWall(S, ins, ins, ins, F, wh, '#7c827f', '#a3a8a6', 1);
+  wmapArtCTower(S, ins, ins, 0.15, 132, wp, rl, rr, GOLD, 36, 2);   // 後角樓
+  g.save(); wmapArtCGround(S); g.fillStyle = 'rgba(110,100,70,.30)';   // 十字市街
+  g.fillRect(ins + 0.05, 1.5 - 0.17, 4 - 2 * ins - 0.1, 0.34); g.fillRect(1.5 - 0.17, ins + 0.05, 0.34, 4 - 2 * ins - 0.1); g.restore();
+  for (i = 0; i < 2; i++) { o = wmapArtCGateUV(S, i === 0 ? 0 : 3, ins); wmapArtCArch(S, o.face, o.face === 'u' ? o.u : o.v, o.face === 'u' ? o.v : o.u, 0.17, 42, 0); }
+  hs = [[0.55, 0.55], [1.05, 0.45], [0.5, 1.05], [2.0, 0.5], [2.6, 0.55], [3.2, 0.6], [2.3, 1.05], [0.5, 2.0], [0.55, 2.6], [1.0, 3.2], [3.3, 2.0], [2.0, 3.3]];
+  for (i = 0; i < hs.length; i++) {
+    if (S.lo && (i & 1)) continue;
+    s = S.rng(); items.push({ d: hs[i][0] + hs[i][1], t: 'h', u: hs[i][0], v: hs[i][1], hw: 0.13 + s * 0.04, hd: 0.11 + s * 0.03, h: 16 + (s * 10 | 0), c: s > 0.5 });
+  }
+  items.push({ d: 5.4, t: 'f' });
+  if (!S.lo) {   // 攤棚:色塊小棚,沿兩條街
+    stalls = [[0.8, 1.26], [2.1, 1.26], [2.5, 1.74], [1.26, 0.85], [1.74, 2.1], [1.26, 3.1]];
+    for (i = 0; i < stalls.length; i++) items.push({ d: stalls[i][0] + stalls[i][1], t: 's', u: stalls[i][0], v: stalls[i][1], c: cols[i % cols.length] });
+    items.push({ d: 3.0, t: 'm', u: 1.34, v: 1.34, c: '#d9b44a' }); items.push({ d: 3.4, t: 'm', u: 1.7, v: 1.66, c: '#4f8fb0' });
+  }
+  items.sort(function (x, y) { return x.d - y.d; });
+  for (i = 0; i < items.length; i++) {
+    it = items[i];
+    if (it.t === 'h') wmapArtCHouse(S, it.u, it.v, it.hw, it.hd, it.h, 17, hp, it.c ? rl : '#4d6c88', it.c ? rr : '#3a566f', null);
+    else if (it.t === 's') { pal = ['#d8cfb4', '#a89e84', it.c]; wmapArtCBox(S, it.u - 0.09, it.u + 0.09, it.v - 0.07, it.v + 0.07, 0, 14, pal); }
+    else if (it.t === 'm') { o = pt(it.u, it.v); wmapArtCFlag(S, o[0], o[1], 44, it.c, 0.6); }
+    else {   // 郡府大殿:兩層、黛藍瓦 + 金脊
+      wmapArtCBox(S, 2.75 - 0.5, 2.75 + 0.5, 2.75 - 0.4, 2.75 + 0.4, 0, 52, hp);
+      wmapArtCRoof(S, 2.75 - 0.5, 2.75 + 0.5, 2.75 - 0.4, 2.75 + 0.4, 52, 20, rl, rr, null, 0.06);
+      wmapArtCBox(S, 2.75 - 0.32, 2.75 + 0.32, 2.75 - 0.26, 2.75 + 0.26, 58, 90, hp);
+      wmapArtCRoof(S, 2.75 - 0.32, 2.75 + 0.32, 2.75 - 0.26, 2.75 + 0.26, 90, 40, rl, rr, GOLD, 0.06);
+    }
+  }
+  wmapArtCWall(S, ins, 4 - ins, F, 4 - ins, wh, '#a3a8a6', '#c0c5c2', 1);   // 前牆(外側面)
+  wmapArtCWall(S, F, 4 - ins, F, ins, wh, '#7c827f', '#989e9b', 1);
+  wmapArtCTower(S, ins, 4 - ins, 0.15, 132, wp, rl, rr, GOLD, 36, 2);
+  wmapArtCTower(S, F, ins, 0.15, 132, wp, rl, rr, GOLD, 36, 2);
+  wmapArtCTower(S, F, 4 - ins, 0.15, 132, wp, rl, rr, GOLD, 36, 2);
+  // 正面兩座重簷城樓(u+1 面、v+1 面)
+  for (i = 1; i <= 2; i++) {
+    o = wmapArtCGateUV(S, i, ins); s = i === 1;   // s:u 面
+    if (s) { wmapArtCBox(S, 4 - 0.38, 4, 1.5 - 0.42, 1.5 + 0.42, 0, 70, wp); wmapArtCRoof(S, 4 - 0.38, 4, 1.5 - 0.42, 1.5 + 0.42, 70, 18, rl, rr, GOLD, 0.05); }
+    else { wmapArtCBox(S, 1.5 - 0.42, 1.5 + 0.42, 4 - 0.38, 4, 0, 70, wp); wmapArtCRoof(S, 1.5 - 0.42, 1.5 + 0.42, 4 - 0.38, 4, 70, 18, rl, rr, GOLD, 0.05); }
+    q2(S, s);
+  }
+  function q2(Sx, isU) {
+    var uc = isU ? 4 - 0.19 : 1.5, vc = isU ? 1.5 : 4 - 0.19, p;
+    wmapArtCBox(Sx, uc - 0.14, uc + 0.14, vc - 0.14, vc + 0.14, 76, 106, hp);
+    wmapArtCRoof(Sx, uc - 0.14, uc + 0.14, vc - 0.14, vc + 0.14, 106, 34, rl, rr, GOLD, 0.06);
+    p = Sx.pt(uc, vc); wmapArtCFlag(Sx, p[0], p[1] - 106 - 34 + 4, 58, '#d9b44a', 1.1);
+    if (isU) wmapArtCArch(Sx, 'u', 4, 1.5, 0.17, 52, 0); else wmapArtCArch(Sx, 'v', 4, 1.5, 0.17, 52, 0);
+  }
+}
+
+// ── 關:兩側山壁(不可走)+ 中間 2 格門道(路)上的黑瓦石砌門樓;PASS0 = 路沿 u(c)走、PASS1 = 沿 v(r)走 ──
+function wmapArtDrawPass(S, axis) {
+  var g = S.g, pt = S.pt, i, p, GOLD = null, sp = ['#a69d8a', '#6b6355', '#b3aa97'], rl = '#4a4d52', rr = '#33363a', rng = S.rng;
+  function at(s, t) { return axis ? pt(t, s) : pt(s, t); }
+  function box(s0, s1, t0, t1, z0, z1, pal) { if (axis) wmapArtCBox(S, t0, t1, s0, s1, z0, z1, pal); else wmapArtCBox(S, s0, s1, t0, t1, z0, z1, pal); }
+  function roof(s0, s1, t0, t1, z, rh, ov) { if (axis) wmapArtCRoof(S, t0, t1, s0, s1, z, rh, rl, rr, GOLD, ov); else wmapArtCRoof(S, s0, s1, t0, t1, z, rh, rl, rr, GOLD, ov); }
+  function course(s0, s1, t0, t1, hgt, n) {   // 條石紋:畫在這個方塊兩個看得見的面
+    var a, b, c, k, y;
+    g.strokeStyle = 'rgba(40,32,22,.34)'; g.lineWidth = 1.6; g.beginPath();
+    a = axis ? pt(t0, s1) : pt(s0, t1); b = axis ? pt(t1, s1) : pt(s1, t1); c = axis ? pt(t1, s0) : pt(s1, t0);
+    for (k = 1; k <= n; k++) { y = hgt * k / (n + 1); g.moveTo(a[0], a[1] - y); g.lineTo(b[0], b[1] - y); g.lineTo(c[0], c[1] - y); }
+    g.stroke();
+  }
+  wmapArtCShadow(S, 0.72);
+  p = at(0.5, 0.55); wmapArtPeak(g, p[0], p[1] + 8, 176, 236, rng, true);   // 後側山壁(2 峰)
+  p = at(1.5, 0.5); wmapArtPeak(g, p[0], p[1] + 8, 190, 212, rng, false);
+  box(0.7, 1.3, 0.5, 0.96, 0, 38, sp); box(0.7, 1.3, 2.04, 2.5, 0, 38, sp);   // 兩翼石牆接進山壁
+  course(0.7, 1.3, 0.5, 0.96, 38, 2); course(0.7, 1.3, 2.04, 2.5, 38, 2);
+  box(0.52, 1.48, 0.96, 2.04, 0, 72, sp); course(0.52, 1.48, 0.96, 2.04, 72, 3);   // 門樓主體(跨在門道上)
+  if (axis) wmapArtCArch(S, 'v', 1.48, 1.5, 0.27, 52, 0); else wmapArtCArch(S, 'u', 1.48, 1.5, 0.27, 52, 0);   // 門洞開在朝 +s 的面
+  box(0.66, 1.34, 1.1, 1.9, 72, 100, sp); roof(0.66, 1.34, 1.1, 1.9, 100, 36, 0.07);
+  p = at(1.0, 1.5); wmapArtCFlag(S, p[0], p[1] - 100 - 36 + 3, 56, '#d9b44a', 1.0);
+  p = at(0.45, 2.65); wmapArtPeak(g, p[0], p[1] + 4, 130, 120, rng, false);   // 前側山壁
+  p = at(1.55, 2.62); wmapArtPeak(g, p[0], p[1] + 4, 140, 140, rng, true);
+}
+
+// ── 小旗:攻下後加畫在該城主城門(朱紅 = 我的);腳點 (ax, ay) ──
+function wmapArtMakeFlagMe() {
+  var o = wmapArtCv2(64, 96), g = o.g, ink = WMAP_PAL.ink;
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  g.strokeStyle = '#5a3d22'; g.lineWidth = 4; g.beginPath(); g.moveTo(14, 92); g.lineTo(14, 8); g.stroke();
+  wmapArtFillStroke(g, [[14, 8], [58, 22], [46, 32], [58, 44], [14, 40]], '#c8321e', ink, 2.5);
+  g.fillStyle = '#d9b44a'; g.beginPath(); g.arc(14, 7, 4, 0, 7); g.fill();
+  return { c: o.c, cw: 64, ch: 96, ax: 14, ay: 92, fw: 1, fh: 1 };
+}
+
+function wmapArtCityDraw(key, q, lo) {
+  var S = wmapArtCityScene(key, q, lo), P = WMAP_PIECE[key];
+  if (!S) return null;
+  if (key === 'CITY') wmapArtDrawCity(S); else if (key === 'COUNTY') wmapArtDrawCounty(S); else if (key === 'JUN') wmapArtDrawJun(S); else wmapArtDrawPass(S, key === 'PASS1' ? 1 : 0);
+  return { c: S.c, cw: P.cw, ch: P.ch, fw: P.fw, fh: P.fh, q: q, pw: S.c.width, ph: S.c.height };
+}
+function wmapArtCityGet(key, q) {
+  var qq = q > 0 ? Math.round(Math.min(4, Math.max(0.1, q)) * 1000) / 1000 : 1, lo = wmapArtLowQ(), L = WMAP_CITY_LAYER, a;
+  if (Math.abs(L.q - qq) > 0.0005 || L.lo !== lo) { L.q = qq; L.lo = lo; L.m = {}; }
+  a = L.m[key];
+  if (a !== undefined) return a;
+  try { a = wmapArtCityDraw(key, qq, lo); } catch (e) { a = null; if (typeof console !== 'undefined') console.warn('wmapArtCityDraw ' + key + ' 失敗', e); }
+  L.m[key] = a;
+  return a;
+}
+// 主城門 / 城門上方的位置(圖內邏輯座標,給 FLAG_ME 小旗腳點用):CITY 一律 side 1;縣 / 郡 side 0~3(= node.gates[node.mg].side);關忽略 side(門樓頂)
+function wmapArtCityGateAnchor(key, side) {
+  var P = WMAP_PIECE[key], S, ins = WMAP_CITY_INS, o, p, z;
+  if (!P || !WMAP_CITY_KEYS[key]) return null;
+  S = { fw: P.fw, fh: P.fh, base: P.ch - (P.fw + P.fh) * 64 };
+  S.pt = function (u, v) { return [(u - v + P.fh) * 128, S.base + (u + v) * 64]; };
+  if (key === 'PASS0' || key === 'PASS1') { p = key === 'PASS1' ? S.pt(1.5, 1.0) : S.pt(1.0, 1.5); return { x: p[0], y: p[1] - 76 }; }
+  o = wmapArtCGateUV(S, key === 'CITY' ? 1 : side, ins); p = S.pt(o.u, o.v);
+  z = key === 'CITY' ? 90 : (key === 'COUNTY' ? 34 : (side === 1 || side === 2 ? 72 : 56));
+  return { x: p[0], y: p[1] - z };
 }
 
 // ───────── 登錄表 ─────────
-function wmapArtGet(key) {
-  var a = wmapArtCache[key];
+function wmapArtGet(key, q) {
+  var a;
+  if (WMAP_CITY_KEYS[key] === 1) return wmapArtCityGet(key, q);   // 城池 5 鍵:按倍率 q 重畫向量(q 省略 = 1),只留一個倍率層
+  a = wmapArtCache[key];
   if (a !== undefined) return a;
   a = null;
   if (key.indexOf('g_') === 0) a = wmapArtMakeGround(key);
@@ -559,12 +788,10 @@ function wmapArtGet(key) {
   else if (/^M[1-4][a-z]?$/.test(key)) a = wmapArtMakeMountain(key);
   else if (key === 'O1') a = wmapArtMakeRock();
   else if (key === 'T1') a = wmapArtMakeTree();
-  else if (key === 'CITY') a = wmapArtMakeCity();
-  else if (key === 'COUNTY') a = wmapArtMakeCounty();
-  else if (key === 'PASS0' || key === 'PASS1') a = wmapArtMakePass(key === 'PASS1' ? 1 : 0);
+  else if (key === 'FLAG_ME') a = wmapArtMakeFlagMe();
   else if (key.indexOf('gt_') === 0) a = wmapArtMakeGT(key);
   else if (key.indexOf('ro_') === 0) a = wmapArtMakeRO(key);
   wmapArtCache[key] = a;
   return a;
 }
-function wmapArtClear() { wmapArtCache = {}; }
+function wmapArtClear() { wmapArtCache = {}; WMAP_CITY_LAYER.q = 0; WMAP_CITY_LAYER.m = {}; }

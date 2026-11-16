@@ -23,24 +23,91 @@
   animation: tc-zoom 26s ease-in-out infinite alternate;
 }
 @keyframes tc-zoom { from { transform: scale(1); } to { transform: scale(1.06) translate3d(-1%, 0, 0); } }
+/* 氛圍層:薄霧 / 雲影橫向漂移(純 CSS transform,每層一張合成層)+ 火星 canvas(js 建立,畫質低不建) */
+.tc-mists { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.tc-mist {
+  position: absolute; left: 0; width: 200%; will-change: transform;
+  background-repeat: repeat-x; background-size: 50% 100%;
+  animation: tc-drift 90s linear infinite;
+}
+.tc-mist.m1 {
+  bottom: 0; height: 46%; opacity: 0.55;
+  background-image:
+    radial-gradient(ellipse 26% 42% at 18% 62%, rgba(214, 226, 238, 0.34), transparent 70%),
+    radial-gradient(ellipse 30% 36% at 55% 70%, rgba(214, 226, 238, 0.28), transparent 70%),
+    radial-gradient(ellipse 22% 40% at 86% 58%, rgba(214, 226, 238, 0.30), transparent 70%);
+}
+.tc-mist.m2 {
+  bottom: 12%; height: 40%; opacity: 0.4; animation-duration: 140s; animation-direction: reverse;
+  background-image:
+    radial-gradient(ellipse 28% 38% at 30% 50%, rgba(238, 224, 200, 0.26), transparent 70%),
+    radial-gradient(ellipse 24% 34% at 74% 56%, rgba(238, 224, 200, 0.22), transparent 70%);
+}
+.tc-mist.m3 {
+  top: 6%; height: 34%; opacity: 0.5; animation-duration: 190s;
+  background-image:
+    radial-gradient(ellipse 34% 40% at 25% 50%, rgba(6, 10, 18, 0.30), transparent 72%),
+    radial-gradient(ellipse 30% 36% at 78% 46%, rgba(6, 10, 18, 0.26), transparent 72%);
+}
+@keyframes tc-drift { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-50%, 0, 0); } }
+.tc-embers { position: absolute; inset: -2%; width: 104%; height: 104%; pointer-events: none; animation: tc-zoom 26s ease-in-out infinite alternate; }
+/* 整體火光閃爍:下半部橙紅漸層,只動 opacity(不影響標題區) */
+.tc-glow {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 55%; pointer-events: none; mix-blend-mode: screen;
+  background: linear-gradient(to top, rgba(255, 96, 24, 0.34), rgba(255, 96, 24, 0.12) 55%, rgba(255, 96, 24, 0));
+  animation: tc-fireflick 4.3s linear infinite;
+}
+@keyframes tc-fireflick { 0% { opacity: 0.92; } 9% { opacity: 0.85; } 17% { opacity: 1; } 31% { opacity: 0.88; } 38% { opacity: 0.97; } 52% { opacity: 0.86; } 66% { opacity: 1; } 79% { opacity: 0.9; } 90% { opacity: 0.95; } 100% { opacity: 0.92; } }
+/* 陰影罩:上下暗角 + 標題後方一圈柔和暗光(亮背景下標題也清楚),中段不壓暗 */
 .tc-shade {
   position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(rgba(8, 10, 16, 0.55), rgba(8, 10, 16, 0.1) 40%, rgba(8, 10, 16, 0.7));
+  background:
+    radial-gradient(ellipse 62% 30% at 50% 44%, rgba(8, 10, 16, 0.62), rgba(8, 10, 16, 0) 100%),
+    linear-gradient(rgba(8, 10, 16, 0.5), rgba(8, 10, 16, 0.04) 34%, rgba(8, 10, 16, 0.06) 62%, rgba(8, 10, 16, 0.66));
 }
-.tc-title { position: absolute; left: 0; right: 0; top: 14%; text-align: center; pointer-events: none; }
+/* 標題:置於畫面中央偏上(已無人物)。lockup = 「東漢」大粗緊湊 + 「Q」圓形印章 + 「卡」較小,比例字距、非等寬 */
+.tc-title { position: absolute; left: 0; right: 0; top: 46%; transform: translateY(-62%); text-align: center; pointer-events: none; }
 .tc-logo {
-  display: inline-block; font-weight: 900; line-height: 1.1;
-  font-size: min(13vw, 13vh, 88px); letter-spacing: 0.08em;
-  background: linear-gradient(var(--tc-gold-hi), var(--tc-gold) 55%, var(--tc-gold-lo));
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  -webkit-text-stroke: 2px var(--tc-ink);
-  filter: drop-shadow(0 3px 0 var(--tc-ink)) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.6));
+  --tc-fs: min(23vw, 25vh, 128px);
+  display: inline-flex; align-items: flex-end; justify-content: center; position: relative;
+  font-family: "Noto Serif TC", "Source Han Serif TC", "Songti TC", "PMingLiU", "MingLiU", "Microsoft JhengHei", serif;
+  font-weight: 900; font-size: var(--tc-fs); line-height: 1; white-space: nowrap;
+  filter: drop-shadow(0 0 18px rgba(255, 190, 70, 0.28));
 }
-.tc-logo-img { max-width: 70vw; max-height: 28vh; }
+.tc-han, .tc-ka {
+  position: relative; display: inline-block; color: #ffd45a; letter-spacing: -0.045em; padding-right: 0.045em;
+  text-shadow:
+    -3px 0 0 #2a1203, 3px 0 0 #2a1203, 0 -3px 0 #2a1203, 0 3px 0 #2a1203,
+    -3px -3px 0 #2a1203, 3px -3px 0 #2a1203, -3px 3px 0 #2a1203, 3px 3px 0 #2a1203,
+    0 5px 0 #2a1203, 0 7px 0 #7a3a08, 0 9px 0 #5c2a06, 0 12px 14px rgba(0, 0, 0, 0.55);
+}
+.tc-han::after, .tc-ka::after {
+  content: attr(data-t); position: absolute; left: 0; top: 0; padding-right: 0.045em; letter-spacing: -0.045em;
+  color: transparent; text-shadow: none;
+  background: linear-gradient(#fff7cf 6%, #ffd860 46%, #f2a520 78%, #d98310);
+  -webkit-background-clip: text; background-clip: text;
+}
+.tc-ka { font-size: 0.6em; margin-left: -0.06em; }
+.tc-q {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 1em; height: 1em; margin: 0 0 0.62em -0.22em; z-index: 1; transform: rotate(-9deg);
+  font-family: "Arial Black", "Segoe UI", "Microsoft JhengHei", Arial, sans-serif; font-weight: 900; font-size: 0.5em; line-height: 1;
+  color: #fff6dc; border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, #e8453a, #b01e18 62%, #7e100c);
+  border: 0.06em solid #ffd45a;
+  box-shadow: 0 0 0 0.035em #2a1203, 0 0.08em 0 0.035em #2a1203, 0 0.14em 0.2em rgba(0, 0, 0, 0.5), inset 0 -0.06em 0.1em rgba(0, 0, 0, 0.35);
+  text-shadow: 0 0.04em 0 #5e0b08;
+}
+.tc-logo-img { display: block; margin: 0 auto; width: min(46vw, 520px); max-height: 52vh; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45)); }
+.tc-logo-wait { visibility: hidden; }
 .tc-sub {
-  margin-top: 0.6em; font-size: min(4.4vw, 3.4vh, 22px); letter-spacing: 0.4em;
-  color: #e9dcb8; text-shadow: 0 1px 2px #000;
+  margin-top: 0.7em; font-size: min(3.6vw, 18px); font-weight: 700; letter-spacing: 0.06em; white-space: nowrap;
+  font-family: "Noto Serif TC", "Source Han Serif TC", "Songti TC", "PMingLiU", "MingLiU", "Microsoft JhengHei", serif;
+  color: #f6e3b0;
+  text-shadow: -1px 0 0 #2a1203, 1px 0 0 #2a1203, 0 -1px 0 #2a1203, 0 1px 0 #2a1203, 0 2px 6px rgba(0, 0, 0, 0.85);
 }
+.tc-sub-wait { visibility: hidden; }
+/* 舊:兩側 Q 版路人(封面已不呼叫 tcUnits,保留樣式備用) */
 .tc-units { position: absolute; bottom: 14%; width: 46%; display: flex; align-items: flex-end; justify-content: center; gap: 1vw; pointer-events: none; }
 .tc-units-l { left: 0; }
 .tc-units-r { right: 0; }
@@ -52,8 +119,8 @@
 .tc-unit.tc-flip img { transform: scaleX(-1); }
 @keyframes tc-breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 .tc-press {
-  position: absolute; left: 0; right: 0; bottom: 6%; text-align: center;
-  font-size: 16px; letter-spacing: 0.2em; color: #fff6d6; text-shadow: 0 1px 3px #000;
+  position: absolute; left: 0; right: 0; bottom: 9%; text-align: center;
+  font-size: 17px; letter-spacing: 0.2em; color: #fff6d6; text-shadow: 0 0 3px #000, 0 1px 3px #000, 0 2px 8px rgba(0, 0, 0, 0.8);
   animation: tc-blink 1.6s ease-in-out infinite; pointer-events: none;
 }
 @keyframes tc-blink { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
@@ -95,9 +162,24 @@
 }
 .tc-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .tc-btn-danger { color: #ffb3a8; }
+.tc-btn-armed {
+  position: relative; overflow: hidden; font: inherit; font-size: 14px; font-weight: 800; cursor: pointer;
+  color: #fff; background: #b3201a; border: 1px solid #ff9a8a; border-radius: 8px; padding: 8px 12px;
+}
+.tc-btn-armed::after { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: #ffd6a0; transform-origin: left; animation: tc-arm 4s linear forwards; }
+@keyframes tc-arm { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .tc-msg { min-height: 1.4em; font-size: 13px; margin-top: 8px; color: #ffe9a8; }
 #titleCover.tc-srv-on .tc-press { display: none; }
+@media (orientation: portrait) {
+  .tc-title { top: 26%; }
+  .tc-logo-img { width: min(86vw, 420px); }
+  .tc-sub { font-size: min(5vw, 18px); }
+  .tc-shade { background: radial-gradient(ellipse 80% 22% at 50% 25%, rgba(8, 10, 16, 0.4), rgba(8, 10, 16, 0) 100%), linear-gradient(rgba(8, 10, 16, 0.3), rgba(8, 10, 16, 0.04) 34%, rgba(8, 10, 16, 0.06) 62%, rgba(8, 10, 16, 0.66)); }
+}
+.q-low .tc-mist.m2, .q-low .tc-mist.m3 { display: none; }
+.q-low .tc-logo { filter: none; }
 @media (max-height: 520px) {
+  .tc-title { top: 44%; }
   .tc-card { padding: 10px; }
   .tc-h { font-size: 16px; margin-bottom: 4px; }
   .tc-srv-list { gap: 6px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -111,6 +193,6 @@
   .tc-msg { margin-top: 4px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .tc-bg, .tc-unit, .tc-press { animation: none; }
+  .tc-bg, .tc-unit, .tc-press, .tc-mist, .tc-embers, .tc-glow { animation: none; }
   #titleCover.tc-flash-on .tc-flash { animation: none; }
 }
