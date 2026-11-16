@@ -176,7 +176,7 @@ function bnRptConfetti(seed) {
 // 場景背景:同 bnstage 的場景找圖規則(rec.opts.scene → bnstScenePath),載入成功才換上,否則維持 CSS 預設圖
 function bnRptScene() {
   var bg = BNRPT.el && BNRPT.el.querySelector ? BNRPT.el.querySelector('.bnr-bg') : null, sc = BNRPT.rec && BNRPT.rec.opts ? BNRPT.rec.opts.scene : '', src, im;
-  if (!bg || !sc || typeof bnstScenePath !== 'function' || typeof Image === 'undefined') return;
+  if (!bg || typeof bnstScenePath !== 'function' || typeof Image === 'undefined') return;
   src = bnstScenePath(sc);
   im = new Image();
   im.onload = function () { if (bg.parentNode) bg.style.backgroundImage = 'url(' + src + ')'; };

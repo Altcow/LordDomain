@@ -41,7 +41,7 @@ function ldHeroPower(e) {
   try { return bnPower(bnUnitSpec(e, { troop: ldHeroTroop(e) })); } catch (er) { return null; }
 }
 function ldHeroApt(e) {
-  var r = bnAptOf(e), list = (typeof BN_DATA !== 'undefined' && BN_DATA.troopList) || ['槍', '騎', '盾', '弓', '謀'];
+  var r = bnAptOf(e), list = (typeof BN_DATA !== 'undefined' && BN_DATA.troopList) || ['槍', '騎', '盾', '弓', '械'];
   return list.map(function (t) { return { t: t, g: r.apt[t], sc: r.scores[t] }; });
 }
 function ldHeroFacName(e) { return (typeof CARD_FAC !== 'undefined' && CARD_FAC[e.fac]) || ''; }

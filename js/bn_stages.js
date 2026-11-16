@@ -45,15 +45,15 @@ var BN_STG_ARCH = {
   bd_chief: { look: 'bandit_chief', troop: '槍', prof: [1.1, 1.15, 0.85, 0.85, 1], hpK: 1.2, elite: 1, skills: ['g_chongfeng'], ult: 'u_inf' },
   yt_blade: { look: 'yt_blade', troop: '槍', prof: [1, 1.1, 0.8, 0.85, 0.9], skills: ['g_zhan'], ult: 'u_inf' },
   yt_brute: { look: 'yt_brute', troop: '盾', prof: [1.15, 1, 0.7, 0.8, 0.9], skills: ['g_tiebi'], ult: 'u_shield' },
-  yt_mystic: { look: 'yt_mystic', troop: '謀', prof: [0.8, 0.7, 1.15, 1, 0.9], skills: ['g_huogong'], ult: 'u_str' },
-  yt_healer: { look: 'yt_mystic', troop: '謀', prof: [0.85, 0.7, 1.05, 1.15, 0.9], keep: 1, skills: ['g_liaoshang'], ult: 'u_heal' },
+  yt_mystic: { look: 'yt_mystic', troop: '弓', dt: 'strat', prof: [0.8, 0.7, 1.15, 1, 0.9], skills: ['g_huogong'], ult: 'u_str' },
+  yt_healer: { look: 'yt_mystic', troop: '弓', dt: 'strat', prof: [0.85, 0.7, 1.05, 1.15, 0.9], keep: 1, skills: ['g_liaoshang'], ult: 'u_heal' },
   cl_shield: { look: 'clan_shield', troop: '盾', prof: [1.15, 1, 0.75, 0.9, 0.9], skills: ['g_gushou'], ult: 'u_shield' },
   cl_xbow: { look: 'clan_xbow', troop: '弓', prof: [0.9, 1.1, 0.95, 0.85, 0.9], skills: ['g_qishe'], ult: 'u_arc' },
-  cl_scholar: { look: 'clan_retainer', troop: '謀', prof: [0.8, 0.7, 1.15, 1.05, 0.95], skills: ['g_lijian'], ult: 'u_str' },
+  cl_scholar: { look: 'clan_retainer', troop: '弓', dt: 'strat', prof: [0.8, 0.7, 1.15, 1.05, 0.95], skills: ['g_lijian'], ult: 'u_str' },
   cl_retainer: { look: 'clan_retainer', troop: '騎', prof: [1, 1.15, 0.9, 0.85, 1], hpK: 1.1, elite: 1, skills: ['g_xianzhen'], ult: 'u_cav' },
   hu_rider: { look: 'hu_rider', troop: '騎', prof: [0.95, 1.15, 0.8, 0.8, 0.95], skills: ['g_chongfeng'], ult: 'u_cav' },
   hu_archer: { look: 'hu_archer', troop: '弓', prof: [0.9, 1.1, 0.9, 0.8, 0.9], skills: ['g_chuanyun'], ult: 'u_arc' },
-  hu_shaman: { look: 'hu_shaman', troop: '謀', prof: [0.8, 0.7, 1.15, 1, 0.95], skills: ['g_leifa'], ult: 'u_str' },
+  hu_shaman: { look: 'hu_shaman', troop: '弓', dt: 'strat', prof: [0.8, 0.7, 1.15, 1, 0.95], skills: ['g_leifa'], ult: 'u_str' },
   rb_captain: { look: 'clan_retainer', troop: '槍', prof: [1.1, 1.1, 0.85, 0.9, 1], hpK: 1.15, elite: 1, skills: ['g_poqiang'], ult: 'u_inf' }
 };
 
@@ -196,17 +196,18 @@ function bnStgMakeFoe(ent, v, ch, pos, st, sk) {
     gr = BN_STG.grOf[ch.n] | 0, boss = !!(st && st.boss && pos === 0), vk = ent.vk || (boss ? 1.05 : 1), card, spec, apt = {}, ov, more = !!(st && st.idx >= BN_STG.extraFrom);
   card = { id: 'foe', name: fig ? fig.name : ent[1], fig: fig ? ent.fig : '', fac: fig ? fig.fac : 4, gr: gr, st: p.map(function (x) { return Math.max(1, Math.round(v * vk * x)); }), tok: 0, up: 0, ja: {}, tr: [], main: '', learn: 0, sex: '' };
   if (!fig) apt[troop] = 'A';
-  spec = bnUnitSpec(card, { troop: troop, apt: fig ? undefined : apt, learned: [], slots: fig && BN_KIT_BY.figs[ent.fig] ? (BN_KIT_BY.figs[ent.fig].pool || []).filter(function (id) { return BN_SKILLS[id] && id !== BN_KIT_BY.figs[ent.fig].passive; }) : undefined });   // learned: [] = 敵將不走名冊 autoLearn;名人敵將選擇槽 = 本命池(敵方不受拆卡限制)
+  var fdt = arch ? (arch.dt || '') : bnDtOf(card), key = fdt === 'strat' ? '謀' : troop;   // key:兵種池 / 外觀鍵(謀略型沿用『謀』鍵;2026-11-16 謀不再是兵種)
+  spec = bnUnitSpec(card, { troop: troop, dt: arch ? fdt : undefined, apt: fig ? undefined : apt, learned: [], slots: fig && BN_KIT_BY.figs[ent.fig] ? (BN_KIT_BY.figs[ent.fig].pool || []).filter(function (id) { return BN_SKILLS[id] && id !== BN_KIT_BY.figs[ent.fig].passive; }) : undefined });   // learned: [] = 敵將不走名冊 autoLearn;名人敵將選擇槽 = 本命池(敵方不受拆卡限制)
   sk = sk || (st ? st.id : 'x');
   ov = (st && BN_STG_SKILL_OVR[st.id] && BN_STG_SKILL_OVR[st.id][pos]) || (!Array.isArray(ent) && ent.skills);
   if (ov) spec.skills = ov.filter(function (id) { return !!BN_SKILLS[id]; });
-  else if (fig) { if (boss) bnStgFoeSkills(sk, pos, 'figboss', troop, null, ch, more).forEach(function (id) { if (spec.skills.indexOf(id) < 0) spec.skills.push(id); }); }
-  else spec.skills = bnStgFoeSkills(sk, pos, boss ? 'boss' : (arch.elite ? 'elite' : 'minion'), troop, arch, ch, more);
+  else if (fig) { if (boss) bnStgFoeSkills(sk, pos, 'figboss', key, null, ch, more).forEach(function (id) { if (spec.skills.indexOf(id) < 0) spec.skills.push(id); }); }
+  else spec.skills = bnStgFoeSkills(sk, pos, boss ? 'boss' : (arch.elite ? 'elite' : 'minion'), key, arch, ch, more);
   if (!fig) {
     spec.ult = arch.ult;
     if (arch.hpK) spec.stats.hp = Math.round(spec.stats.hp * arch.hpK);
   }
-  spec.look = 'foe:' + (fig ? (ent.look || BN_STG_FIG_LOOK[fig.troop] || 'yt_blade') : arch.look);
+  spec.look = 'foe:' + (fig ? (ent.look || BN_STG_FIG_LOOK[key] || 'yt_blade') : arch.look);
   spec.title = ent.title || ent[2] || '';
   spec.foe = 1;
   return spec;

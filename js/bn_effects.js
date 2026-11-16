@@ -21,7 +21,7 @@ function bnDurOf(eff, o, def) {
 function bnFilterSet(list, f) {
   if (!f) return list;
   return list.filter(function (x) {
-    if (f.troop && x.troop !== f.troop) return false;
+    if (f.troop && !bnTroopIs(x, f.troop)) return false;
     if (f.fac !== undefined && x.fac !== f.fac) return false;
     if (f.fig && x.fig !== f.fig) return false;
     return true;
@@ -270,7 +270,7 @@ function bnAtkMul(S, u, eff, sc, t) {
   }
   if (P.perAlly) {
     cfg = P.perAlly;
-    n = bnAllies(S, u, false).filter(function (x) { return cfg.by === 'troop' ? x.troop === cfg.key : (cfg.by === 'fac' ? x.spec.fac === cfg.key : (cfg.by === 'tag' ? bnFigHasTag(x.fig, cfg.key) : x.spec.fac === 4)); }).length;
+    n = bnAllies(S, u, false).filter(function (x) { return cfg.by === 'troop' ? bnTroopIs(x, cfg.key) : (cfg.by === 'fac' ? x.spec.fac === cfg.key : (cfg.by === 'tag' ? bnFigHasTag(x.fig, cfg.key) : x.spec.fac === 4)); }).length;
     m *= 1 + Math.min(n, cfg.max) * (BN_DATA.stepMul[cfg.step] || 0.05);
   }
   if (P.crowd_scale) m *= 1 + Math.min(bnAllies(S, u, true).length, P.crowd_scale.max) * (BN_DATA.stepMul[P.crowd_scale.step] || 0.05);
@@ -292,7 +292,7 @@ function bnApplyEffect2(S, u, eff, res, o) {
   if (bnIsAttack(eff, o)) {
     targets = bnTargetsFor(S, u, eff, res, o);
     if (!res.main || eff.isExtra !== true) { if (!res.main) res.main = targets; }
-    ty = eff.dmg || (u.troop === '謀' ? 'strat' : 'phys');
+    ty = eff.dmg || (u.dt === 'strat' ? 'strat' : 'phys');
     hits = kind === 'atk_multi' ? bnHitsOf(S, u, P) : 1;
     var sk = eff.sk, wx = sk && sk.theme === 'wuxing' && u.el ? u.el : '';
     prevLs = u.st.lifesteal;
@@ -407,7 +407,7 @@ function bnApplyEffect2(S, u, eff, res, o) {
       for (i = 0; i < targets.length; i++) {
         t = targets[i];
         v = P.dmgMul !== undefined ? P.dmgMul : bnKT('stun', pw);
-        if (v > 0 && t.alive) { r = bnHitWithRx(S, u, t, { ty: eff.dmg || (u.troop === '謀' ? 'strat' : 'phys'), mul: v * sc, kind: kind, sk: eff.sk }); if (r && r.killed) res.kills.push(t); }
+        if (v > 0 && t.alive) { r = bnHitWithRx(S, u, t, { ty: eff.dmg || (u.dt === 'strat' ? 'strat' : 'phys'), mul: v * sc, kind: kind, sk: eff.sk }); if (r && r.killed) res.kills.push(t); }
         if (t.alive && bnChance(S, P, t, u)) bnStatusApply(S, u, t, 'stun', { act: true, left: undefined }, {});
       }
       break;
@@ -553,7 +553,7 @@ function bnApplyEffect2(S, u, eff, res, o) {
       for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'critdmg_up', { val: bnPct(kind, eff, sc), left: bnDurOf(eff, o) }, {});
       break;
     case 'delay_burst': {   // 伏火(S0):施放時快照攻(策略傷害取謀)× 檔位係數 × sc,P.after 回合後於回合開始結算(bnFuseFire)
-      var dbAfter = P.after || 2, dbBase = (eff.dmg || (u.troop === '謀' ? 'strat' : 'phys')) === 'strat' ? bnMag(S, u) : bnAtk(S, u);
+      var dbAfter = P.after || 2, dbBase = (eff.dmg || (u.dt === 'strat' ? 'strat' : 'phys')) === 'strat' ? bnMag(S, u) : bnAtk(S, u);
       for (i = 0; i < targets.length; i++) if (targets[i].alive) bnStatusApply(S, u, targets[i], 'fuse', { val: dbBase * bnKT(kind, pw) * sc, at: S.round + dbAfter, pw: pw, left: dbAfter + 1 }, {});
       break;
     }
@@ -923,7 +923,7 @@ function bnQueueAssists(S, u, sk, res, o) {
     c = combos[i];
     var generic = c.casters[0].indexOf('ally:') === 0;
     if (!generic && c.casters.indexOf(u.fig) < 0) continue;
-    if (generic && c.casters[0] !== 'ally:any' && u.troop !== c.casters[0].slice(5)) continue;
+    if (generic && c.casters[0] !== 'ally:any' && !bnTroopIs(u, c.casters[0].slice(5))) continue;
     if (c.on && c.on.cast && c.on.cast !== 'active' && c.on.cast !== sk.id) continue;
     if (c.on && c.on.castKind && c.on.castKind.indexOf(sk.kind) < 0) continue;
     if (c.on && c.on.castTag && !(sk.tags && sk.tags.indexOf(c.on.castTag) >= 0)) continue;
@@ -933,7 +933,7 @@ function bnQueueAssists(S, u, sk, res, o) {
     else if (c.assister && (c.assister.hasKind || c.assister.troop)) {
       as = S.units.filter(function (x) {
         if (x.side !== u.side || !x.alive || x === u) return false;
-        if (c.assister.troop && x.troop !== c.assister.troop) return false;
+        if (c.assister.troop && !bnTroopIs(x, c.assister.troop)) return false;
         if (c.assister.row === 'same' && x.row !== u.row) return false;
         if (c.assister.hasKind && !x.act.concat(x.pas).some(function (it) { return it.def.kind === c.assister.hasKind; })) return false;
         return true;
@@ -996,7 +996,7 @@ function bnDrain(S) {
       if (t) {
         mul = BN_DATA.followMul[q.power] || 0.6;
         bnEv(S, 'skill', { u: q.u.id, id: 'follow', name: '協同追擊', kind: 'follow', cat: 'bond' });
-        bnHitWithRx(S, q.u, t, { ty: q.u.troop === '謀' ? 'strat' : 'phys', mul: mul, kind: 'follow', sk: q.tag ? { id: 'follow', cat: 'bond', tags: [q.tag] } : null, basic: false });
+        bnHitWithRx(S, q.u, t, { ty: q.u.dt === 'strat' ? 'strat' : 'phys', mul: mul, kind: 'follow', sk: q.tag ? { id: 'follow', cat: 'bond', tags: [q.tag] } : null, basic: false });
       }
     }
     ch.dv--;
@@ -1022,7 +1022,7 @@ function bnRunAssist(S, q) {
   mul = BN_DATA.chain.assistBasicMul * (q.ult ? BN_DATA.chain.ultAssistMul : 1);
   bnEv(S, 'skill', { u: u.id, id: c.id, name: c.name, kind: 'assist', cat: 'assist', as: q.by.id });
   var tag = c.action.tag;
-  bnHitWithRx(S, u, t, { ty: c.action.dmgType || (u.troop === '謀' ? 'strat' : 'phys'), mul: mul, kind: 'assist', basic: true, sk: tag ? { id: c.id, cat: 'assist', tags: [tag] } : null });
+  bnHitWithRx(S, u, t, { ty: c.action.dmgType || (u.dt === 'strat' ? 'strat' : 'phys'), mul: mul, kind: 'assist', basic: true, sk: tag ? { id: c.id, cat: 'assist', tags: [tag] } : null });
 }
 
 // ───────── 觸發(被動 / 指揮 trigger) ─────────
@@ -1107,7 +1107,7 @@ function bnVsMatch(S, vs, x) {
   if (!vs || !x) return false;
   if (vs.fig && vs.fig.indexOf(x.fig) >= 0) return true;
   if (vs.tag && vs.tag.some(function (g) { return bnFigHasTag(x.fig, g); })) return true;
-  if (vs.troop && vs.troop.indexOf(x.troop) >= 0) return true;
+  if (vs.troop && bnTroopIn(vs.troop, x.troop, x.dt)) return true;
   if (vs.fac && vs.fac.indexOf(x.fac) >= 0) return true;
   if (vs.status && x.st && vs.status.some(function (k) { return !!x.st[BN_ALIAS[k] || k]; })) return true;
   return false;

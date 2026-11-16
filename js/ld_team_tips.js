@@ -4,13 +4,13 @@
 // ldTipsAdvice(slots) → {lv:'ok'|'info'|'warn', color:'g'|'y'|'r', code, text}(slots = [{row, troop}];只回最嚴重的一條)。
 // ldTipsAfter(S, side, o) → {code, text} | null(戰後一句建議,只在輸時;o = {myPower, foePower});ldTipsHitShare(S, side) → [前鋒%, 中衛%, 主將%](敵方造成的傷害含護盾吸收,三格加總約 100)。
 // 全域:LDTIPS ldTipsReach ldTipsReachText ldTipsAdvice ldTipsAfter ldTipsHitShare LDTIPS_PAGE
-var LDTIPS = { rowTxt: ['前鋒', '中衛', '主將'], R: { '槍': 1, '盾': 1, '騎': 2, '弓': 3, '謀': 3 }, reachMin: 1 };
+var LDTIPS = { rowTxt: ['前鋒', '中衛', '主將'], R: { '槍': 1, '盾': 1, '騎': 2, '弓': 3, '械': 3, '謀': 3 }, reachMin: 1 };
 var LDTIPS_TEXT = {
   empty: '還有空位,三個人都放滿比較穩',
-  softFront: '前鋒最先挨打,弓、謀太脆,換盾或槍來站',
+  softFront: '前鋒最先挨打,弓、械太脆,換盾或槍來站',
   tankBack: '把盾 / 槍兵移到前鋒,勝率通常高很多',
   cavFront: '騎兵當前鋒容易先倒,有盾 / 槍兵的話放前鋒更穩',
-  rangedBack: '弓謀站主將安全,但只打得到對面前鋒',
+  rangedBack: '弓械站主將安全,但只打得到對面前鋒',
   ok: '站位合理:前鋒耐打,主將在後'
 };
 // 「布陣要訣」頁內容(t:'h' 標題、'p' 段落、'li' 條列;**粗體** 由畫面轉 <b>)。文字與 設計_站位目標與布陣教學.md 2.3 ① 一致(「主將倒下整場就輸」在主將陣亡即輸上線前先寫成「隊伍最難翻盤」)
@@ -22,9 +22,9 @@ var LDTIPS_PAGE = [
   { t: 'h', s: '打得到誰?(不能指定目標,普攻會在打得到的人裡隨機挑)' },
   { t: 'li', s: '槍、盾:不管站哪,只打得到對面最前面那位。' },
   { t: 'li', s: '騎:站前鋒能打到對面前兩位;站後面只打得到最前面那位。' },
-  { t: 'li', s: '弓、謀:站前鋒打得到全部;站中衛打到前兩位;**站主將只打得到最前面那位**。' },
+  { t: 'li', s: '弓、械:站前鋒打得到全部;站中衛打到前兩位;**站主將只打得到最前面那位**。' },
   { t: 'li', s: '站越後面,越安全,但打得越近。前面的人倒下,後面的人會往前補。' },
-  { t: 'p', s: '**兵種相剋**:槍剋騎、騎剋盾、盾剋弓、弓剋槍(多打 30%,被剋少打 20%);騎兵另外剋謀士。謀士的法術傷害不吃相剋。' },
+  { t: 'p', s: '**兵種相剋**:槍剋騎、騎剋盾、盾剋弓、弓剋槍(克制方多打、被剋方少打,謀略傷害也吃相剋);四兵種又剋器械,器械打四兵種較弱,但攻城很強。' },
   { t: 'p', s: '**不會排?**按「推薦戰隊」,它會照這些原則幫你挑人。' }
 ];
 
@@ -43,7 +43,7 @@ function ldTipsReachText(troop, row) {
   return r.map(function (i) { return LDTIPS.rowTxt[i]; }).join('、');
 }
 function ldTipsIsTank(t) { return t === '盾' || t === '槍'; }
-function ldTipsIsSoft(t) { return t === '弓' || t === '謀'; }
+function ldTipsIsSoft(t) { return t === '弓' || t === '械' || t === '謀'; }
 function ldTipsMake(code, lv, color) { return { lv: lv, color: color, code: code, text: LDTIPS_TEXT[code] }; }
 function ldTipsAdvice(slots) {
   var by = {}, i, front, main, tankElse = false, anyTank = false;

@@ -408,15 +408,13 @@ function ldoWdBossHtml(now) { return ldoBossHtml('data-wd', now); }
 
 // ═════════ 六、掛上去 ═════════
 function ldoInstall() {
-  var d;
   if (typeof ldHomeRefresh === 'function' && typeof ldoOrigHomeRefresh === 'undefined') { ldoOrigHomeRefresh = ldHomeRefresh; ldHomeRefresh = ldoHomeRefresh; }
   if (typeof ldHomeBldDo === 'function' && typeof ldoOrigHomeBldDo === 'undefined') { ldoOrigHomeBldDo = ldHomeBldDo; ldHomeBldDo = ldoHomeBldDo; }
   if (typeof shellAct === 'function' && typeof ldoOrigShellAct === 'undefined') { ldoOrigShellAct = shellAct; shellAct = ldoShellAct; }
   if (typeof ldNavRegister === 'function') {
-    d = (typeof LDNAV !== 'undefined' && LDNAV.reg.event) || null;
     ldNavRegister({ id: 'event', title: '活動', build: function (el, ctx) {
       ldoMount(el, 'event', function (A, now) { return ldoOn() ? ldoEventHtml(A, now) : ''; });
-      if (d && typeof d.build === 'function') d.build(el, ctx);   // 原本的列(擂台、免費抽、切磋)留在後面
+      if (typeof ldHomeEventBuild === 'function') ldHomeEventBuild(el, ctx);   // 活動頁基本列(擂台、免費抽、切磋)留在後面;S0 起 event / quest 只在本檔登錄
     }, onShow: ldoOnShow('event') });
     ldNavRegister({ id: 'quest', title: '主線任務', build: function (el) { ldoMount(el, 'quest', function (A) { return ldoOn() ? ldoQuestHtml(A) : '<div class="ldp-empty">任務系統準備中</div>'; }); }, onShow: ldoOnShow('quest') });
     ldNavRegister({ id: 'nb', title: '新手七日', build: function (el) { ldoMount(el, 'nb', function (A) { return ldoNbHtml(A); }); }, onShow: ldoOnShow('nb') });

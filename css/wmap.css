@@ -1,0 +1,34 @@
+/* css/wmap.css — M1 斜角大地圖畫面(js/wmap_view.js)。只有 ?wmap=1 掛載 #wmapRoot 時才有任何元素吃到這些規則。命名前綴 wmap-。 */
+#wmapRoot { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 6; overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #e4eef0 0%, #d6e4e8 55%, #c5d8de 100%); color: #333; font: 13px/1.4 system-ui, "Microsoft JhengHei", sans-serif; user-select: none; -webkit-user-select: none; }
+#wmapVp { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; touch-action: none; cursor: grab; }
+#wmapVp:active { cursor: grabbing; }
+#wmapWorld { position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform; }
+#wmapWorld canvas { z-index: 0; position: absolute; left: 0; top: 0; pointer-events: none; }
+#wmapRoot .wmap-b { z-index: 3; position: absolute; left: 0; top: 0; pointer-events: none; font: 700 10px/1 system-ui, sans-serif; background: #5b3a1a; color: #ffe9b0; border-radius: 7px; padding: 2px 4px; border: 1px solid rgba(255, 233, 176, .45); box-shadow: 0 1px 2px rgba(0, 0, 0, .35); white-space: nowrap; }
+#wmapRoot .wmap-own, #wmapRoot .wmap-sel { z-index: 1; position: absolute; left: 0; top: 0; pointer-events: none; background-size: 100% 100%; background-repeat: no-repeat; }
+#wmapRoot .wmap-own { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 1' preserveAspectRatio='none'%3E%3Cpath d='M1 .05 1.95 .5 1 .95 .05 .5Z' fill='%23d03a22' fill-opacity='.14' stroke='%23c4301b' stroke-width='.07' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+#wmapRoot .wmap-sel { z-index: 2; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 1' preserveAspectRatio='none'%3E%3Cpath d='M1 .04 1.96 .5 1 .96 .04 .5Z' fill='%23fff1a8' fill-opacity='.22' stroke='%23fff6c8' stroke-width='.11' stroke-linejoin='round'/%3E%3Cpath d='M1 .04 1.96 .5 1 .96 .04 .5Z' fill='none' stroke='%23d99a12' stroke-width='.055' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+#wmapRoot .wmap-ctl { position: absolute; right: calc(env(safe-area-inset-right) + 10px); top: calc(env(safe-area-inset-top) + 10px); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+#wmapRoot .wmap-btn { width: 44px; height: 44px; border-radius: 22px; border: 1px solid rgba(255, 233, 176, .6); background: rgba(70, 46, 20, .86); color: #ffe9b0; font: 700 22px/1 system-ui, sans-serif; padding: 0; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, .3); touch-action: manipulation; }
+#wmapRoot .wmap-btn:active { background: rgba(110, 72, 30, .95); }
+#wmapRoot .wmap-home { font-size: 16px; }
+#wmapRoot .wmap-zl { font: 700 12px/1 system-ui, sans-serif; color: #5b3a1a; background: rgba(255, 244, 214, .9); border-radius: 8px; padding: 3px 7px; }
+#wmapRoot .wmap-card { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 14px); transform: translateX(-50%); max-width: calc(100% - 140px); padding: 8px 14px; border-radius: 12px; background: rgba(50, 34, 16, .92); color: #fff1c8; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid rgba(255, 233, 176, .45); box-shadow: 0 3px 10px rgba(0, 0, 0, .35); pointer-events: none; }
+#wmapRoot .wmap-hud { position: absolute; left: 6px; top: 6px; padding: 3px 6px; border-radius: 6px; background: rgba(0, 0, 0, .6); color: #fff; font: 11px/1.3 monospace; pointer-events: none; }
+/* ───────── W2 主畫面外殼(js/wmap_ui.js):body.wm-on = 地圖主畫面、body.wm-in-city = 主城內頁。旗標 wmap 關時 body 沒有這兩個 class,以下規則全部不生效。 ───────── */
+body.wm-on #shellRoot .sh-scene > #wmapRoot { position: absolute; z-index: 1; transition: opacity .22s, transform .22s, visibility 0s; }
+body.wm-on.wm-in-city #shellRoot .sh-scene > #wmapRoot { opacity: 0; transform: scale(1.35); visibility: hidden; pointer-events: none; transition: opacity .22s, transform .22s, visibility 0s .22s; }
+body.wm-on #shellRoot .ldh-plqs, body.wm-on #shellRoot .ldh-team, body.wm-on #shellRoot .ldh-band { transition: opacity .22s, visibility 0s; }
+body.wm-on:not(.wm-in-city) #shellRoot .ldh-plqs, body.wm-on:not(.wm-in-city) #shellRoot .ldh-team, body.wm-on:not(.wm-in-city) #shellRoot .ldh-band { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .22s, visibility 0s .22s; }
+body.wm-on:not(.wm-in-city) #shellRoot.sh-ld.sh-p .sh-main { margin-bottom: 0; }
+body.q-low #shellRoot #wmapRoot, body.q-low #shellRoot .ldh-plqs, body.q-low #shellRoot .ldh-team, body.q-low #shellRoot .ldh-band { transition: none !important; }
+body.wm-on.shell-land #shellRoot #wmapRoot .wmap-card { bottom: calc(env(safe-area-inset-bottom, 0px) + 74px); }
+/* 右綠圓鈕 = 招募(u4_btn 圖集第 2 欄綠);位置與左側任務金鈕左右對稱 */
+#shellRoot .ldh-rr { left: auto; right: calc(10px + env(safe-area-inset-right, 0px)); bottom: calc(62px + env(safe-area-inset-bottom, 0px)); width: 60px; height: 60px; background-image: url(../assets/ui2/u4_btn.webp); background-position: 50% 0%; }
+#shellRoot.sh-ld.sh-l .ldh-rr { width: 56px; height: 56px; right: calc(8px + env(safe-area-inset-right, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+/* 〔更多〕第二排:橫版 5 欄貼在底列正上方(寬同底列 440);直版夾在兩顆圓鈕之間 4 欄 */
+#shellRoot .wmap-more { position: absolute; z-index: 6; left: 50%; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: 440px; max-width: calc(100% - 152px); display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 6px; box-sizing: border-box; border: 3px solid #2a170a; border-radius: 12px; background: linear-gradient(#7a4f2a, #4a2d18); box-shadow: 0 3px 0 #0006; }
+#shellRoot .wmap-more[hidden] { display: none; }
+#shellRoot.sh-p .wmap-more { grid-template-columns: repeat(4, 1fr); width: calc(100% - 152px); }
+#shellRoot .wmap-mb { min-height: 44px; padding: 0 2px; border: 2px solid #2a170a; border-radius: 8px; background: linear-gradient(#fff3cf, #f0d28a); color: #3b2410; font: 900 14px/1 var(--ld-font, system-ui, sans-serif); cursor: pointer; box-shadow: 0 2px 0 #0006; touch-action: manipulation; }
+#shellRoot .wmap-mb:active { transform: translateY(2px); box-shadow: none; }

@@ -17,8 +17,8 @@ var CUG = { partial: false, lpT: 0, lpId: null, lpFired: false, lpSwallow: false
 var CUG_MIN = 84;                                   // 卡最小寬(px);欄數 = floor((寬 + 間距) / (最小寬 + 間距)),夾在 3~10 欄
 var CUG_GAP = 6;
 var CUG_SHEET = 'cardsDetail';                      // 人物卡詳情底部面板 id(pf_cardsDetail)
-var CUG_TROOP_ORD = ['槍', '騎', '盾', '弓', '謀'];
-var CUG_TROOP_KEY = { '槍': 'spear', '騎': 'cav', '盾': 'shield', '弓': 'bow', '謀': 'strat' };   // 路人 Q 版:assets/ui/pp_<key>_1..6.webp
+var CUG_TROOP_ORD = ['槍', '騎', '盾', '弓', '械'];
+var CUG_TROOP_KEY = { '槍': 'spear', '騎': 'cav', '盾': 'shield', '弓': 'bow', '械': 'siege', '謀': 'strat' };   // 路人 Q 版:assets/ui/pp_<key>_1..6.webp(謀 = 謀略型 dt;siege 圖尚缺,載入失敗自動隱藏)
 var CUG_GR_OPT = [[-1, '全部'], [4, '金'], [3, '紫'], [2, '藍以下']];   // 2 = 藍以下(品階 ≤ 2)
 var CUG_SORT_OPT = [['def', '預設'], ['gr', '品階'], ['star', '星階'], ['troop', '兵種'], ['new', '最新']];
 var CUG_ONLY_OPT = [['fig', '只看名人'], ['spare', '只看副卡']];
@@ -134,15 +134,16 @@ function cuGridInhOk(g) {
 }
 // 單一堆疊:疊牌偏移(n ≥ 2 才畫後層)+ 右上 ×N 徽章 + 陣中小點;點擊 data-a=gopen 掛在外層
 function cuGridCardHtml(g, selMap) {
-  var e = g.top, troop = cardsRosterTroop(e), lv = cardsStarLv(e), dots = '', i, art = '', tri = '', n = g.n, atAny = false, picked = false, pp, back = '';
+  var e = g.top, troop = cardsRosterTroop(e), lv = cardsStarLv(e), dots = '', i, art = '', tri = '', n = g.n, atAny = false, picked = false, pp, back = '', pk = troop;
+  if (!e.fig && typeof bnDtOf === 'function' && bnDtOf(e) === 'strat') pk = '謀';   // 路人謀略型:謀士 Q 版(pp_strat)
   g.members.forEach(function (m) { if (m.at) atAny = true; if (selMap && selMap[m.id]) picked = true; });
   for (i = 0; i < 5; i++) dots += '<i class="' + (i < lv ? 'lit' : 'dim') + '">★</i>';   // 5 顆星:亮 = 星階,暗 = 未達
   if (e.fig) art = cuPortraitImg(e, true);
-  else if (CUG_TROOP_KEY[troop]) {
-    pp = 'assets/ui/pp_' + CUG_TROOP_KEY[troop] + '_' + (cuGridHash(e.id) % 6 + 1) + '.webp';
+  else if (CUG_TROOP_KEY[pk]) {
+    pp = 'assets/ui/pp_' + CUG_TROOP_KEY[pk] + '_' + (cuGridHash(e.id) % 6 + 1) + '.webp';
     art = '<img alt="" src="' + pp + '" loading="lazy" decoding="async" onerror="this.remove()">';
   }
-  if (typeof bnTroopIconHtml === 'function' && troop) tri = bnTroopIconHtml(troop);
+  if (typeof bnTroopIconHtml === 'function' && troop) tri = bnTroopIconHtml(typeof bnDtOf === 'function' && bnDtOf(e) === 'strat' ? '謀' : troop);
   if (n >= 2) back = '<span class="cugc-back b1"></span>' + (n >= 3 ? '<span class="cugc-back b2"></span>' : '');
   return '<div class="cugw g' + (CARD_GRADE[e.gr] ? e.gr : 0) + (n >= 2 ? '' : ' cugw1') + '" data-a="gopen" data-id="' + cuEsc(e.id) + '" aria-label="' + cuEsc(e.name) + (n >= 2 ? ' 共' + n + '張' : '') + '">' + back +
     '<div class="cugc g' + (CARD_GRADE[e.gr] ? e.gr : 0) + (e.star ? ' lock' : '') + (picked ? ' sel' : '') + '">' +

@@ -41,7 +41,7 @@ function bnsDataVer() {
   try {
     tabs = [typeof BN_DATA !== 'undefined' ? BN_DATA : null, typeof BN_SKILLS !== 'undefined' ? BN_SKILLS : null, typeof BN_FIG_SKILLS !== 'undefined' ? BN_FIG_SKILLS : null,
       typeof BN_TRAIT_MODS !== 'undefined' ? BN_TRAIT_MODS : null, typeof BN_BONDS !== 'undefined' ? BN_BONDS : null, typeof BN_JOB_PRESET !== 'undefined' ? BN_JOB_PRESET : null,
-      typeof BN_ULT_BY !== 'undefined' ? BN_ULT_BY : null, typeof BN_CARD_SKILL_MAP !== 'undefined' ? BN_CARD_SKILL_MAP : null, typeof BN_GENERIC !== 'undefined' ? BN_GENERIC : null,
+      typeof BN_APT !== 'undefined' ? BN_APT : null, typeof BN_ULT_BY !== 'undefined' ? BN_ULT_BY : null, typeof BN_CARD_SKILL_MAP !== 'undefined' ? BN_CARD_SKILL_MAP : null, typeof BN_GENERIC !== 'undefined' ? BN_GENERIC : null,
       typeof CARD_FURNACE !== 'undefined' ? CARD_FURNACE.starBonus : null];
     fns = [typeof bnUnitSpec === 'function' ? bnUnitSpec : null, typeof bnBuildTeam === 'function' ? bnBuildTeam : null, typeof bnInit === 'function' ? bnInit : null, typeof bnHit === 'function' ? bnHit : null,
       typeof bnApplyDmg === 'function' ? bnApplyDmg : null, typeof bnAct === 'function' ? bnAct : null, typeof bnStartRound === 'function' ? bnStartRound : null, typeof bnEndRound === 'function' ? bnEndRound : null];
@@ -101,11 +101,18 @@ function bnsZip(u8, comp) {
 }
 
 // ───────── 隊伍資料:名冊 entry → 單位快照 U → 碼內陣列 ─────────
-// U = {fig, name, gr, fac, st[5], ja{職業:等級}, main, tr[詞條], tok, up, learn, star, lr[學習戰法(含兵書 / 傳授)], troop, row, col, sex, dr 研兵等級}
+// U = {fig, name, gr, fac, st[5], ja{職業:等級}, main, tr[詞條], tok, up, learn, star, lr[學習戰法(含兵書 / 傳授)], troop, row, col, sex, dr 研兵等級, ap 路人適性五字(名人空), dt 's' 謀略型}(碼內第 19 / 20 欄)
 function bnsDrillPer() { return (typeof BNBOOK !== 'undefined' && BNBOOK.drillPer) || BNS.drillPer; }
+// 路人適性隨碼攜帶(2026-11-16 適性新制):名人讀固定表(ap / dt 為空);路人 = 卡上的 apt('槍弓騎盾械' 五字)與 dt('s' = 謀略型),沒有就即時算(同 bnAptRoll,確定性)
+function bnsApOf(c) {
+  var r;
+  if (!c || c.fig) return { ap: '', dt: '' };
+  r = (typeof c.apt === 'string' && c.apt.length === 5) ? { apt: c.apt, dt: c.dt === 's' ? 's' : '' } : (typeof bnAptRoll === 'function' ? bnAptRoll(c) : { apt: '', dt: '' });
+  return { ap: r.apt, dt: r.dt };
+}
 function bnsDrillLv(sp) { return sp && sp.drill ? Math.round(sp.drill / bnsDrillPer()) : 0; }
 function bnsTeamFromSnap(snap, slots) {
-  var u = [], i, j, s, c, tr, nat;
+  var u = [], i, j, s, c, tr, nat, ad;
   for (i = 0; i < slots.length && u.length < 5; i++) {
     s = slots[i];
     for (j = 0; j < snap.length; j++) if (snap[j].id === s.id && snap[j].row === s.row && snap[j].col === s.col) break;
@@ -114,16 +121,17 @@ function bnsTeamFromSnap(snap, slots) {
     if (!Array.isArray(c.st)) continue;
     tr = snap[j].troop;
     nat = c.fig ? [] : bnNativeSkills(c, tr);
+    ad = bnsApOf(c);
     u.push({
       fig: c.fig || '', name: String(c.name || ''), gr: c.gr | 0, fac: c.fac | 0, st: c.st.slice(), ja: Object.assign({}, c.ja || {}), main: c.main || '', tr: (c.tr || []).slice(),
       tok: 0, up: c.up | 0, learn: c.learn | 0, star: c.starLv | 0, lr: c.fig ? [] : snap[j].skills.filter(function (id) { return nat.indexOf(id) < 0; }), troop: tr, row: s.row | 0, col: s.col | 0, sex: c.sex || '',
-      dr: snap[j].drillLv !== undefined ? snap[j].drillLv | 0 : bnsDrillLv(snap[j].spec)
+      dr: snap[j].drillLv !== undefined ? snap[j].drillLv | 0 : bnsDrillLv(snap[j].spec), ap: ad.ap, dt: ad.dt
     });
   }
   return u;
 }
 function bnsMyTeam() {
-  var slots = (typeof bnu !== 'undefined' && bnu.slots) || [], u = [], i, s, e, tr, sp, nat, snap = null, rep = null;
+  var slots = (typeof bnu !== 'undefined' && bnu.slots) || [], u = [], i, s, e, tr, sp, nat, ad, snap = null, rep = null;
   if (typeof bnRepGet === 'function') { try { rep = bnRepGet(); } catch (er) { rep = null; } }
   if (rep && !rep.empty && rep.slots.length) slots = rep.slots;   // 代表隊伍(bnteam.js)優先;空 = 沿用目前布陣
   if (typeof bnTeamSnapshot === 'function') { try { snap = bnTeamSnapshot(slots); } catch (er) { snap = null; } }
@@ -134,10 +142,11 @@ function bnsMyTeam() {
     tr = s.troop || (bnu.tp && bnu.tp[s.id]) || bnDefaultTroop(e);
     sp = bnUnitSpec(e, { troop: tr, row: s.row, col: s.col });
     nat = e.fig ? [] : bnNativeSkills(e, tr);
+    ad = bnsApOf(e);
     u.push({
       fig: e.fig || '', name: String(e.name || ''), gr: e.gr | 0, fac: e.fac | 0, st: e.st.slice(), ja: Object.assign({}, e.ja || {}), main: e.main || '', tr: (e.tr || []).slice(),
       tok: 0, up: e.up | 0, learn: e.learn | 0, star: e.starLv | 0, lr: e.fig ? [] : sp.skills.filter(function (id) { return nat.indexOf(id) < 0; }), troop: tr, row: s.row | 0, col: s.col | 0, sex: e.sex || '',
-      dr: bnsDrillLv(sp)
+      dr: bnsDrillLv(sp), ap: ad.ap, dt: ad.dt
     });
   }
   return { u: u };
@@ -147,7 +156,7 @@ function bnsTeamCheck(t) {
   return '';
 }
 function bnsPackTeam(t) {
-  return { v: 2, u: t.u.map(function (U) { return [U.fig, U.name, U.gr, U.fac, U.st, Object.keys(U.ja).map(function (k) { return [k, U.ja[k]]; }), U.main, U.tr, U.tok, U.up, U.learn, U.star, U.lr, U.troop, U.row, U.col, U.sex, U.dr | 0]; }) };
+  return { v: 2, u: t.u.map(function (U) { return [U.fig, U.name, U.gr, U.fac, U.st, Object.keys(U.ja).map(function (k) { return [k, U.ja[k]]; }), U.main, U.tr, U.tok, U.up, U.learn, U.star, U.lr, U.troop, U.row, U.col, U.sex, U.dr | 0, U.ap || '', U.dt || '']; }) };
 }
 // 碼內陣列 → U(驗證 / 夾值;不認識的名人 / 戰法 / 職業 / 詞條略過並記入 warn)
 function bnsNormUnit(a, warn) {
@@ -158,7 +167,7 @@ function bnsNormUnit(a, warn) {
   nm = bnsStr(a[1], 12) || '無名';
   U = { fig: bnsStr(a[0], 24), name: nm, gr: bnsInt(a[2], 0, 4, 0), fac: bnsInt(a[3], 0, 4, 4), st: st, ja: {}, main: '', tr: [], tok: 0,
     up: bnsInt(a[9], 0, (typeof CARD_CFG !== 'undefined' && CARD_CFG.upMax) || 2, 0), learn: bnsInt(a[10], 0, 3, 0), star: bnsInt(a[11], 0, (typeof CARD_FURNACE !== 'undefined' && CARD_FURNACE.starMax) || 5, 0),
-    lr: [], troop: '', row: bnsInt(a[14], 0, 2, -1), col: bnsInt(a[15], 0, 2, -1), sex: a[16] === 'f' ? 'f' : 'm', dr: bnsInt(a[17], 0, (typeof BNBOOK !== 'undefined' && BNBOOK.drillMax) || BNS.drillMax, 0) };
+    lr: [], troop: '', row: bnsInt(a[14], 0, 2, -1), col: bnsInt(a[15], 0, 2, -1), sex: a[16] === 'f' ? 'f' : 'm', dr: bnsInt(a[17], 0, (typeof BNBOOK !== 'undefined' && BNBOOK.drillMax) || BNS.drillMax, 0), ap: (typeof a[18] === 'string' && /^[SABC]{5}$/.test(a[18])) ? a[18] : '', dt: a[19] === 's' ? 's' : '' };
   if (U.row < 0 || U.col < 0) return null;
   if (U.fig && !((typeof CARD_FIG_BY_ID === 'undefined' || CARD_FIG_BY_ID[U.fig]) && typeof BN_FIG_SKILLS !== 'undefined' && BN_FIG_SKILLS[U.fig])) { warn.push('不認識的名人「' + nm + '」,改用一般武將計算'); U.fig = ''; }
   if (Array.isArray(a[5])) for (i = 0; i < a[5].length && i < 12; i++) {
@@ -192,7 +201,7 @@ function bnsNormTeam(o, warn) {
 // ───────── U → 單位規格(std = 標準化模式) ─────────
 function bnsCard(U, std) {
   return { slot: 0, fig: U.fig || null, sex: U.sex, name: U.name, zi: '', fac: U.fac, gr: std ? BNS.stdGr : U.gr, st: U.st.slice(), ja: Object.assign({}, U.ja), main: U.main || null, learn: U.learn, tr: U.tr.slice(),
-    tok: 0, up: U.up, starLv: std ? 0 : U.star, bnLearn: U.lr.slice() };
+    tok: 0, up: U.up, starLv: std ? 0 : U.star, bnLearn: U.lr.slice(), apt: (!U.fig && U.ap) ? U.ap : undefined, dt: (!U.fig && U.ap) ? U.dt : undefined };
 }
 function bnsSpecs(t, std) {
   return t.u.map(function (U) {

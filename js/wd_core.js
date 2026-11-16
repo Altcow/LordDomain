@@ -524,7 +524,11 @@ function wdAssault(W, cs, pt, trips, mode, t, events) {
 }
 
 // ───────── 事件處理 ─────────
-function wdBackMs(trip) { return Math.round((trip.tArrive - trip.t0) / WD_CFG.retDiv); }   // 回程 = 去程 × 1/4
+function wdBackMs(trip) {   // 回程 = 去程 × 1/4;帶航段 lg 的行程(wmap_go.js)= 預先算好的回程段 b.M + 抵達交戰停頓 fm(與 wmMarchEnd 同刻)
+  var lg = trip.lg;
+  if (lg && lg.k === 'mv' && lg.b && lg.b.M >= 0) return lg.b.M + (lg.fm !== undefined ? lg.fm : (typeof WMARCH_CFG !== 'undefined' ? WMARCH_CFG.FIGHT : 3000));
+  return Math.round((trip.tArrive - trip.t0) / WD_CFG.retDiv);
+}
 function wdTripHome(W, cs, trip, t, events, wiped) {
   trip.slots.forEach(function (s) {
     var e = wdCard(cs, s.id), o = W.trp[s.id];
@@ -660,7 +664,10 @@ function wdNextEvent(W, now) {
   if (W.nr <= now) cand(wdLastRefresh(now), 0, 0, 'refresh');
   for (i = 0; i < W.trips.length; i++) {
     if (W.trips[i].st === 'back') cand(W.trips[i].tHome, 1, i, 'home', W.trips[i]);
-    else if (!W.trips[i].rally) cand(W.trips[i].tArrive, 2, i, 'arrive', W.trips[i]);
+    else if (!W.trips[i].rally) {
+      if (W.trips[i].lg && W.trips[i].lg.k === 'idle') cand(W.trips[i].lg.hu, 1.2, i, 'idleend', W.trips[i]);   // 行軍中停下閒置(wmap_go.js):不抵達;到期自動撤退
+      else cand(W.trips[i].tArrive, 2, i, 'arrive', W.trips[i]);
+    }
   }
   for (i = 0; i < W.rallies.length; i++) cand(W.rallies[i].tArrive, 2, 1000 + i, 'rally', W.rallies[i]);
   for (i = 0; i < W.pts.length; i++) {
@@ -676,6 +683,11 @@ function wdHandle(W, cs, ev, events) {
   if (ev.k === 'refresh') { wdRefreshRes(W, ev.t, events); }
   else if (ev.k === 'home') wdTripHome(W, cs, ev.ref, ev.t, events, false);
   else if (ev.k === 'arrive') wdArriveSingle(W, cs, ev.ref, ev.t, events);
+  else if (ev.k === 'idleend') {   // 閒置到期:自動撤退(航段本身由 wmMarchSegAt 推得;這裡只把行程切成 back,讓回城事件接手)
+    ev.ref.st = 'back';
+    ev.ref.tHome = (typeof wmMarchEnd === 'function' && isFinite(wmMarchEnd(ev.ref.lg))) ? wmMarchEnd(ev.ref.lg) : ev.t;
+    events.push({ t: ev.t, k: 'idleend', team: ev.ref.team, pt: ev.ref.pt });
+  }
   else if (ev.k === 'rally') wdArriveRally(W, cs, ev.ref, ev.t, events);
   else if (ev.k === 'gend') wdGuardEnd(W, cs, ev.ref, ev.t, events);
   else if (ev.k === 'rsvgo') { if (typeof wdRsvGo === 'function') wdRsvGo(W, cs, ev.ref, ev.t, events); else W.rsv = W.rsv.filter(function (x) { return x !== ev.ref; }); }
@@ -796,6 +808,34 @@ function wdNormFoeHp(rows, nf) {
   }
   return out;
 }
+// 行軍航段 lg(js/wm_march.js 的格式)正規化:壞的回 null(行程退回舊欄位)。p 最多 64 個轉折點
+function wdNormPath(p) {
+  var out = [], i;
+  if (!Array.isArray(p) || !p.length || p.length > 64) return null;
+  for (i = 0; i < p.length; i++) { if (typeof p[i] !== 'number' || !isFinite(p[i]) || p[i] < 0 || p[i] > 1e7) return null; out.push(p[i] | 0); }
+  return out;
+}
+function wdNormBack(b) {
+  var p;
+  if (!b || typeof b !== 'object') return null;
+  p = wdNormPath(b.p);
+  if (!p) return null;
+  return { p: p, a0: wdInt(b.a0, 0, 1e9, 0), L: wdInt(b.L, 0, 1e9, 0), M: wdInt(b.M, 0, 1e12, 0) };
+}
+function wdNormLeg(g) {
+  var o, p, b, bt;
+  if (!g || typeof g !== 'object' || ['mv', 'idle', 'back', 'wait', 'done'].indexOf(g.k) < 0) return null;
+  p = wdNormPath(g.p);
+  if (!p) return null;
+  o = { k: g.k, v: wdInt(g.v, 0, 1e9, 0), t0: wdInt(g.t0, 0, 1e15, 0), p: p, n: wdInt(g.n, 8, 1024, 64), a0: wdInt(g.a0, 0, 1e9, 0), L: wdInt(g.L, 0, 1e9, 0), M: wdInt(g.M, 0, 1e12, 0), w: wdInt(g.w, 0, 1e12, 0), on: g.on === 'hold' ? 'hold' : 'fight', g: wdInt(g.g, 0, 1e7, p[p.length - 1]) };
+  if (g.k === 'idle') { o.rm = wdInt(g.rm, 0, 1e12, 0); o.hu = wdInt(g.hu, 0, 1e15, o.t0); }
+  b = wdNormBack(g.b); if (b) o.b = b;
+  bt = wdNormBack(g.bt); if (bt) o.bt = bt;
+  if (g.hm) o.hm = 1;
+  if (g.hd) o.hd = wdInt(g.hd, 0, 1e12, 0);
+  if (g.fm !== undefined) o.fm = wdInt(g.fm, 0, 1e9, 3000);
+  return o;
+}
 function wdNormPt(r) {
   var g, nf, o;
   if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !WD_PFX[r.cat]) return null;
@@ -828,13 +868,16 @@ function wdNorm(raw, now, seed, cs) {
     if (raw.trp && typeof raw.trp === 'object') Object.keys(raw.trp).forEach(function (k) { var o = raw.trp[k]; if (o && typeof o === 'object') W.trp[k] = { r: wdNum(o.r, WD_CFG.trpMin, 1, 1), t: wdInt(o.t, 0, 1e15, now) }; });
     if (raw.harv && typeof raw.harv === 'object') WD_HARV_KEYS.forEach(function (k) { W.harv[k] = wdNum(raw.harv[k], 0, 1e12, 0); });
     W.trips = (Array.isArray(raw.trips) ? raw.trips : []).map(function (t) {
-      var slots, st;
+      var slots, st, o, lg;
       if (!t || typeof t !== 'object' || typeof t.id !== 'string' || typeof t.pt !== 'string') return null;
       slots = wdCleanSlots(t.slots);
       if (!slots.length) return null;
       st = t.st === 'back' ? 'back' : 'go';
       if (st === 'go' && !W.pts.some(function (p) { return p.id === t.pt; })) return null;
-      return { id: t.id, team: wdInt(t.team, 1, 99, 1), name: String(t.name || ''), pt: t.pt, t0: wdInt(t.t0, 0, 1e15, now), tArrive: wdInt(t.tArrive, 0, 1e15, now), tHome: wdInt(t.tHome, 0, 1e15, 0), st: st, rally: typeof t.rally === 'string' ? t.rally : null, slots: slots, auto: !!t.auto, mins: wdInt(t.mins, 1, 60, 1) };
+      o = { id: t.id, team: wdInt(t.team, 1, 99, 1), name: String(t.name || ''), pt: t.pt, t0: wdInt(t.t0, 0, 1e15, now), tArrive: wdInt(t.tArrive, 0, 1e15, now), tHome: wdInt(t.tHome, 0, 1e15, 0), st: st, rally: typeof t.rally === 'string' ? t.rally : null, slots: slots, auto: !!t.auto, mins: wdInt(t.mins, 1, 60, 1) };
+      lg = wdNormLeg(t.lg);   // 新地圖行程(js/wmap_go.js):航段與目標格 / 路徑一併保留;壞航段 = 當舊行程處理
+      if (lg) { o.lg = lg; o.gi = wdInt(t.gi, 0, 1e7, lg.g); o.cost = wdNum(t.cost, 0, 1e4, 0); o.spd = wdNum(t.spd, 0.1, 10, 1); o.g2 = 1; if (t.path) { o.path = wdNormPath(t.path) || lg.p; o.goMs = wdInt(t.goMs, 0, 1e12, 0); o.backMs = wdInt(t.backMs, 0, 1e12, 0); } }
+      return o;
     }).filter(Boolean);
     W.rallies = (Array.isArray(raw.rallies) ? raw.rallies : []).map(function (r) {
       if (!r || typeof r !== 'object' || typeof r.id !== 'string' || typeof r.pt !== 'string' || !Array.isArray(r.order)) return null;
@@ -844,6 +887,7 @@ function wdNorm(raw, now, seed, cs) {
     W.rp = (Array.isArray(raw.rp) ? raw.rp : []).filter(function (r) { return r && typeof r.id === 'string' && Array.isArray(r.rows); }).slice(0, WD_CFG.rpMax);
     W.rc = (Array.isArray(raw.rc) ? raw.rc : []).filter(function (r) { return r && typeof r.i === 'number' && r.rec && typeof r.rec === 'object'; }).slice(0, WD_CFG.rcMax);
     W.hs = wdInt(raw.hs, 0, 1e9, 0);
+    if (raw.g2 && typeof wmapSettleNorm === 'function') W.g2 = wmapSettleNorm(raw.g2, now);   // 新地圖領地產出記錄(js/wmap_settle.js)
     if (typeof wdRsvNorm === 'function') wdRsvNorm(raw.rsv, W);
     wdFill(W, now);
     if (cs && cs.roster) wdNormCards(W, cs);

@@ -6,6 +6,9 @@ var SEASON_THEME = '黃巾之亂';
 // 休眠旗標:false = 賽季核心不啟動(seasonTick 直接回 {off:true},evSeasonStart 沿用舊行為);要上線時改 true 並接好 ldoBoot 呼叫(S5)。測試可在 vm 內覆寫。
 var SEASON_ON = false;
 
+// 賽季末商店名次獎勵(設計_賽季末商店_規格.md 1.4、6.5;SS1 只加資料):false = 沿用 SEASON_CFG.rankGive(抽數 + 碎片 + 材料);SS3 改接後設 true,名次改領 rankGiveShop 的抽數 + 功勳(功勳數字在 SSHOP_CFG.rankMerit)。
+var SEASON_SHOP_RANK_ON = false;
+
 var SEASON_CFG = {
   DAY: 86400000, HOUR: 3600000, tz: 8 * 3600000,    // 週一 00:00 以東八區計
   days: 28,                                          // 一季天數(= EV_CFG.seasonDays = STUDY_CFG.seasonDays,測試檢查相等)
@@ -34,6 +37,13 @@ var SEASON_CFG = {
     { max: 3, pulls: 15, shards: 40, mats: { m_whet: 3 } },
     { max: 6, pulls: 10, shards: 25, mats: { m_whet: 2 } },
     { max: 10, pulls: 5, shards: 15, mats: { m_whet: 1 } }
+  ],
+  // 賽季末商店版名次獎勵:只留抽數(碎片、材料拿掉,材料改在商店賣);功勳依名次另給(SSHOP_CFG.rankMerit)。SEASON_SHOP_RANK_ON 為 false 時不使用
+  rankGiveShop: [
+    { max: 1, pulls: 20 },
+    { max: 3, pulls: 15 },
+    { max: 6, pulls: 10 },
+    { max: 10, pulls: 5 }
   ],
   startRes: { grain: 0 }, // 新季起始資源(homeSeasonStartRes 不存在時用)
   histMax: 12, pendMax: 8, partKeep: 3,

@@ -39,7 +39,7 @@ var GRID_CFG = {
 
   // 行軍:去程(分)= clamp(minsMin, minsMax, minBase + minK × L × spd × 行軍方式),四捨五入到 0.1;回程 = 去程 ÷ retDiv
   minK: 0.6, minBase: 1.0, minsMin: 2, minsMax: 10, retDiv: 4,
-  spd: { '騎': 0.85, '弓': 1.0, '槍': 1.0, '謀': 1.05, '盾': 1.10 },   // 取隊上最慢兵種
+  spd: { '騎': 0.85, '弓': 1.0, '槍': 1.0, '械': 1.25, '謀': 1.05, '盾': 1.10 },   // 取隊上最慢兵種
   march: { steady: { mul: 1, troop: 1 }, rush: { mul: 0.67, troop: 0.9 } },   // 穩進 / 急行(抵達兵力 −10%)
 
   // 野怪(靜態):每 everyMs 在 1 個「無主、可占、去程 ≤ maxMins、在視野內」的格出現 1 隻,最多 max 隻;受傷後 resetMs 重置

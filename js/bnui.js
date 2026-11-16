@@ -1011,7 +1011,7 @@ function bnUiRenderEntry() {
     '<button class="bnen-b" data-a="ent" data-t="share"><b>對戰</b><small>對戰碼與擂台(不計進度、不給獎勵)</small></button>' +
     '<button class="bnen-b" data-a="ent" data-t="log"><b>戰報</b><small>最近的戰報,可查看與儲存</small></button>' +
     '<button class="bnen-b" data-a="ent" data-t="tourney"><b>擂台</b><small>每日固定時間開賽,報名用代表隊伍;16 隊單淘汰,比出前三名</small></button>' +
-    '<button class="bnen-b" data-a="ent" data-t="prac"><b>訓練場</b><small>不計戰績、不給獎勵,敵將依我方戰力縮放,可自由試陣</small></button>' + (typeof featureOn === 'function' && featureOn('worldmap') ? (featureOn('world') ? '<button class="bnen-b" data-a="ent" data-t="wm"><b>地圖</b><small>派部隊占領資源點、討伐山寨野怪、集結攻城;離開時也會照算</small></button>' : '<button class="bnen-b" data-a="ent" data-t="wm"><b>外勤</b><small>派部隊出外採集或討伐據點;清單每格會刷新,離開時也會照算</small></button>') : '') + '</div>'; // @DORMANT worldmap @DORMANT world
+    '<button class="bnen-b" data-a="ent" data-t="prac"><b>訓練場</b><small>不計戰績、不給獎勵,敵將依我方戰力縮放,可自由試陣</small></button>' + (typeof featureOn === 'function' && featureOn('worldmap') && !(typeof wmapUiOn === 'function' && wmapUiOn()) ? (featureOn('world') ? '<button class="bnen-b" data-a="ent" data-t="wm"><b>地圖</b><small>派部隊占領資源點、討伐山寨野怪、集結攻城;離開時也會照算</small></button>' : '<button class="bnen-b" data-a="ent" data-t="wm"><b>外勤</b><small>派部隊出外採集或討伐據點;清單每格會刷新,離開時也會照算</small></button>') : '') + '</div>'; // @DORMANT worldmap @DORMANT world
 }
 function bnUiEntryDo(t) {
   if (t === 'stage') { if (featureOn('stages') || featureOn('shell')) bnUiToMap(); }   // @DORMANT stages:副本入口休眠(v60);@DORMANT shell:外殼開啟時放行

@@ -438,12 +438,12 @@ function cardsUiInfo(kind, key) {
     o.lines.push(['品階', CARD_GRADE.map(function (g) { var c = ''; for (i = 0; i < g.corner; i++) c += '◆'; return g.ch + c; }).join(' < ') + '。邊框色、品字、角飾 ◆ 數三者同步;品階越高,職業上限越高(' + CARD_GRADE.map(function (g) { return g.ch + ' ' + CU_ROMAN[g.jobMax]; }).join('、') + ')']);
     o.lines.push(['五維 ' + CARD_STATS.join(''), '用於討伐戰鬥的兵力、攻防與部分職務判定']);
     o.lines.push(['職業', '人物的職業專精;點職業可看對口職司與加成百分比']);
-    o.lines.push(['兵種', '圖示 + 字(槍 / 騎 / 盾 / 弓 / 謀),與人物卡的兵種相同']);
+    o.lines.push(['兵種', '圖示 + 字(槍 / 騎 / 盾 / 弓 / 器械),與人物卡的兵種相同']);
     o.lines.push(['專屬', '名人專屬詞條,只有該名人才有']);
     o.lines.push(['戰法', '討伐戰鬥用的戰法(指揮 / 主動 / 追擊 / 被動 / 大招),點戰法列可展開白話說明;路人依品階有 1~3 個,名人固定']);
         o.lines.push(['🔒', '卡包鎖定,鎖定中無法遣散']);
     o.lines.push(['★', '強化星數(0~' + CARD_FURNACE.starMax + '),用卡片熔爐的碎片在卡包詳情升星;每星攻 / 防 / HP +' + Math.round(CARD_FURNACE.starBonus.atk * 100) + ' %,' + CARD_FURNACE.starBonus.skillStar + ' 星起技能強化、' + CARD_FURNACE.starBonus.markStar + ' 星專屬標記;與 🔒 無關']);
-    o.lines.push(['卡面圖示', '邊框與頂端寶石顏色 = 品階;人物視窗左上為陣營徽章、右上為戰鬥類型(槍 / 騎 / 盾 / 弓 / 謀;槍克騎、騎克盾、盾克弓、弓克槍,騎另克謀),下緣為強化星數與鎖定;名牌卷軸寫姓名(字),下方面板為五維與主職']);
+    o.lines.push(['卡面圖示', '邊框與頂端寶石顏色 = 品階;人物視窗左上為陣營徽章、右上為戰鬥類型(槍 / 騎 / 盾 / 弓 / 器械;槍克騎、騎克盾、盾克弓、弓克槍,四兵種又克器械),下緣為強化星數與鎖定;名牌卷軸寫姓名(字),下方面板為五維與主職']);
     o.lines.push(['點擊', '詞條、技能、職業、才字都可以點開看說明']);
     return o;
   }

@@ -1,7 +1,7 @@
 // js/skill_rec_data.js — 自動產生(node tools/gen_skill_rec.js),請勿手改。來源:戰法與武將資料 + tools/data/skill_rec_ovr.json。
 // 全域:SKREC。邏輯見 js/skill_rec.js。hero[武將] = [[戰法id, 分數, 理由代碼]×6];skill[戰法] = [[武將, 分數, 理由代碼]×5];troop[兵種] 路人用;why[代碼] = 白話。ES2017。
 var SKREC = {
-  v: 1, gen: "2026-11-15",
+  v: 1, gen: "2026-11-16",
   hero: {
     "caocao": [["s_caocao_1",3.9,"home"],["g_banma",3.02,"ctrl"],["g_zhenshe",3.02,"ctrl"],["s_dongzhuo_2",2.82,"ctrl"],["s_jianyong_leg",2.82,"ctrl"],["s_zhanghong_rn",2.82,"ctrl"]],
     "xiahoudun": [["s_xiahoudun_rn",3.75,"home"],["g_haoling",1.8,"buff"],["g_jixing",1.8,"buff"],["g_xianji",1.8,"buff"],["g_chongfeng",1.65,"fit_phys"],["g_chuanyun",1.65,"fit_phys"]],

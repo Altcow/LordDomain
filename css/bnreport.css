@@ -4,8 +4,8 @@
 #bnRpt *{box-sizing:border-box;min-width:0}
 #bnRpt button{font-family:var(--ld-font);min-width:64px;min-height:44px}
 #bnRpt .bnr-pg{position:absolute;left:0;top:0;right:0;bottom:0;display:flex;flex-direction:column;overflow:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-#bnRpt .bnr-bg{position:absolute;inset:-12px;background:url(../assets/ui/bg_home_land.webp) center/cover;filter:blur(5px) brightness(.5) saturate(1.1);transform:scale(1.05)}
-#bnRpt .bnr-bg:after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 80% 70% at 50% 45%,transparent,#1a0d05cc)}
+#bnRpt .bnr-bg{position:absolute;inset:-12px;background:#1a0d10 url(../assets/ui/bnbg_field.webp) center/cover}
+#bnRpt .bnr-bg:after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(14,6,8,.62),rgba(14,6,8,.62)),radial-gradient(ellipse 80% 70% at 50% 45%,transparent,#1a0d05cc)}
 /* 頂端窄條:小緞帶 + 兵力條 + 回合 / 原因 */
 #bnRpt .bnr-top{position:relative;z-index:4;flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:4px 10px;background:linear-gradient(#1a0d05e6,#1a0d0500)}
 #bnRpt .bnr-ribbon{position:relative;flex:0 0 auto;padding:0 16px 1px;background:linear-gradient(#ef6a4c,var(--red));border:var(--line2);border-radius:8px;box-shadow:var(--drop2);animation:bnrStamp .5s cubic-bezier(.3,1.7,.5,1) both}

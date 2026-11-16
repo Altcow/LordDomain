@@ -559,17 +559,18 @@ function bnPreyCounts(troop, others) {
   (others || []).forEach(function (t) { var r = bnPreyRel(troop, t); if (r > 0) o.up++; else if (r < 0) o.down++; });
   return o;
 }
-// 克制關係白話:『槍克騎、騎克盾、騎克謀、盾克弓、弓克槍』(順序依 troopList)
+// 克制關係白話:『槍克騎、騎克盾、盾克弓、弓克槍』(四兵種循環,順序依 troopList;器械另見 bnPreyRule)
 function bnPreyText() {
-  var P = BN_DATA.prey, out = [];
-  BN_DATA.troopList.forEach(function (a) { BN_DATA.troopList.forEach(function (d) { if (P[a] && P[a][d] > 1) out.push(a + '克' + d); }); });
+  var P = BN_DATA.prey, out = [], L = BN_DATA.troopList.filter(function (t) { return t !== '械'; });
+  L.forEach(function (a) { L.forEach(function (d) { if (P[a] && P[a][d] > 1) out.push(a + '克' + d); }); });
   return out.join('、');
 }
-// 倍率說明:『克制方物理傷害 +25%、被克制方 −20%;謀略(法術)傷害不吃兵種克制』
+// 倍率說明:『克制方傷害 +7.5%、被克制方 −7.5%(物理與謀略都吃);四兵種打器械 +10%、器械打四兵種 −10%』(2026-11-16 使用者決議:雙方差 15pp)
 function bnPreyRule() {
-  var P = BN_DATA.prey, hi = 1, lo = 1;
-  Object.keys(P).forEach(function (a) { Object.keys(P[a]).forEach(function (d) { if (P[a][d] > hi) hi = P[a][d]; if (P[a][d] < lo) lo = P[a][d]; }); });
-  return '克制方的物理傷害 +' + Math.round((hi - 1) * 100) + '%、被克制方 −' + Math.round((1 - lo) * 100) + '%;謀略(法術)傷害不吃兵種克制';
+  var P = BN_DATA.prey, hi = 1, lo = 1, L = BN_DATA.troopList.filter(function (t) { return t !== '械'; });
+  function pc(x) { return String(parseFloat((x * 100).toFixed(1))); }
+  L.forEach(function (a) { L.forEach(function (d) { if (P[a] && P[a][d] > hi) hi = P[a][d]; if (P[a] && P[a][d] < lo) lo = P[a][d]; }); });
+  return '克制方的傷害 +' + pc(hi - 1) + '%、被克制方 −' + pc(1 - lo) + '%(物理與謀略傷害都吃)' + (P['槍'] && P['槍']['械'] > 1 ? ';四兵種打器械 +' + pc(P['槍']['械'] - 1) + '%、器械打四兵種 −' + pc(1 - (P['械'] ? P['械']['槍'] : 1)) + '%' : '');
 }
 // 各兵種的克制表:[{t, beats:[克制哪些兵種], beaten:[被哪些兵種克制]}](順序依 troopList)
 function bnPreyRows() {

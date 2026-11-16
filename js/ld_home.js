@@ -1,6 +1,6 @@
 // js/ld_home.js — 新首頁(骨架第 1 階段;設計_介面骨架實作計畫.md §3-3、任務卡 1)。前綴 ldHome / LD_BLD / LDH。
 // 由 shell.js 在旗標 ldui 開啟時呼叫:ldHomeInit(sceneEl) 建 9 塊建築木牌層、3 格隊伍欄、金 / 綠圓鈕與圓鈕列;ldHomeLayout() 依場景尺寸 / 方向重排;ldHomeRefresh() 每秒更新紅點與隊伍狀態。
-// 另登錄兩個堆疊頁:'event'(活動)、'quest'(任務,空頁)。素材走 ld_art.js(has:false → CSS 佔位 + 單一漢字徽章)。ES2017,不用 ?. ??。
+// 'event'(活動)、'quest'(任務)頁改由 ld_open_ui.js 登錄(S0 刪重複登錄);本檔只留 ldHomeEventBuild 供活動頁沿用。城門 battle 入口頁、高塔木牌已於 S0 移除。素材走 ld_art.js(has:false → CSS 佔位 + 單一漢字徽章)。ES2017,不用 ?. ??。
 // 木牌座標單位:背景圖寬高的百分比;木牌以中心點定位(寬 64、高 60)。舊背景(assets/ui 的 home_bg_*)用 old 座標,新背景(bg_home2_*,has:true)用 new 座標。
 var LDH_PLQ_W = 64, LDH_PLQ_H = 60, LDH_MIN_D = 48, LDH_COL_W = 200, LDH_COL_GAP = 8, LDH_DOCK_LAND_H = 60;
 // 9 塊建築:act 為 shellAct 字串;fn 為特殊動作;lock 有字 = 灰色 + 小字(點了只出 Toast)。P = 直式、L = 橫式;new 座標 = 2026-11-14 接圖後依 bg_home2_port / bg_home2_land 實際建築中心量的(橫式建築都在圖左 ~70%,右側草地留給隊伍欄)。
@@ -8,14 +8,13 @@ var LD_BLD = [
   { id: 'tavern', n: '招賢館', art: 'bld_zhao', act: 'cards:D', P: { old: [17, 26], 'new': [78, 41] }, L: { old: [25, 27], 'new': [37, 50] } },
   { id: 'hall', n: '城主府', art: 'bld_fu', lock: '即將開放', P: { old: [50, 23], 'new': [50, 22] }, L: { old: [50, 24], 'new': [38, 24] } },
   { id: 'acad', n: '書院', art: 'bld_shu', fn: 'study', P: { old: [82, 28], 'new': [10, 25] }, L: { old: [73, 28], 'new': [18, 36] } },
-  { id: 'tower', n: '高塔', dorm: 'tower', art: 'bld_ta', fn: 'tower', P: { old: [80, 11], 'new': [85, 23] }, L: { old: [82, 12], 'new': [62, 26] } },
   { id: 'yard', n: '校場', art: 'bld_chang', fn: 'yard', P: { old: [17, 42], 'new': [20, 43] }, L: { old: [22, 47], 'new': [24, 47] } },
   { id: 'camp', n: '軍營', art: 'bld_ying', fn: 'camp', P: { old: [48, 46], 'new': [82, 56] }, L: { old: [50, 51], 'new': [60, 50] } },
   { id: 'forge', n: '鍛造坊', art: 'bld_fang', fn: 'forge', P: { old: [83, 44], 'new': [19, 62] }, L: { old: [80, 47], 'new': [15, 72] } },
   { id: 'arena', n: '擂台', art: 'bld_tai', act: 'tour', P: { old: [76, 57], 'new': [85, 64] }, L: { old: [80, 69], 'new': [61, 72] } },
   { id: 'gate', n: '城門', art: 'bld_men', fn: 'gate', P: { old: [50, 67], 'new': [50, 68] }, L: { old: [50, 80], 'new': [40, 73] } }
 ];
-// 目前有效的建築清單:休眠功能(dorm)關閉時整塊排除(不建木牌、不佔版面;高塔 FEATURES.tower)
+// 目前有效的建築清單:建築帶 dorm 欄位且該旗標關閉時整塊排除(目前無建築使用;高塔已於 S0 刪除)
 function ldHomeBlds() { return LD_BLD.filter(function (b) { return !b.dorm || (typeof featureOn === 'function' && featureOn(b.dorm)); }); }   // @DORMANT tower
 var LDH = { scene: null, root: null, layer: null, team: null, band: null, rg: null, rb: null, plq: {}, dot: {}, tm: [], key: '', dkey: '', geo: null, dbg: false };
 
@@ -209,10 +208,10 @@ function ldHomeYard() {
 }
 function ldHomeBldDo(b) {
   if (b.lock) { ldHomeToast(b.n + ':' + b.lock); return false; }
-  if (b.fn === 'tower') return (typeof featureOn === 'function' && !featureOn('tower')) ? false : typeof ldNavPush === 'function' ? ldNavPush('tower') : false;   // @DORMANT tower
   if (b.fn === 'camp') return typeof ldNavPush === 'function' ? ldNavPush('team', { n: 1, mode: 'edit' }) : false;
   if (b.fn === 'yard') return ldHomeYard();
-  if (b.fn === 'gate') return typeof ldNavPush === 'function' ? ldNavPush('battle') : false;   // 城門 = 新的滿版戰鬥入口頁(副本 / 對戰 / 戰報 / 擂台 / 訓練場 / 地圖)
+  if (b.fn === 'gate' && typeof wmapUiOn === 'function' && wmapUiOn()) return wmapUiAct('city-out');   // 旗標 wmap 開:城門 = 出城(js/wmap_ui.js)
+  if (b.fn === 'gate') return typeof ldNavPush === 'function' ? ldNavPush('map') : false;   // 城門 → 地圖(舊清單版,W2 改為出城);S0 已刪 battle 入口頁
   if (b.fn === 'study' || b.fn === 'forge') return typeof ldNavPush === 'function' ? ldNavPush(b.fn) : false;   // 書院(尋訪)/ 鍛造坊:js/ld_hunt_ui.js、ld_equip_forge_ui.js 登錄的頁
   if (b.act && typeof shellAct === 'function') return shellAct(b.act);
   return false;
@@ -416,74 +415,4 @@ function ldHomeEventBuild(el) {
 }
 // 這些動作開的是舊面板:shellAct 在 ld 模式下經 ldNavPush 把舊頁疊在活動頁上面(第 6 階段),× / 返回 / 手機返回鍵回到活動頁
 function ldHomeRowClick(act) { return function () { if (typeof shellAct === 'function') shellAct(act); }; }
-// ───────── 堆疊頁:戰鬥入口(城門)─────────
-// 取代舊戰鬥層的入口選單(bnui 的 bnUiRenderEntry)。每項 = { id, k, sub, art, to, ctx, lock, stat, dot }:to = 堆疊頁 id;lock 有字 = 灰色、點了只出 Toast;stat = 狀態小字;dot = 紅點。
-// 副本 / 對戰 / 戰報 / 擂台 / 地圖 都是依戰鬥層開的舊頁(ld_nav.js 的舊頁登錄,滿版、返回 = 退回本頁);訓練場 = 整隊頁(新頁,金鈕 = 練兵出戰)。
-function ldHomeBattleRoster() {
-  try { return typeof bnUnlocked === 'function' ? bnUnlocked() : true; } catch (e) { return true; }
-}
-function ldHomeBattleLogCount() {
-  var raw = null, o = null;
-  try {
-    if (typeof BNLOG !== 'undefined' && BNLOG && BNLOG.key && typeof localStorage !== 'undefined') raw = localStorage.getItem(BNLOG.key);
-    if (raw) o = JSON.parse(raw);
-  } catch (e) { o = null; }
-  return o && Array.isArray(o.recent) ? o.recent.length : 0;
-}
-function ldHomeBattleRows() {
-  var rows = [], ok = ldHomeBattleRoster(), need = '卡包至少 ' + (typeof BNUI !== 'undefined' && BNUI.minRoster ? BNUI.minRoster : 3) + ' 人才能出戰', st, br, n, d, tot;
-  if (typeof featureOn !== 'function' || featureOn('stages') || featureOn('shell')) {   // @DORMANT stages @DORMANT shell
-    st = '';
-    try {
-      if (typeof bnMapStageStats === 'function' && typeof BN_STAGES !== 'undefined' && typeof bnUiLoad === 'function') { d = bnUiLoad(); tot = BN_STAGES.length; st = '討伐進度 ' + bnMapStageStats(d).cleared + '/' + tot; }
-    } catch (e0) { st = ''; }
-    rows.push({ id: 'stage', k: '副本', sub: '討伐地圖:選章節與關卡,首通有獎勵,可重複通關', art: 'pos_flag', to: 'stage', lock: ok ? '' : need, stat: st, dot: false });
-  }
-  rows.push({ id: 'share', k: '對戰', sub: '用對戰碼和朋友比一場(不計進度、不給獎勵)', art: 'nav_event', to: 'share', lock: ok ? '' : need, stat: '', dot: false });
-  n = ldHomeBattleLogCount();
-  rows.push({ id: 'log', k: '戰報', sub: '最近的戰報,可查看、重播與儲存', art: 'nav_log', to: 'log', lock: ok ? '' : need, stat: n ? '最近 ' + n + ' 場' : '還沒有戰報', dot: false });
-  br = null;
-  try { if (typeof bnTourBrief === 'function') br = bnTourBrief(Date.now()); } catch (e2) { br = null; }
-  rows.push({ id: 'tour', k: '擂台', sub: '每日固定時間開賽,報名用代表隊伍;16 隊單淘汰,系統隊伍補滿', art: 'bld_tai', to: 'tour', lock: ok ? '' : need, stat: br ? br.stat : '', dot: !!(br && br.dot) });   // 擂台入口不鎖名聲(可進去觀看);名聲不足只是不能報名(bnTourLocked)
-  rows.push({ id: 'prac', k: '訓練場', sub: '編隊後試打山賊:不計戰績、不給獎勵,敵將依我方戰力縮放', art: 'bld_chang', to: 'team', ctx: { n: 1, mode: 'edit' }, lock: '', stat: '', dot: false });
-  if (typeof featureOn !== 'function' || (featureOn('worldmap') && featureOn('world'))) rows.push({ id: 'map', k: '地圖', sub: '派部隊占領資源點、討伐山寨野怪、集結攻城', art: 'bld_men', to: 'map', lock: ok ? '' : need, stat: '', dot: false });   // @DORMANT worldmap @DORMANT world
-  return rows;
-}
-function ldHomeBattleBuild(el) {
-  var rows = ldHomeBattleRows(), grid = ldHomeEl('div', 'ldb-grid'), i, r, b, tx;
-  for (i = 0; i < rows.length; i++) {
-    r = rows[i];
-    b = ldHomeEl('button', 'ldb-card' + (r.lock ? ' lock' : ''));
-    b.setAttribute('type', 'button');
-    b.setAttribute('data-bt', r.id);
-    b.setAttribute('aria-label', r.k + (r.lock ? '(' + r.lock + ')' : ''));
-    b.appendChild(ldArt(r.art, 'ldb-ico'));
-    tx = ldHomeEl('span', 'ldb-tx');
-    tx.appendChild(ldHomeEl('b', '', r.k));
-    tx.appendChild(ldHomeEl('small', 'ldb-sub', r.sub));
-    if (r.lock) tx.appendChild(ldHomeEl('em', 'ldb-lk', '🔒 ' + r.lock));
-    else if (r.stat) tx.appendChild(ldHomeEl('em', 'ldb-st', r.stat));
-    b.appendChild(tx);
-    if (r.dot) b.appendChild(ldHomeEl('i', 'ldh-dot on'));
-    b.addEventListener('click', ldHomeBattleClick(r));
-    grid.appendChild(b);
-  }
-  el.appendChild(grid);
-}
-function ldHomeBattleClick(r) {
-  return function () {
-    if (r.lock) { ldHomeToast(r.k + ':' + r.lock); return false; }
-    return typeof ldNavPush === 'function' ? ldNavPush(r.to, r.ctx ? Object.assign({}, r.ctx) : undefined) : false;
-  };
-}
-function ldHomeQuestBuild(el) {
-  var panel = ldHomeEl('div', 'ldp-panel');
-  panel.appendChild(ldHomeEl('div', 'ldp-empty', '任務系統準備中'));
-  el.appendChild(panel);
-}
-if (typeof ldNavRegister === 'function') {
-  ldNavRegister({ id: 'event', title: '活動', build: ldHomeEventBuild });
-  ldNavRegister({ id: 'quest', title: '任務', build: ldHomeQuestBuild });
-  ldNavRegister({ id: 'battle', title: '戰鬥', bg: 'sc_gate', build: ldHomeBattleBuild, onShow: function () { if (typeof ldNavRefresh === 'function') ldNavRefresh('battle'); } });
-}
-if (typeof module !== 'undefined' && module.exports) module.exports = { LD_BLD: LD_BLD, ldHomePlace: ldHomePlace, ldHomeBattleRows: ldHomeBattleRows };
+if (typeof module !== 'undefined' && module.exports) module.exports = { LD_BLD: LD_BLD, ldHomePlace: ldHomePlace };

@@ -24,7 +24,7 @@ var BN_PT_KIND = {
   heal: { n: 8, col: '#7af09a', sh: 1, vy: -55, g: -10, dur: 0.75 }, shield: { n: 8, col: '#8ec7ff', sh: 0, vy: -10, g: 0, dur: 0.6, ring: 1 },
   buff: { n: 5, col: '#ffd75a', sh: 2, vy: -60, g: 0, dur: 0.6 }, debuff: { n: 5, col: '#c890ff', sh: 3, vy: 45, g: 0, dur: 0.6 }, crit: { n: 6, col: '#ffb040', sh: 0, vy: -70, g: 160, dur: 0.4, burst: 1 }
 };
-var BN_ATK_SFX = { '盾': 'atk_blade', '槍': 'atk_spear', '騎': 'atk_cav', '弓': 'atk_bow', '謀': 'atk_strat' };
+var BN_ATK_SFX = { '盾': 'atk_blade', '槍': 'atk_spear', '騎': 'atk_cav', '弓': 'atk_bow', '械': 'atk_blade', '謀': 'atk_strat' };   // 械:暫用刀盾聲(器械專屬音效尚缺);謀略型(dt)另由 bnPlIsStrat 判斷
 var BN_SFX_ALT = { atk_blade: 'melee', atk_spear: 'blade', atk_cav: 'hoofH', atk_bow: 'arrow', atk_strat: 'bolt', block: 'shieldHit', kill: 'grunt', ult: 'flag', drum: 'drum' };   // 沒有 bnsfx.js 時退回 sfxwar 舊音色
 var BN_NUM_DMG = '#ff3b30', BN_NUM_HEAL = '#3ee05a', BN_NUM_MIN = 15;   // 浮字:扣血紅、補血綠,一律黑色描邊;最小字級(px)
 var BN_ST_ICON = { atk_up: 1, atk_down: 1, def_up: 1, def_down: 1, spd_up: 1, stun: 1, burn: 1, poison: 1, bleed: 1, shield: 1, silence: 1, taunt: 1, timid: 1, confuse: 1, heal_reduce: 'heal_block', ward: 1, rate_up: 'stc_rate_up', debuff_hit: 'stc_ink_blind', wx_mark: 'stc_wx_mark', sleep: 'stn_sleep', paralyze: 'stn_paralyze', evade: 'stn_evade', dodge_rate: 'stn_evade' };   // stn_* = assets/statusicon/(2026-11-09 GPT 圖;只補原本沒圖示的狀態,burn / poison 維持 bnfx/st_*)
@@ -61,9 +61,9 @@ var BN_FX_HERO = { u_caocao: 'fxhero_caocao', u_liubei: 'fxhero_liubei', u_sunqu
   u_zhangjiao: 'fxhero_zhangjiao', u_simayi: 'fxhero_simayi', u_diaochan: 'fxhero_diaochan', u_zuoci: 'fxhero_zuoci', u_nanhua: 'fxhero_nanhua' };
 var BN_TONE = { '金光': 'gold', '赤焰': 'flame', '白霜': 'frost', '青雷': 'thunder', '墨影': 'ink', '紫光': 'purple', '碧風': 'wind' };
 var BN_TONE_COL = { gold: '#ffd25a', flame: '#ff6a3a', frost: '#9fe0ff', thunder: '#7aa8ff', ink: '#b9a8d8', purple: '#c78bff', wind: '#6fe6b0', common: '#ffe9a8' };
-var BN_BODY_OF = { '盾': 'shield', '槍': 'inf', '騎': 'cav', '弓': 'arc', '謀': 'str' };
+var BN_BODY_OF = { '盾': 'shield', '槍': 'inf', '騎': 'cav', '弓': 'arc', '械': 'inf', '謀': 'str' };   // 械:器械立繪尚缺,暫用槍兵身形;謀略型 dt 用 str(bnDrLook)
 var BN_TINTS = ['', '#3a6ea8', '#a83a3a', '#3aa86e', '#8a4aa8', '#a8883a', '#3a8aa8', '#a85a8a'];
-var BN_CROWD_OF = { '盾': 'guard', '槍': 'guard', '騎': 'knight', '弓': 'escort', '謀': 'scholar' };
+var BN_CROWD_OF = { '盾': 'guard', '槍': 'guard', '騎': 'knight', '弓': 'escort', '械': 'guard', '謀': 'scholar' };
 
 // ───────── 圖片 ─────────
 function bnDrImg(path) {
@@ -85,7 +85,7 @@ function bnStIconPath(ic, k) {
   if (typeof ic === 'string' && ic.indexOf('stn_') === 0) return 'assets/statusicon/' + ic + '.webp';
   return 'assets/bnfx/' + (typeof ic === 'string' && ic.indexOf('stc_') === 0 ? ic : 'st_' + (ic === 1 ? k : ic)) + '.webp';
 }
-var BN_TROOP_ICON = { '槍': 'troop_spear', '騎': 'troop_cav', '盾': 'troop_shield', '弓': 'troop_bow', '謀': 'troop_strat' };
+var BN_TROOP_ICON = { '槍': 'troop_spear', '騎': 'troop_cav', '盾': 'troop_shield', '弓': 'troop_bow', '謀': 'troop_strat', '械': 'troop_siege' };
 var BN_SKILLCAT_IDS = ['phys', 'strat', 'bow', 'pursuit', 'buff', 'control', 'heal', 'def', 'debuff'];   // assets/skillcat/cat_<id>.webp(512px,戰法大全用)
 var BN_LEGION_IDS = ['spear', 'cav', 'shield', 'bow', 'cover'];                                          // assets/legion/legion_<id>.webp(512px,兵種卡用)
 var BN_STATUS_ICON_IDS = ['sleep', 'paralyze', 'evade', 'freeze', 'burn', 'poison'];                    // assets/statusicon/stn_<id>.webp(128px)
@@ -161,7 +161,7 @@ function bnDrLook(u) {
     paths.push(fb || 'assets/fullbody/' + u.fig + '.webp'); bust.push(false);
     paths.push(pt || 'assets/portraits/' + u.fig + '.webp'); bust.push(true);
   } else {
-    paths.push('assets/fullbody/bn_body_' + (BN_BODY_OF[u.troop] || 'inf') + '.webp'); bust.push(false);
+    paths.push('assets/fullbody/bn_body_' + (BN_BODY_OF[bnPlIsStrat(u) ? '謀' : u.troop] || 'inf') + '.webp'); bust.push(false);   // 謀略型(dt)畫謀士身形
     for (i = 0; i < (u.name || '').length; i++) h = (h * 31 + u.name.charCodeAt(i)) >>> 0;
     tint = (h + (sp.gr || 0)) % BN_TINTS.length;
   }
@@ -244,7 +244,7 @@ function bnDrLayoutStage(vw, vh, top, bot, opts) {
 function bnPlNewVu(u, L) {
   var lk = bnDrLook(u), p = L ? L.pos[u.side][u.row][u.col] : { x: 0, y: 0 };
   return {
-    id: u.id, side: u.side, name: u.name, troop: u.troop, fig: u.fig, row: u.row, col: u.col, px: p.x, py: p.y, tx: p.x, ty: p.y, dx: 0, dy: 0, hp: u.hp, mx: u.maxHp, hpShow: u.hp, hpLag: u.hp, lagHold: 0, hitGlow: 0,
+    id: u.id, side: u.side, name: u.name, troop: u.troop, dt: u.dt || '', fig: u.fig, row: u.row, col: u.col, px: p.x, py: p.y, tx: p.x, ty: p.y, dx: 0, dy: 0, hp: u.hp, mx: u.maxHp, hpShow: u.hp, hpLag: u.hp, lagHold: 0, hitGlow: 0,
     alive: u.alive !== false, fade: 1, rot: 0, flash: 0, cast: 0, kb: 0, scale: 1, lunge: null, dying: -1, st: {}, shield: 0, look: lk, phase: (u.id * 1.713) % 6.28, sx: 1, sy: 1, sh: L ? L.sh : 100, nn: 0, hitAt: 0, ultReady: false, tone: '',
     lean: 0, ev: 0, stp: {}, ibr: 1, itl: 0, isw: 0, zt: 0
   };
@@ -393,9 +393,11 @@ function bnPlAreaFx(P, side, delay) {
   if (!n) return;
   bnPlFx(P, 'impact_ring', xs / n, ys / n - P.L.sh * 0.4, { size: Math.max(P.L.sh * 1.4, (x1 - x0) + P.L.colW), dur: 0.5, delay: delay || 0 });
 }
+// 謀略型(dt:'strat')或舊『謀』兵種:畫成謀士 / 施法姿勢 / 遠程
+function bnPlIsStrat(v) { return !!v && (v.dt === 'strat' || v.troop === '謀'); }
 function bnPlIsMelee(v, sk) {
   var k = sk ? sk.kind : '';
-  if (v.troop === '弓' || v.troop === '謀') return false;
+  if (v.troop === '弓' || v.troop === '械' || bnPlIsStrat(v)) return false;
   if (!sk) return true;
   return k === 'atk_single' || k === 'atk_exec' || k === 'atk_multi' || k === 'stun' || k === 'atk_pierce' || k === 'atk_cross' || k === 'atk_snipe' || k === 'atk_back' || k === 'lifesteal' || k === 'execute_chain';   // 近戰兵種的單體類主動 / 追擊:前衝到目標身上打
 }
@@ -497,12 +499,12 @@ function bnPlDmg(P, e) {
       if (bnPlIsMelee(vs, null)) { delay = bnPlAnimOf(vs) ? bnPlAnimOf(vs).atkDur * bnPlAnimOf(vs).hitAt : BNPL_T.lunge; bnPlStartLunge(P, vs, vt, 0.52); }
       else { delay = BNPL_T.proj; bnPlProj(P, vs, vt, e, delay); }
       wait = bnPlAnimOf(vs) ? bnPlAnimOf(vs).atkDur : BNPL_T.basicWait;
-      bnPlSfx(P, BN_ATK_SFX[vs.troop] || 'atk_blade');   // 出手音依兵種:盾刀、槍、騎、弓、謀略
+      bnPlSfx(P, BN_ATK_SFX[bnPlIsStrat(vs) ? '謀' : vs.troop] || 'atk_blade');   // 出手音依兵種:盾刀、槍、騎、弓、謀略(dt)
     } else if (vs) {
       delay = BNPL_T.skillHit; wait = BNPL_T.skillWait;
       if (sk && (sk.kind === 'atk_all' || sk.kind === 'dot_spread')) bnPlAreaFx(P, vt.side, delay);   // 全體:整個敵陣標一圈範圍(稍延遲)
-      if (bnPlIsMelee(vs, sk)) bnPlStartLunge(P, vs, vt, 0.5); else if (sk && (sk.kind === 'atk_back' || sk.kind === 'atk_snipe' || vs.troop === '弓' || vs.troop === '謀')) bnPlProj(P, vs, vt, e, delay);
-      bnPlSfx(P, BN_ATK_SFX[vs.troop] || 'atk_blade');
+      if (bnPlIsMelee(vs, sk)) bnPlStartLunge(P, vs, vt, 0.5); else if (sk && (sk.kind === 'atk_back' || sk.kind === 'atk_snipe' || vs.troop === '弓' || vs.troop === '械' || bnPlIsStrat(vs))) bnPlProj(P, vs, vt, e, delay);
+      bnPlSfx(P, BN_ATK_SFX[bnPlIsStrat(vs) ? '謀' : vs.troop] || 'atk_blade');
     }
   }
   if (e.ctr && vs) { bnPlStartLunge(P, vs, vt, 0.4); }
@@ -720,7 +722,7 @@ function bnPlPose(P, v) {
   var c = v.cast, d = v.side === 'A' ? 1 : -1, k = Math.sin(Math.min(1, c) * 3.1416 * 0.5), L = P.L;
   if (P.ps) { v.dy -= L.sh * 0.03 * k; return; }
   if (v.troop === '弓') { v.dx -= d * L.colW * 0.07 * k; v.lean -= 0.5 * k; v.sx *= 1 - 0.04 * k; }
-  else if (v.troop === '謀') { v.dy -= L.sh * 0.06 * k; v.sy *= 1 + 0.06 * k; v.lean += Math.sin(c * 12) * 0.25 * k; }
+  else if (bnPlIsStrat(v)) { v.dy -= L.sh * 0.06 * k; v.sy *= 1 + 0.06 * k; v.lean += Math.sin(c * 12) * 0.25 * k; }
   else { v.sy *= 1 - 0.07 * k; v.sx *= 1 + 0.05 * k; v.lean += 0.45 * k; v.dx -= d * L.colW * 0.03 * k; }
 }
 // ───────── 推進 ─────────

@@ -22,10 +22,13 @@ function bnCardStats(card) {
 function bnRound(x) { return Math.round(x + 1e-9); }
 function bnFormula(f, T, W, Z, P) { return f[0] + f[1] * T + f[2] * W + f[3] * Z + f[4] * P; }
 
-// 適性分(§2.2)
+// 適性新制(2026-11-16,設計_兵種適性與器械_規格 §2):名人讀固定表 BN_APT(js/bn_apt_data.js;未載入時讀 BN_FIG_SKILLS[id].apt,內容同源),
+// 路人抽到時 bnAptRoll 算一次(確定性、只吃卡面屬性 / 職業),寫進卡片 card.apt('槍弓騎盾械' 五字)與 card.dt('s' = 謀略型)。公式與門檻只在 bnAptRoll 用。
+var BN_APT_ORDER = ['槍', '弓', '騎', '盾', '械'];
+// 適性分(§2.3:屬性公式分 + 職業加分;謀移除、新增器械)
 function bnAptScores(S5, ja) {
   var T = S5[0], W = S5[1], Z = S5[2], P = S5[3];
-  var sc = { '盾': 0.7 * T + 0.3 * W, '槍': 0.6 * W + 0.4 * T, '騎': 0.6 * W + 0.2 * T + 0.2 * Z, '弓': 0.5 * W + 0.3 * Z + 0.2 * T, '謀': 0.8 * Z + 0.2 * P };
+  var sc = { '盾': 0.7 * T + 0.3 * W, '槍': 0.6 * W + 0.4 * T, '騎': 0.6 * W + 0.2 * T + 0.2 * Z, '弓': 0.5 * W + 0.3 * Z + 0.2 * T, '械': 0.4 * Z + 0.3 * P + 0.3 * T - BN_DATA.aptEngCut };
   Object.keys(ja || {}).forEach(function (jid) {
     var pr = BN_JOB_PRESET[jid];
     if (!pr) return;
@@ -38,26 +41,60 @@ function bnAptGrade(score) {
   var c = BN_DATA.aptCut;
   return score >= c.S ? 'S' : score >= c.A ? 'A' : score >= c.B ? 'B' : 'C';
 }
+// 路人適性(抽到 / 生成時算一次):回 {apt:'ABCCC'(槍弓騎盾械), dt:'s'|''}。最高的戰鬥兵種保底 A;謀略型 = 謀分(0.8 智 + 0.2 政)≥ 四戰鬥兵種分,其 弓 至少 A(預設兵種 弓,後排遠程)
+function bnAptRoll(card) {
+  var S5 = bnCardStats(card), sc = bnAptScores(S5, card.ja), g = {}, best = null, strat = 0.8 * S5[2] + 0.2 * S5[3] >= Math.max(sc['槍'], sc['弓'], sc['騎'], sc['盾']);
+  BN_APT_ORDER.forEach(function (tp) { g[tp] = bnAptGrade(sc[tp]); if (g[tp] === 'S') g[tp] = 'A'; });   // 路人沒有本命,不給 S
+  ['槍', '弓', '騎', '盾'].forEach(function (tp) { if (best === null || sc[tp] > sc[best]) best = tp; });
+  if (g[best] !== 'A') g[best] = 'A';
+  if (strat && g['弓'] !== 'A') g['弓'] = 'A';
+  return { apt: BN_APT_ORDER.map(function (tp) { return g[tp]; }).join(''), dt: strat ? 's' : '' };
+}
+// 寫進卡片(已有則不動;只在生成時呼叫,之後升星 / 裝備 / 詞條變化都不重算)
+function bnAptSeal(card) {
+  var r;
+  if (!card || card.fig || typeof card.apt === 'string') return card;
+  r = bnAptRoll(card); card.apt = r.apt; card.dt = r.dt;
+  return card;
+}
+// 名人固定表字串:BN_APT.f[id](js/bn_apt_data.js)優先,否則 BN_FIG_SKILLS[id].apt(gen_bn_skills 從同一份 apt_table.json 嵌入)
+function bnAptStrOf(fig) {
+  if (typeof BN_APT !== 'undefined' && BN_APT.f && BN_APT.f[fig]) return BN_APT.f[fig];
+  return (BN_FIG_SKILLS[fig] && BN_FIG_SKILLS[fig].apt) || '';
+}
+// 謀略型 dt:名人 = 固定表名單;路人 = card.dt(沒有則即時算)。回 'strat' 或 ''
+function bnDtOf(card) {
+  var fg, r;
+  if (!card) return '';
+  if (card.fig) {
+    if (typeof BN_APT !== 'undefined' && BN_APT.s) return BN_APT.s.indexOf(card.fig) >= 0 ? 'strat' : '';
+    fg = BN_FIG_SKILLS[card.fig];
+    return fg && fg.dt === 'strat' ? 'strat' : '';
+  }
+  if (typeof card.dt === 'string' && typeof card.apt === 'string') return card.dt === 's' ? 'strat' : '';
+  r = bnAptRoll(card);
+  return r.dt === 's' ? 'strat' : '';
+}
 function bnAptOf(card) {
-  var S5 = bnCardStats(card), sc = bnAptScores(S5, card.ja), out = {}, fg = card.fig ? BN_FIG_SKILLS[card.fig] : null;
-  BN_DATA.troopList.forEach(function (tp) {
-    var g = bnAptGrade(sc[tp]);
-    if (fg) { if (tp === fg.troop) g = 'S'; else if (g === 'S') g = 'A'; }
-    out[tp] = g;
-  });
+  var out = {}, s = '', fg = card.fig ? BN_FIG_SKILLS[card.fig] : null, r, sc = bnAptScores(bnCardStats(card), card.ja);
+  if (fg) s = bnAptStrOf(card.fig);
+  else if (typeof card.apt === 'string') s = card.apt;
+  if (s.length !== 5) { r = bnAptRoll(card); s = r.apt; if (fg) { BN_APT_ORDER.forEach(function (tp, i) { if (tp === fg.troop) s = s.substr(0, i) + 'S' + s.substr(i + 1); }); } }   // 理論上不會(名人缺表 / 路人無 apt):臨時算,不寫回
+  BN_APT_ORDER.forEach(function (tp, i) { out[tp] = s.charAt(i) || 'C'; });
   return { apt: out, scores: sc };
 }
 function bnDefaultTroop(card) {
   var fg = card.fig ? BN_FIG_SKILLS[card.fig] : null, r, best = null;
   if (fg) return fg.troop;
+  if (bnDtOf(card) === 'strat') return '弓';   // 謀略型路人:後排遠程
   r = bnAptOf(card).scores;
-  BN_DATA.troopList.forEach(function (tp) { if (best === null || r[tp] > r[best]) best = tp; });
+  ['槍', '騎', '盾', '弓'].forEach(function (tp) { if (best === null || r[tp] > r[best]) best = tp; });   // 預設不給器械
   return best;
 }
 function bnRowOf(card, troop) {
   var fg = card.fig ? BN_FIG_SKILLS[card.fig] : null;
   if (fg) return fg.row === '前' ? 0 : fg.row === '中' ? 1 : 2;
-  return (troop === '盾' || troop === '槍') ? 0 : (troop === '騎' ? 1 : 2);
+  return (troop === '盾' || troop === '槍') ? 0 : (troop === '騎' ? 1 : 2);   // 弓 / 械(射程 3)→ 2(主將排)
 }
 function bnPower(spec) {   // 戰力(§5.2,僅顯示)
   var s = spec.stats;
@@ -74,7 +111,7 @@ function bnTraitFold(card, troop) {
   for (i = 0; i < list.length; i++) {
     tm = list[i];
     if (!tm) continue;
-    if (tm.troop && tm.troop !== troop) continue;
+    if (tm.troop && !(tm.troop === troop || (tm.troop === '謀' && bnDtOf(card) === 'strat'))) continue;
     if (tm.stT) st.stT += tm.stT;
     if (tm.stW) st.stW += tm.stW;
     if (tm.stZ) st.stZ += tm.stZ;
@@ -111,7 +148,7 @@ function bnSlotCount(card) {
 function bnAutoLearn(card, troop, native, n) {
   var pool = BN_GENERIC.skills.filter(function (id) {
     var d = BN_SKILLS[id], f = d.fit || {};
-    return d.cat !== 'passive' && native.indexOf(id) < 0 && ((f.troops && f.troops.indexOf(troop) >= 0) || (f.jobs && card.ja && f.jobs.some(function (j) { return card.ja[j]; })));
+    return d.cat !== 'passive' && native.indexOf(id) < 0 && (bnTroopIn(f.troops, troop, bnDtOf(card)) || (f.jobs && card.ja && f.jobs.some(function (j) { return card.ja[j]; })));
   }), out = [], h = 2166136261, s = String(card.name) + '|' + (card.no || '') + '|' + (card.main || '') + '|' + card.gr, i, k;
   for (i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0;
   while (out.length < n && pool.length) { k = h % pool.length; out.push(pool[k]); pool.splice(k, 1); h = (Math.imul(h, 1664525) + 1013904223) >>> 0; }
@@ -139,7 +176,8 @@ function bnNativeSkills(card, troop) {
 }
 function bnUltFor(card, troop) {
   var k = troop, row;
-  if (troop === '謀') {
+  if (bnDtOf(card) === 'strat') {   // 謀略型:查謀系大招鍵(醫 / 政 / 商 再分流)
+    k = '謀';
     var jb = BN_JOB_PRESET, main = card.main, j = main && typeof CARD_JOB_BY_ID !== 'undefined' ? CARD_JOB_BY_ID[main] : null;
     row = j ? j.row : '';
     if (row === '醫') k = '謀醫'; else if (row === '政') k = '謀政'; else if (row === '商') k = '謀商';
@@ -209,9 +247,12 @@ function bnSimFigSlots(card) {
 // 規則:本人 ×1.0;同基礎兵種隊友 ×0.5(優點與弱點皆同比例);每張卡全隊只算第一位裝備者;一名隊友最多受一張分享;裝兵種卡者不受分享。
 // 無兵種卡的單位不寫任何 lg 欄(舊戰鬥逐位不變)。
 function bnLgIs(id) { return !!(typeof BN_LEGION !== 'undefined' && BN_LEGION.cards && BN_LEGION.cards[id]); }
-function bnLgPick(ids, troop) {
-  var i;
-  for (i = 0; ids && i < ids.length; i++) if (bnLgIs(ids[i]) && BN_LEGION.cards[ids[i]].troop === troop) return ids[i];
+function bnTroopKey(x) { return x.dt === 'strat' ? '謀' : x.troop; }   // 兵種卡 / 同兵種判斷用的鍵:謀略型一律算『謀』
+// 兵種卡能否給此名冊卡裝備:謀略型只能裝『謀』卡(限謀士),其餘依預設兵種(bnSkcCanEquip / skill_rec 共用)
+function bnLgTroopOk(id, e) { var ct = BN_LEGION.cards[id].troop; return bnDtOf(e) === 'strat' ? ct === '謀' : ct === bnDefaultTroop(e); }
+function bnLgPick(ids, troop, dt) {
+  var i, ct;
+  for (i = 0; ids && i < ids.length; i++) if (bnLgIs(ids[i])) { ct = BN_LEGION.cards[ids[i]].troop; if (dt === 'strat' ? ct === '謀' : ct === troop) return ids[i]; }
   return null;
 }
 function bnLgLord(fig) { return !!fig && !!BN_DATA.figTags && BN_DATA.figTags.lord.indexOf(fig) >= 0; }
@@ -248,7 +289,7 @@ function bnLgHpAlly(units, i, e, m) {
   var x = units[i], w = e.v.who, v = e.v.v * m, mx = e.v.max * m, cnt = 0, j;
   for (j = 0; j < units.length; j++) {
     if (j === i) continue;
-    if (w === '黃巾' ? units[j].fac === 3 : (units[j].troop === x.troop || units[j].fac === 3)) cnt++;
+    if (w === '黃巾' ? units[j].fac === 3 : (bnTroopKey(units[j]) === bnTroopKey(x) || units[j].fac === 3)) cnt++;
   }
   x.stats.hp = bnRound(x.stats.hp * (1 + Math.min(mx, v * cnt)));
 }
@@ -260,7 +301,7 @@ function bnLgApply(units) {
   units.forEach(function (u) { if (u.fig) hasFig[u.fig] = true; if (bnLgLord(u.fig)) lordIn = true; });
   for (i = 0; i < n; i++) {
     x = units[i];
-    held[i] = !!bnLgPick([x.legion], x.troop);
+    held[i] = !!bnLgPick([x.legion], x.troop, x.dt);
     if (!held[i] || owner[x.legion]) continue;
     owner[x.legion] = 1; self[i] = x.legion;   // 同一張卡全隊只算第一位
   }
@@ -294,7 +335,7 @@ function bnLgApply(units) {
   for (i = 0; i < n; i++) {
     if (self[i] || held[i]) continue;
     for (j = 0; j < n; j++) {
-      if (!self[j] || j === i || units[j].troop !== units[i].troop || (cnt[j] || 0) >= capOf(j)) continue;
+      if (!self[j] || j === i || bnTroopKey(units[j]) !== bnTroopKey(units[i]) || (cnt[j] || 0) >= capOf(j)) continue;
       cnt[j] = (cnt[j] || 0) + 1;
       mate(i, j);
       break;
@@ -304,7 +345,7 @@ function bnLgApply(units) {
   for (j = 0; j < n; j++) {
     if (!self[j] || !hasCon(BN_LEGION.cards[self[j]], 'mateAtkNonTroop')) continue;
     var mc = BN_LEGION.cards[self[j]].cons.filter(function (e) { return e.k === 'mateAtkNonTroop'; })[0];
-    for (i = 0; i < n; i++) if (i !== j && units[i].troop !== units[j].troop) bnLgPush(units[i], [{ k: 'atkPct', v: mc.v, car: j, when: 'carAlive' }]);
+    for (i = 0; i < n; i++) if (i !== j && bnTroopKey(units[i]) !== bnTroopKey(units[j])) bnLgPush(units[i], [{ k: 'atkPct', v: mc.v, car: j, when: 'carAlive' }]);
   }
 }
 
@@ -313,18 +354,20 @@ function bnUnitSpec(card, o) {
   o = o || {};
   var S5 = bnCardStats(card), apt = bnAptOf(card), troop = bnTroopNorm(o.troop) || bnDefaultTroop(card), c = BN_DATA.troops[troop], g = BN_DATA.grade[card.gr] || 1;
   if (o.apt) Object.assign(apt.apt, o.apt);   // 測試 / 手動指定適性
+  var dt = o.dt !== undefined ? (o.dt === 's' ? 'strat' : o.dt) : bnDtOf(card);   // 謀略型(普攻吃謀略 / 主動 +5pp / 謀系大招 / 暴擊看智)
   var tf = bnTraitFold(card, troop), a = BN_DATA.apt[apt.apt[troop]] || 1;
-  var T = S5[0] + tf.st.stT, W = S5[1] + tf.st.stW, Z = S5[2] + tf.st.stZ, P = S5[3], M = S5[4], F = BN_DATA.f;
-  var crit = BN_DATA.critBase + Math.max(0, (troop === '謀' ? Z : W) - BN_DATA.critFrom) * BN_DATA.critPerPt;
+  // 適性乙案:a 乘在五維遞減後(加完詞條)的統 / 武 / 智;兵力 hp 用未乘的 T0 / W0(兵力 = 帶兵數,不受適性影響)
+  var T0 = S5[0] + tf.st.stT, W0 = S5[1] + tf.st.stW, T = T0 * a, W = W0 * a, Z = (S5[2] + tf.st.stZ) * a, P = S5[3], M = S5[4], F = BN_DATA.f;
+  var crit = BN_DATA.critBase + Math.max(0, (dt === 'strat' ? Z : W) - BN_DATA.critFrom) * BN_DATA.critPerPt;
   var atkM = 1 + tf.st.atk + tf.st.atkTroop, hpM = 1 + tf.st.hp, spec, fg = card.fig ? BN_FIG_SKILLS[card.fig] : null, skills = [], i, sl, learned;
   spec = {
-    name: card.name, fig: card.fig || '', fac: card.fac, gr: card.gr, troop: troop, row: o.row !== undefined ? o.row : bnRowOf(card, troop), col: o.col !== undefined ? o.col : 0,
+    name: card.name, fig: card.fig || '', fac: card.fac, gr: card.gr, troop: troop, dt: dt, row: o.row !== undefined ? o.row : bnRowOf(card, troop), col: o.col !== undefined ? o.col : 0,
     apt: apt.apt, sex: card.sex || '', traits: (card.tr || []).slice(), jobs: Object.keys(card.ja || {}), main: card.main || '', learn: card.learn | 0,
     stats: {
-      hp: bnRound(bnFormula(F.hp, T, W, Z, P) * c.hp * g * a * hpM * tf.st.all),
-      atk: bnRound(bnFormula(F.atk, T, W, Z, P) * c.atk * g * a * atkM * tf.st.all),
+      hp: bnRound(bnFormula(F.hp, T0, W0, 0, P) * c.hp * g * hpM * tf.st.all),
+      atk: bnRound(bnFormula(F.atk, T, W, Z, P) * c.atk * g * atkM * tf.st.all),
       mag: bnRound(bnFormula(F.mag, T, W, Z, P) * g * tf.st.all),
-      def: bnRound(bnFormula(F.def, T, W, Z, P) * c.def * a * tf.st.all),
+      def: bnRound(bnFormula(F.def, T, W, Z, P) * c.def * tf.st.all),
       sres: bnRound(bnFormula(F.sres, T, W, Z, P)),
       spd: bnRound(bnFormula(F.spd, T, W, Z, P) + c.spd + tf.st.spd),
       heal: bnRound(bnFormula(F.heal, T, W, Z, P) * g),
@@ -351,7 +394,7 @@ function bnUnitSpec(card, o) {
     skills = bnNativeSkills(card, troop);
     learned = o.learned || card.bnLearn;
     sl = bnSlotCount(card);
-    if (!learned && typeof bnSkcLearnOf === 'function') { var bl = bnSkcLearnOf(card); if (bl) { lgSrc = bl; sl = bnSkcSlots(card); learned = bnLearnMerge(card, troop, skills, sl - (bnLgPick(bl, troop) ? 1 : 0), bl.filter(function (x) { return x && !bnLgIs(x); })); kit2 = true; } }   // 戰法傳承裝備的戰法(bn_skcard.js;名冊路人才有;選擇槽白 1、青以上 2);兵種卡占一槽、不進學習欄
+    if (!learned && typeof bnSkcLearnOf === 'function') { var bl = bnSkcLearnOf(card); if (bl) { lgSrc = bl; sl = bnSkcSlots(card); learned = bnLearnMerge(card, troop, skills, sl - (bnLgPick(bl, troop, dt) ? 1 : 0), bl.filter(function (x) { return x && !bnLgIs(x); })); kit2 = true; } }   // 戰法傳承裝備的戰法(bn_skcard.js;名冊路人才有;選擇槽白 1、青以上 2);兵種卡占一槽、不進學習欄
     if (!lgSrc) lgSrc = learned || null;
     if (!learned) learned = BN_DATA.slots.autoLearn ? bnAutoLearn(card, troop, skills, sl) : [];
     for (i = 0; i < learned.length && i < sl; i++) if (BN_SKILLS[learned[i]] && skills.indexOf(learned[i]) < 0) { skills.push(learned[i]); kitIds.push(learned[i]); }
@@ -361,7 +404,7 @@ function bnUnitSpec(card, o) {
   if (km) spec.kitInst = km;
   if (kit2) spec.kit2 = 1;
   spec.skills = skills;
-  lgId = lgSrc ? bnLgPick(lgSrc, troop) : null;
+  lgId = lgSrc ? bnLgPick(lgSrc, troop, dt) : null;
   if (lgId) spec.legion = lgId;   // B3:只在裝了有效兵種卡時才寫入,無兵種卡的 spec 不變
   // 名人強度校正(B6,bn_data.js BN_FIG_TUNE):兵力 / 攻擊 / 謀略 / 治療 / 護盾量同乘一個係數,讓新舊名人勝率落在相近範圍
   var tn = (card.fig && typeof BN_FIG_TUNE !== 'undefined') ? BN_FIG_TUNE[card.fig] : 0;
@@ -413,7 +456,7 @@ function bnApplyScene(spec, scene) {
 // 直接指定屬性(敵人樣板、黃金測試用)
 function bnSpecRaw(r) {
   var s = {
-    name: r.name, fig: r.fig || '', fac: r.fac === undefined ? 4 : r.fac, gr: r.gr || 0, troop: r.troop, row: r.row, col: r.col || 0, apt: {}, traits: r.traits || [], jobs: [], main: '', learn: 0,
+    name: r.name, fig: r.fig || '', fac: r.fac === undefined ? 4 : r.fac, gr: r.gr || 0, troop: r.troop, dt: r.dt || '', row: r.row, col: r.col || 0, apt: {}, traits: r.traits || [], jobs: [], main: '', learn: 0,
     stats: { hp: r.hp, atk: r.atk, mag: r.mag, def: r.def, sres: r.sres, spd: r.spd, heal: r.heal !== undefined ? r.heal : 60, sh: r.sh !== undefined ? r.sh : 100, crit: r.crit !== undefined ? r.crit : 0.05, res: r.res !== undefined ? r.res : 0.04 },
     mods: r.mods || {}, skills: r.skills || [], ult: r.ult || '', el: r.el || ''
   };
@@ -499,13 +542,14 @@ function bnRandomCard(rng, gr, figId) {
   key = 'E:' + Math.floor(rng() * 1000);
   card = cardGen(cs, 'E', key, Math.floor(rng() * 9), gr, 't' + Math.floor(rng() * 1e9), {});
   card.up = 0;
+  bnAptSeal(card);   // 路人適性:生成時算一次寫進卡片
   return card;
 }
 function bnRandomLearned(rng, card, troop) {
   var n = bnSlotCount(card), pool = BN_GENERIC.skills.filter(function (id) {
     var d = BN_SKILLS[id], f = d.fit || {};
     if (d.cat === 'passive') return false;
-    return (f.troops && f.troops.indexOf(troop) >= 0) || (f.jobs && card.ja && f.jobs.some(function (j) { return card.ja[j]; }));
+    return bnTroopIn(f.troops, troop, bnDtOf(card)) || (f.jobs && card.ja && f.jobs.some(function (j) { return card.ja[j]; }));
   }), out = [], k;
   while (out.length < n && pool.length) { k = Math.floor(rng() * pool.length); out.push(pool[k]); pool.splice(k, 1); }
   return out;

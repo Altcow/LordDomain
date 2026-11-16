@@ -23,6 +23,9 @@ var UNLOCK_CFG = [
 // 首頁木牌 id(ld_home.js LD_BLD)→ 解鎖 id。城主府固定「即將開放」,不在此表
 var UNLOCK_PLAQUE = { tavern: 'draw', camp: 'team', gate: 'gate', yard: 'drill', forge: 'forge', acad: 'study' };   // 擂台木牌不鎖(入口可進,只有報名要名聲 1800;unlockIs('arena') 仍供報名判斷)
 
+// 賽季末商店(設計_賽季末商店_規格.md 2.10、6.3;SS1 只加資料):false = 七日 / 團結關維持現行獎勵;SS12 / SS4 接線後與 SSHOP_ON 一起開。
+var EV_SHOP_ON = false;
+
 var EV_CFG = {
   DAY: 86400000, HOUR: 3600000, tz: 8 * 3600000,
   seasonDays: 28,
@@ -56,7 +59,12 @@ var EV_CFG = {
   tutMins: 0.5, tutFoeMul: 0.3, tutGrain: 100,
   // 預約(3.3)
   rsvMax: 3, rsvSpan: 36 * 3600000,
-  pendMax: 30
+  pendMax: 30,
+  // ---- 賽季末商店新值(EV_SHOP_ON 開啟後才取代現行 nbGive / 團結關獎勵)----
+  nbGoldDay: 7,   // 七日第 7 天領隨機金將(第 1 季卡池 gr 4,優先沒擁有的;終身 1 次;存檔 nb.gold 0 未到 / 1 待領 / 2 已領)
+  nbGiveShop: [null, { shards: 406, mats: { m_iron2: 5, m_hide2: 5, m_whet: 10 } }, { shards: 406, mats: { m_iron2: 5, m_hide2: 5, m_whet: 10 } }, { shards: 406, mats: { m_iron2: 5, m_hide2: 5, m_whet: 10 } }, { shards: 406, mats: { m_iron2: 5, m_hide2: 5, m_whet: 10 } }, { shards: 331, mats: { m_iron2: 5, m_hide2: 5, m_whet: 10 } }, { shards: 331, mats: { m_iron2: 5, m_hide2: 5, m_whet: 10 }, gold: 1 }],   // 第 2~7 天(索引 1~6):不再有紫金材料(碎片數照舊);第 7 天另 gold:1 = 隨機金將
+  bossFrag: 1, bossFragFight: 2,       // 團結關第 2 場擊殺:給 1 片專武殘片(本期上架 12 件中隨機,沒持有的優先)
+  bossSkill: 1, bossSkillFight: 2      // 團結關第 2 場擊殺:從本期新上架通用戰法隨機給 1 個;已全擁有 → 通用戰法任選券
 };
 
 // 主線 14 條(2.5)。k = 計數器名(ev.cnt);n = 需要次數;poll = 輪詢條件名(不靠事件);need = 需要存在的全域函式名(不存在 = 視為不存在,自動跳過);give = 獎勵

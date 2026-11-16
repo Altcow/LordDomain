@@ -11,8 +11,8 @@ var BN_DATA = {
   critMul: 1.5,
   jitter: 0.10,                // 浮動 ±5 %:0.95 + 0.10 × r
   grade: [1.00, 1.04, 1.08, 1.12, 1.16],          // 品階係數 g(§2.1)
-  apt: { S: 1.10, A: 1.00, B: 0.90, C: 0.80 },    // 兵種適性係數 a
-  aptCut: { S: 85, A: 70, B: 55 },                // 適性分門檻
+  apt: { S: 1.20, A: 1.00, B: 0.85, C: 0.70 },    // 兵種適性係數 a(2026-11-16 適性新制乙案:乘在五維遞減後的統 / 武 / 智,兵力 hp 用未乘值;不再乘在 hp / atk / def 成品上)
+  aptCut: { S: 88, A: 76, B: 61 }, aptEngCut: 8,  // 適性分門檻(只給路人生成 bnAptRoll 用;名人讀 BN_APT 固定表);器械分另扣
   aptJob: 12, aptJobTier: 6,                      // 職業加權 / 職業階 III 以上再加
   effKnee: [80, 100], effSlope: [0.5, 0.25],      // 五維遞減(≤80 線性;81~100 斜率 0.5;>100 斜率 0.25)
   // 屬性公式係數 [常數, 統, 武, 智, 政](§2.1)
@@ -29,17 +29,19 @@ var BN_DATA = {
     '騎': { hp: 1.00, atk: 1.08, def: 0.85, spd: 16, R: 2 },
     '盾': { hp: 1.20, atk: 0.88, def: 1.25, spd: -10, R: 1 },
     '弓': { hp: 1.00, atk: 1.12, def: 0.75, spd: 8, R: 3 },
-    '謀': { hp: 1.05, atk: 0.70, def: 0.80, spd: 5, R: 3 }
+    // 2026-11-16 適性新制:謀不再是兵種(改為武將屬性 dt:'strat' 謀略型);新增『械』(器械;資料鍵單字,畫面顯示『器械』)
+    '械': { hp: 1.20, atk: 1.00, def: 1.05, spd: -10, R: 3 }
   },
-  troopList: ['槍', '騎', '盾', '弓', '謀'],   // 順序 = 克制循環 槍 > 騎 > 盾 > 弓 > 槍(謀不在循環內)
-  troopAlias: { '步': '槍' },                    // 舊存檔 / 舊隊伍碼的兵種名正規化(bnTroopNorm)
-  normalMag: 0.8,              // 謀兵種普攻 strat 0.8 × MAG
-  // 兵種克制(物理傷害 phys;謀略 strat 不吃):prey[攻方][守方] = 傷害倍率。循環 槍 > 騎 > 盾 > 弓 > 槍(克制 ×1.3、被克 ×0.8);騎另克謀 ×1.3
-  prey: { '槍': { '騎': 1.3, '弓': 0.8 }, '騎': { '盾': 1.3, '槍': 0.8, '謀': 1.3 }, '盾': { '弓': 1.3, '騎': 0.8 }, '弓': { '槍': 1.3, '盾': 0.8 } },
+  troopList: ['槍', '騎', '盾', '弓', '械'],   // 順序 = 克制循環 槍 > 騎 > 盾 > 弓 > 槍(械不在循環內,只有四兵種打械 ×1.10 / 械打四兵種 ×0.9)
+  troopAlias: { '步': '槍', '謀': '' },          // 舊存檔 / 舊隊伍碼的兵種名正規化(bnTroopNorm);『謀』→ 空字串 → 改用本命 / 預設兵種
+  normalMag: 0.8,              // 謀略型(dt:'strat')普攻 strat 0.8 × MAG
+  // 兵種克制(物理 phys 與謀略 strat 都吃;持續傷害、治療、護盾不吃):prey[攻方][守方] = 傷害倍率。循環 槍 > 騎 > 盾 > 弓 > 槍。
+  // 2026-11-16 使用者決議:克制方 ×1.075、被克方 ×0.925(雙方差 15 個百分點,未實測,P7 實測);騎剋謀刪除;四兵種打械 ×1.10、械打四兵種 ×0.9
+  prey: { '槍': { '騎': 1.075, '弓': 0.925, '械': 1.10 }, '騎': { '盾': 1.075, '槍': 0.925, '械': 1.10 }, '盾': { '弓': 1.075, '騎': 0.925, '械': 1.10 }, '弓': { '槍': 1.075, '盾': 0.925, '械': 1.10 }, '械': { '槍': 0.9, '騎': 0.9, '盾': 0.9, '弓': 0.9 } },
   blockPct: 0.15,              // 盾兵格擋 = floor(0.15 × DEF)(每段 phys)
   cavCharge: 1.2,              // 騎兵每場第一次普攻
   archerBackTaken: 0.9,        // 弓站後排受近戰普攻
-  mageRateBonus: 0.05,         // 謀兵種主動戰法發動率 +5 pp
+  mageRateBonus: 0.05,         // 謀略型(dt:'strat')主動戰法發動率 +5 pp
   // 目標選擇
   pickPrey: 100, pickLowHp: 50,
   // 戰法發動率 / 冷卻預設(§4.2)。每次行動:每個主動戰法與大招各自擲骰(可同時放好幾個),普攻後每個追擊戰法各自擲骰。
@@ -327,10 +329,14 @@ var BN_TIER_CFG = {
 };
 
 // 兵種名正規化:舊存檔 / 舊隊伍碼的『步』→『槍』;不認得的回空字串(呼叫端改用預設兵種)。永遠不丟例外
+// 謀士判斷(2026-11-16):資料裡『兵種條件 = 謀』一律改看 dt === 'strat';其餘兵種照舊比對 troop。u = 戰鬥單位或 spec(含 troop / dt)
+function bnTroopIs(u, t) { return !!u && (t === '謀' ? u.dt === 'strat' : u.troop === t); }
+// 兵種條件清單(fit.troops 等)是否含此單位:含單位的兵種,或清單含『謀』且單位為謀略型
+function bnTroopIn(list, troop, dt) { return !!list && (list.indexOf(troop) >= 0 || (dt === 'strat' && list.indexOf('謀') >= 0)); }
 function bnTroopNorm(t) {
   if (typeof t !== 'string') return '';
   if (BN_DATA.troopAlias[t]) t = BN_DATA.troopAlias[t];
   return BN_DATA.troops[t] ? t : '';
 }
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { bnTroopNorm: bnTroopNorm, BN_DATA: BN_DATA, BN_TRAIT_MODS: BN_TRAIT_MODS, BN_BONDS: BN_BONDS, BN_FIG_TRAIT: BN_FIG_TRAIT, BN_SKILL_TUNE: BN_SKILL_TUNE, BN_RATE_LEGACY: BN_RATE_LEGACY, BN_KIT_CFG: BN_KIT_CFG, BN_RATE_CAP: BN_RATE_CAP, BN_SKC: BN_SKC, BN_LEGION_CFG: BN_LEGION_CFG, BN_TIER_CFG: BN_TIER_CFG };
+if (typeof module !== 'undefined' && module.exports) module.exports = { bnTroopNorm: bnTroopNorm, bnTroopIs: bnTroopIs, bnTroopIn: bnTroopIn, BN_DATA: BN_DATA, BN_TRAIT_MODS: BN_TRAIT_MODS, BN_BONDS: BN_BONDS, BN_FIG_TRAIT: BN_FIG_TRAIT, BN_SKILL_TUNE: BN_SKILL_TUNE, BN_RATE_LEGACY: BN_RATE_LEGACY, BN_KIT_CFG: BN_KIT_CFG, BN_RATE_CAP: BN_RATE_CAP, BN_SKC: BN_SKC, BN_LEGION_CFG: BN_LEGION_CFG, BN_TIER_CFG: BN_TIER_CFG };

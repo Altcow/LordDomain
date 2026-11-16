@@ -49,7 +49,7 @@ function bnSkcMaxUse(id) {
 function bnSkcTroopOk(e, id) {
   var d = bnSkcSkill(id), ot = d && d.onlyTroops;
   if (!ot || !ot.length) return true;
-  return ot.indexOf(bnDefaultTroop(e)) >= 0;
+  return bnTroopIn(ot, bnDefaultTroop(e), bnDtOf(e));
 }
 
 // 一次性遷移(傳承一人一個,2026-11-15):v62 以前拆借用者的卡,解鎖的是別人的戰法 id(BN_SKC.inhMove 的 key);改成本人複本 id。own 與 eq 都換;原 id 與複本 id 並存時取較早時間。冪等(換完原 id 不復存在)。就地修改 o,回傳是否有換
@@ -139,7 +139,7 @@ function bnSkcCanEquip(cs, e, slot, id) {
   cur = bnSkcLoad().eq[r.id] || [null, null];
   for (i = 0; i < 2; i++) if (i !== slot && cur[i] === id) return { ok: false, reason: 'dup' };
   if (bnSkcIsLegion(id)) {
-    if (BN_LEGION.cards[id].troop !== bnDefaultTroop(r)) return { ok: false, reason: 'legion' };
+    if (!bnLgTroopOk(id, r)) return { ok: false, reason: 'legion' };
     for (i = 0; i < 2; i++) if (i !== slot && cur[i] && bnSkcIsLegion(cur[i])) return { ok: false, reason: 'legion' };
   } else if (!bnSkcSkill(id)) return { ok: false, reason: 'own' };
   if (!bnSkcTroopOk(r, id)) return { ok: false, reason: 'troop' };

@@ -71,7 +71,7 @@ function skrCands(e) {
   var R = skrRec(), t, a;
   if (!R || !e) return [];
   if (e.fig && R.hero && R.hero[e.fig]) a = R.hero[e.fig];
-  else { t = (typeof bnDefaultTroop === 'function') ? bnDefaultTroop(e) : ''; a = (R.troop && R.troop[t]) || []; }
+  else { t = (typeof bnDtOf === 'function' && bnDtOf(e) === 'strat') ? '謀' : ((typeof bnDefaultTroop === 'function') ? bnDefaultTroop(e) : ''); a = (R.troop && R.troop[t]) || []; }   // 謀略型路人查『謀』鍵(2026-11-16 謀不再是兵種)
   return Array.isArray(a) ? a.filter(function (x) { return Array.isArray(x) && skrSk(x[0]); }) : [];
 }
 
@@ -297,7 +297,7 @@ function skrApply(cs, plan) {
         if (row.indexOf(id) !== j) return fail('dup', { id: id, eid: k });
         if (!bnSkcOwned(id)) return fail('own', { id: id, eid: k });
         if (!bnSkcTroopOk(r, id)) return fail('troop', { id: id, eid: k });
-        if (bnSkcIsLegion(id) && BN_LEGION.cards[id].troop !== bnDefaultTroop(r)) return fail('legion', { id: id, eid: k });
+        if (bnSkcIsLegion(id) && !bnLgTroopOk(id, r)) return fail('legion', { id: id, eid: k });
       }
     }
     for (k in sim) {

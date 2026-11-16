@@ -1,8 +1,8 @@
-const VERSION = 'v64';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v65';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
-const RUNTIME_PATHS = ['/assets/buildings/', '/assets/portraits/', '/assets/ui/', '/assets/ui2/', '/assets/terrain/', '/assets/fullbody/', '/assets/bnfx/', '/assets/furnace/', '/assets/traffic/', '/assets/card/', '/assets/statusicon/', '/assets/troopicon/', '/assets/skillcat/', '/assets/legion/', '/assets/audio/'];
+const RUNTIME_PATHS = ['/assets/buildings/', '/assets/portraits/', '/assets/ui/', '/assets/ui2/', '/assets/terrain/', '/assets/fullbody/', '/assets/bnfx/', '/assets/furnace/', '/assets/traffic/', '/assets/card/', '/assets/statusicon/', '/assets/troopicon/', '/assets/skillcat/', '/assets/legion/', '/assets/cutin/', '/assets/audio/'];
 const PRECACHE = [
   './',
   './index.html',
@@ -30,8 +30,11 @@ const PRECACHE = [
   './css/ld_equip.css',
   './css/title_cover.css',
   './css/ld_skin.css',
+  './css/wmap.css',
+  './css/wmap_go.css',
   './js/ui_assets.js',
   './js/features.js',
+  './js/ld_clock.js',
   './js/data.js',
   './js/units.js',
   './js/unitinfo.js',
@@ -198,6 +201,7 @@ const PRECACHE = [
   './js/bn_data.js',
   './js/bn_cost_data.js',
   './js/bn_skills_data.js',
+  './js/bn_apt_data.js',
   './js/bn_units.js',
   './js/bn_flavor.js',
   './js/bn_text.js',
@@ -213,6 +217,20 @@ const PRECACHE = [
   './js/rsvui.js',
   './js/wd_data.js',
   './js/wd_grid_data.js',
+  './js/wm_gen.js',
+  './js/wm_march.js',
+  './js/wmap_proj.js',
+  './js/wmap_art.js',
+  './js/wmap_res.js',
+  './js/wmap_view.js',
+  './js/wmap_army_art.js',
+  './js/wmap_army.js',
+  './js/wmap_go.js',
+  './js/wmap_settle.js',
+  './js/wmap_ui.js',
+  './js/wmap_go_ui.js',
+  './js/wmap_settle_ui.js',
+  './js/wmap_panels.js',
   './js/wd_core.js',
   './js/wd_ui.js',
   './js/ld_open_data.js',
@@ -262,6 +280,7 @@ const PRECACHE = [
   './js/ld_hunt_ui.js',
   './js/ld_home.js',
   './js/ld_open_ui.js',
+  './js/ld_names.js',
   './js/shell.js',
   './js/title_cover.js',
   './js/main.js',

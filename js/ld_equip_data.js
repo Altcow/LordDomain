@@ -1,5 +1,5 @@
 // js/ld_equip_data.js — 裝備與尋訪 資料表(設計_裝備與尋訪_定案.md 第二、三、四節)。前綴 GEAR_ / gear。數值全部 PLACEHOLDER,集中在這裡,最後統一調。
-// 純資料,不碰存檔、不碰 DOM。全域:GEAR_KEY GEAR_CFG GEAR_TRAITS GEAR_ATTR gearTraitDef gearTraitBy。ES2017;不用 ?. ??。
+// 純資料,不碰存檔、不碰 DOM。全域:GEAR_KEY GEAR_CFG GEAR_TRAITS GEAR_ATTR gearTraitDef gearTraitBy GEAR_RARE_ON GEAR_CAT_NAME GEAR_SETS GEAR_ZW GEAR_BREEDS gearZwDef gearSetDef。ES2017;不用 ?. ??。
 // @DORMANT ldui:資料本身無副作用;戰鬥數值與介面只在旗標 ldui 開啟時生效(見 ld_equip.js gearLive)。
 var GEAR_KEY = 'lorddomain.gear.v1';
 var GEAR_CFG = {
@@ -74,4 +74,72 @@ function gearTraitDef(id) {
   for (i = 0; i < GEAR_TRAITS.length; i++) if (GEAR_TRAITS[i].id === id) return GEAR_TRAITS[i];
   return null;
 }
-if (typeof module !== 'undefined' && module.exports) module.exports = { GEAR_CFG: GEAR_CFG, GEAR_TRAITS: GEAR_TRAITS };
+// ===== 賽季末商店(設計_賽季末商店_規格.md 第 2.4~2.9、6.1 節;SS1 只加資料,不接行為)=====
+// 旗標:false = 新機率 / 屬性浮動 / 專武 / 套裝全部不生效(現行行為不變)。SS4 接線後與 SSHOP_ON 一起開。數值全 PLACEHOLDER。
+var GEAR_RARE_ON = false;
+GEAR_CFG.roll = [0.85, 1.20];          // 自鍛 / 尋訪 / 券:每條屬性 × 隨機浮動(取到 0.1)
+GEAR_CFG.zwMul = 1.08;                 // 專武 / 名駒:每條屬性 × 固定倍率
+GEAR_CFG.zwExtraTr = 0.05;             // 名駒:第 2 條特性機率
+GEAR_CFG.forge.qRoll = { 2: [[1, 0.92], [2, 0.08]], 3: [[1, 0.70], [2, 0.25], [3, 0.05]] };   // 精鍛(紫配方)/ 神鍛(金配方)成功後再擲品質:[[實際品質, 機率]…]
+GEAR_CFG.enh.brkZw = [0, 0, 0, 0, 0, 0, 0.04, 0.06, 0.08, 0.10, 0.12];   // 專武(武器 / 防具)強化失敗爆裝率(+6 起)
+// 寶具分類:主屬性 → 分類名(策略 = 謀略;「策略」是分類,物品用具體名稱)
+var GEAR_CAT_NAME = { mag: '策略', heal: '治療', res: '抵抗', sres: '謀防' };
+// 套裝(只有專武):mem = [武器, 防具, 寶具] 的 GEAR_ZW id;b2 = 2 件加成 {k 屬性, v};b3 = 3 件加成 {tr 特性 id(全強度), k, v(約 2 件的一半)};grp = 輪替組;tag = CSS 色票名(--set-<tag>)
+var GEAR_SETS = [
+  { id: 'huben', n: '虎賁', grp: 'A', mem: ['huben_w', 'huben_a', 'huben_r'], b2: { k: 'def', v: 5 }, b3: { tr: 'lowhp', k: 'def', v: 2.5 }, tag: 'huben', d: '前排坦、盾兵、防禦流' },
+  { id: 'qinglong', n: '青龍', grp: 'B', mem: ['qinglong_w', 'qinglong_a', 'qinglong_r'], b2: { k: 'atk', v: 3 }, b3: { tr: 'early2', k: 'atk', v: 1.5 }, tag: 'qinglong', d: '物理突擊、先手爆發、騎兵' },
+  { id: 'baima', n: '白馬', grp: 'B', mem: ['baima_w', 'baima_a', 'baima_r'], b2: { k: 'crit', v: 5 }, b3: { tr: 'lowkill', k: 'crit', v: 2.5 }, tag: 'baima', d: '暴擊收割、弓騎' },
+  { id: 'youxia', n: '遊俠', grp: 'A', mem: ['youxia_w', 'youxia_a', 'youxia_r'], b2: { k: 'cdmg', v: 16 }, b3: { tr: 'leech', k: 'cdmg', v: 8 }, tag: 'youxia', d: '普攻流、單挑續航' },
+  { id: 'xinglin', n: '杏林', grp: 'A', mem: ['xinglin_w', 'xinglin_a', 'xinglin_r'], b2: { k: 'heal', v: 5 }, b3: { tr: 'deft', k: 'heal', v: 2.5 }, tag: 'xinglin', d: '補師、護盾輔助' },
+  { id: 'guigu', n: '鬼谷', grp: 'B', mem: ['guigu_w', 'guigu_a', 'guigu_r'], b2: { k: 'mag', v: 2.5 }, b3: { tr: 'sresign', k: 'mag', v: 1.3 }, tag: 'guigu', d: '謀略輸出' },
+  { id: 'xiyuan', n: '西園', grp: 'B', mem: ['xiyuan_w', 'xiyuan_a', 'xiyuan_r'], b2: { k: 'sres', v: 5 }, b3: { tr: 'antistrat', k: 'sres', v: 2.5 }, tag: 'xiyuan', d: '抗謀略前排、謀士坦' },
+  { id: 'huangtian', n: '黃天', grp: 'A', mem: ['huangtian_w', 'huangtian_a', 'huangtian_r'], b2: { k: 'hp', v: 3 }, b3: { tr: 'regen', k: 'hp', v: 1.5 }, tag: 'huangtian', d: '持續傷害(燒、毒)、耐久消耗' }
+];
+// 專武(8 套 × 3 件)+ 名駒 2 匹:一律金(q 3);fz_<id> = 該件殘片。slot / type 同 GEAR_CFG;main = 主屬性;sub = 2 條副屬性;tr = 固定特性 id;set = 套 id(名駒 null);xtr = 1 表示另有 GEAR_CFG.zwExtraTr 機率的第 2 條特性(名駒);ico = 圖示鍵(沒圖用分類底圖 + 名稱前 2 字占位)
+var GEAR_ZW = [
+  { id: 'huben_w', n: '虎賁刀', set: 'huben', slot: 'wpn', type: 'wu', main: 'atk', sub: ['crit', 'cdmg'], tr: 'leech', ico: 'zw_huben_w' },
+  { id: 'huben_a', n: '明光鎧', set: 'huben', slot: 'arm', type: 'heavy', main: 'def', sub: ['sres', 'hp'], tr: 'laststand', ico: 'zw_huben_a' },
+  { id: 'huben_r', n: '鎮軍虎符', set: 'huben', slot: 'relic', type: 'relic', main: 'res', sub: ['sres', 'heal'], tr: 'calm', ico: 'zw_huben_r' },
+  { id: 'qinglong_w', n: '青龍偃月刀', set: 'qinglong', slot: 'wpn', type: 'wu', main: 'atk', sub: ['crit', 'cdmg'], tr: 'defign', ico: 'zw_qinglong_w' },
+  { id: 'qinglong_a', n: '青龍鎧', set: 'qinglong', slot: 'arm', type: 'heavy', main: 'def', sub: ['sres', 'hp'], tr: 'critres', ico: 'zw_qinglong_a' },
+  { id: 'qinglong_r', n: '八卦鏡', set: 'qinglong', slot: 'relic', type: 'relic', main: 'sres', sub: ['res', 'mag'], tr: 'regen', ico: 'zw_qinglong_r' },
+  { id: 'baima_w', n: '白馬銀槍', set: 'baima', slot: 'wpn', type: 'wu', main: 'atk', sub: ['crit', 'cdmg'], tr: 'early2', ico: 'zw_baima_w' },
+  { id: 'baima_a', n: '白馬戰袍', set: 'baima', slot: 'arm', type: 'robe', main: 'sres', sub: ['def', 'hp'], tr: 'antistrat', ico: 'zw_baima_a' },
+  { id: 'baima_r', n: '玉龍珮', set: 'baima', slot: 'relic', type: 'relic', main: 'res', sub: ['mag', 'sres'], tr: 'calm', ico: 'zw_baima_r' },
+  { id: 'youxia_w', n: '古錠刀', set: 'youxia', slot: 'wpn', type: 'wu', main: 'atk', sub: ['crit', 'cdmg'], tr: 'lowkill', ico: 'zw_youxia_w' },
+  { id: 'youxia_a', n: '遊俠衫', set: 'youxia', slot: 'arm', type: 'robe', main: 'sres', sub: ['def', 'hp'], tr: 'critres', ico: 'zw_youxia_a' },
+  { id: 'youxia_r', n: '續命錦囊', set: 'youxia', slot: 'relic', type: 'relic', main: 'heal', sub: ['res', 'sres'], tr: 'regen', ico: 'zw_youxia_r' },
+  { id: 'xinglin_w', n: '杏林羽扇', set: 'xinglin', slot: 'wpn', type: 'wen', main: 'mag', sub: ['crit', 'cdmg'], tr: 'sresign', ico: 'zw_xinglin_w' },
+  { id: 'xinglin_a', n: '鶴氅', set: 'xinglin', slot: 'arm', type: 'robe', main: 'sres', sub: ['def', 'hp'], tr: 'antistrat', ico: 'zw_xinglin_a' },
+  { id: 'xinglin_r', n: '華佗青囊', set: 'xinglin', slot: 'relic', type: 'relic', main: 'heal', sub: ['mag', 'res'], tr: 'regen', ico: 'zw_xinglin_r' },
+  { id: 'guigu_w', n: '七星刀', set: 'guigu', slot: 'wpn', type: 'wen', main: 'mag', sub: ['crit', 'cdmg'], tr: 'early2', ico: 'zw_guigu_w' },
+  { id: 'guigu_a', n: '鬼谷玄袍', set: 'guigu', slot: 'arm', type: 'robe', main: 'sres', sub: ['def', 'hp'], tr: 'critres', ico: 'zw_guigu_a' },
+  { id: 'guigu_r', n: '遁甲天書', set: 'guigu', slot: 'relic', type: 'relic', main: 'mag', sub: ['sres', 'res'], tr: 'calm', ico: 'zw_guigu_r' },
+  { id: 'xiyuan_w', n: '西園令扇', set: 'xiyuan', slot: 'wpn', type: 'wen', main: 'mag', sub: ['crit', 'cdmg'], tr: 'sresign', ico: 'zw_xiyuan_w' },
+  { id: 'xiyuan_a', n: '西園校尉鎧', set: 'xiyuan', slot: 'arm', type: 'heavy', main: 'def', sub: ['sres', 'hp'], tr: 'thorns', ico: 'zw_xiyuan_a' },
+  { id: 'xiyuan_r', n: '照妖鏡', set: 'xiyuan', slot: 'relic', type: 'relic', main: 'sres', sub: ['res', 'heal'], tr: 'calm', ico: 'zw_xiyuan_r' },
+  { id: 'huangtian_w', n: '黃天九節杖', set: 'huangtian', slot: 'wpn', type: 'wen', main: 'mag', sub: ['crit', 'cdmg'], tr: 'sresign', ico: 'zw_huangtian_w' },
+  { id: 'huangtian_a', n: '黃天力士甲', set: 'huangtian', slot: 'arm', type: 'heavy', main: 'def', sub: ['sres', 'hp'], tr: 'lowhp', ico: 'zw_huangtian_a' },
+  { id: 'huangtian_r', n: '太平要術', set: 'huangtian', slot: 'relic', type: 'relic', main: 'mag', sub: ['heal', 'res'], tr: 'dotout', ico: 'zw_huangtian_r' },
+  // 名駒(殘片 4 片合成;本季限定,奇數期絕影、偶數期的盧)。副屬性 PLACEHOLDER:絕影走突擊、的盧走穩陣(待決)
+  { id: 'jueying', n: '絕影', set: null, slot: 'horse', type: 'horse', main: 'spd', sub: ['atk', 'hp'], tr: 'r1spd', xtr: 1, ico: 'zw_jueying' },
+  { id: 'dilu', n: '的盧', set: null, slot: 'horse', type: 'horse', main: 'spd', sub: ['def', 'hp'], tr: 'breakfree', xtr: 1, ico: 'zw_dilu' }
+];
+// 馬品種:src 'hunt' = 尋訪金馬(浮動、無特性);'ticket' = 名駒券特殊馬(×zwMul 固定、必帶 1 條,tr = 候選特性);副屬性固定(品種的意思)
+var GEAR_BREEDS = [
+  { id: 'xiliang', n: '西涼馬', q: 3, src: 'hunt', sub: ['atk', 'hp'], tr: [], d: '突擊:騎兵、物理輸出' },
+  { id: 'wuhuan', n: '烏桓馬', q: 3, src: 'hunt', sub: ['def', 'hp'], tr: [], d: '穩陣:坦、輔助' },
+  { id: 'hanxue', n: '汗血馬', q: 3, src: 'ticket', sub: ['atk', 'hp'], tr: ['r1spd', 'vsslow'], d: '搶先手、打慢的' },
+  { id: 'wusun', n: '烏孫馬', q: 3, src: 'ticket', sub: ['def', 'hp'], tr: ['fathalf', 'breakfree'], d: '長期戰、防控' }
+];
+function gearZwDef(id) {
+  var i;
+  for (i = 0; i < GEAR_ZW.length; i++) if (GEAR_ZW[i].id === id) return GEAR_ZW[i];
+  return null;
+}
+function gearSetDef(id) {
+  var i;
+  for (i = 0; i < GEAR_SETS.length; i++) if (GEAR_SETS[i].id === id) return GEAR_SETS[i];
+  return null;
+}
+if (typeof module !== 'undefined' && module.exports) module.exports = { GEAR_CFG: GEAR_CFG, GEAR_TRAITS: GEAR_TRAITS, GEAR_SETS: GEAR_SETS, GEAR_ZW: GEAR_ZW, GEAR_BREEDS: GEAR_BREEDS, GEAR_CAT_NAME: GEAR_CAT_NAME };

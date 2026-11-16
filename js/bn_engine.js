@@ -7,7 +7,7 @@
 //   bnInit(rec) → state        rec = {v:BN_REC_VER, seed, teamA:[spec], teamB:[spec], opts:{events:true, scene:''}}(spec 由 bn_units.js 產生;舊紀錄的 opts.autoUlt 不再使用)
 // 戰報版本 BN_REC_VER:2 = 普攻改「射程內隨機」(2026-11-13)。rec.v < BN_REC_VER 的舊戰報結果可能已不同,不可重播(只能看文字結果)。
 // 3 = 戰法發動率重平衡(2026-11-15):發動率查表 / 取消冷卻 / 保底 / 每場上限 / 同次 2 招 / pf / K 0.55 / 疲兵 / healK。
-var BN_REC_VER = 3;
+var BN_REC_VER = 4;   // 4 = 適性新制(乙案)+ 克制 ×1.075 / ×0.925 + 謀略型 dt(2026-11-16);舊戰報 / 舊碼一律拒絕
 //   bnStep(state) → events[]   推進一個「行動」(或回合結束)
 //   bnRunToEnd(state) → state          跑到結束;bnRun(rec) = bnInit + bnRunToEnd
 //   state.over / state.result = {winner:'A'|'B'|'draw', reason:'wipe'|'limit', rounds, hp:{A,B}}
@@ -125,7 +125,7 @@ function bnLgVal(S, u, k, o) {
     if (e.k !== k) continue;
     if (k === 'lowHpAtk' && !(u.hp / u.maxHp < e.thr)) continue;
     if (k === 'vsLowHp' && !(o && o.hp / o.maxHp < e.thr)) continue;
-    if ((k === 'vsTroop' || k === 'takenVsTroop') && !(o && o.troop === e.tr)) continue;
+    if ((k === 'vsTroop' || k === 'takenVsTroop') && !(o && bnTroopIs(o, e.tr))) continue;
     if (k === 'vsLord' && !(o && bnLgLord(o.fig))) continue;
     if (k === 'vsControlled' && !(o && BN_LG_CC.some(function (c) { return !!o.st[c]; }))) continue;
     if (!bnLgOn(S, u, e)) continue;
@@ -254,7 +254,7 @@ function bnPickEnemy(S, a, mode, vsKind, opt) {
   tau = list.filter(function (x) { return x.st.taunt; });
   if (tau.length && !a.st.confuse) list = tau;
   if (mode === 'troop') {
-    list2 = list.filter(function (x) { return opt && x.troop === opt.troop; });
+    list2 = list.filter(function (x) { return opt && bnTroopIs(x, opt.troop); });
     if (!list2.length) return bnPickEnemy(S, a, 'one', vsKind, opt);
     list = list2;
   } else if (mode === 'prey') {
@@ -456,8 +456,8 @@ function bnHit(S, a, t, h) {
     if (ty === 'strat') base = bnMag(S, a) * (mo.magMul || 1); else base = bnAtk(S, a);
     defv = h.ignoreDef ? 0 : (ty === 'strat' ? bnSres(S, t) : bnDef(S, t));
     if (ty === 'strat' ? mo.sresIgn : mo.defIgn) defv *= 1 - (ty === 'strat' ? mo.sresIgn : mo.defIgn);   // 裝備特性「破甲 / 文心」:無視目標部分防禦 / 謀防(js/ld_equip_data.js 第二批)
-    h.pv = 0;   // 兵種克制旗標(事件 dmg.pv:1 克制 / −1 被克;僅物理傷害)
-    if (ty === 'phys' && BN_DATA.prey[a.troop] && BN_DATA.prey[a.troop][t.troop]) { prey = BN_DATA.prey[a.troop][t.troop]; h.pv = prey > 1 ? 1 : (prey < 1 ? -1 : 0); }
+    h.pv = 0;   // 兵種克制旗標(事件 dmg.pv:1 克制 / −1 被克;物理與謀略傷害,2026-11-16 起謀略也吃克制)
+    if ((ty === 'phys' || ty === 'strat') && BN_DATA.prey[a.troop] && BN_DATA.prey[a.troop][t.troop]) { prey = BN_DATA.prey[a.troop][t.troop]; h.pv = prey > 1 ? 1 : (prey < 1 ? -1 : 0); }
     // 輸出端加成
     if (S.round === 1 && mo.r1Dmg) outM *= 1 + mo.r1Dmg;
     if (mo.lowHpDmg && t.hp / t.maxHp < mo.lowHpDmg[0]) outM *= 1 + mo.lowHpDmg[1];   // 裝備特性「斬將」
@@ -566,7 +566,7 @@ function bnApplyDmg(S, a, t, dmg, h, crit, viaOf) {
   } else { S.stats.dmgTaken[t.side] += hpLost; }
   t.dmgRound += hpLost;
   t.dmgTakenTotal = (t.dmgTakenTotal || 0) + hpLost;
-  bnEv(S, 'dmg', { src: a ? a.id : -1, tgt: t.id, v: hpLost, abs: absorbed, ty: h.dot ? 'dot' : h.ty, crit: crit ? 1 : 0, hp: t.hp, via: viaOf >= 0 ? viaOf : undefined, dot: h.dot || undefined, ctr: h.counter ? 1 : undefined, basic: h.basic ? 1 : undefined, rx: h.rx ? h.rx.id : undefined, pv: (h.pv && h.ty === 'phys' && !h.dot) ? h.pv : undefined });
+  bnEv(S, 'dmg', { src: a ? a.id : -1, tgt: t.id, v: hpLost, abs: absorbed, ty: h.dot ? 'dot' : h.ty, crit: crit ? 1 : 0, hp: t.hp, via: viaOf >= 0 ? viaOf : undefined, dot: h.dot || undefined, ctr: h.counter ? 1 : undefined, basic: h.basic ? 1 : undefined, rx: h.rx ? h.rx.id : undefined, pv: (h.pv && (h.ty === 'phys' || h.ty === 'strat') && !h.dot) ? h.pv : undefined });
   if (S.chain) S.chain.hits++;
   var killed = false;
   if (t.hp <= 0) {
@@ -632,7 +632,7 @@ function bnFinish(S, reason) {
 // ───────── 建立戰鬥 ─────────
 function bnMakeUnit(S, side, spec, idx) {
   var st = spec.stats, u = {
-    id: S.units.length, side: side, idx: idx, name: spec.name, fig: spec.fig || '', troop: spec.troop, row: spec.row, col: spec.col, spec: spec, fac: spec.fac,
+    id: S.units.length, side: side, idx: idx, name: spec.name, fig: spec.fig || '', troop: spec.troop, dt: spec.dt || '', row: spec.row, col: spec.col, spec: spec, fac: spec.fac,
     maxHp: Math.round(st.hp), hp: (spec.hpR > 0 && spec.hpR < 1) ? Math.max(1, Math.round(st.hp * spec.hpR)) : Math.round(st.hp), alive: true, el: spec.el || '',
     base: { atk: st.atk, mag: st.mag, def: st.def, sres: st.sres, spd: st.spd, heal: st.heal, sh: st.sh, crit: st.crit, res: st.res },
     mods: JSON.parse(JSON.stringify(spec.mods || {})), st: {}, sc: {}, acted: false, immunes: [], immuneFirstUsed: {},
@@ -684,7 +684,7 @@ function bnInit(rec) {
       x.base.atk *= g; x.base.mag *= g;
     }
   });
-  bnEv(S, 'init', { units: S.units.map(function (x) { return { id: x.id, side: x.side, name: x.name, fig: x.fig, troop: x.troop, row: x.row, col: x.col, hp: x.hp, mx: x.maxHp }; }) });
+  bnEv(S, 'init', { units: S.units.map(function (x) { return { id: x.id, side: x.side, name: x.name, fig: x.fig, troop: x.troop, dt: x.dt || undefined, row: x.row, col: x.col, hp: x.hp, mx: x.maxHp }; }) });
   bnSetupBattle(S);
   bnCheckEnd(S);
   return S;
@@ -958,7 +958,7 @@ function bnTickDots(S, u) {
 
 // 普攻:回傳 'idle' / 目標單位(命中) / null
 function bnNormal(S, u) {
-  var t, rk = bnReach(S, u), isMage = u.troop === '謀', h, res, en;
+  var t, rk = bnReach(S, u), isMage = u.dt === 'strat', h, res, en;
   if (u.st.confuse) {
     var cf = u.st.confuse, want = cf.ft && u.fig ? cf.ft[u.fig] : '';   // 連環計:被擾亂者優先攻擊指定對象
     en = S.units.filter(function (x) { return x.alive && x !== u; });
@@ -996,7 +996,7 @@ function bnRateOf(S, u, inst) {
   if (bnPityOf(inst)) return 1;           // 保底(在所有加減之後、不受 rate_down 影響)
   if (r === undefined) r = cat === 'ult' ? BN_DATA.rate.ult : BN_DATA.rate[cat][d.power || 'M'];
   if (d.prep) r += BN_DATA.rate.prepBonus;
-  if (u.troop === '謀' && cat === 'active') r += BN_DATA.mageRateBonus;
+  if (u.dt === 'strat' && cat === 'active') r += BN_DATA.mageRateBonus;
   perm = (u.mods.rateBonus || 0) + (inst.homeRate || 0);
   if (u.kit2) perm = Math.min(RC.permCap, perm);
   r += perm + (inst.vsRate || 0);

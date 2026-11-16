@@ -57,9 +57,17 @@ var SHELL_DOCK_LD = [
   { id: 'report', label: '戰報', art: 'nav_log', act: 'log' },
   { id: 'set', label: '設定', art: 'nav_set', act: 'settings' }
 ];
+// 地圖主畫面(旗標 wmap,js/wmap_ui.js):底部導覽重排;act 'wmap:*' 由 wmapUiAct 處理(主城 / 出城 依狀態換字與圖示、更多 = 展開第二排)。五格,與 SHELL_DOCK_LD 同寬,橫版 / 直版版面不變。
+var SHELL_DOCK_WM = [
+  { id: 'heroes', label: '武將', art: 'nav_cards', act: 'cards:R' },
+  { id: 'skills', label: '戰法', art: 'ic_counter', act: 'wmap:skills' },
+  { id: 'team', label: '部隊', art: 'bld_ying', act: 'wmap:team' },
+  { id: 'city', label: '主城', art: 'bld_fu', act: 'wmap:city' },
+  { id: 'more', label: '更多', art: 'ic_sort', act: 'wmap:more' }
+];
 function shellOn() { return typeof featureOn === 'function' && featureOn('shell'); }   // @DORMANT shell
 function shellLdOn() { return shellOn() && typeof featureOn === 'function' && featureOn('ldui') && typeof ldHomeInit === 'function' && typeof ldArt === 'function'; }   // @DORMANT ldui
-function shellDockList() { return SHELL.ld ? SHELL_DOCK_LD : SHELL_DOCK; }
+function shellDockList() { return SHELL.ld ? ((typeof wmapUiOn === 'function' && wmapUiOn()) ? SHELL_DOCK_WM : SHELL_DOCK_LD) : SHELL_DOCK; }   // @DORMANT wmap
 // 純函式:版面數值(測試用)。vw > vh 為橫向,與 CSS orientation 一致。直立與橫向的底部 dock 皆貼底。
 function shellLayout(vw, vh) {
   var land = vw > vh;
@@ -262,9 +270,10 @@ function shellStatRender(lv, n, pw) {
   var txt = { troops: String(n || 0), power: (pw || 0).toLocaleString(), faction: '--', fame: '--', land: '--', rsv: '--', res: '--' }, k, key, t;
   try {   // 名聲 / 預備兵 / 糧:模組存在才顯示(fame.js rsv.js res4.js);領地讀地圖
     if (typeof fameGet === 'function') txt.fame = fameGet().toLocaleString();
+    if (typeof wmapPnlPowerText === 'function' && wmapPnlPowerText()) txt.faction = wmapPnlPowerText();   // W6:勢力 = wmapSettlePower
     if (typeof rsvGet === 'function') { if (typeof rsvSettle === 'function') rsvSettle(Date.now()); txt.rsv = rsvGet().n.toLocaleString() + '/' + rsvCap().toLocaleString(); }
     if (typeof res4All === 'function') { t = res4All(); txt.res = shellFmtMoney(t.grain); }
-    if (typeof wdTerritoryOf === 'function' && typeof WDUI !== 'undefined' && WDUI && WDUI.W) txt.land = String(wdTerritoryOf(WDUI.W).total);
+    if (typeof wdTerritoryOf === 'function' && typeof WDUI !== 'undefined' && WDUI && WDUI.W) txt.land = String(wdTerritoryOf(WDUI.W).total + (typeof wmapSettleCount === 'function' ? wmapSettleCount(WDUI.W) : 0));
   } catch (e) { /* 顯示用,失敗保持 -- */ }
   key = JSON.stringify(txt);
   if (!SHELL.stV || SHELL.sv === key) return;
@@ -348,6 +357,7 @@ function shellLdRoute(act) {
 function shellAct(act) {
   var a, t, IUo, r;
   if (!act) return false;
+  if (act.indexOf('wmap:') === 0) return typeof wmapUiAct === 'function' ? wmapUiAct(act.slice(5)) : false;   // @DORMANT wmap
   r = shellLdRoute(act);
   if (r !== null) return r;
   if (act.indexOf('cards:') === 0) {
@@ -360,7 +370,7 @@ function shellAct(act) {
     case 'prac': shellOpenBattle(function () { if (typeof bnUiEntryDo === 'function') bnUiEntryDo('prac'); }); return true;
     case 'gift': if (typeof IU === 'object' && IU) IU.sub = 'item'; return shellAct('cards:R');   // 新手禮包:卡包的道具頁籤
     case 'tour': shellOpenBattle(function () { if (typeof bnTourOpen === 'function') bnTourOpen(); }); return true;
-    case 'wm': if (SHELL.ld && typeof ldNavPush === 'function' && typeof featureOn === 'function' && featureOn('world')) return ldNavPush('map'); shellOpenBattle(function () { if (typeof featureOn === 'function' && featureOn('world') && typeof wdOpen === 'function') wdOpen(); else if (typeof wmOpen === 'function') wmOpen(); }); return true;   // @DORMANT world(旗標開 → 新地圖 wdOpen;關 → 舊外勤 wmOpen)
+    case 'wm': if (typeof wmapUiOn === 'function' && wmapUiOn()) return wmapUiAct('city-out'); if (SHELL.ld && typeof ldNavPush === 'function' && typeof featureOn === 'function' && featureOn('world')) return ldNavPush('map'); shellOpenBattle(function () { if (typeof featureOn === 'function' && featureOn('world') && typeof wdOpen === 'function') wdOpen(); else if (typeof wmOpen === 'function') wmOpen(); }); return true;   // @DORMANT world(旗標開 → 新地圖 wdOpen;關 → 舊外勤 wmOpen)
     case 'ldevent': return typeof ldNavPush === 'function' ? ldNavPush('event') : false;   // 新首頁底列「活動」
     case 'log': shellOpenBattle(function () { if (typeof bnLogOpen === 'function') bnLogOpen(); }); return true;
     case 'share': shellOpenBattle(function () { if (typeof bnsOpen === 'function') bnsOpen('share'); }); return true;
@@ -544,6 +554,7 @@ function shellInit() {
   shellSyncNav();
   if (SHELL.ld && typeof ldHomeLayout === 'function') ldHomeLayout();
   shellRefresh();
+  if (typeof wmapUiInit === 'function') wmapUiInit();   // @DORMANT wmap:旗標開 → 地圖主畫面(js/wmap_ui.js);旗標關 = 直接返回
   if (typeof setInterval === 'function') SHELL.ttl = setInterval(function () { shellRefresh(); shellKick(); }, SHELL_TICK);
   shellKick();
   return true;

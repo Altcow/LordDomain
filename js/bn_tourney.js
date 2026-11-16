@@ -43,7 +43,7 @@ function bnTourPower(specs) { var p = 0; (specs || []).forEach(function (s) { p 
 // 兵種傾向:人數最多的兵種(平手依字母序取先者)
 function bnTourArch(specs) {
   var c = {}, best = '', n = -1;
-  (specs || []).forEach(function (s) { c[s.troop] = (c[s.troop] || 0) + 1; });
+  (specs || []).forEach(function (s) { var k = s.dt === 'strat' ? '謀' : s.troop; c[k] = (c[k] || 0) + 1; });   // 謀略型算『謀』傾向(2026-11-16 謀不再是兵種)
   Object.keys(c).sort().forEach(function (k) { if (c[k] > n) { n = c[k]; best = k; } });
   return best;
 }

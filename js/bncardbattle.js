@@ -25,7 +25,7 @@ var BNCB_SPD_DEF = 2;   // 發動率重平衡(2026-11-15):每場變長(平均 6~
 
 // ───────── 純資料:事件 → 步 ─────────
 // 回 {mySide, enemySide, mine:[單位], enemy:[單位], byId, open:{hp,dead}, steps, win, reason, reasonTxt, maxRound, endTxt, seed}
-// 單位 = {id, side, name, fig, fac, sex, main, traits, gr, troop, row, pos, boss, star, mx, hp0};mine / enemy 依 row 0→2(前鋒、中衛、主將)
+// 單位 = {id, side, name, fig, fac, sex, main, traits, gr, troop, dt(謀略型 'strat' 或 ''), row, pos, boss, star, mx, hp0};mine / enemy 依 row 0→2(前鋒、中衛、主將)
 var BNCB_POS = ['前鋒', '中衛', '主將'];
 function bncbPassLabel(name) { return Array.from(String(name || '')).slice(0, 2).join(''); }
 function bncbSteps(rec, mySide) {
@@ -37,7 +37,7 @@ function bncbSteps(rec, mySide) {
   init = S.events.filter(function (x) { return x.t === 'init'; })[0];
   init.units.forEach(function (x) {
     var su = S.units.filter(function (y) { return y.id === x.id; })[0], sp = su.spec, u;
-    u = { id: x.id, side: x.side, name: sp.name, fig: sp.fig || '', fac: sp.fac, sex: sp.sex || '', main: sp.main || '', traits: (sp.traits || []).slice(), gr: sp.gr | 0, troop: x.troop, row: x.row, pos: BNCB_POS[x.row] || '', boss: x.row === 2,
+    u = { id: x.id, side: x.side, name: sp.name, fig: sp.fig || '', fac: sp.fac, sex: sp.sex || '', main: sp.main || '', traits: (sp.traits || []).slice(), gr: sp.gr | 0, troop: x.troop, dt: x.dt || '', row: x.row, pos: BNCB_POS[x.row] || '', boss: x.row === 2,
       star: x.side === 'A' ? (stars[su.idx] | 0) : 0, mx: Math.round(x.mx), hp0: Math.max(0, Math.round(x.hp)) };
     sides[x.side].push(u); byId[u.id] = u; hp0[u.id] = x.hp; hp[u.id] = x.hp; dead[u.id] = false; rows[u.id] = x.row; rows0[u.id] = x.row;
   });
@@ -105,7 +105,7 @@ function bncbSteps(rec, mySide) {
   steps.forEach(function (s) { s.lines.forEach(function (ln) { if (ln.c === 'end' && ln.txt.indexOf('══ 戰鬥結束') === 0) endTxt = ln.txt.replace(/^══ /, ''); }); });
   return {
     mySide: me, enemySide: bnOpp(me), mine: sides[me], enemy: sides[bnOpp(me)], byId: byId, open: { hp: hp0, dead: {}, rows: rows0 }, steps: steps,
-    win: res.winner, reason: res.reason, reasonTxt: BNLOG_WHY[res.reason] || String(res.reason || ''), maxRound: res.rounds | 0, endTxt: endTxt || '戰鬥結束', seed: rec.seed >>> 0, scene: (rec.opts && rec.opts.scene) || 'field'
+    win: res.winner, reason: res.reason, reasonTxt: BNLOG_WHY[res.reason] || String(res.reason || ''), maxRound: res.rounds | 0, endTxt: endTxt || '戰鬥結束', seed: rec.seed >>> 0, scene: (rec.opts && rec.opts.scene) || 'field', kind: (rec.meta && rec.meta.kind) || ''
   };
 }
 
@@ -245,6 +245,7 @@ function bncbToggleLog() {
 function bncbStop() {
   BNCB.run++;
   BNST.tok++;
+  if (typeof bnstScrClear === 'function') bnstScrClear();   // 中斷(跳過 / 重播 / 離開):演出幕立刻收掉
   if (BNCB.timer) bnstCancel(BNCB.timer);
   BNCB.timer = null;
 }

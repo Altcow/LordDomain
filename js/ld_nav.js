@@ -432,11 +432,6 @@ function ldNavRegLegacy() {
     open: function () { return ldNavBnOpen(function () { if (typeof bnsOpen === 'function') bnsOpen('share'); }); },
     close: function () { if (typeof bnsClose === 'function') bnsClose(); },
     isOpen: function () { return typeof bnsIsOpen === 'function' && bnsIsOpen(); } } });
-  // 副本(章節 / 關卡選擇、布陣、戰鬥、結算都在戰鬥層的非入口階段):戰鬥層回到入口階段(或關閉)= 這頁結束
-  ldNavRegister({ id: 'stage', title: '副本', legacy: { bn: true,
-    open: function () { return ldNavBnOpen(function () { if (typeof bnUiToMap === 'function') bnUiToMap(); }); },
-    close: function () { if (typeof bnUiLeave === 'function') bnUiLeave(false); },
-    isOpen: function () { return typeof bnu !== 'undefined' && !!bnu && !!bnu.open && !bnu.leaving && bnu.phase !== 'entry'; } } });
   ldNavRegister({ id: 'map', title: '地圖', legacy: { bn: true,
     open: function (c) {
       return ldNavBnOpen(function () {

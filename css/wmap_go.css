@@ -1,0 +1,144 @@
+/* css/wmap_go.css — M1 W3 派兵介面(js/wmap_go_ui.js):地塊浮動資訊卡、軍隊小選單、改目標提示列、滿版出征頁。只有旗標 wmap 開(#wmapRoot 掛載)時才有元素吃到這些規則;不改 css/wmap.css 既有規則。 */
+#wmapRoot .wmapgo-card, #wmapRoot .wmapgo-menu, #wmapRoot .wmapgo-hint { position: absolute; z-index: 7; box-sizing: border-box; color: #fff1c8; border: 1px solid rgba(255, 233, 176, .55); background: rgba(50, 34, 16, .94); box-shadow: 0 3px 10px rgba(0, 0, 0, .4); font: 13px/1.4 system-ui, "Microsoft JhengHei", sans-serif; user-select: none; -webkit-user-select: none; }
+#wmapRoot .wmapgo-card[hidden], #wmapRoot .wmapgo-menu[hidden], #wmapRoot .wmapgo-hint[hidden] { display: none; }
+#wmapRoot .wmapgo-card { left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 62px); transform: translateX(-50%); width: max-content; max-width: calc(100% - 150px); padding: 8px 12px; border-radius: 12px; }
+body.wm-on.shell-land #shellRoot #wmapRoot .wmapgo-card { bottom: calc(env(safe-area-inset-bottom, 0px) + 122px); }
+#wmapRoot .wgc-t { font-weight: 700; font-size: 14px; white-space: nowrap; }
+#wmapRoot .wgc-s { font-size: 12px; color: #e8d6a0; margin-top: 2px; white-space: normal; }
+#wmapRoot .wgc-r { display: flex; gap: 8px; margin-top: 6px; justify-content: flex-end; }
+#wmapRoot .wgc-b, #wmapRoot .wgm-b { min-height: 34px; padding: 4px 14px; border-radius: 9px; border: 1px solid rgba(255, 233, 176, .55); background: rgba(110, 72, 30, .95); color: #fff1c8; font: 700 13px/1 system-ui, "Microsoft JhengHei", sans-serif; cursor: pointer; }
+#wmapRoot .wgc-b.pri { background: #b5361f; border-color: #ffd98a; }
+#wmapRoot .wgc-b:active, #wmapRoot .wgm-b:active { filter: brightness(1.2); }
+#wmapRoot .wmapgo-menu { width: 196px; padding: 8px 10px; border-radius: 12px; }
+#wmapRoot .wgm-t { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#wmapRoot .wgm-s { font-size: 12px; color: #e8d6a0; margin: 2px 0 6px; }
+#wmapRoot .wgm-r { display: flex; flex-wrap: wrap; gap: 6px; }
+#wmapRoot .wgm-b { flex: 1 1 56px; padding: 4px 6px; }
+#wmapRoot .wgm-b.warn { background: #7a2a1a; }
+#wmapRoot .wgm-b.x { flex: 0 0 34px; padding: 4px 0; }
+#wmapRoot .wgm-b:disabled { opacity: .45; cursor: default; }
+#wmapRoot .wgm-b[data-cd]:not([data-cd=""])::after { content: " " attr(data-cd) "s"; font-weight: 400; font-size: 11px; }
+#wmapRoot .wmapgo-hint { left: 50%; top: calc(env(safe-area-inset-top, 0px) + 10px); transform: translateX(-50%); max-width: calc(100% - 140px); padding: 8px 14px; border-radius: 18px; background: #b5361f; border-color: #ffd98a; font-weight: 700; cursor: pointer; }
+/* 滿版出征頁(ldNav 頁 wmgo) */
+.ldp-body.wgp { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; overflow-y: auto; color: #fff1c8; font-family: system-ui, "Microsoft JhengHei", sans-serif; }
+.wgp .wgp-head { padding: 10px 12px; border-radius: 12px; background: rgba(50, 34, 16, .88); border: 1px solid rgba(255, 233, 176, .45); }
+.wgp .wgp-title { font-weight: 700; font-size: 18px; }
+.wgp .wgp-sub { font-size: 13px; color: #e8d6a0; margin-top: 2px; }
+.wgp .wgp-list { display: flex; flex-direction: column; gap: 8px; }
+.wgp .wgp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; text-align: left; padding: 10px 12px; border-radius: 12px; border: 2px solid rgba(255, 233, 176, .3); background: rgba(50, 34, 16, .8); color: #fff1c8; font-size: 14px; cursor: pointer; min-height: 48px; }
+.wgp .wgp-row.sel { border-color: #ffd98a; background: rgba(120, 70, 24, .92); }
+.wgp .wgp-row.off { opacity: .55; cursor: default; }
+.wgp .wgp-n { font-size: 16px; }
+.wgp .wgp-sp { flex: 1 1 0; }
+.wgp .wgp-od { padding: 1px 8px; border-radius: 9px; font-weight: 700; background: #666; }
+.wgp .wgp-od.good { background: #2f7d32; }
+.wgp .wgp-od.mid { background: #a37a12; }
+.wgp .wgp-od.bad { background: #a02a1a; }
+.wgp .wgp-eta { flex: 1 0 100%; font-size: 12px; color: #e8d6a0; }
+.wgp .wgp-why { color: #f0b090; }
+.wgp .wgp-msg { padding: 24px 8px; text-align: center; color: #e8d6a0; }
+.wgp .wgp-foot { display: flex; gap: 10px; justify-content: flex-end; margin-top: auto; padding-top: 4px; }
+.wgp .wgp-btn { min-height: 44px; padding: 8px 22px; border-radius: 12px; border: 1px solid rgba(255, 233, 176, .55); background: rgba(110, 72, 30, .95); color: #fff1c8; font: 700 16px/1 system-ui, "Microsoft JhengHei", sans-serif; cursor: pointer; }
+.wgp .wgp-btn.pri { background: #b5361f; border-color: #ffd98a; min-width: 120px; }
+.wgp .wgp-btn:disabled { opacity: .45; cursor: default; }
+/* ───────── W5 抵達快報條(wmap_settle_ui.js)/ 戰報頁 ───────── */
+#wmapRoot .wmapgo-flash { position: absolute; z-index: 8; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 56px); transform: translateX(-50%); box-sizing: border-box; width: max-content; max-width: calc(100% - 150px); min-width: 180px; padding: 7px 30px 7px 12px; border-radius: 12px; color: #fff1c8; border: 1px solid rgba(255, 233, 176, .55); background: rgba(50, 34, 16, .94); box-shadow: 0 3px 10px rgba(0, 0, 0, .45); font: 13px/1.4 system-ui, "Microsoft JhengHei", sans-serif; cursor: pointer; user-select: none; -webkit-user-select: none; }
+#wmapRoot .wmapgo-flash[hidden] { display: none; }
+#wmapRoot .wmapgo-flash.win { border-color: #8fd18f; }
+#wmapRoot .wmapgo-flash.mid { border-color: #e2c050; }
+#wmapRoot .wmapgo-flash.lose { border-color: #e07a62; }
+#wmapRoot .wgf-t { font-weight: 700; font-size: 14px; }
+#wmapRoot .wmapgo-flash.win .wgf-t { color: #b9f0b4; }
+#wmapRoot .wmapgo-flash.lose .wgf-t { color: #ffb4a0; }
+#wmapRoot .wmapgo-flash.mid .wgf-t { color: #f6dc84; }
+#wmapRoot .wgf-s { font-size: 12px; color: #e8d6a0; }
+#wmapRoot .wgf-h { font-size: 11px; color: #c9b27a; margin-top: 2px; }
+#wmapRoot .wgf-x { position: absolute; right: 2px; top: 2px; width: 28px; height: 28px; border: 0; background: transparent; color: #fff1c8; font: 700 16px/1 system-ui, sans-serif; cursor: pointer; }
+#wmapRoot .wgc-b.warn { background: #7a2a1a; }
+.ldp-body.wgr { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; overflow-y: auto; color: #fff1c8; font-family: system-ui, "Microsoft JhengHei", sans-serif; }
+.wgr .wgr-card { padding: 10px 12px; border-radius: 12px; background: rgba(50, 34, 16, .88); border: 1px solid rgba(255, 233, 176, .45); font-size: 14px; }
+.wgr .wgr-card.win { border-color: #8fd18f; }
+.wgr .wgr-card.mid { border-color: #e2c050; }
+.wgr .wgr-card.lose { border-color: #e07a62; }
+.wgr .wgr-t { font-weight: 700; font-size: 18px; }
+.wgr .wgr-h { font-size: 15px; margin-top: 2px; }
+.wgr .wgr-s { font-size: 12px; color: #e8d6a0; }
+.wgr .wgr-row, .wgr .wgr-li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 12px; border-radius: 10px; background: rgba(50, 34, 16, .8); border: 1px solid rgba(255, 233, 176, .3); font-size: 13px; text-align: left; color: #fff1c8; }
+.wgr .wgr-li { width: 100%; min-height: 44px; font-size: 14px; cursor: pointer; }
+.wgr .wgr-sp { flex: 1 1 0; color: #e8d6a0; }
+.wgr .wgr-b { min-height: 34px; padding: 4px 14px; border-radius: 9px; border: 1px solid rgba(255, 233, 176, .55); background: rgba(110, 72, 30, .95); color: #fff1c8; font: 700 13px/1 system-ui, "Microsoft JhengHei", sans-serif; cursor: pointer; }
+.wgr .wgr-n { font-size: 12px; color: #c9b27a; }
+.wgr .okc { color: #8fd18f; }
+.wgr .ngc { color: #ff9c86; }
+/* ───────── W6 部隊面板 / 倒數浮條 / 迷你地圖 / 頂列勢力名聲膠囊 / 地圖格框與營徽章(js/wmap_panels.js)───────── */
+#wmapRoot .wp-col { position: absolute; z-index: 6; left: calc(env(safe-area-inset-left, 0px) + 6px); top: 58px; width: 150px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+#wmapRoot .wp-panel, #wmapRoot .wp-cd, #wmapRoot .wp-mini { pointer-events: auto; box-sizing: border-box; color: #fff1c8; border: 1px solid rgba(255, 233, 176, .5); background: rgba(50, 34, 16, .9); box-shadow: 0 3px 10px rgba(0, 0, 0, .35); font: 12px/1.3 system-ui, "Microsoft JhengHei", sans-serif; user-select: none; -webkit-user-select: none; }
+#wmapRoot .wp-panel { border-radius: 12px; overflow-x: hidden; overflow-y: auto; max-height: calc(100% - 200px); }
+#wmapRoot .wp-head { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 30px; padding: 0 8px; border: 0; background: rgba(110, 72, 30, .55); color: #fff1c8; font: 700 13px/1 system-ui, "Microsoft JhengHei", sans-serif; cursor: pointer; text-align: left; }
+#wmapRoot .wp-hs { flex: 1 1 auto; font: 400 11px/1 system-ui, "Microsoft JhengHei", sans-serif; color: #e8d6a0; text-align: right; }
+#wmapRoot .wp-hc { width: 8px; height: 8px; border-right: 2px solid #ffe9b0; border-bottom: 2px solid #ffe9b0; transform: rotate(45deg) translate(-2px, -2px); }
+#wmapRoot .wp-panel.shut .wp-hc { transform: rotate(-135deg) translate(-2px, -2px); }
+#wmapRoot .wp-panel.shut .wp-list { display: none; }
+#wmapRoot .wp-list { display: flex; flex-direction: column; }
+#wmapRoot .wp-row { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 8px; box-sizing: border-box; border-top: 1px solid rgba(255, 233, 176, .15); cursor: pointer; border-left: 3px solid transparent; }
+#wmapRoot .wp-row.k-go { border-left-color: #8fd18f; }
+#wmapRoot .wp-row.k-fight { border-left-color: #ff9c86; }
+#wmapRoot .wp-row.k-idle { border-left-color: #f6dc84; }
+#wmapRoot .wp-row.k-back { border-left-color: #9fb7c8; }
+#wmapRoot .wp-row.k-hurt { border-left-color: #e07a62; }
+#wmapRoot .wp-row.sel { background: rgba(120, 70, 24, .85); border-left-color: #6cc4ff; }
+#wmapRoot .wp-face { flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: #5b3a1a; border: 1px solid rgba(255, 233, 176, .6); }
+#wmapRoot .wp-face img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 12%; display: block; pointer-events: none; }
+#wmapRoot .wp-row.k-hurt .wp-face { filter: grayscale(.8); }
+#wmapRoot .wp-main { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+#wmapRoot .wp-l1 { display: flex; align-items: baseline; gap: 4px; }
+#wmapRoot .wp-nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+#wmapRoot .wp-tm { flex: 0 0 auto; font: 700 12px/1 system-ui, sans-serif; font-style: normal; color: #ffe9b0; font-variant-numeric: tabular-nums; }
+#wmapRoot .wp-l2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #e8d6a0; }
+#wmapRoot .wp-cmd { display: flex; gap: 4px; margin-top: 3px; }
+#wmapRoot .wp-cb { flex: 1 1 0; min-height: 30px; padding: 2px 4px; border-radius: 8px; border: 1px solid rgba(255, 233, 176, .55); background: rgba(110, 72, 30, .95); color: #fff1c8; font: 700 12px/1 system-ui, "Microsoft JhengHei", sans-serif; cursor: pointer; touch-action: manipulation; }
+#wmapRoot .wp-cb.warn { background: #7a2a1a; }
+#wmapRoot .wp-cb:disabled { opacity: .45; cursor: default; }
+#wmapRoot .wp-none { padding: 10px 8px; color: #e8d6a0; font-size: 11px; }
+#wmapRoot .wp-cd { border-radius: 12px; padding: 4px 6px; display: flex; flex-direction: column; gap: 2px; }
+#wmapRoot .wp-cd[hidden] { display: none; }
+#wmapRoot .wp-chip { display: flex; align-items: center; gap: 5px; min-height: 22px; font-size: 11px; }
+#wmapRoot .wp-chip.tap { cursor: pointer; }
+#wmapRoot .wp-ic { flex: 0 0 14px; width: 14px; height: 14px; background-size: 100% 100%; background-repeat: no-repeat; }
+#wmapRoot .wp-cl { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
+#wmapRoot .wp-ct { flex: 0 0 auto; font: 700 11px/1 system-ui, sans-serif; font-style: normal; color: #ffe9b0; font-variant-numeric: tabular-nums; }
+#wmapRoot .wp-more { font-size: 11px; color: #c9b27a; text-align: right; }
+#wmapRoot .k-go .wp-ic { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3 1v12' stroke='%23e8d6a0' stroke-width='1.6'/%3E%3Cpath d='M3.5 2h8l-2 2.6 2 2.6h-8z' fill='%238fd18f'/%3E%3C/svg%3E"); }
+#wmapRoot .k-idle .wp-ic { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M1 12 7 2l6 10z' fill='%23f6dc84' stroke='%235b3a1a' stroke-width='1'/%3E%3Cpath d='M7 12V7l-2 5z' fill='%235b3a1a'/%3E%3C/svg%3E"); }
+#wmapRoot .k-back .wp-ic { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M12 11V6H5' fill='none' stroke='%239fb7c8' stroke-width='1.8'/%3E%3Cpath d='M8 2 4 6l4 4z' fill='%239fb7c8'/%3E%3C/svg%3E"); }
+#wmapRoot .k-quit .wp-ic { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3 1h8v2.5L8 7l3 3.5V13H3v-2.5L6 7 3 3.5z' fill='%23e07a62' stroke='%235b3a1a' stroke-width='.8'/%3E%3C/svg%3E"); }
+/* 迷你地圖:右上、貼在縮放鈕左邊;點 = 鏡頭跳過去 */
+#wmapRoot .wp-mini { position: absolute; z-index: 6; right: calc(env(safe-area-inset-right, 0px) + 64px); top: 10px; width: 80px; height: 80px; padding: 3px; border-radius: 10px; cursor: pointer; }
+#wmapRoot .wp-mcv { display: block; width: 72px; height: 72px; image-rendering: pixelated; border-radius: 6px; }
+/* 橫版:倒數浮條搬到上緣置中(橫向排列),面板獨立定位 */
+body.shell-land #wmapRoot .wp-col { display: contents; }
+body.shell-land #wmapRoot .wp-panel { position: absolute; z-index: 6; left: calc(env(safe-area-inset-left, 0px) + 6px); top: 58px; width: 150px; max-height: calc(100% - 140px); overflow-y: auto; }
+body.shell-land #wmapRoot .wp-cd { position: absolute; z-index: 6; left: 50%; top: 8px; transform: translateX(-50%); flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 4px 12px; max-width: calc(100% - 400px); width: max-content; }
+body.shell-land #wmapRoot .wp-chip { min-height: 20px; }
+body.shell-land #wmapRoot .wp-cl { max-width: 84px; flex: 0 1 auto; }
+#wmapRoot .wmapgo-hint:not([hidden]) ~ .wp-col .wp-cd, #wmapRoot .wmapgo-hint:not([hidden]) ~ .wp-cd { display: none; }
+/* 頂列:勢力 / 名聲兩個小膠囊(上下疊在頭像右邊,不擠壓錢 / 抽 / 戰 3 槽) */
+#shellRoot .wp-caps { flex: 0 0 auto; display: flex; flex-direction: column; justify-content: center; gap: 3px; width: 64px; }
+#shellRoot .wp-cap { display: flex; align-items: center; gap: 3px; height: 20px; padding: 0 6px 0 4px; box-sizing: border-box; border: 1px solid #2a170a; border-radius: 10px; background: linear-gradient(#fff3cf, #f0d28a); color: #3b2410; font: 900 11px/1 var(--ld-font, system-ui, sans-serif); cursor: pointer; touch-action: manipulation; }
+#shellRoot .wp-cv { flex: 1 1 auto; min-width: 0; text-align: right; overflow: hidden; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#shellRoot .wp-ci { flex: 0 0 12px; width: 12px; height: 12px; background-size: 100% 100%; background-repeat: no-repeat; }
+#shellRoot .wp-cap.k-power .wp-ci { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 1v10' stroke='%233b2410' stroke-width='1.4'/%3E%3Cpath d='M2.5 1.5h8L8.6 4l1.9 2.5h-8z' fill='%23c4301b'/%3E%3C/svg%3E"); }
+#shellRoot .wp-cap.k-fame .wp-ci { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m6 .8 1.5 3.4 3.7.3-2.8 2.4.9 3.6L6 8.6 2.7 10.5l.9-3.6L.8 4.5l3.7-.3z' fill='%23d99a12' stroke='%233b2410' stroke-width='.7' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+body.wm-on #shellRoot.sh-ld.sh-p .wp-caps { width: 48px; }
+body.wm-on #shellRoot.sh-ld.sh-p .wp-cap { padding: 0 4px 0 3px; font-size: 10px; gap: 2px; }
+body.wm-on #shellRoot.sh-ld.sh-p .wp-ci { flex-basis: 10px; width: 10px; height: 10px; }
+body.wm-on #shellRoot.sh-ld.sh-p .sh-lslot { gap: 3px; padding: 0 6px 0 3px; }
+body.wm-on #shellRoot.sh-ld.sh-p .sh-llab { width: 20px; height: 20px; font-size: 11px; }
+/* 地圖格框 / 營徽章:畫在 world 內(只動 transform / opacity;呼吸週期 1.6 秒 < 1 Hz) */
+#wmapRoot .wp-frame, #wmapRoot .wp-camp { z-index: 2; position: absolute; left: 0; top: 0; pointer-events: none; }
+#wmapRoot .wp-frame { background-size: 100% 100%; background-repeat: no-repeat; animation: wpBreath 1.6s ease-in-out infinite; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 1' preserveAspectRatio='none'%3E%3Cpath d='M1 .04 1.96 .5 1 .96 .04 .5Z' fill='%236cc4ff' fill-opacity='.2' stroke='%23ffffff' stroke-width='.11' stroke-linejoin='round'/%3E%3Cpath d='M1 .04 1.96 .5 1 .96 .04 .5Z' fill='none' stroke='%231b7fd0' stroke-width='.055' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+#wmapRoot .wp-camp { z-index: 3; }
+#wmapRoot .wp-camp i { display: block; width: 100%; height: 100%; transform-origin: 50% 90%; animation: wpPulse 1.6s ease-in-out infinite; background-size: 100% 100%; background-repeat: no-repeat; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .45)); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M3 35 20 7l17 28z' fill='%23f2e0a8' stroke='%235b3a1a' stroke-width='2.2' stroke-linejoin='round'/%3E%3Cpath d='M20 35V19l-7 16z' fill='%23b5361f' stroke='%235b3a1a' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M20 7V1' stroke='%235b3a1a' stroke-width='2'/%3E%3Cpath d='M20 1.5h8l-2 2.6 2 2.6h-8z' fill='%23d03a22' stroke='%235b3a1a' stroke-width='1'/%3E%3C/svg%3E"); }
+@keyframes wpBreath { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes wpPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+body.q-low #wmapRoot .wp-frame, body.q-low #wmapRoot .wp-camp i { animation: none; }

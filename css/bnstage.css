@@ -3,13 +3,15 @@
 #bnCB{padding:0}
 #bnCB .bst-stage{position:absolute;left:50%;top:50%;width:844px;height:390px;overflow:hidden;background:#1a1118;color:#f3e7cf;font-family:var(--ld-font);font-size:13px;transform-origin:center center;transform:translate(-50%,-50%)}
 #bnCB .bst-world{position:absolute;left:0;top:0;width:844px;height:390px;overflow:hidden}
-#bnCB .bst-scene{position:absolute;left:-12px;top:-12px;width:868px;height:414px;background:url(../assets/ui/bg_home_land.webp) center/cover;filter:blur(5px) brightness(.6) saturate(1.1)}
-#bnCB .bst-backdrop{position:absolute;left:0;top:0;width:100%;height:250px;background:radial-gradient(ellipse 70% 60% at 50% 70%,transparent,#1a0d05aa)}
-#bnCB .bst-floor{position:absolute;left:0;top:236px;width:100%;height:154px;border-top:3px solid #8a6238;background:linear-gradient(180deg,rgba(0,0,0,.45),rgba(0,0,0,0) 30%),repeating-linear-gradient(90deg,#6b4526 0 70px,#5d3b20 70px 72px,#74502e 72px 140px,#5d3b20 140px 142px)}
+#bnCB .bst-scene{position:absolute;left:-12px;top:-12px;width:868px;height:414px;background:#2a1418 url(../assets/ui/bnbg_field.webp) center/cover}
+#bnCB .bst-tone{position:absolute;inset:0;background:rgba(14,5,8,.16);pointer-events:none}
+#bnCB .bst-backdrop{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;background:linear-gradient(180deg,rgba(10,4,6,.6) 0,rgba(10,4,6,0) 40px,rgba(10,4,6,0) 330px,rgba(10,4,6,.65) 390px),radial-gradient(ellipse 85% 85% at 50% 52%,transparent 55%,rgba(10,3,4,.6))}
+#bnCB .bst-floor{position:absolute;left:0;top:236px;width:100%;height:154px;border-top:3px solid #2e1a12;background:linear-gradient(180deg,rgba(0,0,0,.5),rgba(0,0,0,0) 35%),radial-gradient(ellipse 55% 60% at 50% 38%,rgba(255,190,120,.18),transparent 75%),linear-gradient(rgba(22,8,6,.3),rgba(22,8,6,.3)),#4a2e1c url(../assets/ui/bn_floor_scorch.webp) 0 0/100% 100% no-repeat}
 #bnCB .bst-units{position:absolute;left:0;top:0;width:100%;height:100%}
-#bnCB .bst-valance{position:absolute;left:0;top:0;width:100%;height:34px;z-index:40;background:radial-gradient(circle at 21px -6px,#b3262c 22px,transparent 23px) 0 0/42px 34px repeat-x,linear-gradient(#8e1b22,#8e1b22) 0 0/100% 12px no-repeat;filter:drop-shadow(0 3px 0 var(--ink))}
-#bnCB .bst-valance:after{content:"";position:absolute;left:0;right:0;top:10px;height:3px;background:repeating-linear-gradient(90deg,#e5b74a 0 6px,transparent 6px 10px)}
-#bnCB .bst-curtain{position:absolute;top:0;width:51%;height:100%;z-index:45;background:repeating-linear-gradient(90deg,#7d1219 0 18px,#a8222a 18px 30px,#8d1820 30px 42px);border:var(--line);box-shadow:inset 0 -30px 40px rgba(0,0,0,.5),var(--drop);transition:transform .8s cubic-bezier(.6,0,.3,1)}
+#bnCB .bst-valance{position:absolute;left:0;top:0;width:100%;height:34px;z-index:40;background:radial-gradient(circle at 21px -6px,#5e0f14 22px,transparent 23px) 0 0/42px 34px repeat-x,linear-gradient(#4a0b10,#5e0f14) 0 0/100% 12px no-repeat;filter:drop-shadow(0 3px 0 rgba(255,120,40,.3))}
+#bnCB .bst-valance:after{content:"";position:absolute;left:0;right:0;top:10px;height:3px;background:repeating-linear-gradient(90deg,#9a7a3a 0 5px,transparent 5px 12px,#9a7a3a 12px 15px,transparent 15px 26px);opacity:.8}
+#bnCB .bst-curtain{position:absolute;top:0;width:51%;height:100%;z-index:45;background:repeating-linear-gradient(90deg,#5e0f14 0 18px,#7e1a1e 18px 30px,#4a0b10 30px 42px);box-shadow:inset 0 -30px 40px rgba(0,0,0,.5);clip-path:polygon(0 0,100% 0,100% 94%,92% 98%,84% 93%,75% 99%,66% 94%,58% 100%,50% 95%,41% 99%,33% 93%,24% 98%,16% 94%,8% 99%,0 95%);transition:transform .8s cubic-bezier(.6,0,.3,1)}
+#bnCB .bst-curtain:after{content:"";position:absolute;left:0;right:0;bottom:0;height:40px;background:linear-gradient(180deg,transparent,#120506 85%);border-bottom:2px solid rgba(255,120,40,.35)}
 #bnCB .bst-curtain.l{left:0}
 #bnCB .bst-curtain.r{right:0}
 #bnCB .bst-world.open .bst-curtain.l{transform:translateX(-96%)}
@@ -18,10 +20,17 @@
 #bnCB .bst-dim.on{opacity:1}
 #bnCB .bst-spot{position:absolute;top:0;width:260px;height:340px;margin-left:-130px;z-index:4;pointer-events:none;opacity:0;background:radial-gradient(ellipse 50% 22% at 50% 92%,rgba(255,240,190,.4),transparent 70%),linear-gradient(180deg,rgba(255,240,190,0),rgba(255,240,190,.1) 40%,rgba(255,240,190,0));clip-path:polygon(44% 0,56% 0,100% 100%,0 100%);transition:left .18s,opacity .2s}
 #bnCB .bst-spot.on{opacity:1}
-/* 單位:腳底 y / x / 縮放 --sc 由 JS 依排號設定(前 322 ×1、中 312 ×1、主將 302 ×1.3;主將身高約 159,頭頂約 y143,低於頂列 36 與回合木牌);z 由 JS 動態(待機 13/12/11、受擊 16、出手 18、陣亡 9) */
+/* 單位:腳底 y / x / 縮放 --sc 由 JS 依排號設定(前 322 ×1、中 312 ×1、主將 302,三排縮放皆 1;身高由 JS 依名人頭高表算成 --bh,約 100~170);z 由 JS 動態(待機 13/12/11、受擊 16、出手 18、陣亡 9) */
 #bnCB .bst-u{position:absolute;top:318px;width:0;height:0;z-index:10;opacity:1}
-#bnCB .bst-act{position:absolute;left:0;top:0;transition-property:transform;transition-timing-function:ease-in}
-#bnCB .bst-body{position:absolute;bottom:0;left:50%;height:calc(122px*var(--sc,1));width:auto;max-width:none;transform:translateX(-50%);filter:drop-shadow(0 4px 2px rgba(0,0,0,.5));display:block}
+#bnCB .bst-act{position:absolute;left:0;top:0;transform-origin:0 0;transition-property:transform;transition-timing-function:ease-in}
+/* 接觸陰影:腳下暗橢圓(光從左來,往右偏 6px×sc);鏡頭層 .bst-cam:大招接觸格推近 1.15×、震動掛這裡(WP3) */
+#bnCB .bst-shd{position:absolute;left:calc(-32px*var(--sc,1));top:calc(-8px*var(--sc,1));width:calc(76px*var(--sc,1));height:calc(16px*var(--sc,1));border-radius:50%;background:radial-gradient(ellipse at center,rgba(0,0,0,.5),rgba(0,0,0,0) 70%);pointer-events:none}
+#bnCB .bst-u.dead .bst-shd{opacity:.4}
+#bnCB .bst-cam{position:absolute;left:0;top:0;width:844px;height:390px;transition:transform .3s ease-in-out}
+#bnCB .bst-cam.zoom{transform:scale(var(--zoom,1.15));transition-duration:.26s;transition-timing-function:ease-out}
+#bnCB .bst-cam.bst-quake{animation:bstQuake .35s}
+@media (prefers-reduced-motion:reduce){#bnCB .bst-cam{--zoom:1.06}}
+#bnCB .bst-body{position:absolute;bottom:0;left:50%;height:var(--bh,122px);width:auto;max-width:none;transform:translateX(-50%);filter:drop-shadow(0 4px 2px rgba(0,0,0,.5));display:block}
 #bnCB .bst-u.foe .bst-body{transform:translateX(-50%) scaleX(-1)}
 #bnCB .bst-body.bst-flash{animation:bstFlash .18s}
 #bnCB .bst-act.bst-shake{animation:bstShake .22s}
@@ -38,20 +47,20 @@
 /* 大招準備:橘色脈動 */
 #bnCB .bst-u.prep .bst-ring{border-color:#ffb347;box-shadow:0 0 18px #ff9a2e,inset 0 0 12px #ff9a2e;animation:bstPulse .7s ease-in-out infinite alternate}
 /* 大招放大:原地 1.3 倍的感覺以高度與光暈表現(避開 inline transform) */
-#bnCB .bst-u.ult-big .bst-body{height:calc(159px*var(--sc,1))}
+#bnCB .bst-u.ult-big .bst-body{height:calc(var(--bh,122px)*1.3)}
 #bnCB .bst-u.ult-big .bst-ring{box-shadow:0 0 26px var(--qc),inset 0 0 12px var(--qc)}
 #bnCB .bst-u.ult-big .bst-act:before{content:"";position:absolute;left:-90px;top:-150px;width:180px;height:200px;border-radius:50%;background:radial-gradient(ellipse at center,var(--qc) 0,transparent 70%);opacity:.45;z-index:-1}
 /* 帥旗:主將手持(旗桿在身體外側、蓋過身體,握手點在桿上;旗面朝外飄;高度、位置、旗面都乘 --sc) */
-#bnCB .bst-flag{position:absolute;left:calc(-42px*var(--sc,1));top:calc(-150px*var(--sc,1));width:5px;height:calc(150px*var(--sc,1));background:linear-gradient(90deg,#8a5a2b,#5a3b1d);border-radius:2px;box-shadow:0 0 0 1px #2a1a0e;z-index:2;transform-origin:bottom center;transition:transform .5s ease-in,height .2s,top .2s}
+#bnCB .bst-flag{position:absolute;left:calc(-42px*var(--sc,1));top:calc(-30px - var(--bh,122px));width:5px;height:calc(30px + var(--bh,122px));background:linear-gradient(90deg,#8a5a2b,#5a3b1d);border-radius:2px;box-shadow:0 0 0 1px #2a1a0e;z-index:2;transform-origin:bottom center;transition:transform .5s ease-in,height .2s,top .2s}
 #bnCB .bst-u.foe .bst-flag{left:calc(39px*var(--sc,1))}
-#bnCB .bst-flag:before{content:"";position:absolute;left:-4px;top:calc(62px*var(--sc,1));width:9px;height:9px;border-radius:50%;background:#f0c08a;border:2px solid var(--ink,#2a1a0e)}
+#bnCB .bst-flag:before{content:"";position:absolute;left:-4px;top:calc(var(--bh,122px)*.5);width:9px;height:9px;border-radius:50%;background:#f0c08a;border:2px solid var(--ink,#2a1a0e)}
 #bnCB .bst-flag span{position:absolute;top:0;right:5px;width:calc(26px*var(--sc,1));height:calc(34px*var(--sc,1));background:var(--fc);color:#fff;font-weight:900;font-size:calc(16px*var(--sc,1));display:flex;align-items:center;justify-content:center;clip-path:polygon(0 0,100% 0,100% 82%,50% 100%,0 82%);animation:bstWave 2.2s ease-in-out infinite}
 #bnCB .bst-u.foe .bst-flag span{right:auto;left:5px}
 #bnCB .bst-u.dead .bst-flag{transform:rotate(-80deg)}
 #bnCB .bst-u.foe.dead .bst-flag{transform:rotate(80deg)}
 #bnCB .bst-u.dead .bst-act{transition:transform .5s,opacity .5s!important;transform:translateY(8px) rotate(-8deg)!important;opacity:.35;filter:grayscale(1)}
 /* 名牌 */
-#bnCB .bst-plate{position:absolute;left:calc(-46px*var(--sc,1));top:calc(-38px - 122px*var(--sc,1));width:calc(92px*var(--sc,1));padding:2px 4px 3px;border:var(--line);border-left:6px solid var(--qc);border-radius:8px;font-size:12px;line-height:1.25;z-index:12}
+#bnCB .bst-plate{position:absolute;left:-44px;top:calc(-38px - var(--bh,122px));width:88px;padding:2px 4px 3px;border:var(--line);border-left:6px solid var(--qc);border-radius:8px;font-size:12px;line-height:1.25;z-index:12}
 #bnCB .bst-plate b{display:block;font-weight:900;white-space:nowrap;overflow:hidden}
 #bnCB .bst-plate{transition:opacity .12s}
 #bnCB .bst-u.acting .bst-plate{opacity:0}   /* 出手者衝出去期間隱藏自己的名牌(含兵力條),回位恢復;大招放大時名牌 / 狀態字 / 帥旗不避讓 */
@@ -62,7 +71,7 @@
 #bnCB .bst-u.foe .bst-bar i{background:linear-gradient(90deg,#a8382a,#e0553c)}
 #bnCB .bst-hpt{font-size:10px;font-weight:700;color:var(--ink);white-space:nowrap}
 /* 狀態字 */
-#bnCB .bst-tag{position:absolute;left:-75px;top:calc(-58px - 122px*var(--sc,1));width:150px;white-space:nowrap;text-align:center;font-size:12px;font-weight:700;color:#e6d6ff;text-shadow:0 0 4px #000,0 0 8px #000;z-index:13;opacity:0;transition:opacity .2s}
+#bnCB .bst-tag{position:absolute;left:-75px;top:calc(-58px - var(--bh,122px));width:150px;white-space:nowrap;text-align:center;font-size:12px;font-weight:700;color:#e6d6ff;text-shadow:0 0 4px #000,0 0 8px #000;z-index:13;opacity:0;transition:opacity .2s}
 #bnCB .bst-tag.on{opacity:1}
 /* 戰法名牌 */
 #bnCB .bst-skill{position:absolute;top:38px;z-index:30;padding:3px 16px 4px;font-size:18px;letter-spacing:4px;background:linear-gradient(#ef6a4c,var(--red));border:var(--line);border-radius:10px;box-shadow:var(--drop);white-space:nowrap;transform:translate(-50%,0) scale(.6);opacity:0;transition:transform .15s,opacity .15s;pointer-events:none}
@@ -76,9 +85,84 @@
 /* 特效(黑底圖用 screen 疊) */
 #bnCB .bst-fx{position:absolute;z-index:25;pointer-events:none;mix-blend-mode:screen;transform:translate(-50%,-50%);animation:bstFxA .45s ease-out forwards}
 /* 大招中央演出 */
-#bnCB .bst-show{position:absolute;left:422px;top:340px;width:0;height:0;z-index:22;display:none}
-#bnCB .bst-show.foe img{transform:scaleX(-1)}
-#bnCB .bst-show img{position:absolute;bottom:0;left:-170px;width:340px;height:277px;object-fit:contain;object-position:bottom}
+#bnCB .bst-show{position:absolute;left:422px;top:360px;width:0;height:0;z-index:22;display:none}
+#bnCB .bst-show.foe img{transform:scaleX(-1) scale(1.6)}
+#bnCB .bst-show img{position:absolute;bottom:0;left:-170px;width:340px;height:277px;object-fit:contain;object-position:bottom;transform-origin:50% 100%;transform:scale(1.6)}
+#bnCB .bst-u.ult-back .bst-anim{transform:translateX(-50%) scaleX(-1)}
+#bnCB .bst-u.foe.ult-back .bst-anim{transform:translateX(-50%)}
+/* 戰法演出幕 .bst-scr(設計_戰法演出幕.md):在 .bst-world 內、鏡頭層 .bst-cam 外(不吃推近與震動);z 22,頂列 / 倍速鈕 z 70 浮在上面。
+   時間由 JS 設 --k(實際毫秒 / 規劃毫秒:1× = 1、2× = .5、3× 首次 = 500 / 總長);所有動畫只動 transform / opacity;狀態 class:on 顯示、s-l0 / s-pan / s-fig / s-ttl / s-nm / s-out / s-end / s-shake。敵方 .foe 左右鏡射 */
+#bnCB .bst-scr{position:absolute;left:0;top:0;width:844px;height:390px;z-index:22;pointer-events:none;overflow:hidden;visibility:hidden;--k:1;--pn:860;--dn:820}
+#bnCB .bst-scr.on{visibility:visible}
+#bnCB .scr-l0{position:absolute;left:0;top:0;width:844px;height:390px;opacity:0;transition:opacity calc(140ms*var(--k)) linear}
+#bnCB .bst-scr.s-l0 .scr-l0{opacity:1}
+#bnCB .bst-scr.s-end .scr-l0{opacity:0;transition-duration:calc(160ms*var(--k))}
+#bnCB .scr-l0 canvas{position:absolute;left:0;top:0;width:844px;height:390px;image-rendering:auto}
+#bnCB .scr-l0 canvas.b{transform:translate(-3%,2%) scale(1.18);opacity:.55}
+#bnCB .scr-l0c{position:absolute;left:0;top:0;width:844px;height:390px;background:radial-gradient(ellipse at 55% 50%,rgba(10,5,8,.45),rgba(6,3,5,.88) 75%),rgba(60,12,8,.18)}
+#bnCB .bst-scr.ql-low .scr-l0 canvas,#bnCB .bst-scr.nosnap .scr-l0 canvas{display:none}
+#bnCB .bst-scr.ql-mid .scr-l0 canvas.b{display:none}
+#bnCB .bst-scr.ql-low .scr-l0c,#bnCB .bst-scr.nosnap .scr-l0c{background:radial-gradient(ellipse at 55% 50%,rgba(22,10,14,.9),rgba(6,3,5,.96) 80%),rgba(60,12,8,.18)}
+/* L1 筆刷色帶(程式版:鋸齒 clip-path 由 JS 一次寫入)+ L2 效果圖 */
+#bnCB .scr-pan{position:absolute;left:96px;top:84px;width:724px;height:236px;background:#140c0c;opacity:0;transform:translateX(-80px) scaleY(.86);transition:transform calc(180ms*var(--k)) ease-out,opacity calc(180ms*var(--k)) ease-out}
+#bnCB .bst-scr.foe .scr-pan{left:24px;transform:translateX(80px) scaleY(.86)}
+#bnCB .bst-scr.s-pan .scr-pan{opacity:1;transform:none}
+#bnCB .scr-art{position:absolute;left:0;top:0;width:100%;height:100%;transform:scale(1.12);transition:transform calc(1ms*var(--pn)*var(--k)) linear}
+#bnCB .scr-art:after{content:"";position:absolute;left:0;top:0;width:100%;height:100%;background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.2) 48%,transparent 58%),linear-gradient(180deg,rgba(0,0,0,.45),transparent 22%,transparent 78%,rgba(0,0,0,.5))}
+#bnCB .bst-scr.foe .scr-art{transform:scaleX(-1) scale(1.12)}
+#bnCB .bst-scr.s-pan .scr-art{transform:none}
+#bnCB .bst-scr.foe.s-pan .scr-art{transform:scaleX(-1)}
+#bnCB .scr-edge{position:absolute;left:0;top:0;width:100%;height:100%;box-shadow:inset 0 0 40px rgba(0,0,0,.8)}
+/* 墨點飛濺(程式版 12 個,圖版換 scr_splat.webp) */
+#bnCB .scr-ink{position:absolute;left:-20px;top:50px;width:884px;height:300px;opacity:0;transform:scale(.3);transition:transform calc(200ms*var(--k)) ease-out,opacity calc(200ms*var(--k))}
+#bnCB .scr-ink i{position:absolute;background:#140c0c;display:block}
+#bnCB .bst-scr.s-ttl .scr-ink{opacity:1;transform:none}
+#bnCB .bst-scr.ql-low .scr-ink{display:none}
+/* L3 立繪窗:斜切右緣,頭頂高出面板;最多 3 張疊放(動態立繪多格),切入方式 sw-cut / sw-fade / sw-flash / sw-slide */
+#bnCB .scr-fig{position:absolute;left:-36px;top:6px;width:360px;height:384px;overflow:hidden;clip-path:polygon(0 0,100% 0,82% 100%,0 100%);opacity:0;transform:translateX(-120px);transition:transform calc(220ms*var(--k)) cubic-bezier(.2,.9,.3,1),opacity calc(220ms*var(--k)) linear}
+#bnCB .bst-scr.foe .scr-fig{left:auto;right:-36px;clip-path:polygon(0 0,100% 0,100% 100%,18% 100%);transform:translateX(120px)}
+#bnCB .bst-scr.s-fig .scr-fig{opacity:1;transform:none}
+#bnCB .scr-fig .stk{position:absolute;left:0;top:0;width:360px;height:480px;transition:transform calc(1ms*var(--dn)*var(--k)) linear}
+#bnCB .bst-scr.s-fig .scr-fig .stk{transform:translateX(18px)}
+#bnCB .bst-scr.foe.s-fig .scr-fig .stk{transform:translateX(-18px)}
+#bnCB .scr-fig img{position:absolute;left:0;top:0;width:360px;height:480px;object-fit:cover;object-position:50% 0;opacity:0}
+#bnCB .scr-fig img.on{opacity:1}
+#bnCB .scr-fig img,#bnCB .scr-sheet{transform:translate(var(--jx,0px),var(--jy,0px)) rotate(var(--jr,0deg))}
+/* 翻頁模式(.flip):圖集格 .scr-sheet(背景圖 + 位置由 JS 設)、硬切不補間、不慢漂 */
+#bnCB .scr-sheet{position:absolute;left:-36px;top:0;width:432px;height:384px;opacity:0;background-repeat:no-repeat}
+#bnCB .scr-sheet.on{opacity:1}
+#bnCB .bst-scr.flip .scr-fig .stk{transition:none;transform:none}
+#bnCB .bst-scr.flip .scr-fig{background:radial-gradient(ellipse at 50% 40%,#f6ecd2 0,#e9d9b4 100%)}
+#bnCB .scr-fig img.sw-fade{transition:opacity calc(110ms*var(--k)) linear}
+#bnCB .scr-fig img.sw-slide.on{animation:scrSlide calc(150ms*var(--k)) ease-out}
+#bnCB .bst-scr.foe .scr-fig img,#bnCB .bst-scr.foe .scr-sheet{transform:scaleX(-1) translate(var(--jx,0px),var(--jy,0px)) rotate(var(--jr,0deg))}
+#bnCB .bst-scr.foe .scr-fig img.sw-slide.on{animation-name:scrSlideF}
+#bnCB .scr-fl{position:absolute;left:0;top:0;width:100%;height:100%;background:#fff;opacity:0}
+#bnCB .scr-fl.go{animation:scrFlash calc(120ms*var(--k)) ease-out}
+#bnCB .bst-scr.ql-low .scr-fig{transform:none}
+/* 名牌 */
+#bnCB .scr-nm{position:absolute;left:120px;top:298px;width:230px;height:40px;opacity:0;transform:translateX(-30px);background:linear-gradient(90deg,rgba(10,30,30,.95) 70%,transparent);transition:transform calc(160ms*var(--k)) ease-out,opacity calc(160ms*var(--k))}
+#bnCB .scr-nm b{display:block;padding-left:14px;font-size:24px;line-height:40px;letter-spacing:6px;color:#f3e7cf;white-space:nowrap;overflow:hidden;font-weight:900}
+#bnCB .bst-scr.foe .scr-nm{left:494px;transform:translateX(30px);background:linear-gradient(270deg,rgba(10,30,30,.95) 70%,transparent)}
+#bnCB .bst-scr.foe .scr-nm b{padding-left:0;padding-right:14px;text-align:right}
+#bnCB .bst-scr.s-nm .scr-nm{opacity:1;transform:none}
+#bnCB .bst-scr.fast .scr-nm{transition:none}
+/* L4 金色戰法名(系統楷體;前層漸層字 + 後層墨暈複本,不用 filter) */
+#bnCB .scr-ttl{position:absolute;left:420px;top:222px;width:360px;height:76px;opacity:0;transform:scale(1.8);transition:transform calc(120ms*var(--k)) ease-out,opacity calc(120ms*var(--k)) ease-out}
+#bnCB .bst-scr.foe .scr-ttl{left:64px}
+#bnCB .bst-scr.s-ttl .scr-ttl{opacity:1;transform:none}
+#bnCB .scr-ttl .br{position:absolute;left:-10px;top:6px;width:380px;height:64px;background:linear-gradient(100deg,transparent,rgba(12,6,6,.88) 18%,rgba(12,6,6,.88) 82%,transparent);transform:skewX(-12deg)}
+#bnCB .scr-ttl .t{position:relative;display:block;text-align:center;white-space:nowrap;line-height:76px;font-family:'DFKai-SB','BiauKai','標楷體','Kaiti TC','STKaiti',serif;font-weight:900;font-size:64px;letter-spacing:2px;color:#000;text-shadow:0 0 10px #000,0 0 24px rgba(120,20,10,.85)}
+#bnCB .scr-ttl .t:after{content:attr(data-t);position:absolute;left:0;right:0;top:0;color:transparent;background:linear-gradient(180deg,#fff6cf 0%,#ffd76a 38%,#d89a2a 62%,#8a5212 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-stroke:1.5px #3a1e08;text-shadow:none}
+/* 小震 3px(只在面板與戰法名) */
+#bnCB .bst-scr.s-shake .scr-pan,#bnCB .bst-scr.s-shake .scr-ttl{animation:scrShake calc(80ms*var(--k)) linear}
+/* 退場:L1~L4 淡出並往外 40px,L0 稍後淡出(.s-end) */
+#bnCB .bst-scr.s-out .scr-pan,#bnCB .bst-scr.s-out .scr-fig,#bnCB .bst-scr.s-out .scr-ttl,#bnCB .bst-scr.s-out .scr-nm,#bnCB .bst-scr.s-out .scr-ink{opacity:0;transform:translateX(40px);transition-duration:calc(160ms*var(--k))}
+#bnCB .bst-scr.foe.s-out .scr-pan,#bnCB .bst-scr.foe.s-out .scr-fig,#bnCB .bst-scr.foe.s-out .scr-ttl,#bnCB .bst-scr.foe.s-out .scr-nm,#bnCB .bst-scr.foe.s-out .scr-ink{transform:translateX(-40px)}
+@keyframes scrShake{0%,100%{transform:translate(0,0)}30%{transform:translate(-3px,2px)}65%{transform:translate(3px,-2px)}}
+@keyframes scrFlash{0%{opacity:.95}100%{opacity:0}}
+@keyframes scrSlide{from{transform:translateX(-70px)}to{transform:none}}
+@keyframes scrSlideF{from{transform:scaleX(-1) translateX(-70px)}to{transform:scaleX(-1)}}
 #bnCB .bst-ultname{position:absolute;left:50%;top:70px;z-index:23;font-size:46px;font-weight:900;letter-spacing:14px;color:#fff3c4;text-shadow:0 0 12px #ffc940,0 0 30px #c87d00,3px 3px 0 #000;transform:translateX(-50%) translateX(-120px);opacity:0;transition:transform .3s,opacity .3s;white-space:nowrap}
 #bnCB .bst-ultname.on{transform:translateX(-50%);opacity:1}
 #bnCB .bst-ultline{position:absolute;left:50%;top:132px;z-index:23;font-size:17px;color:#fff;background:rgba(0,0,0,.55);padding:3px 14px;border-radius:2px;transform:translateX(-50%);opacity:0;transition:opacity .3s;white-space:nowrap}
@@ -145,3 +229,25 @@
 @keyframes bstDrop{0%{transform:translateY(-50px)}70%{transform:translateY(5px)}100%{transform:translateY(0)}}
 @keyframes bstQuake{0%,100%{transform:translate(0,0)}20%{transform:translate(-6px,3px)}40%{transform:translate(5px,-4px)}60%{transform:translate(-4px,2px)}80%{transform:translate(3px,-2px)}}
 @media (prefers-reduced-motion:reduce){#bnCB .bst-num,#bnCB .bst-pas{animation:none}}
+/* 煉獄戰場(設計_煉獄戰場背景.md):場景光影、側翼框景、餘燼 / 煙霧 / 火光閃爍(常駐動畫共 4 個,只動 transform / opacity) */
+#bnCB .bst-glow{position:absolute;left:95px;top:20px;width:230px;height:160px;pointer-events:none;background:radial-gradient(ellipse 50% 50% at 50% 55%,rgba(255,140,50,.5),transparent 72%);animation:bstFlick 1.7s linear infinite}
+#bnCB .bst-band{position:absolute;left:0;top:110px;width:100%;height:190px;pointer-events:none;background:linear-gradient(180deg,rgba(38,20,24,0),rgba(38,20,24,.5) 22%,rgba(38,20,24,.5) 78%,rgba(38,20,24,0))}
+#bnCB .bst-smoke{position:absolute;left:-60px;top:28px;width:964px;height:130px;pointer-events:none;opacity:.55;background:radial-gradient(ellipse 18% 55% at 50% 50%,rgba(20,12,16,.75),transparent 75%),radial-gradient(ellipse 22% 50% at 80% 40%,rgba(30,20,24,.6),transparent 75%),radial-gradient(ellipse 22% 50% at 18% 60%,rgba(30,20,24,.5),transparent 75%);animation:bstSmoke 20s ease-in-out infinite alternate}
+#bnCB .bst-prop{position:absolute;z-index:6;pointer-events:none;background:no-repeat center bottom/contain}
+#bnCB .bst-prop.pa{left:-26px;top:145px;width:130px;height:155px;background-image:url(../assets/ui/bn_prop_flags.webp)}
+#bnCB .bst-prop.pb{left:740px;top:155px;width:130px;height:145px;background-image:url(../assets/ui/bn_prop_jvma.webp)}
+#bnCB .bst-prop.pc{z-index:2;top:214px;width:150px;height:48px;opacity:.9;background-image:url(../assets/ui/bn_prop_armorpile.webp)}
+#bnCB .bst-prop.pc.l{left:160px}
+#bnCB .bst-prop.pc.r{left:534px;transform:scaleX(-1)}
+#bnCB .bst-ember{position:absolute;left:0;top:0;width:844px;height:650px;z-index:7;pointer-events:none;background:radial-gradient(circle at 30px 40px,#ffb347 0,#ff7a2e 1.5px,transparent 3px),radial-gradient(circle at 120px 90px,#ff7a2e 0,transparent 2.5px),radial-gradient(circle at 190px 30px,#ffb347 0,transparent 2px),radial-gradient(circle at 70px 150px,#ff7a2e 0,transparent 2.5px),radial-gradient(circle at 160px 210px,#ffb347 0,#ff7a2e 1.5px,transparent 3px),radial-gradient(circle at 20px 235px,#ff7a2e 0,transparent 2px),radial-gradient(circle at 105px 245px,#ffb347 0,transparent 2px),radial-gradient(circle at 205px 130px,#ff7a2e 0,transparent 2px);background-size:220px 260px;animation:bstEmber 9s linear infinite}
+#bnCB .bst-ember.e2{opacity:.55;background-size:310px 330px;background-position:90px 60px;animation-duration:14s;animation-name:bstEmber2}
+@keyframes bstEmber{to{transform:translateY(-260px)}}
+@keyframes bstEmber2{to{transform:translateY(-330px)}}
+@keyframes bstSmoke{from{transform:translateX(-40px)}to{transform:translateX(40px)}}
+@keyframes bstFlick{0%{opacity:.85}12%{opacity:.65}30%{opacity:1}44%{opacity:.75}63%{opacity:.95}80%{opacity:.7}100%{opacity:.85}}
+/* 冷鐵色調:擂台 / 切磋 / 訓練場(不關火光,關餘燼) */
+#bnCB .bst-world.tone-iron .bst-tone{background:rgba(30,42,51,.3)}
+#bnCB .bst-world.tone-iron .bst-ember{display:none}
+/* 低畫質(body.q-low,含偏好減少動態)與系統減少動態:關餘燼與煙霧 */
+body.q-low #bnCB .bst-ember,body.q-low #bnCB .bst-smoke{display:none}
+@media (prefers-reduced-motion:reduce){#bnCB .bst-ember,#bnCB .bst-smoke{display:none}#bnCB .bst-glow{animation:none}}

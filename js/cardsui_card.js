@@ -67,7 +67,7 @@ function cuCEndDot(s) { return /[。!?」]$/.test(s) ? s : s + '。'; }
 function cuCPp(x) { var v = Math.round(x * 100); return (v > 0 ? '+' : '−') + Math.abs(v) + ' pp'; }
 function cuCGem(G) { var s = '', i; for (i = 0; i < G.corner; i++) s += '◆'; return s; }
 function cuCTroop(e) { return (typeof bnDefaultTroop === 'function') ? (bnDefaultTroop(e) || '') : ''; }
-function cuCTroopIcon(e) { return (typeof bnTroopIconHtml === 'function') ? bnTroopIconHtml(cuCTroop(e)) : ''; }
+function cuCTroopIcon(e) { return (typeof bnTroopIconHtml === 'function') ? bnTroopIconHtml(typeof bnDtOf === 'function' && bnDtOf(e) === 'strat' ? '謀' : cuCTroop(e)) : ''; }   // 謀略型(dt)顯示謀士圖示(troop_strat),其餘依兵種
 // 戰法基本資料:BN_SKILLS;兵種卡(BN_LEGION)轉成同形狀(legion = true)
 function cuCSkill(id) {
   var d = (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[id]) || null, L;
@@ -355,7 +355,7 @@ function cuBioText(c) {
     j = CARD_JOB_BY_ID[c.main];
     t = cuCTroop(c);
     out.push(cuCEndDot(c.name + ',' + fac + org + '出身'));
-    out.push(cuCEndDot(t === '謀' ? '擅長謀略' : '擅長' + t + '兵'));
+    out.push(cuCEndDot(t === '械' ? '擅長器械' : (typeof bnDtOf === 'function' && bnDtOf(c) === 'strat' ? '擅長謀略' : '擅長' + t + '兵')));
     names = [];
     (c.tr || []).forEach(function (id) { var x = (typeof CARD_TRAIT_BY_ID !== 'undefined') ? CARD_TRAIT_BY_ID[id] : null; if (x && names.indexOf(x.n) < 0) names.push(x.n); });
     (c.trn || []).forEach(function (x) { if (names.indexOf(x[0]) < 0) names.push(x[0]); });

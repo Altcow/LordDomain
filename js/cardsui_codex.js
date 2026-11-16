@@ -11,7 +11,7 @@ var CUX_CAT = [['物理攻擊', 'phys'], ['謀略攻擊', 'strat'], ['弓系', '
 var CUX_TIERS = ['S', 'A', 'B', 'C'];
 var CUX_TIER_NAME = { S: '朱金', A: '紫', B: '青藍', C: '灰褐' };
 var CUX_TIER_COL = { S: '#b8432a', A: '#76489a', B: '#365fa3', C: '#7a6a58' };
-var CUX_TROOP_IMG = { '槍': 'spear', '騎': 'cav', '盾': 'shield', '弓': 'bow', '謀': 'cover' };   // 兵種卡插畫 assets/legion/legion_<代號>.webp
+var CUX_TROOP_IMG = { '槍': 'spear', '騎': 'cav', '盾': 'shield', '弓': 'bow', '械': 'cover', '謀': 'cover' };   // 械:器械兵種卡插畫尚缺,暫用 cover   // 兵種卡插畫 assets/legion/legion_<代號>.webp
 var CUX_ROLE = { ult: '名人固有大招', passive: '名人固有被動', bond: '專屬聯動', slot: '選擇槽', learned: '選擇槽', legacy: '傳承', fixed: '固定' };
 var CUX_ROW = ['前鋒', '中衛', '主將'], CUX_POS = ['前鋒', '中衛', '主將'];
 var CUX_SEL = ['fac', 'troop', 'gr', 'own', 'sown'];
@@ -258,7 +258,7 @@ function cuCxChip(kx, v, cur, label, img) {
   return '<button type="button" class="cux-chip' + (String(cur) === String(v) ? ' on' : '') + '" data-kx="' + kx + '" data-v="' + cuEsc(v) + '">' + (img ? '<img src="assets/' + img + '" alt="" loading="lazy" onerror="this.remove()">' : '') + cuEsc(label) + '</button>';
 }
 function cuCodexFiltHtml() {
-  var idx = cuCxIdx(), facs = [], grs = [], troops = (typeof BN_DATA !== 'undefined' && BN_DATA.troopList) ? BN_DATA.troopList : ['槍', '騎', '盾', '弓', '謀'], h = '';
+  var idx = cuCxIdx(), facs = [], grs = [], troops = (typeof BN_DATA !== 'undefined' && BN_DATA.troopList) ? BN_DATA.troopList : ['槍', '騎', '盾', '弓', '械'], h = '';
   if (CUX.tab === 'fig') {
     idx.figs.forEach(function (it) { if (facs.indexOf(it.fac) < 0) facs.push(it.fac); if (grs.indexOf(it.gr) < 0) grs.push(it.gr); });
     facs.sort(function (a, b) { return a - b; });

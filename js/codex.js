@@ -379,7 +379,7 @@ function cxRulesHtml() {
   Object.keys(B.fac).forEach(function (n) { fac.push(n + ' 人:' + cxFacBonusTxt(+n)); });
   Object.keys(B.tag).forEach(function (t) { tag.push(t); });
   h += '<details class="cx-rules" open><summary>基本原則(先看這裡)</summary>';
-  h += '<div class="cx-l"><b class="cx-k">站位</b>一隊 3 人:主將守後方,副將一在中衛、副將二在前鋒,前鋒最先被打,適合兵力高、防禦好的盾 / 槍兵;弓、謀打得遠但不耐打,放中衛或主將。弓兵站後方時受到近戰普攻傷害 −' + cxPct(1 - D.archerBackTaken) + '。</div>';
+  h += '<div class="cx-l"><b class="cx-k">站位</b>一隊 3 人:主將守後方,副將一在中衛、副將二在前鋒,前鋒最先被打,適合兵力高、防禦好的盾 / 槍兵;弓、械打得遠但不耐打,放中衛或主將。弓兵站後方時受到近戰普攻傷害 −' + cxPct(1 - D.archerBackTaken) + '。</div>';
   h += '<div class="cx-l"><b class="cx-k">兵種相剋</b>' + prey.join(';') + '。' + (preyRows ? '<br>' + preyRows + '<br>' : '') + '騎兵每場第一次普攻 ×' + D.cavCharge + ';謀士主動戰法發動率 +' + cxPct(D.mageRateBonus) + '。</div>';
   h += '<div class="cx-l"><b class="cx-k">治療與禁療</b>單次治療最多回復兵力上限的 ' + cxPct(D.healCap.single) + ';敵人的「禁療」會讓治療變少。第 ' + D.fatigue.start + ' 回合起雙方疲兵:每回合受到傷害 +' + cxPct(D.fatigue.dmg) + '、受到治療 −' + cxPct(D.fatigue.heal) + ',所以隊伍至少帶 1 位治療或護盾。</div>';
   h += '<div class="cx-l"><b class="cx-k">陣營加成</b>同一陣營上陣 ' + fac.join(';') + '(取人數最多的陣營;中立不計,加成上限 攻擊 ' + cxPct((B.cap || D.bondCap).atk) + '、兵力 ' + cxPct((B.cap || D.bondCap).hp) + ')。</div>';
