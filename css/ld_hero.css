@@ -165,5 +165,56 @@
   .ldh-hero { min-height: 76px; }
   .ldh-av { width: 36px; height: 36px; }
 }
+/* ───── 2026-11-16 滿版詳情頁 / 推薦戰法頁(左上返回、無右上 ×):說明不再縮在底部小列,整頁顯示全文、頁面可捲動 ───── */
+.ldh-detail { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; box-sizing: border-box; }
+.ldh-who { font-size: 14px; font-weight: 900; color: #f5c542; }
+.ldh-info.full { height: auto; overflow: visible; padding: 10px 12px; font-size: 15px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ldh-info.full b { font-size: 17px; margin-bottom: 4px; }
+.ldh-info.full span { margin-top: 2px; }
+.ldh-info.full .eq-act { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+.ldh-info.full .ldh-acts { margin-top: 10px; justify-content: flex-start; }
 /* 戰法詳情小鈕(R5):比一般 mini 窄一點,同列放得下 */
 .ldh-mini.sm { padding: 0 8px; font-size: 12px; }
+/* ───── 小浮泡(兵種 / 六圍 / 戰力):靠被點元素、不加 ×,點外面關 ───── */
+.ldh-pop { position: absolute; z-index: 6; box-sizing: border-box; width: max-content; max-width: min(250px, calc(100% - 8px)); padding: 6px 10px; border: var(--line2); border-radius: 10px; background: #fff8e6; color: var(--ink); box-shadow: 0 3px 0 #0006, var(--drop2); font-size: 13px; line-height: 1.45; }
+.ldh-pop b { display: block; font-size: 14px; font-weight: 900; }
+.ldh-pop span { display: block; }
+/* ───── 推薦戰法頁(選擇槽):上方 1~2 行戰法格、下方整區說明可捲動 ───── */
+.ldh-skp { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 6px; box-sizing: border-box; }
+.ldh-skp .ldh-who { flex: 0 0 auto; }
+.ldh-skp .ldh-who i { font-style: normal; font-size: 12px; margin-left: 8px; color: #e9d3a6; font-weight: 700; }
+.ldh-skcells { flex: 0 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 6px; max-height: 118px; overflow-y: auto; padding: 3px; }
+.ldh-skc { position: relative; min-height: 52px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px 6px; border: var(--line2); border-radius: 10px; background: #fff8e6; color: var(--ink); cursor: pointer; text-align: center; }
+.ldh-skc b { font-size: 13px; font-weight: 900; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ldh-skc u { text-decoration: none; font-size: 11px; font-weight: 900; padding: 0 6px; border-radius: 6px; background: var(--paper2); }
+.ldh-skc .tg { position: absolute; left: 4px; top: 3px; font-style: normal; font-size: 11px; font-weight: 900; padding: 0 5px; border: 1.5px solid var(--ink); border-radius: 7px; background: var(--paper2); }
+.ldh-skc .tg.tS { background: var(--q4); } .ldh-skc .tg.tA { background: var(--q3); color: #fff; } .ldh-skc .tg.tB { background: var(--q2); } .ldh-skc .tg.tC { background: var(--q1); }
+.ldh-skc.stcut u { background: #ffd9a0; color: #8a3b00; }
+.ldh-skc.stno { background: #e3dccb; color: #6d6451; }
+.ldh-skc.stno u { background: #cfc6b0; }
+.ldh-skc.stcan u { background: #d6ecc0; color: #2f6d1f; }
+.ldh-skc.semptyx, .ldh-skc.sempty, .ldh-skc.slock { background: #00000044; color: #e9d3a6; border-style: dashed; }
+.ldh-rbadge { position: absolute; right: 3px; top: 3px; font-style: normal; font-size: 10px; font-weight: 900; line-height: 1.3; padding: 0 5px; border-radius: 7px; background: var(--red); color: #fff; box-shadow: 0 1px 0 #0006; }
+.ldh-skdesc.ldh-info.full { flex: 1 1 auto; min-height: 0; height: auto; overflow: hidden auto; -webkit-overflow-scrolling: touch; white-space: normal; }
+.ldh-skdesc p { margin: 4px 0; }
+.ldh-skdesc p em { font-style: normal; font-weight: 900; margin-right: 6px; padding: 0 6px; border-radius: 6px; background: var(--paper2); }
+.ldh-skdesc .ldh-stl { font-weight: 900; }
+.ldh-skdesc .ldh-stl.cut { color: #8a3b00; } .ldh-skdesc .ldh-stl.no { color: #6d6451; } .ldh-skdesc .ldh-stl.can { color: #2f6d1f; }
+.ldh-skdesc .tg { font-style: normal; font-size: 12px; font-weight: 900; padding: 0 6px; border: 1.5px solid var(--ink); border-radius: 8px; background: var(--paper2); white-space: nowrap; }
+.ldh-skdesc .tg.tS { background: var(--q4); } .ldh-skdesc .tg.tA { background: var(--q3); color: #fff; } .ldh-skdesc .tg.tB { background: var(--q2); } .ldh-skdesc .tg.tC { background: var(--q1); }
+.ldh-skdesc .tg.star { background: var(--red); color: #fff; }
+.ldh-skdesc .ldh-acts { margin-top: 10px; justify-content: flex-start; }
+.ldh-skdesc .ldh-mute { opacity: .75; font-size: 13px; }
+/* 屬性頁拿掉底部說明欄後:內容在可用高度內均分(不留一大塊空白) */
+.ldh-scroll[data-tab="attr"] { justify-content: space-evenly; }
+.ldh-scroll[data-tab="attr"] > * { flex: 0 0 auto; }
+/* ───── 傳承頁:小分頁(戰法 / 說明 / 推薦)+ 底部共用操作列 ───── */
+.ldh-subtabs { display: flex; gap: 6px; flex: 0 0 auto; }
+.ldh-sub { flex: 1 1 0; min-height: 44px; padding: 0 8px; box-sizing: border-box; font: 900 14px/1 var(--ld-font); color: #e9d3a6; border: var(--line2); border-radius: 10px; background: linear-gradient(var(--wood2), var(--wood3)); cursor: pointer; }
+.ldh-sub.on { background: linear-gradient(var(--gold2), var(--gold)); color: var(--ink); }
+.ldh-subbody { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
+.ldh-subbody .ldh-skcells { max-height: none; }
+.ldh-bar { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-height: 52px; box-sizing: border-box; padding: 4px 8px; border: var(--line2); border-radius: 12px; background: #fbf1dcee; color: var(--ink); }
+.ldh-bar b { font-size: 14px; font-weight: 900; white-space: nowrap; }
+.ldh-bar span { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 900; }
+.ldh-bar .ldh-mini { flex: 0 0 auto; }

@@ -1,12 +1,13 @@
 // js/ld_nav.js — 新介面骨架:頁面堆疊管理(設計_介面骨架實作計畫.md §3-1、§3-2、任務卡 0)。前綴 ldNav / LDNAV。
-// 首頁不算層,最多 5 層;開已在堆疊中的頁 = 退回那一層(不繞圈);左上返回 = 退一層;右上 X = 全部關掉回首頁;Esc / 手機返回鍵 = 退一層。
+// 首頁不算層,最多 6 層(2026-11-16 由 5 提高:武將介面多了詳情 / 推薦戰法頁);開已在堆疊中的頁 = 退回那一層(不繞圈);左上返回 = 退一層;右上 X = 全部關掉回首頁;Esc / 手機返回鍵 = 退一層。
 // 頁面登錄:ldNavRegister({ id, title, build(el, ctx), onShow(el, ctx), onHide(el, ctx), res: fn→[[字,值]], legacy: { open(ctx), close(), isOpen() } })
+//   def.noClose = true → 該頁沒有右上 ×(只能左上返回 / Esc / 手機返回鍵)。
 //   build 的 el = 內容區;ctx.page = 整頁根元素、ctx.titleEl = 標題木牌、ctx.tabsEl = 頁籤區、ctx.resEl = 資源區;ctx.lvl = 第幾層、ctx.last = 是否第 5 層(不可再往下開頁)。
 //   legacy 頁(舊面板)開在堆疊中:堆疊頂端是舊頁時,所有新頁隱藏;舊頁自己關掉後(isOpen() 為 false)下次動作前會被剪掉。
 // 純函式 ldNavPlan(stack, id, max) 給測試用。z-index 45(高於舊大面板 41、低於舊底部面板 72 與戰鬥層 70)。ES2017,不用 ?. ??。
 // 第 6 階段:舊頁(cards / goods / settings / log / tour / map / share)登錄在檔尾;舊頁 × 自行關閉由 ldNavPrune(動作前、250 ms 輪詢、shell 每秒)剪掉;
 //   popstate 以 history.state 判斷落點(落在自己那筆 = 被彈掉的是上層戰鬥層,不處理)+ ldNavSkipPop(ms) 帶逾時的「略過下一次 popstate」;Esc 在 window 捕獲階段先於 panelmgr 處理(新頁在頂端時,不讓底下的舊面板先被關)。
-var LDNAV = { max: 5, stack: [], reg: {}, histOn: false, histSkip: false, skipUntil: 0, bound: false, timer: 0, pollMs: 250 };
+var LDNAV = { max: 6, stack: [], reg: {}, histOn: false, histSkip: false, skipUntil: 0, bound: false, timer: 0, pollMs: 250 };
 // 略過下一次 popstate(程式自己呼叫 history.back() 之前用);ms 內沒有 popstate 就自動失效,不會吞掉使用者之後的返回鍵
 function ldNavSkipPop(ms) { LDNAV.histSkip = true; LDNAV.skipUntil = Date.now() + (ms > 0 ? ms : 1000); }
 // stack = 目前堆疊的頁 id 陣列;回 { op:'push'|'rewind'|'deny', to }:rewind 的 to = 要退回的那一層索引;push 的 to = 新層索引
@@ -144,7 +145,7 @@ function ldNavMake(def, ctx) {
   x.setAttribute('data-ld', 'close'); x.setAttribute('aria-label', '關閉');
   back.addEventListener('click', function () { ldNavBack(); });
   x.addEventListener('click', function () { ldNavClose(); });
-  top.appendChild(back); top.appendChild(title); top.appendChild(tabs); top.appendChild(res); top.appendChild(x);
+  top.appendChild(back); top.appendChild(title); top.appendChild(tabs); top.appendChild(res); if (!def.noClose) top.appendChild(x);   // def.noClose:只有左上返回、不給右上 ×(武將介面各頁)
   page.appendChild(scene); page.appendChild(top); page.appendChild(body);
   ldNavSetBg(scene, def); page.__ldScene = scene;
   ctx.page = page; ctx.titleEl = title; ctx.tabsEl = tabs; ctx.resEl = res; ctx.bodyEl = body;

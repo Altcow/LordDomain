@@ -341,14 +341,14 @@ function skdDetAct(ctx, act, v, b) {
   if (act === 'hero' || act === 'inhgo') {
     f = cardsFind(cs, v);
     if (!f) { skdToast('找不到這位武將'); return true; }
-    skdGo('hero', { id: v, list: [v], tab: act === 'inhgo' ? 'inh' : 'skill' });
+    skdGo('hero', { id: v, list: [v], tab: act === 'inhgo' ? 'inh' : 'attr' });
     return true;
   }
   if (act === 'herogo') {
     h = (typeof skrSkillHeroes === 'function' ? skrSkillHeroes(cs, ctx.id) : []).filter(function (x) { return x.fig === fig; })[0];
     if (!h || h.state === 'none') { skdToast('你還沒有 ' + skdFigName(fig) + (skdSk(ctx.id) ? ',抽到後就能裝這個戰法' : '')); return true; }
     if (h.state === 'owned') { skdToast(skdFigName(fig) + ' 不在卡包,先收入卡包'); return true; }
-    skdGo('hero', { id: h.e.id, list: [h.e.id], tab: 'skill' });
+    skdGo('hero', { id: h.e.id, list: [h.e.id], tab: 'attr' });
     return true;
   }
   if (act === 'eq') {
@@ -380,7 +380,7 @@ ldNavRegister({
   onShow: function (el, ctx) { if (ctx.dexEl) skdDexRender(ctx.dexEl, ctx); }   // 從詳情 / 武將頁退回:重畫(裝備可能已變)
 });
 ldNavRegister({
-  id: 'skill', title: '戰法',
+  id: 'skill', title: '戰法', noClose: true,
   build: function (el, ctx) { ctx.confirm = ''; skdDetailRender(el, ctx); },
   onShow: function (el, ctx) { if (ctx.detEl) { ctx.confirm = ''; skdDetailRender(ctx.detEl, ctx); } }
 });

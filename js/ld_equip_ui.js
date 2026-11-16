@@ -302,12 +302,12 @@ function eqBagClick(ctx, ev) {
 
 if (typeof ldNavRegister === 'function') {
   ldNavRegister({
-    id: 'equipPick', title: '換裝',
+    id: 'equipPick', title: '換裝', noClose: true,
     build: function (el, ctx) { eqPickRender(el, ctx); },
     onShow: function (el, ctx) { eqPickRender(el, ctx); }
   });
   ldNavRegister({
-    id: 'equipEnh', title: '裝備',
+    id: 'equipEnh', title: '裝備', noClose: true,
     res: function () { return [['礪石', (typeof matCount === 'function') ? matCount('m_whet') : 0]]; },
     build: function (el, ctx) { ctx.sel = {}; ctx.res = null; ctx.enhConfirm = false; ctx.salvConfirm = false; eqEnhRender(el, ctx); }
   });
