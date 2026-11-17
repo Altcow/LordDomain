@@ -22,6 +22,7 @@ var FEATURES = {
   tower: false,        // 試煉塔(首頁木牌、ld_tower 頁、首通名聲、賽季塔層同步;併入 49 格大地圖戰鬥,暫時關閉;程式與存檔 lorddomain.tower.v1 保留;主線 12 已改成地圖戰鬥計數,不再依賴本旗標)
   grid49: false,       // 大地圖 19×19(設計_49格地圖_整合規格.md;js/wd_grid_data.js 資料表已載入、尚無任何程式引用;K / B 包完成接入前保持關閉)
   wmap: true,          // (v65 預設開) M1 視覺原型:斜角大地圖當主畫面(設計_M1視覺原型_實作計畫.md;W2 起接入:js/wmap_ui.js 在外殼 ld 模式下把主畫面換成地圖(進城 / 出城、底部導覽重接);網址 ?wmap=1 / ?wmap=0 或 localStorage lorddomain.feature.wmap 覆寫)
+  seek_talent: false,   // 尋訪人才・寶物・線索兌換(書院『人才·寶物』『線索』分頁、武將寶具槽來源)暫時關閉;尋訪馬不受影響;網址 ?seek_talent=1(別名 ?seekTalent=1)/ ?seek_talent=0 或 localStorage lorddomain.feature.seek_talent 覆寫
   shell: true          // 新主畫面外殼 App Shell(js/shell.js、css/shell.css;B 包 S0/S1)預設開(2026-11-12 純卡牌版);網址 ?shell=1 / ?shell=0 或 localStorage lorddomain.feature.shell 覆寫
 };
 var FEATURES_WARNED = {};
@@ -40,6 +41,9 @@ function featureLoadOverrides() {
   if (v !== null) FEATURES.shell = v;
   featureLoadOverride2('ldui', s);
   featureLoadOverride2('wmap', s);
+  featureLoadOverride2('seek_talent', s);
+  m = /[?&]seekTalent=([01])/.exec(s);   // 別名(駝峰寫法)
+  if (m) FEATURES.seek_talent = m[1] === '1';
 }
 // 其他旗標覆寫(同 shell 的做法):?名稱=1|0 優先,其次 localStorage('lorddomain.feature.名稱' = '1' / '0')
 function featureLoadOverride2(name, search) {

@@ -43,17 +43,18 @@ function wmapGoUiCtx() {   // {W, cs}:沿用舊地圖頁的狀態(第一次用�
   if (!WMAPGO.mig && WDUI.W && typeof wmapGoMigrate === 'function' && typeof WMAP !== 'undefined' && WMAP.WG) wmapGoUiMigrate();
   return { W: WDUI.W, cs: WDUI.cs };
 }
-// 世界版本重排(gv 2 → 3):先把 world.v2 備份成 .bak_gv2(只寫一次、不覆蓋),再重排並存檔、提示一次
+// 世界版本重排(gv 2 / 3 → 4):先把 world.v2 備份成 .bak_gv<舊版>(gv 3 → .bak_gv3;只寫一次、不覆蓋),再重排並存檔、提示一次
 function wmapGoUiMigrate() {
-  var m, v;
+  var m, v, bk;
   WMAPGO.mig = 1;
   if (!wmapGoNeedMigrate(WDUI.W, WMAP.WG)) return;
+  bk = '.bak_gv' + (WDUI.W.g2 && WDUI.W.g2.gv > 0 ? WDUI.W.g2.gv : 2);
   try {
     v = localStorage.getItem(WDUI_KEY);
-    if (v && localStorage.getItem(WDUI_KEY + '.bak_gv2') === null) localStorage.setItem(WDUI_KEY + '.bak_gv2', v);
+    if (v && localStorage.getItem(WDUI_KEY + bk) === null) localStorage.setItem(WDUI_KEY + bk, v);
   } catch (e) { /* 備份失敗(容量 / 無痕)不影響重排 */ }
   m = wmapGoMigrate(WDUI.W, WDUI.cs, WMAP.WG, ldNow());
-  if (m.changed) { wmapGoUiSave(); wmapGoUiToast('地圖改版:縣城 / 郡城 / 關口重新排列' + (m.home ? ',出征中的 ' + m.home + ' 隊已回城' : '') + (m.res ? ',' + m.res + ' 塊領地因地形變動失效' : '')); }
+  if (m.changed) { wmapGoUiSave(); wmapGoUiToast('地圖改版:縣城 / 郡城 / 關口與資源重新排列' + (m.home ? ',出征中的 ' + m.home + ' 隊已回城' : '') + (m.res ? ',' + m.res + ' 塊領地因地形變動失效' : '')); }
 }
 function wmapGoUiSave() { if (typeof wdUiSave === 'function') wdUiSave(); }
 function wmapGoUiInfo(gi) { return typeof wmapInfoOf === 'function' ? wmapInfoOf(gi) : null; }
@@ -77,7 +78,7 @@ function wmapGoUiConsume(evs, quiet) {
   if (!evs || !evs.length) return;
   if (typeof wmapSettleUiSync === 'function') {   // W5:先對帳(占領 / 名額 / 占領獎勵寫進戰報),再依結果做快報條;地圖格的戰報不走舊 toast
     sr = wmapSettleUiSync();
-    for (i = 0; i < evs.length; i++) { if (evs[i].k === 'report' && wmapGoIsPtId(evs[i].pt)) reps.push(evs[i]); else rest.push(evs[i]); }
+    for (i = 0; i < evs.length; i++) { if (evs[i].k === 'report' && (wmapGoIsPtId(evs[i].pt) || (typeof wmapMobIsPtId === 'function' && wmapMobIsPtId(evs[i].pt)))) reps.push(evs[i]); else rest.push(evs[i]); }
   } else rest = evs;
   if (typeof wdUiConsume === 'function') {
     if (reps.length) wdUiConsume(reps, true);   // 掉落入帳(不跳舊 toast)
@@ -94,7 +95,7 @@ function wmapGoUiSyncTrips() {
     t = c.W.trips[i];
     if (!t.lg) continue;
     px = WMAPGO.proxies[t.id] || (WMAPGO.proxies[t.id] = { id: t.id, side: 'own', tag: t.team });
-    px.lg = t.lg; px.tag = t.team; seen[t.id] = 1; list.push(px);
+    px.lg = t.lg; px.tag = t.team; px.slots = t.slots; seen[t.id] = 1; list.push(px);   // slots → 行軍層判定兵種模型(wmapArmyTroopOf)
   }
   for (k in WMAPGO.proxies) if (!seen[k]) delete WMAPGO.proxies[k];
   att.layer.setTrips(list);
@@ -407,6 +408,7 @@ function wmapGoUiInit() {
   if (WMAPGO.boot && (WMAPGO.boot.report || WMAPGO.boot.home || WMAPGO.boot.idleend)) {
     wmapGoUiToast('離線期間:' + (WMAPGO.boot.report ? '戰報 ' + WMAPGO.boot.report + ' 場(勝 ' + WMAPGO.boot.win + ')' : '') + (WMAPGO.boot.home ? ' 回城 ' + WMAPGO.boot.home + ' 隊' : '') + (WMAPGO.boot.idleend ? ' 閒置到期撤退 ' + WMAPGO.boot.idleend + ' 隊' : '') + (typeof wmapSettleUiBootText === 'function' ? wmapSettleUiBootText() : ''));
   } else if (typeof wmapSettleUiBootText === 'function' && wmapSettleUiBootText()) wmapGoUiToast('離線期間:' + wmapSettleUiBootText().replace(/^・/, ''));
+  if (typeof wmapMobUiInit === 'function') wmapMobUiInit();   // 野怪標記 / 小卡(js/wmap_mob_ui.js)
   if (typeof setInterval === 'function') WMAPGO.tid = setInterval(wmapGoUiTick, 1000);
   wmapGoUiAdd(document, 'visibilitychange', function () { if (!document.hidden) wmapGoUiTick(); });
   return true;

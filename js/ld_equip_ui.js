@@ -41,16 +41,19 @@ function ldEquipItemHtml(it, opt) {
 }
 
 // ───────── 武將詳情掛鉤(ld_hero.js)─────────
+// 寶具來源只有尋訪人才・寶物;旗標 seek_talent 關閉且該槽沒有已持有的寶具時,顯示『尚未開放』(已持有仍可裝備 / 顯示)
+function eqRelicOff(k, it) { return !it && eqSlotKeyOf(k) === 'relic' && !featureOn('seek_talent'); }   // @DORMANT seek_talent
 function ldEquipSlotInner(entryId, k, q) {
   var it;
   if (typeof gearOf !== 'function' || typeof GEAR_CFG === 'undefined') return null;
   it = gearOf(entryId)[eqSlotKeyOf(k)];
-  if (!it) return eqArt(q[0], 'ldh-eqi') + '<i>' + eqEsc(q[1]) + '</i>';
+  if (!it) return eqArt(q[0], 'ldh-eqi') + '<i>' + (eqRelicOff(k, it) ? '尚未開放' : eqEsc(q[1])) + '</i>';
   return eqIconHtml(it) + '<i>' + eqEsc(q[1]) + '</i>';
 }
 function ldEquipInfoHtml(entryId, k) {
   var slot = eqSlotKeyOf(k), it = gearOf(entryId)[slot], cs = eqCs(), f = cs ? cardsFind(cs, entryId) : null, nm = GEAR_CFG.slotName[slot], star = f ? cardsStarLv(f.e) : 0, h = '', free;
   free = gearList({ slot: slot, free: true }).length;
+  if (!it && eqRelicOff(k, it)) return '<b>' + nm + '</b><span>尚未開放。</span>';
   if (!it) {
     h = '<b>' + nm + '</b><span>尚未裝備。紫裝需 1 星、金裝需 2 星。背包有 ' + free + ' 件' + nm + '可換。</span>';
     h += '<button class="ldh-mini" data-act="eqpick" data-v="' + k + '">選擇' + nm + '</button>';
@@ -101,7 +104,7 @@ function eqPickHtml(ctx) {
   h += '<div class="eq-sec">目前</div>';
   h += cur ? '<div class="eq-row cur">' + ldEquipItemHtml(cur) + '<div class="eq-bt"><button class="eq-b" data-a="det" data-v="' + eqEsc(cur.id) + '">強化 / 詳情</button><button class="eq-b warn" data-a="off" data-v="' + eqEsc(cur.id) + '">脫下</button></div></div>' : '<div class="eq-none">沒有裝備</div>';
   h += '</div><div class="eq-r"><div class="eq-sec">可換(' + list.length + ')</div>';
-  if (!list.length) h += '<div class="eq-none">背包沒有其他' + GEAR_CFG.slotName[slot] + '。' + (slot === 'wpn' || slot === 'arm' ? '到鍛造坊鍛造。' : slot === 'horse' ? '到書院尋訪馬。' : '到書院尋訪人才時有機會尋到。') + '</div>';
+  if (!list.length) h += '<div class="eq-none">背包沒有其他' + GEAR_CFG.slotName[slot] + '。' + (slot === 'wpn' || slot === 'arm' ? '到鍛造坊鍛造。' : slot === 'horse' ? '到書院尋訪馬。' : (featureOn('seek_talent') ? '到書院尋訪人才時有機會尋到。' : '寶具尚未開放。')) + '</div>';   // @DORMANT seek_talent
   list.forEach(function (it) {
     var need = GEAR_CFG.needStar[it.q], lack = star < need;
     h += '<div class="eq-row' + (lack ? ' lack' : '') + '">' + ldEquipItemHtml(it, { owner: true }) + '<div class="eq-bt">' +
@@ -266,7 +269,7 @@ function eqBagHtml(ctx) {
   n = gearList({ free: true }).length;
   h += '<div class="eq-filter">' + EQ_BAG_FILTERS.map(function (f) { return '<button class="ld-tab' + ((ctx.slot || '') === f[0] ? ' on' : '') + '" data-a="flt" data-v="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>';
   h += '<div class="eq-kv"><span>未穿庫存</span><b class="' + (n >= GEAR_CFG.inv ? 'bad' : '') + '">' + n + ' / ' + GEAR_CFG.inv + '</b></div>';
-  if (!list.length) return h + '<div class="eq-none">還沒有裝備。到鍛造坊鍛造武器 / 防具,到書院尋訪馬與寶具。</div>';
+  if (!list.length) return h + '<div class="eq-none">還沒有裝備。到鍛造坊鍛造武器 / 防具,到書院尋訪馬' + (featureOn('seek_talent') ? '與寶具' : '') + '。</div>';   // @DORMANT seek_talent
   h += '<div class="eq-grid">';
   list.forEach(function (it) { h += '<div class="eq-cell ' + EQ_QCLS[it.q] + '" data-a="item" data-v="' + eqEsc(it.id) + '">' + eqIconHtml(it) + '<i>' + eqEsc(GEAR_CFG.slotName[it.slot]) + '</i>' + (it.owner ? '<u>穿</u>' : '') + '</div>'; });
   h += '</div>';

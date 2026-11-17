@@ -5,7 +5,7 @@
 // 資料來源:cardsFind / cardsStats / bnPower(bnUnitSpec) / bnAptOf / CARD_FAC / cardsStarLv;戰法 bnSkillInfo / cuCSkillRows;裝卸 bnSkcCanEquip / bnSkcEquip / bnSkcUnequip;傳承 cuInhState / bnSkcInherit。
 // e.star 是「鎖定防誤遣散」旗標(不是星等,星等 e.starLv):青銅六角 = 鎖定切換(同 cardsui.js 的 a === 'star')。升星入口不在武將介面(由熔爐頁自己處理)。
 // 素材走 ld_art.js 佔位(has:false = CSS 徽章 + 單一漢字)。純函式與 DOM 分開,供 tools/test_ld_hero.js 測試。ES2017,不用 ?. ??。
-var LDHERO_TABS = [['attr', '屬性'], ['bio', '傳記'], ['inh', '傳承']];
+var LDHERO_TABS = [['attr', '屬性'], ['inh', '傳承'], ['bio', '傳記']];
 var LDHERO_EQ = [['eq_weapon', '武器'], ['eq_armor', '防具'], ['eq_horse', '馬'], ['eq_treasure', '寶具']];
 var LDHERO_ST = [['st_tong', '統'], ['st_wu', '武'], ['st_zhi', '智'], ['st_zheng', '政'], ['st_mei', '魅']];
 var LDHERO_ST_INFO = [
@@ -166,7 +166,7 @@ function ldHeroRecApply(ctx, cs, f, confirmed) {
 // ───────── 推薦戰法頁(選擇槽):上方 1~2 行戰法格、下方整區說明(可捲動);格子標「推薦」小徽章,狀態 = 自帶 / 已裝 / 可裝 / 可拆 / 未得 ─────────
 // 缺的戰法來源在某張卡上(傳承)= 可拆:說明區給〔拆〕鈕,開那張卡的傳承頁,沿用原本的拆卡確認流程;其餘 = 未得
 function ldHeroSkSrcCard(m) { var s = (m && m.src) || {}, e = s.e; return (e && e.id && (s.k === 'inh' || s.k === 'inhWait' || s.k === 'inhRoster')) ? e : null; }
-// 回 [{ key, kind:'sk'|'empty'|'lock', id, slot, st:'自帶'|'自動'|'已裝'|'可裝'|'可拆'|'未得'|'空槽'|'鎖', rec, m, tk, why }]
+// 回 [{ key, kind:'sk'|'empty'|'lock', id, slot, st:'自帶'|'自動'|'已裝'|'可裝'|'可傳承'|'未得'|'空槽'|'鎖', rec, m, tk, why }]
 function ldHeroSkCells(cs, f) {
   var e = f.e, inR = f.list === 'roster', p = ldHeroRecPlan(cs, f), rows = (typeof cuCSkillRows === 'function') ? cuCSkillRows(e, inR) : [], out = [], seen = {}, recIdx = {}, eqs = [];
   function add(c) { if (c.kind === 'sk') { if (!c.id) return; if (c.slot === -1) c.key = 'fx:' + c.id; else { if (seen[c.id]) return; seen[c.id] = 1; c.key = 'sk:' + c.id; } } out.push(c); }   // 自帶 / 自動戰法的格子另用 fx: 鍵(同一戰法也可能同時是推薦的缺項)
@@ -182,17 +182,30 @@ function ldHeroSkCells(cs, f) {
       var on = p.cur.indexOf(id) >= 0, tk = p.take.filter(function (t) { return t.id === id; })[0] || null;
       add({ kind: 'sk', id: id, slot: on ? p.cur.indexOf(id) : -2, st: on ? '已裝' : '可裝', rec: true, tk: tk, why: skrWhyText(p.why[i]) });
     });
-    p.miss.forEach(function (m) { add({ kind: 'sk', id: m.id, slot: -2, st: ldHeroSkSrcCard(m) ? '可拆' : '未得', rec: true, m: m }); });
+    p.miss.forEach(function (m) { add({ kind: 'sk', id: m.id, slot: -2, st: ldHeroSkSrcCard(m) ? '可傳承' : '未得', rec: true, m: m }); });
   }
   eqs.forEach(function (r) { add({ kind: 'sk', id: r.id, slot: r.slot, st: '已裝', rec: false }); });
   return out;
 }
-function ldHeroSkCellHtml(c, ctx) {
-  var nm, t;
+// 一列一筆(2026-11-16):列首標籤(自帶 / 已裝備 / 推薦 / 空槽 / 鎖)+ 階級小標 + 戰法名 + 列尾狀態(只有推薦列:可學習 / 可裝備 / 未得)。「自動」與「自帶」玩家介面不區分,一律標「自帶」
+function ldHeroSkGroup(c) { return (c.st === '自帶' || c.st === '自動') ? 0 : (c.st === '已裝' || c.kind === 'empty' || c.kind === 'lock') ? 1 : 2; }
+function ldHeroSkTag(c) { var g = ldHeroSkGroup(c); return c.kind === 'empty' ? '空槽' : c.kind === 'lock' ? '鎖' : g === 0 ? '自帶' : g === 1 ? '已裝備' : '推薦'; }
+function ldHeroSkRst(c) { return ldHeroSkGroup(c) === 2 ? (c.st === '可傳承' ? ['可傳承', 'cut'] : c.st === '可裝' ? ['可裝備', 'can'] : ['未得', 'no']) : null; }
+// 固定排序:自帶 → 已裝備(含空槽,依槽位)→ 推薦(維持推薦順序)
+function ldHeroSkSorted(cells) {
+  return cells.map(function (c, i) { return { c: c, i: i }; }).sort(function (x, y) {
+    var gx = ldHeroSkGroup(x.c), gy = ldHeroSkGroup(y.c);
+    if (gx !== gy) return gx - gy;
+    if (gx === 1) { var sx = x.c.slot < 0 || x.c.slot === undefined ? 9 : x.c.slot, sy = y.c.slot < 0 || y.c.slot === undefined ? 9 : y.c.slot; if (sx !== sy) return sx - sy; }
+    return x.i - y.i;
+  }).map(function (o) { return o.c; });
+}
+function ldHeroSkRowHtml(c, ctx, first) {
+  var nm, t = '', g = ldHeroSkGroup(c), rs = ldHeroSkRst(c);
   if (c.kind === 'sk') { nm = ldHeroSkName(c.id); t = ldHeroTier(c.id); }
-  else { nm = c.kind === 'lock' ? '選擇槽(青階開放)' : '空槽'; t = ''; }
-  return '<div class="ldh-skc s' + c.kind + ' st' + (c.st === '可拆' ? 'cut' : c.st === '未得' ? 'no' : c.st === '已裝' || c.st === '自帶' || c.st === '自動' ? 'have' : 'can') + (ctx.skSel === c.key ? ' sel' : '') + '" role="button" tabindex="0" data-act="skpick" data-v="' + ldHeroEsc(c.key) + '">' +
-    (c.rec ? '<em class="ldh-rbadge">推薦</em>' : '') + (t ? '<i class="tg t' + ldHeroEsc(t) + '">' + ldHeroEsc(t) + '</i>' : '') + '<b>' + ldHeroEsc(nm) + '</b><u>' + c.st + '</u></div>';
+  else nm = c.kind === 'lock' ? '選擇槽(青階開放)' : '(尚未裝備)';
+  return '<div class="ldh-skr g' + g + ' k' + c.kind + (first ? ' first' : '') + (ctx.skSel === c.key ? ' sel' : '') + '" role="button" tabindex="0" data-act="skpick" data-v="' + ldHeroEsc(c.key) + '">' +
+    '<u class="tag t' + g + '">' + ldHeroSkTag(c) + '</u>' + (t ? '<i class="tg t' + ldHeroEsc(t) + '">' + ldHeroEsc(t) + '</i>' : '') + '<b>' + ldHeroEsc(nm) + '</b>' + (rs ? (c.st === '可傳承' && ldHeroSkSrcCard(c.m) ? '<button class="rst cut btn" data-act="skinh" data-v="' + ldHeroEsc(ldHeroSkSrcCard(c.m).id) + '" aria-label="可傳承,按下確認">傳承</button>' : '<span class="rst ' + rs[1] + '">' + rs[0] + '</span>') : '') + '</div>';
 }
 function ldHeroSkLines(id) {
   var info = ldHeroSkInfo(id), lines = (info && info.lines) ? info.lines : [];
@@ -226,7 +239,7 @@ function ldHeroSkApplyHtml(cs, f, ctx) {
 function ldHeroSkDescHtml(cs, f, ctx, cells) {
   var c = cells.filter(function (x) { return x.key === ctx.skSel; })[0], inR = f.list === 'roster', h = '', acts = '', p = ldHeroRecPlan(cs, f), t, src;
   if (!c) {
-    h = '<b>選擇槽</b><p>點上方任一戰法格,這裡會顯示說明與狀態。格子上有「推薦」的是依武將特性推薦的戰法。</p>' + (inR ? '' : '<p>非卡包人員不能裝備戰法(先收入卡包)。</p>');
+    h = '<b>選擇槽</b><p>點上方任一列,這裡會顯示說明與狀態。標「推薦」的是依武將特性推薦的戰法。</p>' + (inR ? '' : '<p>非卡包人員不能裝備戰法(先收入卡包)。</p>');
     if (p) p.busy.forEach(function (b) { if (p.rec.indexOf(b.id) < 0) h += '<p class="ldh-mute">『' + ldHeroEsc(ldHeroSkName(b.id)) + '』目前在 ' + ldHeroEsc(b.holderName || '別人') + '(' + ldHeroEsc(b.why || '使用中') + ')身上,先不拿。</p>'; });
     return h + ldHeroSkApplyHtml(cs, f, ctx) + '<div class="ldh-acts"><button class="ldh-mini" data-act="skdex">看更多候選 ›</button></div>';
   }
@@ -238,19 +251,19 @@ function ldHeroSkDescHtml(cs, f, ctx, cells) {
   }
   t = ldHeroTier(c.id);
   h = '<b>' + (t ? '<i class="tg t' + ldHeroEsc(t) + '">' + ldHeroEsc(t) + '</i> ' : '') + ldHeroEsc(ldHeroSkName(c.id)) + (c.rec ? ' <i class="tg star">推薦</i>' : '') + '</b>';
-  if (c.st === '可拆') {
+  if (c.st === '可傳承') {
     src = ldHeroSkSrcCard(c.m);
-    h += '<p class="ldh-stl cut">狀態:可拆 — 還沒解鎖,拆「' + ldHeroEsc(src ? src.name : '') + '」的傳承即可取得。</p>' + ldHeroSkCutInfo(cs, c);
-    acts = (ctx.last || !src) ? '<p class="ldh-mute">請返回卡包後,從卡包進入那張卡的「傳承」。</p>' : '<button class="ldh-mini warn" data-act="skgo" data-v="' + ldHeroEsc(src.id) + '">拆</button>';
+    h += '<p class="ldh-stl cut">狀態:可傳承 — 還沒解鎖,拆「' + ldHeroEsc(src ? src.name : '') + '」的傳承即可取得。</p>' + ldHeroSkCutInfo(cs, c);
+    acts = src ? '<button class="ldh-mini warn" data-act="skinh" data-v="' + ldHeroEsc(src.id) + '">傳承</button>' : '<p class="ldh-mute">這個戰法的來源卡目前不在,先到卡包確認。</p>';
   } else if (c.st === '未得') {
     h += '<p class="ldh-stl no">狀態:未得 — ' + ldHeroEsc((c.m && c.m.src && c.m.src.text) || '目前無法取得') + '</p>';
   } else if (c.st === '已裝') {
     h += '<p class="ldh-stl have">狀態:已裝備' + (c.slot >= 0 ? '(選擇槽 ' + (c.slot + 1) + ')' : '') + '。</p>' + (c.why ? '<p>' + ldHeroEsc(c.why) + '</p>' : '');
     if (inR && c.slot >= 0) acts = (ctx.last ? '' : '<button class="ldh-mini" data-act="pick" data-v="' + c.slot + '">更換</button>') + '<button class="ldh-mini warn" data-act="uneq" data-v="' + c.slot + '">卸下</button>';
   } else if (c.st === '可裝') {
-    h += '<p class="ldh-stl can">狀態:已解鎖,可裝上。' + (c.tk ? '會從 ' + ldHeroEsc(c.tk.fromName || '別人') + ' 身上拿來。' : '') + '</p>' + (c.why ? '<p>' + ldHeroEsc(c.why) + '。</p>' : '');
+    h += '<p class="ldh-stl can">狀態:可裝備 — 已解鎖,還沒裝上。' + (c.tk ? '會從 ' + ldHeroEsc(c.tk.fromName || '別人') + ' 身上拿來。' : '') + '</p>' + (c.why ? '<p>' + ldHeroEsc(c.why) + '。</p>' : '');
     if (inR) acts = '<button class="ldh-mini warn" data-act="skequip" data-v="' + ldHeroEsc(c.id) + '">裝上</button>';
-  } else h += '<p class="ldh-stl have">狀態:' + c.st + '戰法。</p>';
+  } else h += '<p class="ldh-stl have">狀態:自帶 — ' + (c.st === '自動' ? '預設習得,不用裝備。' : '武將本來就有的固定戰法。') + '</p>';
   h += ldHeroSkLines(c.id);
   if (ldHeroTier(c.id)) acts += ldHeroSkBtn(c.id);
   return h + (acts ? '<div class="ldh-acts">' + acts + '</div>' : '');
@@ -294,11 +307,6 @@ function ldHeroInhTarget(cs, f) {
   st = tg ? cuInhState(cs, tg) : { ok: false, n: 0, reason: adv.text };
   return { target: tg || f, spare: adv.code === 'hasSpare' || adv.code === 'isSpare', st: st, adv: adv };
 }
-function ldHeroInhSkill(x) {
-  var info = ldHeroSkInfo(x.id), lines = (info && info.lines) ? info.lines : [];
-  return '<div class="ldh-isk"><div class="hd"><i class="tg t' + ldHeroEsc(x.tier) + '">' + ldHeroEsc(x.tier) + '</i><b>' + ldHeroEsc(ldHeroSkName(x.id)) + '</b><u class="' + (x.owned ? 'own' : '') + '">' + (x.owned ? '已擁有' : '未得') + '</u></div>' +
-    lines.map(function (l) { return '<p class="' + (String(l[0]).indexOf('典故') >= 0 ? 'fl' : 'ln') + '"><em>' + ldHeroEsc(String(l[0]).replace('事蹟 / 典故', '典故')) + '</em>' + ldHeroEsc(l[1]) + '</p>'; }).join('') + '</div>';
-}
 // 拆了會怎樣
 function ldHeroInhEffect(cs, f, list, adv, T) {
   var e = f.e, fig = !!e.fig, nums = adv.nums, fresh = list.filter(function (x) { return !x.owned; }), names = list.map(function (x) { return '『' + ldHeroSkName(x.id) + '』'; }).join('、'), maxU = (typeof bnSkcMaxUse === 'function' && list.length) ? bnSkcMaxUse(list[0].id) : 1, h = '', frag = T.target && T.target.e ? bnSkcFrag(T.target.e) : nums.frag;
@@ -317,7 +325,7 @@ function ldHeroInhBest(cs, sid, fig) {
   var K = ldHeroKit(), hs = ldHeroInhHeroes(cs, sid, fig, 3), h;
   h = '<p>本人裝(本命):效果 100%、發動率 +' + ldHeroPct(K.homeRate) + '%</p><p>別人裝:效果 ' + ldHeroPct(K.otherDefaultMul) + '%</p>';
   if (!bnSkcOwned(sid)) h += '<p class="ldh-mute">還沒解鎖,拆卡取得後才能裝給他們。</p>';
-  h += '<p class="lbl">推薦給(點頭像直接裝上)</p><div class="ldh-heroes">' + hs.map(function (x) { return ldHeroHeroBtn(x, 'inhhero', x.fig); }).join('') + '</div><div class="ldh-acts">' + ldHeroSkBtn(sid) + '<button class="ldh-mini" data-act="skdex">看更多候選 ›</button></div>';
+  h += ldHeroInhTeam(sid) + '<p class="lbl">推薦給(點頭像直接裝上)</p><div class="ldh-heroes">' + hs.map(function (x) { return ldHeroHeroBtn(x, 'inhhero', x.fig); }).join('') + '</div><div class="ldh-acts">' + ldHeroSkBtn(sid) + '<button class="ldh-mini" data-act="skdex">看更多候選 ›</button></div>';
   return h;
 }
 // 拆完的接續動作:要現在裝上嗎?(只列卡包中、有空槽或能裝的人)
@@ -330,63 +338,64 @@ function ldHeroInhDoneHtml(cs, d) {
     (hs.length ? '<p>點頭像,直接裝到他的第一個空槽。</p><div class="ldh-heroes">' + hs.map(function (x) { return ldHeroHeroBtn(x, 'inhequip', x.e.id); }).join('') + '</div>' : '<p>目前卡包裡沒有能裝的人,之後到武將頁的「戰法」書籤再裝。</p>') +
     '<div class="ldh-acts"><button class="ldh-mini" data-act="inhdone">先不裝</button></div>');
 }
-// 拆卡確認(行內)
-function ldHeroInhConfirm(cs, f, T, list) {
-  var tg = T.target.e, adv = T.adv, fig = !!tg.fig, fresh = list.filter(function (x) { return !x.owned; }), gain = fresh.map(function (x) { return '『' + ldHeroSkName(x.id) + '』'; }).join('、'), cp = (fig && typeof skrCopies === 'function') ? skrCopies(cs, tg.fig) : null, who = fig ? ldHeroFigName(tg.fig) || tg.name : tg.name, h;
-  h = '<p class="big">確定拆掉「' + ldHeroEsc(tg.name) + ' ★' + cardsStarLv(tg) + (T.spare ? '(副卡)' : '') + '」?</p>' +
-    '<p><em>得到</em>' + ldHeroEsc(gain) + '(永久)、碎片 ' + bnSkcFrag(tg) + '</p>' +
-    '<p><em>失去</em>' + (fig ? '這張' + ldHeroEsc(who) + '轉為流浪(星等保留,花 ' + adv.nums.recall + ' 碎片可請回)' : '這位路人消失,不能請回') + '</p>';
-  if (T.spare && cp && cp.main) h += '<p>主力' + ldHeroEsc(who) + ' ★' + cardsStarLv(cp.main) + ' 不受影響。</p>';
-  else if (fig) h += '<p>拆完後卡包裡就沒有' + ldHeroEsc(who) + '了;他身上的武器、防具會退回背包。</p>';
-  return h + '<div class="ldh-acts"><button class="ldh-mini" data-act="inhno">取消</button><button class="ldh-mini warn" data-act="inhyes">確定拆卡</button></div>';
+// 傳承確認視窗(浮層,不是 ldNav 頁;兩個入口共用:推薦戰法頁列尾〔傳承〕/ 武將傳承頁〔傳承〕):來源卡、得到、失去、建議、淨損益;可捲動,〔取消〕/ 點視窗外 = 關閉,〔確定傳承〕才執行(沿用 bnSkcInherit)
+function ldHeroModalHtml(cs, ctx) {
+  var f = (ctx && ctx.modal) ? cardsFind(cs, ctx.modal.cid) : null, T, list, fresh, tg, adv, n, fig, frag, sid, cp, who, h;
+  if (!f) return '';
+  T = ldHeroInhTarget(cs, f); list = bnSkcInheritList(f.e); fresh = list.filter(function (x) { return !x.owned; });
+  if (!T.st.ok || !fresh.length) return '';
+  tg = T.target.e; adv = T.adv; n = adv.nums; fig = !!tg.fig; frag = bnSkcFrag(tg); sid = fresh[0].id;
+  who = fig ? ldHeroFigName(tg.fig) || tg.name : tg.name;
+  cp = (fig && typeof skrCopies === 'function') ? skrCopies(cs, tg.fig) : null;
+  h = '<p><em>來源</em>' + ldHeroEsc(tg.name) + ' ★' + cardsStarLv(tg) + (T.spare ? '(副卡)' : '') + ' 這張卡(傳承 = 拆卡)</p>';
+  h += '<p><em>得到</em>永久解鎖' + ldHeroEsc(fresh.map(function (x) { return '『' + ldHeroSkName(x.id) + '』'; }).join('、')) + ';碎片 ' + frag + '</p>';
+  h += '<p><em>失去</em>' + (fig ? '這張' + ldHeroEsc(who) + '轉為流浪(星等保留),之後請回要花 ' + n.recall + ' 碎片,且卡包要有空位;他身上的武器、防具退回背包,戰法卸下' : '這位路人會消失,不能請回') + '</p>';
+  if (T.spare && cp && cp.main) h += '<p class="ldh-mute">主力' + ldHeroEsc(who) + ' ★' + cardsStarLv(cp.main) + ' 不受影響。</p>';
+  else if (fig) h += '<p class="ldh-mute">拆完後卡包裡就沒有' + ldHeroEsc(who) + '了。</p>';
+  h += '<p class="ldh-adv ' + adv.k + '"><em>建議</em>' + ldHeroEsc(adv.title) + '。' + ldHeroEsc(adv.text) + '</p>';
+  h += '<p class="ldh-net"><em>淨損益</em>' + (fig ? '拆得 ' + frag + ' 碎片、請回花 ' + n.recall + ' 碎片,' + (T.spare ? '副卡本來就是多的,不用請回' : '實際 ' + (n.recall - frag) + ' 碎片換到戰法') : '拆得 ' + frag + ' 碎片,路人不能請回') + '</p>';
+  return '<div class="ldh-modal" data-act="mdno"><div class="ldh-mbox" role="dialog" aria-modal="true"><h4>傳承:' + ldHeroEsc(ldHeroSkName(sid)) + '</h4><div class="ldh-mbody">' + h + '</div>' +
+    '<div class="ldh-acts"><button class="ldh-mini" data-act="mdno">取消</button><button class="ldh-mini warn" data-act="mdyes">確定傳承</button></div></div></div>';
 }
-// 傳承頁(2026-11-16):三個小分頁 戰法(傳承戰法格 + 狀態)/ 說明(全文,可捲動)/ 推薦(誰裝最強 + 拆完接續),
-// 最後的〔拆〕決定放在畫面下方「共用操作列」(ldHeroInhBar):對選取的戰法格,狀態 = 可拆 → 〔拆〕鈕;已得 / 未得 → 只有狀態文字。說明內容一律在「說明」分頁。
-var LDHERO_INH_SUBS = [['cells', '戰法'], ['exp', '說明'], ['rec', '推薦']];
-// 傳承戰法格的狀態:已得(已解鎖)/ 可拆(拆這張或其副卡就能得到)/ 未得(現在不能拆,原因在說明與操作列)
+// 傳承頁(2026-11-16 改版):兩個小分頁 戰法 / 推薦。「戰法」= 一整面可捲動(戰法名稱 + 階級 + 狀態、技能介紹、拆了會怎樣、〔拆〕鈕 / 行內確認),沒有戰法格 / 方塊;
+// 「推薦」= 拆完接續動作、誰裝最強(本命加成、推薦頭像)、適合戰隊。〔拆〕只在「可拆」時出現在戰法分頁內;已得 / 未得只有狀態文字。沒有底部操作列。
+var LDHERO_INH_SUBS = [['main', '戰法'], ['rec', '推薦']];
+// 傳承戰法的狀態:已得(已解鎖)/ 可拆(拆這張或其副卡就能得到)/ 未得(現在不能拆,原因在建議句)
 function ldHeroInhCells(cs, f) {
   var list = bnSkcInheritList(f.e), T = ldHeroInhTarget(cs, f), canCut = T.adv.k !== 'gray' && T.st.ok;
-  return list.map(function (x, i) { return { i: i, id: x.id, tier: x.tier, owned: !!x.owned, st: x.owned ? '已得' : (canCut ? '可拆' : '未得') }; });
+  return list.map(function (x, i) { return { i: i, id: x.id, tier: x.tier, owned: !!x.owned, st: x.owned ? '已得' : (canCut ? '可傳承' : '未得') }; });
 }
 function ldHeroInhSubsHtml(ctx) {
-  var t = ctx.inhSub || 'cells';
+  var t = ctx.inhSub === 'rec' ? 'rec' : 'main';
   return '<div class="ldh-subtabs">' + LDHERO_INH_SUBS.map(function (x) { return '<button class="ldh-sub' + (x[0] === t ? ' on' : '') + '" data-act="inhsub" data-v="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
 }
-function ldHeroInhCellsHtml(cs, f, ctx) {
-  var cells = ldHeroInhCells(cs, f), sel = ctx.inhSel | 0, T = ldHeroInhTarget(cs, f), fig = !!f.e.fig;
-  return '<div class="ldh-skcells">' + cells.map(function (c) {
-    return '<div class="ldh-skc ssk st' + (c.st === '可拆' ? 'cut' : c.st === '未得' ? 'no' : 'have') + (c.i === sel ? ' sel' : '') + '" role="button" tabindex="0" data-act="inhsel" data-v="' + c.i + '"><em class="ldh-rbadge">' + (fig ? '傳承' : '卡面') + '</em><i class="tg t' + ldHeroEsc(c.tier) + '">' + ldHeroEsc(c.tier) + '</i><b>' + ldHeroEsc(ldHeroSkName(c.id)) + '</b><u>' + c.st + '</u></div>';
-  }).join('') + '</div><p class="ldh-mute">' + ldHeroEsc(T.adv.title) + '。點「說明」看全文與拆了會怎樣;下方操作列決定拆不拆。</p>';
+function ldHeroInhHead(c) {
+  return '<div class="ldh-ih"><i class="tg t' + ldHeroEsc(c.tier) + '">' + ldHeroEsc(c.tier) + '</i><b>' + ldHeroEsc(ldHeroSkName(c.id)) + '</b><u class="st' + (c.st === '可傳承' ? 'cut' : c.st === '未得' ? 'no' : 'have') + '">' + c.st + '</u></div>';
 }
-function ldHeroInhExpHtml(cs, f, ctx) {
-  var e = f.e, fig = !!e.fig, list = bnSkcInheritList(e), T = ldHeroInhTarget(cs, f), adv = T.adv, h = '', sel = list[ctx.inhSel | 0] || list[0];
-  if (ctx.inhConfirm && T.st.ok) h += ldHeroSec('adv yellow', '再確認一次', ldHeroInhConfirm(cs, f, T, list));
-  h += ldHeroSec('', fig ? '傳承戰法' : '卡面戰法(傳承可得)', [sel].concat(list.filter(function (x) { return x !== sel; })).map(ldHeroInhSkill).join(''));
-  h += ldHeroSec('', '拆了會怎樣', ldHeroInhEffect(cs, f, list, adv, T));
-  h += ldHeroSec('adv ' + adv.k, '這張要不要拆?', '<p class="big">' + ldHeroEsc(adv.title) + '</p><p>' + ldHeroEsc(adv.text) + '</p>');
-  return h;
+function ldHeroInhMainHtml(cs, f, ctx) {
+  var list = bnSkcInheritList(f.e), cells = ldHeroInhCells(cs, f), T = ldHeroInhTarget(cs, f), adv = T.adv, fresh = list.some(function (x) { return !x.owned; }), h = '<div class="ldh-inh">';
+  cells.forEach(function (c, i) { h += (i ? '<hr>' : '') + ldHeroInhHead(c) + ldHeroSkLines(c.id); });
+  h += '<p class="ldh-adv ' + adv.k + '"><em>建議</em>' + ldHeroEsc(adv.title) + '。' + ldHeroEsc(adv.text) + '</p>';
+  if (fresh) h += '<hr><h5>拆了會怎樣</h5>' + ldHeroInhEffect(cs, f, list, adv, T);
+  if (cells.some(function (c) { return c.st === '可傳承'; })) h += '<div class="ldh-cutrow"><button class="ldh-mini' + (adv.k === 'yellow' ? '' : ' warn') + '" data-act="inh" aria-label="' + ldHeroEsc(adv.btn || '傳承這張卡') + '">傳承</button></div>';
+  return h + '</div>';
 }
 function ldHeroInhRecHtml(cs, f, ctx) {
   var e = f.e, list = bnSkcInheritList(e), h = '';
   if (ctx.inhDone && ctx.inhDone.sid) h += ldHeroInhDoneHtml(cs, ctx.inhDone);
   if (e.fig && list.length) h += ldHeroSec('', '誰裝最強', ldHeroInhBest(cs, list[0].id, e.fig));
+  else if (list.length) h += ldHeroSec('', '適合戰隊', ldHeroInhTeam(list[0].id) || '<p class="ldh-mute">沒有推薦資料。</p>');
   return h || '<div class="ldh-note">沒有推薦。</div>';
 }
-function ldHeroTabInh(cs, f, ctx) {
-  var list = bnSkcInheritList(f.e), t = ctx.inhSub || 'cells';
-  if (!list.length) return '<div class="ldh-note">此人沒有可傳承的戰法。</div>';
-  return ldHeroInhSubsHtml(ctx) + '<div class="ldh-subbody">' + (t === 'exp' ? ldHeroInhExpHtml(cs, f, ctx) : t === 'rec' ? ldHeroInhRecHtml(cs, f, ctx) : ldHeroInhCellsHtml(cs, f, ctx)) + '</div>';
+// 適合戰隊:戰法資料自帶的標籤(兵種 / 流派);缺資料回空字串(省略該行)
+function ldHeroInhTeam(sid) {
+  var info = ldHeroSkInfo(sid), tags = (info && info.tags) ? info.tags.filter(function (t) { return t; }) : [];
+  return tags.length ? '<p><em>適合戰隊</em>' + ldHeroEsc(tags.join('、')) + '</p>' : '';
 }
-// 共用操作列(傳承頁底部,固定):對選取的戰法格 — 可拆 → 〔拆〕(再按〔確定拆卡〕才執行);已得 / 未得 → 只有狀態文字
-function ldHeroInhBar(cs, f, ctx) {
-  var list = bnSkcInheritList(f.e), T, adv, c, cells, label;
-  if (!list.length) return '';
-  T = ldHeroInhTarget(cs, f); adv = T.adv; cells = ldHeroInhCells(cs, f); c = cells[ctx.inhSel | 0] || cells[0];
-  label = '<b>' + ldHeroEsc(ldHeroSkName(c.id)) + '</b>';
-  if (ctx.inhConfirm && T.st.ok) return '<div class="ldh-bar">' + label + '<span>確定要拆嗎?</span><button class="ldh-mini" data-act="inhno">取消</button><button class="ldh-mini warn" data-act="inhyes">確定拆卡</button></div>';
-  if (c.st === '可拆') return '<div class="ldh-bar">' + label + '<span>可拆</span><button class="ldh-mini' + (adv.k === 'yellow' ? '' : ' warn') + '" data-act="inh" aria-label="' + ldHeroEsc(adv.btn || '拆這張取得傳承') + '">拆</button></div>';
-  if (c.st === '已得') return '<div class="ldh-bar">' + label + '<span>已得(已擁有)</span></div>';
-  return '<div class="ldh-bar">' + label + '<span>未得 — ' + ldHeroEsc(adv.title) + '</span></div>';
+function ldHeroTabInh(cs, f, ctx) {
+  var list = bnSkcInheritList(f.e);
+  if (!list.length) return '<div class="ldh-note">此人沒有可傳承的戰法。</div>';
+  return ldHeroInhSubsHtml(ctx) + '<div class="ldh-subbody">' + (ctx.inhSub === 'rec' ? ldHeroInhRecHtml(cs, f, ctx) : ldHeroInhMainHtml(cs, f, ctx)) + '</div>';
 }
 // 傳承書籤紅點:名人、可傳承且他的傳承戰法還沒擁有
 function ldHeroInhDot(cs, f) {
@@ -425,13 +434,13 @@ function ldHeroFigHtml(cs, f, ctx) {
 function ldHeroPanelHtml(cs, f, ctx) {
   var t = ctx.tab || 'attr', h;
   h = t === 'bio' ? ldHeroTabBio(cs, f) : t === 'inh' ? ldHeroTabInh(cs, f, ctx) : ldHeroTabAttr(cs, f, ctx);
-  return '<div class="ldh-panel ld-panel"><div class="ldh-scroll" data-tab="' + t + '">' + h + '</div>' + (t === 'inh' ? ldHeroInhBar(cs, f, ctx) : '') + '</div>';
+  return '<div class="ldh-panel ld-panel"><div class="ldh-scroll" data-tab="' + t + '">' + h + '</div></div>';
 }
 function ldHeroTabsHtml(ctx, cs, f) {
   var t = ctx.tab || 'attr';
   return '<div class="ldh-tabs">' + LDHERO_TABS.map(function (x) { return '<button class="ldh-bm' + (x[0] === t ? ' on' : '') + '" data-act="tab" data-v="' + x[0] + '">' + x[1] + (x[0] === 'inh' && t !== 'inh' && cs && f && ldHeroInhDot(cs, f) ? '<em class="ldh-dot" aria-label="可傳承"></em>' : '') + '</button>'; }).join('') + '</div>';
 }
-function ldHeroHtml(cs, f, ctx) { return '<div class="ldh">' + ldHeroFigHtml(cs, f, ctx) + ldHeroPanelHtml(cs, f, ctx) + ldHeroTabsHtml(ctx, cs, f) + '</div>'; }
+function ldHeroHtml(cs, f, ctx) { return '<div class="ldh">' + ldHeroFigHtml(cs, f, ctx) + ldHeroPanelHtml(cs, f, ctx) + ldHeroTabsHtml(ctx, cs, f) + ldHeroModalHtml(cs, ctx) + '</div>'; }
 // 頂列中間:‹ 名字牌 ›
 function ldHeroTopHtml(cs, f, ctx) {
   var nv = ldHeroNav(cs, ctx);
@@ -460,7 +469,7 @@ function ldHeroRender(el, ctx) {
 function ldHeroOnClick(ctx, ev) {
   var n = ev ? ev.target : null, act = null, info = null, v = null, wasPop = !!ctx.popKey;
   while (n && n !== ctx.heroEl && n.getAttribute) {
-    if (n.className === 'ldh-pop') return true;   // 點浮泡本身:不動
+    if (n.className === 'ldh-pop' || n.className === 'ldh-mbox') return true;   // 點浮泡 / 確認視窗本身:不動
     if (n.getAttribute('data-act')) { act = n.getAttribute('data-act'); v = n.getAttribute('data-v'); break; }
     if (n.getAttribute('data-info')) { info = n.getAttribute('data-info'); break; }
     n = n.parentNode;
@@ -475,17 +484,17 @@ function ldHeroOnClick(ctx, ev) {
 function ldHeroAct(ctx, act, v) {
   var cs = ldHeroCs(), f = cs ? cardsFind(cs, ctx.id) : null, nv, g, i, r, T, name, list, sid;
   if (!f) return false;
-  if (act === 'tab') { ctx.tab = ldHeroTabOk(v); ctx.info = ''; ctx.inhConfirm = false; ctx.inhDone = null; ctx.recConfirm = false; ctx.inhSub = 'cells'; ctx.inhSel = 0; }
+  if (act === 'tab') { ctx.tab = ldHeroTabOk(v); ctx.info = ''; ctx.modal = null; ctx.inhDone = null; ctx.recConfirm = false; ctx.inhSub = 'main'; }
   else if (act === 'prev' || act === 'next') {
     nv = ldHeroNav(cs, ctx);
     if (act === 'prev' && nv.prev) ctx.id = nv.prev; else if (act === 'next' && nv.next) ctx.id = nv.next; else return false;
-    ctx.info = ''; ctx.inhConfirm = false; ctx.inhDone = null; ctx.recConfirm = false; ctx.inhSub = 'cells'; ctx.inhSel = 0;
+    ctx.info = ''; ctx.modal = null; ctx.inhDone = null; ctx.recConfirm = false; ctx.inhSub = 'main';
   }
   else if (act === 'stk') {
     g = (typeof cuGridItemOf === 'function') ? cuGridItemOf(cs, f.e.id) : null;
     if (!g || g.n < 2) return false;
     for (i = 0; i < g.members.length; i++) if (g.members[i].id === f.e.id) break;
-    ctx.id = g.members[(i + 1) % g.members.length].id; ctx.info = ''; ctx.inhConfirm = false; ctx.inhDone = null; ctx.recConfirm = false; ctx.inhSub = 'cells'; ctx.inhSel = 0;
+    ctx.id = g.members[(i + 1) % g.members.length].id; ctx.info = ''; ctx.modal = null; ctx.inhDone = null; ctx.recConfirm = false; ctx.inhSub = 'main';
   }
   else if (act === 'skills') {
     if (typeof ldNavPush !== 'function') { ldHeroToast('即將開放'); return true; }
@@ -509,25 +518,27 @@ function ldHeroAct(ctx, act, v) {
     ldHeroToast('已卸下');
   }
   else if ((act === 'eqpick' || act === 'eqdet' || act === 'equnq') && typeof ldEquipHeroAct === 'function') return ldEquipHeroAct(ctx, act, v);   // 裝備(js/ld_equip_ui.js)
-  else if (act === 'inhsub') { ctx.inhSub = v || 'cells'; }
-  else if (act === 'inhsel') { ctx.inhSel = +v || 0; }
-  else if (act === 'inh') { ctx.inhConfirm = true; ctx.inhSub = 'exp'; }
-  else if (act === 'inhno') { ctx.inhConfirm = false; }
-  else if (act === 'inhyes') {
-    T = ldHeroInhTarget(cs, f);
-    if (!T.st.ok) { ctx.inhConfirm = false; ldHeroToast(T.st.reason); ldHeroRender(ctx.heroEl, ctx); return true; }
+  else if (act === 'inhsub') { ctx.inhSub = v === 'rec' ? 'rec' : 'main'; }
+  else if (act === 'inh') { ctx.modal = { cid: f.e.id }; ctx.inhSub = 'main'; }
+  else if (act === 'skinh') { g = cardsFind(cs, v); if (!g) { ldHeroToast('找不到來源卡'); return true; } ctx.modal = { cid: g.e.id }; }
+  else if (act === 'mdno') { ctx.modal = null; }
+  else if (act === 'mdyes') {
+    g = ctx.modal ? cardsFind(cs, ctx.modal.cid) : null;
+    if (!g) { ctx.modal = null; ldHeroRender(ctx.heroEl, ctx); return true; }
+    T = ldHeroInhTarget(cs, g);
+    if (!T.st.ok) { ctx.modal = null; ldHeroToast(T.st.reason); ldHeroRender(ctx.heroEl, ctx); return true; }
     name = T.target.e.name;
     list = bnSkcInheritList(T.target.e);
     sid = (list.filter(function (x) { return !x.owned; })[0] || list[0] || {}).id;
     r = bnSkcInherit(cs, T.target.e);
-    if (!r.ok) { ctx.inhConfirm = false; ldHeroToast(LDHERO_INH_REASON[r.reason] || '無法傳承'); ldHeroRender(ctx.heroEl, ctx); return true; }
+    if (!r.ok) { ctx.modal = null; ldHeroToast(LDHERO_INH_REASON[r.reason] || '無法傳承'); ldHeroRender(ctx.heroEl, ctx); return true; }
     if (typeof cardsSyncTalents === 'function') { try { cardsSyncTalents(); } catch (er) { /* 略過 */ } }
     if (typeof cu !== 'undefined' && cu) cu.detail = null;
     ldHeroSync();
-    ctx.inhConfirm = false;
+    ctx.modal = null;
     ldHeroToast('取得『' + ldHeroSkName(sid) + '』!碎片 +' + r.shards + (r.wander ? ';' + name + ' 轉為流浪' : ''));
     if (!cardsFind(cs, ctx.id)) { if (typeof ldNavBack === 'function') ldNavBack(); return true; }   // 本卡已消失(路人)→ 退回上一層
-    ctx.inhDone = { sid: sid, fig: T.target.e.fig || '' }; ctx.inhSub = 'rec';   // 接續動作:要現在裝上嗎?(在「推薦」分頁)
+    if (!ctx.sub) { ctx.inhDone = { sid: sid, fig: T.target.e.fig || '' }; ctx.inhSub = 'rec'; }   // 接續動作:要現在裝上嗎?(在「推薦」分頁)
   }
   else if (act === 'inhdone') { ctx.inhDone = null; }
   else if (act === 'inhhero' || act === 'inhequip') {
@@ -621,15 +632,24 @@ function ldHeroInfoPageHtml(cs, f, ctx) {
   if (k === 'sk' && ldHeroTier(v)) h += '<div class="ldh-acts">' + ldHeroSkBtn(v) + '</div>';
   return '<div class="ldh-detail ld-panel"><div class="ldh-who">' + ldHeroEsc(f.e.name) + '</div><div class="ldh-info full" aria-live="polite">' + h + '</div></div>';
 }
+function ldHeroSkListHtml(cells, ctx) {
+  var prev = -1;
+  return '<div class="ldh-skrows">' + ldHeroSkSorted(cells).map(function (c) { var g = ldHeroSkGroup(c), f = prev >= 0 && g !== prev; prev = g; return ldHeroSkRowHtml(c, ctx, f); }).join('') + '</div>';
+}
 function ldHeroSkillsPageHtml(cs, f, ctx) {
   var cells = ldHeroSkCells(cs, f), p = ldHeroRecPlan(cs, f);
-  return '<div class="ldh-skp ld-panel"><div class="ldh-who">' + ldHeroEsc(f.e.name) + ' · 選擇槽' + (p ? '<i>推薦 ' + p.n + ' 格</i>' : '') + '</div><div class="ldh-skcells">' + cells.map(function (c) { return ldHeroSkCellHtml(c, ctx); }).join('') + '</div><div class="ldh-skdesc ldh-info full" aria-live="polite">' + ldHeroSkDescHtml(cs, f, ctx, cells) + '</div></div>';
+  return '<div class="ldh-skp ld-panel"><div class="ldh-who">' + ldHeroEsc(f.e.name) + ' · 選擇槽' + (p ? '<i>推薦 ' + p.n + ' 格</i>' : '') + '</div>' + ldHeroSkListHtml(cells, ctx) + '<div class="ldh-skdesc ldh-info full" aria-live="polite">' + ldHeroSkDescHtml(cs, f, ctx, cells) + '</div>' + ldHeroModalHtml(cs, ctx) + '</div>';
 }
 function ldHeroSubRender(el, ctx) {
-  var cs = ldHeroCs(), f = cs ? cardsFind(cs, ctx.id) : null, y = el && el.scrollTop ? el.scrollTop : 0;
+  var cs = ldHeroCs(), f = cs ? cardsFind(cs, ctx.id) : null, y = el && el.scrollTop ? el.scrollTop : 0, ly = 0, lst, sr;
   ctx.heroEl = el;
   if (!f) { el.innerHTML = '<p class="ldp-empty">找不到此武將</p>'; return false; }
+  if (ctx.sub !== 'info' && typeof el.querySelector === 'function') { lst = el.querySelector('.ldh-skrows'); ly = lst ? lst.scrollTop : 0; }
   el.innerHTML = ctx.sub === 'info' ? ldHeroInfoPageHtml(cs, f, ctx) : ldHeroSkillsPageHtml(cs, f, ctx);
+  if (ctx.sub !== 'info' && typeof el.querySelector === 'function') {   // 清單:保留捲動位置,選取的列捲進可視範圍
+    lst = el.querySelector('.ldh-skrows'); sr = lst ? lst.querySelector('.sel') : null;
+    if (lst) { lst.scrollTop = ly; if (sr && (sr.offsetTop < lst.scrollTop || sr.offsetTop + sr.offsetHeight > lst.scrollTop + lst.clientHeight)) lst.scrollTop = Math.max(0, sr.offsetTop - 4); }
+  }
   el.onclick = function (ev) { ldHeroOnClick(ctx, ev); };
   if (y) el.scrollTop = y;
   return true;
@@ -711,7 +731,7 @@ ldNavRegister({
   build: function (el, ctx) {
     ctx.tab = ldHeroTabOk(ctx.tab);
     if (!ctx.list || !ctx.list.length) ctx.list = [ctx.id];
-    ctx.info = ''; ctx.inhConfirm = false; ctx.inhDone = null; ctx.recConfirm = false; ctx.inhSub = 'cells'; ctx.inhSel = 0; ctx.heroSkip = 1; ctx.sub = '';
+    ctx.info = ''; ctx.modal = null; ctx.inhDone = null; ctx.recConfirm = false; ctx.inhSub = 'main'; ctx.heroSkip = 1; ctx.sub = '';
     if (el.classList) el.classList.add('ldh-body');
     if (ctx.tabsEl && ctx.tabsEl.classList) ctx.tabsEl.classList.add('ldh-top');
     ldHeroRender(el, ctx);

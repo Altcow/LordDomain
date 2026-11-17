@@ -7,7 +7,7 @@
 //   bnInit(rec) → state        rec = {v:BN_REC_VER, seed, teamA:[spec], teamB:[spec], opts:{events:true, scene:''}}(spec 由 bn_units.js 產生;舊紀錄的 opts.autoUlt 不再使用)
 // 戰報版本 BN_REC_VER:2 = 普攻改「射程內隨機」(2026-11-13)。rec.v < BN_REC_VER 的舊戰報結果可能已不同,不可重播(只能看文字結果)。
 // 3 = 戰法發動率重平衡(2026-11-15):發動率查表 / 取消冷卻 / 保底 / 每場上限 / 同次 2 招 / pf / K 0.55 / 疲兵 / healK。
-var BN_REC_VER = 4;   // 4 = 適性新制(乙案)+ 克制 ×1.075 / ×0.925 + 謀略型 dt(2026-11-16);舊戰報 / 舊碼一律拒絕
+var BN_REC_VER = 5;   // 5 = 克制 ×1.15 / ×0.85(2026-11-17);4 = 適性新制 + 謀略型 dt(2026-11-16);舊戰報 / 舊碼一律拒絕
 //   bnStep(state) → events[]   推進一個「行動」(或回合結束)
 //   bnRunToEnd(state) → state          跑到結束;bnRun(rec) = bnInit + bnRunToEnd
 //   state.over / state.result = {winner:'A'|'B'|'draw', reason:'wipe'|'limit', rounds, hp:{A,B}}

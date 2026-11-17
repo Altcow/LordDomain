@@ -48,6 +48,7 @@ function wmapSettleNorm(raw, now) {
       g.own[k] = { lv: wmapSettleInt(r.lv, 1, 10, 1), ty: r.ty, t0: wmapSettleInt(r.t0, 0, 1e15, now), ac: wmapSettleInt(r.ac, 0, now, now), fr: fr, q: wmapSettleInt(r.q, 0, 1e15, 0) };
     }
   }
+  if (raw.yg && typeof wmapMobNorm === 'function') g.yg = wmapMobNorm(raw.yg);   // 野怪已擊殺紀錄(js/wmap_mob.js)
   if (raw.oh && typeof raw.oh === 'object') {
     Object.keys(raw.oh).slice(-WMAPSET_CFG.ohKeep).forEach(function (kk) { if (/^\d{1,8}$/.test(kk)) g.oh[kk] = wmapSettleInt(raw.oh[kk], 0, 1e9, 0); });
   }
@@ -83,6 +84,7 @@ function wmapSettleRate(ty, lv) {
   return { key: r.key, out: r.out, outName: r.outName, perHour: r.perHour, perMin: r.perHour / 60 };
 }
 function wmapSettleOutName(out) {
+  if (out === 'coin') return '文';
   var L = typeof GRID_RES !== 'undefined' ? GRID_RES.list : [], i;
   for (i = 0; i < L.length; i++) if (L[i].out === out) return L[i].outName;
   return out;
@@ -192,6 +194,7 @@ function wmapSettleSync(W, cs, now, o) {
     if (!pt) { delete g.own[k]; out.changed = true; }
   }
   for (k in g.own) { rec = g.own[k]; if (rec.ac + WMAPSET_MIN <= now) { wmapSettleAccrue(rec, now, out.credit); out.changed = true; out.minutes++; } }
+  if (typeof wmapMobSync === 'function') wmapMobSync(W, cs, now, out);   // 野怪掉落入帳(文 / 糧)與清舊點(js/wmap_mob.js)
   if (!out.used) out.used = Object.keys(g.own).length;
   if (!out.cap) out.cap = wmapSettleCap(W, cs, o);
   return out;
@@ -201,7 +204,7 @@ function wmapSettleApply(credit) {
   for (k in credit || {}) {
     if (!(credit[k] > 0)) continue;
     one = {}; one[k] = credit[k];
-    if (k === 'grain') { if (typeof res4Add === 'function') { g = res4Add(one); if (g.grain > 0) got.grain = g.grain; } }
+    if (k === 'grain' || k === 'coin') { if (typeof res4Add === 'function') { g = res4Add(one); if (g[k] > 0) got[k] = g[k]; } }
     else if (typeof matGrant === 'function') { g = matGrant(one); if (g[k] > 0) got[k] = g[k]; }
   }
   return got;
@@ -237,6 +240,7 @@ function wmapSettleLootTxt(loot) {
 }
 function wmapSettleBrief(W, rp, o) {
   o = o || {};
+  if (rp.cat === 'yg' && typeof wmapMobBrief === 'function') return wmapMobBrief(rp, o.size || 64);
   var size = o.size || 64, gi = wmapSettleIsPtId(rp.pt) ? wmapSettleGiOf(rp.pt) : -1, kind = rp.cat === 'res' ? 'res' : (rp.cat === 'pass' ? 'pass' : (rp.cat === 'county' ? 'county' : (rp.cat === 'jun' ? 'jun' : 'other'))), name, head, lines = [], tone, lt, occ;
   name = (gi >= 0 ? wmapSettleCoord(gi, size) + ' ' : '') + (kind === 'res' ? 'Lv' + rp.lv + ' ' + rp.ptName : rp.ptName + (kind === 'pass' ? '(關口)' : (kind === 'county' ? '(縣城)' : (kind === 'jun' ? '(郡城)' : ''))));
   if (rp.win) {

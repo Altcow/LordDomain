@@ -565,7 +565,7 @@ function bnPreyText() {
   L.forEach(function (a) { L.forEach(function (d) { if (P[a] && P[a][d] > 1) out.push(a + '克' + d); }); });
   return out.join('、');
 }
-// 倍率說明:『克制方傷害 +7.5%、被克制方 −7.5%(物理與謀略都吃);四兵種打器械 +10%、器械打四兵種 −10%』(2026-11-16 使用者決議:雙方差 15pp)
+// 倍率說明:『克制方傷害 +15%、被克制方 −15%(物理與謀略都吃);四兵種打器械 +10%、器械打四兵種 −10%』(2026-11-17 使用者決議:每邊 ±15%)
 function bnPreyRule() {
   var P = BN_DATA.prey, hi = 1, lo = 1, L = BN_DATA.troopList.filter(function (t) { return t !== '械'; });
   function pc(x) { return String(parseFloat((x * 100).toFixed(1))); }

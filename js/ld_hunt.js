@@ -177,6 +177,7 @@ function studyRoll(kind, far, cs, now, opt) {
   opt = opt || {};
   now = now || Date.now();
   if (kind !== 'talent' && kind !== 'horse') return { ok: false, reason: 'bad' };
+  if (kind === 'talent' && !featureOn('seek_talent')) return { ok: false, reason: 'seekoff' };   // @DORMANT seek_talent
   if (!opt.ignoreOpen && !studyOpen()) return { ok: false, reason: 'closed' };
   st = studyRead(now);
   studyTickSt(st, now);
@@ -238,6 +239,7 @@ function studyExchange(fac, figId, cs, now, opt) {
   opt = opt || {};
   now = now || Date.now();
   if (STUDY_FACS.indexOf(fac) < 0) return { ok: false, reason: 'bad' };
+  if (!featureOn('seek_talent')) return { ok: false, reason: 'seekoff' };   // @DORMANT seek_talent
   if (!opt.ignoreOpen && !studyOpen()) return { ok: false, reason: 'closed' };
   f = (typeof cardsFigSrc === 'function') ? cardsFigSrc().filter(function (x) { return x.id === figId; })[0] : null;
   if (!f || (f.gr !== 3 && f.gr !== 4)) return { ok: false, reason: 'bad' };

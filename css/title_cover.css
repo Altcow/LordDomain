@@ -145,16 +145,24 @@
   background: var(--tc-panel); border: 1px solid var(--tc-line); border-radius: 14px; padding: 14px;
 }
 .tc-h { font-size: 18px; font-weight: 800; margin-bottom: 8px; color: var(--tc-gold-hi); }
-.tc-srv-list { display: grid; gap: 8px; }
-.tc-srv {
-  display: flex; flex-direction: column; align-items: flex-start; text-align: left; width: 100%;
-  background: #1c2634; color: var(--tc-text); border: 2px solid #3b4a5e; border-radius: 10px; padding: 10px 12px; font: inherit;
+/* 伺服器列表:一列一筆(無卡片外框),細分隔線 + 交錯底色;選中 = 亮底 + 左側色條;超出高度時上下捲動 */
+.tc-srv-list {
+  display: flex; flex-direction: column; max-height: min(46vh, 260px); overflow-y: auto; overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y;
+  border-top: 1px solid rgba(201, 162, 74, 0.28); border-bottom: 1px solid rgba(201, 162, 74, 0.28);
 }
-.tc-srv.tc-sel { border-color: #f0c34a; box-shadow: 0 0 0 2px rgba(240, 195, 74, 0.35); }
-.tc-srv.tc-srv-off { opacity: 0.45; filter: grayscale(1); cursor: not-allowed; border-style: dashed; box-shadow: none; }
-.tc-srv-id { font-size: 12px; opacity: 0.75; }
-.tc-srv-name { font-size: 18px; font-weight: 800; }
-.tc-srv-info { font-size: 13px; opacity: 0.9; margin-top: 2px; }
+.tc-srv {
+  display: flex; flex-direction: row; align-items: baseline; gap: 10px; flex: 0 0 auto; text-align: left; width: 100%; box-sizing: border-box;
+  background: transparent; color: var(--tc-text); border: 0; border-left: 4px solid transparent; border-radius: 0;
+  border-bottom: 1px solid rgba(201, 162, 74, 0.2); padding: 10px 12px 10px 10px; font: inherit; cursor: pointer;
+}
+.tc-srv:nth-child(even) { background: rgba(255, 255, 255, 0.045); }
+.tc-srv:last-child { border-bottom: 0; }
+.tc-srv.tc-sel { background: rgba(240, 195, 74, 0.2); border-left-color: #f0c34a; }
+.tc-srv.tc-srv-off { opacity: 0.45; cursor: not-allowed; background: transparent; }
+.tc-srv-id { flex: 0 0 auto; min-width: 2.6em; font-size: 15px; font-weight: 800; color: var(--tc-gold); }
+.tc-srv-name { flex: 0 0 auto; font-size: 18px; font-weight: 800; }
+.tc-srv-info { flex: 1 1 auto; min-width: 0; text-align: right; font-size: 13px; opacity: 0.9; overflow-wrap: anywhere; }
 .tc-hint { font-size: 12px; opacity: 0.8; margin-top: 8px; min-height: 1em; }
 .tc-btn-big {
   display: block; width: 100%; margin-top: 12px; padding: 14px; font: inherit; font-size: 20px; font-weight: 900;
@@ -182,9 +190,8 @@
   .tc-title { top: 44%; }
   .tc-card { padding: 10px; }
   .tc-h { font-size: 16px; margin-bottom: 4px; }
-  .tc-srv-list { gap: 6px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .tc-srv-info { display: block; white-space: normal; }
-  .tc-srv { padding: 5px 10px; }
+  .tc-srv-list { max-height: 34vh; }
+  .tc-srv { padding: 6px 10px 6px 8px; }
   .tc-srv-name { font-size: 15px; }
   .tc-srv-info { font-size: 12px; }
   .tc-hint { margin-top: 4px; }

@@ -1,5 +1,5 @@
 // js/wmap_panels.js — M1 W6 主畫面資訊:部隊面板 / 倒數浮條 / 頂列勢力名聲膠囊 / 地圖格框與「營」徽章 / 迷你地圖(設計_M1視覺原型_實作計畫.md W6 列;外殼規格 5.2、5.4)。
-// 純函式(wmapPnl 開頭、node 可測):格式化(wmapPnlFmtNum / wmapPnlDur)、隊伍狀態(wmapPnlState / wmapPnlRows)、倒數清單(wmapPnlCdList)、地圖覆蓋(wmapPnlOverlay)、迷你地圖座標(wmapPnlMiniXY / wmapPnlMiniCell)。
+// 純函式(wmapPnl 開頭、node 可測):格式化(wmapPnlFmtNum / wmapPnlDur)、隊伍狀態(wmapPnlState / wmapPnlRows)、倒數清單(wmapPnlCdList)、地圖覆蓋(wmapPnlOverlay)、迷你地圖座標(wmapPnlMiniXY / wmapPnlMiniCell,六邊形菱形投影)。
 // UI(wmapPnlInit):掛在 #wmapRoot 裡的小浮條,不跳半視窗;每秒一次計時(頁面隱藏時不跑),倒數只改文字節點、結構(狀態 / 按鈕組合)變了才重建;
 //   地圖上的格框與「營」徽章是畫在 WMAP.world 內的 CSS 圖形節點(只動 transform / opacity,呼吸週期 1.6 秒),地圖上沒有任何文字;不碰 wmap_view / wmap_art / wmap_res 的渲染。
 // 掛鉤:wmap_ui.js 的 wmapUiInit 尾端呼叫 wmapPnlInit();shell.js 的 shellStatRender 讀 wmapPnlPowerText() 補『勢力』(基本數據面板)。
@@ -15,7 +15,7 @@
 //   wmapPnlRowSig(row) → string                                 列的結構簽名(不含倒數;簽名不變就只更新文字)
 //   wmapPnlCdList(W, now, size, WG) → entries[]                 倒數清單(行軍 / 閒置 / 回程 / 放棄),依剩餘時間由近到遠:{kind, id, label, ms, gi}
 //   wmapPnlOverlay(W, now, WG, selId) → {frame:gi|-1, camps:[gi…]}   地圖覆蓋:選取軍隊所屬格 + 閒置軍所在格(徽章)
-//   wmapPnlMiniXY(gi, size, px) → {x, y}                        迷你地圖像素(格中心);wmapPnlMiniCell(x, y, size, px) → gi    反查(點迷你地圖 → 格)
+//   wmapPnlMiniXY(gi, size, px) → {x, y}                        迷你地圖像素(格中心;px = 畫布寬,高 = wmapPnlMiniH(size, px));wmapPnlMiniCell(x, y, size, px) → gi    反查(點迷你地圖 → 格,夾在範圍內);wmapPnlMiniUV(u, v, size, px) 連續座標;wmapPnlMiniRaw 不夾範圍
 //   wmapPnlPowerText() → ''|'1,234'                             勢力顯示字串(沒有存檔狀態 = '')
 //   wmapPnlInit() → bool        建面板 / 浮條 / 膠囊 / 迷你地圖並起 1 秒計時;旗標 wmap 關 / 地圖未掛 / 已建 = false
 //   wmapPnlTick()               更新全部(1 秒呼叫一次)
@@ -25,7 +25,7 @@
 
 var WMAPPNL = { inited: false, root: null, panel: null, list: null, head: null, cd: null, mini: null, miniCv: null, miniBase: null, miniSig: '', caps: null, capEls: {}, capTx: {}, sel: null, selFrom: '', open: true,
   rowsSig: '', rowEls: {}, cdSig: '', cdEls: [], ovSig: '', frame: null, campEls: [], tid: 0, ticks: 0, binds: [], hooked: false };
-var WMAPPNL_CFG = { cdMax: 4, miniPx: 64, miniShow: 76, key: 'lorddomain.ui.wmpnl', capEvery: 3 };
+var WMAPPNL_CFG = { cdMax: 4, miniPx: 192, miniShow: 72, miniShowWide: 120, key: 'lorddomain.ui.wmpnl', capEvery: 3 };
 var WMAPPNL_STATE = { ready: '待命', go: '行軍', fight: '交戰', idle: '閒置', back: '回程', hurt: '重傷' };
 var WMAPPNL_CMD = { stop: '停止', resume: '繼續', retreat: '撤退' };
 
@@ -126,10 +126,19 @@ function wmapPnlOverlay(W, now, WG, selId) {
   o.camps.sort(function (a, b) { return a - b; });
   return o;
 }
-function wmapPnlMiniXY(gi, size, px) { var c = gi % size, r = (gi - c) / size, k = px / size; return { x: (c + 0.5) * k, y: (r + 0.5) * k }; }
+// 迷你地圖 = 主畫面同形的六邊形菱形投影縮小版(wmap_proj.js:x = ox + 0.75 W (u − v)、y = oy + 0.5 H (u + v),H = 9/16 W):
+// 寬 px = 1.5 W × size 的縮小,所以 x = px / 2 + (u − v) × px / (2 × size)、y = (u + v) × px × ratio / (2 × size),ratio = 0.5 H / 0.75 W = 0.375;畫布高 = px × ratio。
+// 與主畫面只差一個均勻縮放 + 平移(測試:隨機格逐格比對 wmapUV2World)。
+function wmapPnlMiniRatio() { return 0.5 * (typeof WMHEX_HRATIO === 'number' ? WMHEX_HRATIO : 0.5625) / 0.75; }
+function wmapPnlMiniH(size, px) { return Math.ceil(px * wmapPnlMiniRatio()); }
+function wmapPnlMiniUV(u, v, size, px) { var a = px / (2 * size); return { x: px / 2 + (u - v) * a, y: (u + v) * a * wmapPnlMiniRatio() }; }
+function wmapPnlMiniXY(gi, size, px) { var c = gi % size; return wmapPnlMiniUV(c + 0.5, (gi - c) / size + 0.5, size, px); }
+function wmapPnlMiniRaw(x, y, size, px) {   // 迷你地圖像素 → 格(不夾範圍,可能 < 0 或 ≥ size)
+  var a = px / (2 * size), X = (x - px / 2) / a, Y = y / (a * wmapPnlMiniRatio()), h = wmHexRound((X + Y) / 2 - 0.5, (Y - X) / 2 - 0.5);
+  return { c: h.c, r: h.r };
+}
 function wmapPnlMiniCell(x, y, size, px) {
-  var k = size / px, c = Math.floor(x * k), r = Math.floor(y * k);
-  c = Math.max(0, Math.min(size - 1, c)); r = Math.max(0, Math.min(size - 1, r));
+  var p = wmapPnlMiniRaw(x, y, size, px), c = Math.max(0, Math.min(size - 1, p.c)), r = Math.max(0, Math.min(size - 1, p.r));
   return r * size + c;
 }
 function wmapPnlPowerText() {
@@ -370,30 +379,33 @@ function wmapPnlOvRender(c, now, force) {
 
 // ───────── 迷你地圖 ─────────
 function wmapPnlMiniBase() {
-  var WG = WMAP.WG, N = WG.size, px = WMAPPNL_CFG.miniPx, cv = document.createElement('canvas'), g, im, d, i, k, c, o;
-  cv.width = px; cv.height = px;
+  var WG = WMAP.WG, N = WG.size, px = WMAPPNL_CFG.miniPx, ph = wmapPnlMiniH(N, px), cv = document.createElement('canvas'), g, im, d, i, k, p, x, y, col;
+  cv.width = px; cv.height = ph;
   g = cv.getContext('2d');
   if (!g) return null;
-  im = g.createImageData(px, px); d = im.data;
-  for (i = 0; i < px * px; i++) {
-    c = Math.floor((i % px) * N / px); o = Math.floor(Math.floor(i / px) * N / px);
-    k = WG.k[o * N + c];
-    var col = k === 1 || k === 2 ? [118, 112, 104] : (k === 3 ? [96, 150, 190] : (k === 4 ? [150, 190, 200] : (k === 5 ? [196, 170, 120] : (k === 7 ? [60, 52, 44] : [110, 150, 92]))));
-    d[i * 4] = col[0]; d[i * 4 + 1] = col[1]; d[i * 4 + 2] = col[2]; d[i * 4 + 3] = 255;
+  im = g.createImageData(px, ph); d = im.data;
+  for (y = 0; y < ph; y++) for (x = 0; x < px; x++) {   // 逐像素反查所屬格;菱形外透明
+    p = wmapPnlMiniRaw(x + 0.5, y + 0.5, N, px);
+    if (p.c < 0 || p.r < 0 || p.c >= N || p.r >= N) continue;
+    k = WG.k[p.r * N + p.c];
+    col = k === 1 || k === 2 ? [118, 112, 104] : (k === 3 ? [96, 150, 190] : (k === 4 ? [150, 190, 200] : (k === 5 ? [196, 170, 120] : (k === 7 ? [60, 52, 44] : [110, 150, 92]))));
+    i = (y * px + x) * 4; d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255;
   }
   g.putImageData(im, 0, 0);
   return cv;
 }
 function wmapPnlBuildMini(root) {
   var e = wmapPnlEl('div', 'wp-mini'), cv = wmapPnlEl('canvas', 'wp-mcv');
-  cv.width = WMAPPNL_CFG.miniPx; cv.height = WMAPPNL_CFG.miniPx;
+  var px = WMAPPNL_CFG.miniPx, ph = wmapPnlMiniH(WMAP.WG.size, px), sw = (root.clientWidth >= 600 ? WMAPPNL_CFG.miniShowWide : WMAPPNL_CFG.miniShow), sh = Math.ceil(sw * ph / px);
+  cv.width = px; cv.height = ph;
+  cv.style.width = sw + 'px'; cv.style.height = sh + 'px'; e.style.width = (sw + 8) + 'px'; e.style.height = (sh + 8) + 'px';   // 覆蓋 CSS 的 72×72 正方形:菱形約 2.67 : 1;窄螢幕(< 600)維持 72 寬避免壓到「主線」鈕,橫向 120 寬
   cv.setAttribute('aria-label', '迷你地圖');
   e.appendChild(cv); root.appendChild(e);
   wmapPnlStop(e);
   wmapPnlAdd(e, 'click', function (ev) {
     var r = cv.getBoundingClientRect(), gi, N = WMAP.WG.size;
     if (!r.width) return;
-    gi = wmapPnlMiniCell((ev.clientX - r.left) / r.width * WMAPPNL_CFG.miniPx, (ev.clientY - r.top) / r.height * WMAPPNL_CFG.miniPx, N, WMAPPNL_CFG.miniPx);
+    gi = wmapPnlMiniCell((ev.clientX - r.left) / r.width * cv.width, (ev.clientY - r.top) / r.height * cv.height, N, WMAPPNL_CFG.miniPx);
     wmapSetCam((gi % N) + 0.5, Math.floor(gi / N) + 0.5);
     WMAPPNL.miniSig = '';
     wmapPnlMiniRender(wmapPnlCtx(), ldNow());
@@ -413,7 +425,7 @@ function wmapPnlMiniRender(c, now) {
     if (!st.lg) continue;
     pose = wmMarchAt(st.lg, now, N);
     if (pose.phase === 'done' || pose.phase === 'wait') continue;
-    pts.push([Math.floor(pose.c), Math.floor(pose.r), st.phase === 'back' ? 1 : 0]);
+    pts.push([Math.floor(pose.c), Math.floor(pose.r), st.phase === 'back' ? 1 : 0, pose.c, pose.r]);
   }
   cam = WMAP.cam;
   sig = cells.join(',') + '|' + pts.join(';') + '|' + Math.round(cam.u) + ',' + Math.round(cam.v);
@@ -421,19 +433,29 @@ function wmapPnlMiniRender(c, now) {
   WMAPPNL.miniSig = sig;
   g = cv.getContext('2d');
   if (!g) return;
+  g.clearRect(0, 0, cv.width, cv.height);
   if (WMAPPNL.miniBase) g.drawImage(WMAPPNL.miniBase, 0, 0);
-  g.fillStyle = '#d03a22';   // 已占領領地
-  for (i = 0; i < cells.length; i++) { p = wmapPnlMiniXY(cells[i], N, px); g.fillRect(Math.floor(p.x) - 1, Math.floor(p.y) - 1, 3, 3); }
-  for (i = 0; i < WG.nodes.length; i++) {   // 城池占地(縣 3×3 青灰、郡 4×4 黛藍、關 2×3 灰褐),1 格 = 小方塊;不寫字
-    k = WG.nodes[i]; g.fillStyle = k.type === 'jun' ? '#3f5d7a' : (k.type === 'pass' ? '#8f8676' : '#6f7f86');
-    g.fillRect(Math.floor(k.c0 * px / N), Math.floor(k.r0 * px / N), Math.max(2, Math.round(k.fw * px / N)), Math.max(2, Math.round(k.fh * px / N)));
+  function quad(c0, r0, fw, fh) {   // c×r 矩形占地 → 菱形四角
+    var q = [wmapPnlMiniUV(c0, r0, N, px), wmapPnlMiniUV(c0 + fw, r0, N, px), wmapPnlMiniUV(c0 + fw, r0 + fh, N, px), wmapPnlMiniUV(c0, r0 + fh, N, px)];
+    g.beginPath(); g.moveTo(q[0].x, q[0].y); g.lineTo(q[1].x, q[1].y); g.lineTo(q[2].x, q[2].y); g.lineTo(q[3].x, q[3].y); g.closePath(); g.fill();
+    return q;
   }
-  g.fillStyle = '#d03a22';   // 主城 3×3(朱紅,深褐外框)
-  g.fillRect(Math.floor((WG.cx - 1) * px / N), Math.floor((WG.cy - 1) * px / N), Math.max(3, Math.round(3 * px / N)), Math.max(3, Math.round(3 * px / N)));
-  g.strokeStyle = '#3b2410'; g.lineWidth = 1; g.strokeRect(Math.floor((WG.cx - 1) * px / N) + 0.5, Math.floor((WG.cy - 1) * px / N) + 0.5, Math.max(3, Math.round(3 * px / N)) - 1, Math.max(3, Math.round(3 * px / N)) - 1);
-  for (i = 0; i < pts.length; i++) { g.fillStyle = pts[i][2] ? '#9fb7c8' : '#ffffff'; g.fillRect(pts[i][0] * px / N - 1, pts[i][1] * px / N - 1, 3, 3); g.strokeStyle = '#1b1b1b'; g.strokeRect(pts[i][0] * px / N - 0.5, pts[i][1] * px / N - 0.5, 2, 2); }
+  g.fillStyle = '#d03a22';   // 已占領領地
+  for (i = 0; i < cells.length; i++) { p = wmapPnlMiniXY(cells[i], N, px); g.fillRect(Math.floor(p.x) - 1, Math.floor(p.y) - 1, 3, 2); }
+  for (i = 0; i < WG.nodes.length; i++) {   // 城池占地(縣青灰、郡 / 州黛藍、關灰褐)畫成菱形(c×r 矩形 = 螢幕菱形);不寫字
+    k = WG.nodes[i]; g.fillStyle = k.type === 'jun' ? '#3f5d7a' : (k.type === 'pass' ? '#8f8676' : '#6f7f86');
+    quad(k.c0, k.r0, k.fw, k.fh);
+  }
+  g.fillStyle = '#d03a22';   // 主城(外框 3×3 菱形,朱紅,深褐描邊)
+  p = quad(WG.cx - 1, WG.cy - 1, 3, 3);
+  g.strokeStyle = '#3b2410'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(p[0].x, p[0].y); g.lineTo(p[1].x, p[1].y); g.lineTo(p[2].x, p[2].y); g.lineTo(p[3].x, p[3].y); g.closePath(); g.stroke();
+  for (i = 0; i < pts.length; i++) {
+    p = wmapPnlMiniUV(pts[i][3] + 0.5, pts[i][4] + 0.5, N, px);
+    g.fillStyle = pts[i][2] ? '#9fb7c8' : '#ffffff'; g.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); g.strokeStyle = '#1b1b1b'; g.strokeRect(p.x - 1, p.y - 1, 2, 2);
+  }
   g.strokeStyle = '#ffffff'; g.lineWidth = 1;   // 鏡頭位置(十字)
-  p = { x: cam.u * px / N, y: cam.v * px / N };
+  p = wmapPnlMiniUV(cam.u, cam.v, N, px);
   g.beginPath(); g.moveTo(p.x - 4, p.y); g.lineTo(p.x + 4, p.y); g.moveTo(p.x, p.y - 4); g.lineTo(p.x, p.y + 4); g.stroke();
 }
 

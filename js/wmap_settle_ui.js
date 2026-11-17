@@ -162,8 +162,8 @@ function wmapSettleUiHM(ms) { var d = new Date(ms), p = function (n) { return (n
 function wmapSettleUiRpOf(W, id) { var i; for (i = 0; i < W.rp.length; i++) if (W.rp[i].id === id) return W.rp[i]; return null; }
 function wmapSettleUiRecOk(W, idx) { var rec = idx && typeof wdRecOf === 'function' ? wdRecOf(W, idx) : null; return !!rec && typeof BN_REC_VER !== 'undefined' && rec.v === BN_REC_VER; }
 function wmapSettleUiRptTitle(rp, size) {
-  var gi = wmapSettleIsPtId(rp.pt) ? +rp.pt.slice(1) : -1;
-  return (gi >= 0 ? wmapSettleCoord(gi, size) + ' ' : '') + (rp.cat === 'res' ? 'Lv' + rp.lv + ' ' : '') + rp.ptName + (rp.kind === 'rally' ? '(集結)' : '');
+  var gi = wmapSettleIsPtId(rp.pt) ? +rp.pt.slice(1) : (rp.cat === 'yg' && typeof wmapMobParse === 'function' && wmapMobParse(rp.pt) ? wmapMobParse(rp.pt).gi : -1);
+  return (gi >= 0 ? wmapSettleCoord(gi, size) + ' ' : '') + (rp.cat === 'res' || rp.cat === 'yg' ? 'Lv' + rp.lv + ' ' : '') + rp.ptName + (rp.kind === 'rally' ? '(集結)' : '');
 }
 function wmapSettleUiDetailHtml(W, rp) {
   var size = wmapSettleUiSize(), b = wmapSettleBrief(W, rp, { size: size }), h = '', i, r, txt, lt;
@@ -173,9 +173,11 @@ function wmapSettleUiDetailHtml(W, rp) {
     if (r.skipped) txt = '守軍已被前面的隊打光,未出手';
     else txt = '打守軍第 ' + (r.foe + 1) + ' 隊 ' + r.rounds + ' 回合,削血 ' + Math.round(r.dmg * 100) + '%,損兵 ' + Math.round(r.loss * 100) + '%' + (r.wiped ? '(全滅,重傷 15 分鐘)' : '') + (r.last ? ' ★最後一刀' : '');
     h += '<div class="wgr-row"><b>' + wmapSettleUiEsc(r.name || ('隊' + r.team)) + '</b><span class="wgr-sp">' + wmapSettleUiEsc(txt) + '</span>' +
-      (!r.skipped ? (wmapSettleUiRecOk(W, r.recIdx) ? '<button type="button" class="wgr-b" data-wgr="replay" data-i="' + r.recIdx + '">重播</button>' : '<span class="wgr-n">只剩文字結果</span>') : '') + '</div>';
+      (!r.skipped ? (wmapSettleUiRecOk(W, r.recIdx) ? (typeof bnRptBuild === 'function' ? '<button type="button" class="wgr-b" data-wgr="det" data-i="' + r.recIdx + '" aria-expanded="false">武將明細</button>' : '') + '<button type="button" class="wgr-b" data-wgr="replay" data-i="' + r.recIdx + '">重播</button>' : '<span class="wgr-n">只剩文字結果</span>') : '') + '</div>' +
+      (!r.skipped && wmapSettleUiRecOk(W, r.recIdx) ? '<div class="wgr-det" data-di="' + r.recIdx + '" hidden></div>' : '');
   }
   if (rp.occ && wmapSettleHasAny(rp.occ)) h += '<div class="wgr-card">占領獎勵 ' + wmapSettleUiEsc(wmapSettleText(rp.occ)) + '(3 小時產量,之後每分鐘自動入帳)</div>';
+  if (rp.ml && typeof wmapSettleText === 'function') h += '<div class="wgr-card">掉落 ' + wmapSettleUiEsc(wmapSettleText(rp.ml)) + '</div>';
   lt = wmapSettleLootTxt(rp.loot);
   if (lt) h += '<div class="wgr-card">掉落 ' + wmapSettleUiEsc(lt) + '</div>';
   if (rp.win && rp.fame > 0) h += '<div class="wgr-card">名聲 +' + rp.fame + '</div>';
@@ -190,6 +192,19 @@ function wmapSettleUiListHtml(W) {
     h += '<button type="button" class="wgr-li" data-wgr="open" data-id="' + wmapSettleUiEsc(rp.id) + '"><b>' + wmapSettleUiEsc(wmapSettleUiRptTitle(rp, size)) + '</b><span class="wgr-sp"></span><span class="wgr-s">' + wmapSettleUiHM(rp.t) + '</span> <b class="' + (rp.win ? 'okc' : 'ngc') + '">' + (rp.win ? '勝' : '敗') + '</b></button>';
   }
   return h;
+}
+// 武將明細(與戰鬥結算戰報共用 bnreport.js 的明細元件):點〔武將明細〕才重算該場並展開;再點收合;面板內點武將卡展開各戰法
+function wmapSettleUiDetail(el, idx, btn) {
+  var c = typeof wmapGoUiCtx === 'function' ? wmapGoUiCtx() : null, box = el.querySelector('.wgr-det[data-di="' + idx + '"]'), rec, open;
+  if (!box || !c) return;
+  open = box.hidden;
+  if (open && !box.firstChild) {
+    rec = typeof wdRecOf === 'function' ? wdRecOf(c.W, idx) : null;
+    if (!rec || typeof bnRptBuild !== 'function') return;
+    box.innerHTML = bnRptPanelHtml(bnRptBuild(rec, 'A'));
+  }
+  box.hidden = !open;
+  if (btn && btn.setAttribute) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 // 重播:戰鬥舞台 → 戰報的〔離開〕後直接回地圖(把堆疊裡連續的戰報頁關掉),不停在戰報頁(W6)
 function wmapSettleUiReplay(idx) {
@@ -208,11 +223,13 @@ function wmapSettleUiPageRender(el, ctx) {
   if (!el.__wgrBound) {
     el.__wgrBound = true;
     el.addEventListener('click', function (ev) {
-      var t = ev.target, a;
+      var t = ev.target, a, tg = t && t.closest ? t.closest('[data-act="tg"]') : null;
+      if (tg && el.contains(tg) && typeof bnRptDetailToggle === 'function') { bnRptDetailToggle(tg); return; }
       while (t && t !== el && !(t.getAttribute && t.getAttribute('data-wgr'))) t = t.parentNode;
       if (!t || t === el) return;
       a = t.getAttribute('data-wgr');
       if (a === 'open' && typeof ldNavPush === 'function') { ldNavPush('wmgrp', { id: t.getAttribute('data-id') }); return; }
+      if (a === 'det') { wmapSettleUiDetail(el, +t.getAttribute('data-i'), t); return; }
       if (a === 'replay') wmapSettleUiReplay(+t.getAttribute('data-i'));
     });
   }

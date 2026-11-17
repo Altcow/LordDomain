@@ -1,0 +1,578 @@
+{
+ "version": 1,
+ "order": [
+  "march_ld",
+  "march_lu",
+  "march_d",
+  "march_u",
+  "back_ld",
+  "back_lu",
+  "back_d",
+  "back_u",
+  "pause",
+  "garrison"
+ ],
+ "grid": [
+  4,
+  3
+ ],
+ "rc": [
+  [
+   0,
+   0
+  ],
+  [
+   0,
+   1
+  ],
+  [
+   0,
+   2
+  ],
+  [
+   0,
+   3
+  ],
+  [
+   1,
+   0
+  ],
+  [
+   1,
+   1
+  ],
+  [
+   1,
+   2
+  ],
+  [
+   1,
+   3
+  ],
+  [
+   2,
+   0
+  ],
+  [
+   2,
+   1
+  ]
+ ],
+ "troops": {
+  "sp": {
+   "tp": "槍",
+   "src": "槍兵_長槍版_504.webp",
+   "srcBaseW": 321.5,
+   "cats": 0,
+   "files": {
+    "keep_1x": {
+     "file": "army_sp_keep_1x.webp",
+     "bytes": 27608,
+     "w": 312,
+     "h": 195
+    },
+    "keep_2x": {
+     "file": "army_sp_keep_2x.webp",
+     "bytes": 82164,
+     "w": 624,
+     "h": 390
+    },
+    "strip_1x": {
+     "file": "army_sp_strip_1x.webp",
+     "bytes": 33434,
+     "w": 312,
+     "h": 195
+    },
+    "strip_2x": {
+     "file": "army_sp_strip_2x.webp",
+     "bytes": 100488,
+     "w": 624,
+     "h": 390
+    }
+   },
+   "cell": [
+    78,
+    65
+   ],
+   "anchor": [
+    39,
+    42
+   ],
+   "baseW": 64,
+   "boxes": {
+    "march_ld": [
+     6,
+     6,
+     67,
+     56
+    ],
+    "march_lu": [
+     7,
+     5,
+     65,
+     57
+    ],
+    "march_d": [
+     7,
+     6,
+     65,
+     56
+    ],
+    "march_u": [
+     7,
+     7,
+     65,
+     55
+    ],
+    "back_ld": [
+     7,
+     5,
+     65,
+     57
+    ],
+    "back_lu": [
+     7,
+     3,
+     65,
+     60
+    ],
+    "back_d": [
+     7,
+     5,
+     66,
+     58
+    ],
+    "back_u": [
+     6,
+     7,
+     66,
+     56
+    ],
+    "pause": [
+     6,
+     4,
+     66,
+     59
+    ],
+    "garrison": [
+     2,
+     9,
+     70,
+     53
+    ]
+   }
+  },
+  "sh": {
+   "tp": "盾",
+   "src": "盾兵_重畫版_510.webp",
+   "srcBaseW": 343.0,
+   "cats": 0,
+   "files": {
+    "keep_1x": {
+     "file": "army_sh_keep_1x.webp",
+     "bytes": 23160,
+     "w": 280,
+     "h": 183
+    },
+    "keep_2x": {
+     "file": "army_sh_keep_2x.webp",
+     "bytes": 63136,
+     "w": 560,
+     "h": 366
+    },
+    "strip_1x": {
+     "file": "army_sh_strip_1x.webp",
+     "bytes": 27756,
+     "w": 280,
+     "h": 183
+    },
+    "strip_2x": {
+     "file": "army_sh_strip_2x.webp",
+     "bytes": 79134,
+     "w": 560,
+     "h": 366
+    }
+   },
+   "cell": [
+    70,
+    61
+   ],
+   "anchor": [
+    35,
+    38
+   ],
+   "baseW": 64,
+   "boxes": {
+    "march_ld": [
+     3,
+     6,
+     65,
+     53
+    ],
+    "march_lu": [
+     3,
+     3,
+     65,
+     55
+    ],
+    "march_d": [
+     3,
+     6,
+     65,
+     53
+    ],
+    "march_u": [
+     3,
+     7,
+     65,
+     52
+    ],
+    "back_ld": [
+     3,
+     6,
+     65,
+     53
+    ],
+    "back_lu": [
+     3,
+     4,
+     65,
+     54
+    ],
+    "back_d": [
+     3,
+     7,
+     65,
+     51
+    ],
+    "back_u": [
+     3,
+     6,
+     65,
+     52
+    ],
+    "pause": [
+     3,
+     5,
+     65,
+     54
+    ],
+    "garrison": [
+     3,
+     4,
+     65,
+     54
+    ]
+   }
+  },
+  "ar": {
+   "tp": "弓",
+   "src": "弓兵_重畫版_509.webp",
+   "srcBaseW": 331.0,
+   "cats": 0,
+   "files": {
+    "keep_1x": {
+     "file": "army_ar_keep_1x.webp",
+     "bytes": 25556,
+     "w": 288,
+     "h": 180
+    },
+    "keep_2x": {
+     "file": "army_ar_keep_2x.webp",
+     "bytes": 75942,
+     "w": 576,
+     "h": 360
+    },
+    "strip_1x": {
+     "file": "army_ar_strip_1x.webp",
+     "bytes": 29646,
+     "w": 288,
+     "h": 180
+    },
+    "strip_2x": {
+     "file": "army_ar_strip_2x.webp",
+     "bytes": 90552,
+     "w": 576,
+     "h": 360
+    }
+   },
+   "cell": [
+    72,
+    60
+   ],
+   "anchor": [
+    36,
+    37
+   ],
+   "baseW": 64,
+   "boxes": {
+    "march_ld": [
+     4,
+     4,
+     65,
+     53
+    ],
+    "march_lu": [
+     3,
+     2,
+     66,
+     55
+    ],
+    "march_d": [
+     4,
+     4,
+     65,
+     53
+    ],
+    "march_u": [
+     4,
+     6,
+     65,
+     52
+    ],
+    "back_ld": [
+     4,
+     4,
+     65,
+     54
+    ],
+    "back_lu": [
+     4,
+     3,
+     65,
+     55
+    ],
+    "back_d": [
+     4,
+     5,
+     65,
+     53
+    ],
+    "back_u": [
+     4,
+     4,
+     65,
+     53
+    ],
+    "pause": [
+     4,
+     4,
+     65,
+     53
+    ],
+    "garrison": [
+     4,
+     4,
+     65,
+     54
+    ]
+   }
+  },
+  "ca": {
+   "tp": "騎",
+   "src": "騎兵_重畫版_511.webp",
+   "srcBaseW": 324.5,
+   "cats": 0,
+   "files": {
+    "keep_1x": {
+     "file": "army_ca_keep_1x.webp",
+     "bytes": 23912,
+     "w": 288,
+     "h": 177
+    },
+    "keep_2x": {
+     "file": "army_ca_keep_2x.webp",
+     "bytes": 69866,
+     "w": 576,
+     "h": 354
+    },
+    "strip_1x": {
+     "file": "army_ca_strip_1x.webp",
+     "bytes": 29384,
+     "w": 288,
+     "h": 177
+    },
+    "strip_2x": {
+     "file": "army_ca_strip_2x.webp",
+     "bytes": 88860,
+     "w": 576,
+     "h": 354
+    }
+   },
+   "cell": [
+    72,
+    59
+   ],
+   "anchor": [
+    36,
+    36
+   ],
+   "baseW": 64,
+   "boxes": {
+    "march_ld": [
+     3,
+     4,
+     66,
+     53
+    ],
+    "march_lu": [
+     4,
+     3,
+     65,
+     53
+    ],
+    "march_d": [
+     4,
+     3,
+     65,
+     53
+    ],
+    "march_u": [
+     4,
+     2,
+     65,
+     54
+    ],
+    "back_ld": [
+     4,
+     5,
+     65,
+     52
+    ],
+    "back_lu": [
+     4,
+     5,
+     65,
+     52
+    ],
+    "back_d": [
+     4,
+     4,
+     65,
+     52
+    ],
+    "back_u": [
+     4,
+     5,
+     65,
+     52
+    ],
+    "pause": [
+     4,
+     11,
+     65,
+     45
+    ],
+    "garrison": [
+     4,
+     9,
+     65,
+     47
+    ]
+   }
+  },
+  "en": {
+   "tp": "械",
+   "src": "器械_重畫版_512_使用者自寫文案.webp",
+   "srcBaseW": 326.0,
+   "cats": 0,
+   "files": {
+    "keep_1x": {
+     "file": "army_en_keep_1x.webp",
+     "bytes": 21150,
+     "w": 288,
+     "h": 159
+    },
+    "keep_2x": {
+     "file": "army_en_keep_2x.webp",
+     "bytes": 60636,
+     "w": 576,
+     "h": 318
+    },
+    "strip_1x": {
+     "file": "army_en_strip_1x.webp",
+     "bytes": 26418,
+     "w": 288,
+     "h": 159
+    },
+    "strip_2x": {
+     "file": "army_en_strip_2x.webp",
+     "bytes": 77522,
+     "w": 576,
+     "h": 318
+    }
+   },
+   "cell": [
+    72,
+    53
+   ],
+   "anchor": [
+    36,
+    30
+   ],
+   "baseW": 64,
+   "boxes": {
+    "march_ld": [
+     4,
+     7,
+     65,
+     43
+    ],
+    "march_lu": [
+     4,
+     2,
+     65,
+     48
+    ],
+    "march_d": [
+     4,
+     5,
+     65,
+     46
+    ],
+    "march_u": [
+     4,
+     4,
+     65,
+     46
+    ],
+    "back_ld": [
+     4,
+     10,
+     66,
+     40
+    ],
+    "back_lu": [
+     3,
+     8,
+     66,
+     43
+    ],
+    "back_d": [
+     4,
+     10,
+     65,
+     40
+    ],
+    "back_u": [
+     4,
+     8,
+     65,
+     42
+    ],
+    "pause": [
+     4,
+     9,
+     65,
+     42
+    ],
+    "garrison": [
+     4,
+     2,
+     65,
+     48
+    ]
+   }
+  }
+ }
+}

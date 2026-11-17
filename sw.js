@@ -1,4 +1,4 @@
-const VERSION = 'v68';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v69';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -217,6 +217,7 @@ const PRECACHE = [
   './js/rsvui.js',
   './js/wd_data.js',
   './js/wd_grid_data.js',
+  './js/wm_hex.js',
   './js/wm_gen.js',
   './js/wm_march.js',
   './js/wmap_proj.js',
@@ -227,9 +228,11 @@ const PRECACHE = [
   './js/wmap_army.js',
   './js/wmap_go.js',
   './js/wmap_settle.js',
+  './js/wmap_mob.js',
   './js/wmap_ui.js',
   './js/wmap_go_ui.js',
   './js/wmap_settle_ui.js',
+  './js/wmap_mob_ui.js',
   './js/wmap_panels.js',
   './js/wd_core.js',
   './js/wd_ui.js',
@@ -289,7 +292,31 @@ const PRECACHE = [
   './icons/icon-180.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/icon-maskable-512.png'
+  './icons/icon-maskable-512.png',
+  './assets/wmap/tex/tex_farm_a_512.webp',
+  './assets/wmap/tex/tex_farm_b_512.webp',
+  './assets/wmap/tex/tex_grass_512.webp',
+  './assets/wmap/tex/tex_hunt_512.webp',
+  './assets/wmap/tex/tex_mine_512.webp',
+  './assets/wmap/tex/tex_mud_512.webp',
+  './assets/wmap/tex/tex_rammed_512.webp',
+  './assets/wmap/tex/tex_river_512.webp',
+  './assets/wmap/tex/tex_rock_512.webp',
+  './assets/wmap/tex/tex_shoal_512.webp',
+  './assets/wmap/tex/tex_suburb_512.webp',
+  './assets/wmap/tex/tex_wood_512.webp',
+  './assets/wmap/tex/tex_meta.json',
+  './assets/wmap/army/army_meta.json',
+  './assets/wmap/army/army_sp_keep_1x.webp',
+  './assets/wmap/army/army_sp_keep_2x.webp',
+  './assets/wmap/army/army_sh_keep_1x.webp',
+  './assets/wmap/army/army_sh_keep_2x.webp',
+  './assets/wmap/army/army_ar_keep_1x.webp',
+  './assets/wmap/army/army_ar_keep_2x.webp',
+  './assets/wmap/army/army_ca_keep_1x.webp',
+  './assets/wmap/army/army_ca_keep_2x.webp',
+  './assets/wmap/army/army_en_keep_1x.webp',
+  './assets/wmap/army/army_en_keep_2x.webp'
 ];
 
 // 封面背景與標題 logo:放進執行期圖片桶(IMG_CACHE),首次安裝後離線也能顯示封面;抓不到不擋安裝

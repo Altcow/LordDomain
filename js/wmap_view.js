@@ -1,32 +1,49 @@
-// js/wmap_view.js — M1 斜角大地圖畫面層(設計_M1視覺原型_實作計畫.md W1;設計_地圖斜角視覺_規格.md 1.3、1.5、6.2):
+// js/wmap_view.js — 六邊形大地圖畫面層(設計_地圖六邊形改版_規格.md 1.3、3、5;工作流 4;前身:M1 斜角大地圖 設計_M1視覺原型_實作計畫.md W1):
 //   ?wmap=1 時掛載 #wmapRoot(整頁疊在最上,不動既有首頁 DOM);沒有 ?wmap=1 時本檔載入後什麼都不做(首頁逐像素不變)。
 //   烘焙分塊:256 CSS px 見方的 canvas(只建視窗內 + 預取一圈、上限 20 塊、LRU 回收),整張 world 用 transform 平移;
-//   覆蓋層 DOM = 只有「我的朱紅框」的格才有節點(節點池)+ 1 個選取框;領地等級靠烘焙畫面的物件疏密 / 大小 / 地面覆蓋 / 里程碑表現(wmap_res.js 演算法、wmap_art.js 圖形),地圖上沒有任何文字或數字;視窗外不渲染;拖曳 / 滾輪 / 雙指 / 按鈕三段縮放(格 44 / 64 / 104);點擊命中 → 選取框 + 資訊列。
-//   目前資料 = wmGen(種子) 的世界(W0);領地(Lv / 種類)與我的占領是「示範資料」(wmapDemo*,由 W3 / W5 換成真資料,接口見下)。
-//   ES2017,不用 ?. ??;UTF-8 + CRLF。載入順序:wm_gen.js、wmap_proj.js、wmap_art.js 之後。命名:全域一律 wmap* / WMAP_*。
+//   每格 = 一塊有厚度的六邊形地磚:頂面(貼圖取樣)+ 側壁(只在「正下 / 左下 / 右下鄰格不存在或比本格低」時畫)+ 倒角 + 深褐描邊;依格中心 y(c + r)由小到大畫,前排側壁 / 頂面蓋住後排;
+//   水格(河 / 淺灘 / 橋下)頂面下沉 T/2,岸邊露出側壁;地形交界格疊「鄰格第二貼圖 + 漸層遮罩」過渡帶(WMAP_VCFG.trans 開關);邊界帶霧改六邊形。
+//   覆蓋層 DOM = 只有「我的朱紅框」的格才有節點(節點池)+ 1 個選取框;領地等級靠烘焙畫面的物件疏密 / 大小 / 地面覆蓋表現(wmap_res.js 演算法、wmap_art.js 圖形),地圖上沒有任何文字或數字;視窗外不渲染;拖曳 / 滾輪 / 雙指 / 按鈕兩段縮放(格寬 64 / 96);點擊命中 → 選取框 + 資訊列。
+//   目前資料 = wmGen(種子) 的世界;領地(Lv / 種類)與我的占領是「示範資料」(wmapDemo*,由 W3 / W5 換成真資料,接口見下)。
+//   ES2017,不用 ?. ??;UTF-8 + CRLF。載入順序:wm_hex.js、wm_gen.js、wmap_proj.js、wmap_art.js、wmap_res.js 之後。命名:全域一律 wmap* / WMAP_*。
 //
-// ───────── 公開 API(給 W2 / W3 / W5 / W6;W4 軍隊層請用 wmap_proj.js) ─────────
-//   WMAP                      狀態物件:{WG, G, zi, cam, vw, vh, root, world, own:{gi:1}, sel:gi|−1, onSelect, cellInfo, ...}
-//   wmapMount(o) → bool       o = {seed, size, parent}:建立畫面並開始;已掛載回 false。?wmap=1 時載入後自動以預設值呼叫
+// ───────── 公開 API(給 W2 / W3 / W5 / W6;軍隊層請用 wmap_proj.js) ─────────
+//   WMAP                      狀態物件:{WG, G, zi, cam, vw, vh, root, world, own:{gi:1}, sel:gi|−1, onSelect, cellInfo, lv(Uint8Array:1 = 水格下沉), ...}
+//   WMAP_VCFG                 畫面參數(可調 / 可關):{edge: 'all' | 'diff' | 'none'(描邊:每格 / 只在不同地形交界 / 不畫), trans: 地形過渡帶開關, bevel: 倒角開關, lw: 描邊線寬(× 格寬), edgeA: 描邊透明度, wall: 側壁色}
+//   wmapMount(o) → bool       o = {seed, size, parent}:建立畫面並開始;已掛載回 false。?wmap=1 時載入後自動以預設值呼叫(直向預設格寬 64、橫向 96)
 //   wmapUnmount()             移除畫面與監聽
 //   wmapSetCam(u, v)          鏡頭置中到連續座標 (u, v)(格座標,中心 = c + 0.5);會夾住並重畫
-//   wmapSetZoom(idx, ax, ay)  三段縮放(0 / 1 / 2);(ax, ay) = 視窗內錨點像素,省略 = 視窗中心
+//   wmapSetZoom(idx, ax, ay)  兩段縮放(0 / 1);(ax, ay) = 視窗內錨點像素,省略 = 視窗中心
 //   wmapSelect(gi)            選取一格(−1 = 取消);會呼叫 WMAP.onSelect(gi)
-//   wmapInvalidate()          格內容改變(占領 / 刷新)後重烘全部可見分塊與朱紅框(W5 之後可改成只烘受影響分塊)
-//   wmapCellText(gi) → 字串   資訊列文字(座標 / 地形 / Lv / 領地種類 / 去程);W3 換成地塊卡時替換
-//   WMAP.cellInfo(gi) → {ty:'farm'|'mine'|'hunt'|'lumber'|'quarry', lv}|null   該格是否為資源領地、等級多少(畫成物件疏密 / 里程碑;預設 = 示範資料;W3 以 wmCell 取代)
-//   wmapHit(x, y) → {gi, node}  視窗內像素的命中(含往上凸物件);城池(gv 3 占地:縣 3×3 / 郡 4×4 / 關 2×3)= 點占地菱形往上拉高的六邊形內任何一點,gi = node.gi(主城門格)、node = wm_gen 的 WG.nodes 項({id, type:'county'|'jun'|'pass', gi, adj, d, c0, r0, fw, fh…});主城 = {gi: c0, node: null};點一下選取時 WMAP.onSelect(gi, node);選取框 = 單一元素(占地大小)
-//   wmapNodeShapes() → [{node, gi, p:[x,y…]}]   城池(含主城)的點選形(世界座標六邊形,隨縮放重算並快取),前面的在前
+//   wmapInvalidate()          格內容改變(占領 / 刷新)後重烘全部可見分塊與朱紅框
+//   wmapCellText(gi) → 字串   資訊列文字(座標 / 地形 / Lv / 領地種類 / 去程)
+//   WMAP.cellInfo(gi) → {ty:'farm'|'mine'|'hunt'|'lumber'|'quarry', lv}|null   該格是否為資源領地、等級多少(預設 = 示範資料;W3 以 wmCell 取代)
+//   wmapHit(x, y) → {gi, node}  視窗內像素的命中(含往上凸物件);城池(縣 4×4 / 郡 6×6 / 州 8×8 / 關 2×4)= 點占地頂面外殼往上拉高的凸多邊形內任何一點,gi = node.gi(主城門格)、node = wm_gen 的 WG.nodes 項;主城 = {gi: c0, node: null};點一下選取時 WMAP.onSelect(gi, node);選取框 = 單一元素(占地外框 + 內部六邊形格)
+//   wmapNodeShapes() → [{node, gi, dep, p:[x,y…]}]   城池(含主城)的點選形(世界座標凸多邊形,隨縮放重算並快取),前面的在前
+//   wmapNodeDim(key, fw, fh) → {cw, ch, ax, ay, art}   城池圖尺寸(規格 3:底座寬 = 192 × (fw + fh − 2) + 256、底座高 = 72 × (fw + fh − 2) + 180,往上 U = 底座高 × 0.6)
+//   wmapRoadArms(gi) → 6 位元遮罩(bit d = 朝 d 向鄰格有路臂,d 同 wm_hex.js);wmapRiverNb(gi) / wmapRiverDg(gi) → 6 個布林;wmapBridge(gi) → bool
 //   wmapStats() → {chunks, bakes, bakeAvgMs, dom, owns, zoom, vw, vh}      量測用
+//
+// ───────── 與 wmap_art.js(工作流 5)的接口 ─────────
+//   頂面:貼圖已載入(wmapTexReady)→ 世界錨定 pattern(wmapTexPattern(g, 貼圖鍵, wmapTexSg(W), 0, 0))交給 wmapArtTexHex(側壁 / 描邊由本檔自畫:sides 0、line 0);未載入 → 貼 wmapArtGet(wmapArtHexKey(地面, 款))(程式紋理單格 256 × 180,錨點 (128, 72));
+//   貼圖載入:wmapMount 呼叫 wmapTexLoad(…);載入完 WMAP_TEX.onload → 清分塊重烘(去抖 120 ms);過渡遮罩 = wmapArtGet('mask_<d + 6 × 款>');
+//   圖塊放置:WMAP_IMG[key] = {w, h, ax, ay}(wmapNodeDim / 拼塊物件用它的錨點);沒有該鍵 → 程式色塊(六邊形稜柱)。
+//   道路 / 河:道路形狀本檔自畫(6 臂、批次填 gt_road 紋理);河 = 下沉的水格頂面(貼圖 river / shoal)+ wmapArtRiver 'hi' 高光層。
 
 var WMAP = { on: false, WG: null, G: null, zi: 1, cam: { u: 32, v: 32 }, vw: 0, vh: 0, root: null, vp: null, world: null, own: {}, sel: -1, onSelect: null, cellInfo: null,
-  chunks: {}, nChunks: 0, stamp: 0, sc: {}, dpr: 1, raf: 0, objs: [], res: {}, resList: [], F: null, pat: {}, fpool: [], bsig: '', bakes: 0, bakeMs: 0, ptrs: {}, drag: null, wheelAcc: 0, wheelT: 0,
+  chunks: {}, nChunks: 0, stamp: 0, sc: {}, dpr: 1, raf: 0, objs: [], res: {}, resList: [], F: null, pat: {}, tile: {}, mask: {}, lv: null, lvWG: null, fpool: [], bsig: '', bakes: 0, bakeMs: 0, ptrs: {}, drag: null, wheelAcc: 0, wheelT: 0,
   selEls: [], card: null, hud: null, dbg: false, ground: null, seed: 0, B: 4, N: 64, listeners: [] };
-var WMAP_KNAME = ['平地', '山', '大石', '河', '淺灘', '道路', '主城', '邊界', '城內庭院', '縣城', '關口', '郡城'];
-// 城池圖的邏輯尺寸(規格 3.2;1 格寬 = 256):MV2 的 WMAP_PIECE 登錄的占地 fw × fh 與節點相符就用登錄的尺寸與圖,否則(缺圖 / 舊單格圖)退回這張表 + 簡單色塊
-var WMAP_NODE_DIM = { COUNTY: [768, 560], JUN: [1024, 800], PASS0: [640, 600], PASS1: [640, 600], CITY: [768, 680] };
+var WMAP_KNAME = ['平地', '山', '大石', '河', '淺灘', '道路', '主城', '邊界', '城內庭院', '縣城', '關口', '郡城', '州城'];
 var WMAP_TY = ['farm', 'mine', 'hunt', 'lumber', 'quarry'];
 var WMAP_PRI = { grass: 6, wood: 5, dirt: 3, rammed: 2, rock: 0 };
+// 畫面參數(規格待決 3:描邊遊戲內細一點;'diff' = 只在不同地形交界描邊;trans = 地形交界過渡帶開關)
+var WMAP_VCFG = {
+  edge: 'all', trans: true, bevel: true, lw: 0.016, edgeA: 0.5, ink: '#4a3b2c',
+  wall: { grass: '#8d7a45', dirt: '#9c7c48', wood: '#6e7a40', rock: '#837b69', rammed: '#9a8a62', water: '#5f93ad', bank: '#c9b783' },
+  col: { grass: ['#9fc95c', '#93be52', '#a7d065'], dirt: ['#cfa86a', '#c6a062'], wood: ['#79a64a', '#6f9c44'], rock: ['#a79f8c', '#9d9583'], rammed: ['#c9b78c', '#c1ae82'], water: ['#58a5d4', '#4f9bcb', '#62adda'], ford: ['#8ec6d6'] },
+  fog: '#dfe9ec', n: { grass: 3, dirt: 2, wood: 2, rock: 2, rammed: 2 }   // 各地面的款數(v % n)
+};
+// 城池圖的邏輯尺寸(格寬 256 單位)= 底座(規格 3)+ 往上 U = 底座高 × 0.6;wmapNodeDim 依 fw / fh 算,不再查表
 
 // ───────── 示範資料(W3 / W5 換掉) ─────────
 function wmapNoise(seed, x, y, sc) {
@@ -37,6 +54,7 @@ function wmapNoise(seed, x, y, sc) {
 }
 function wmapDemoCellInfo(gi) {
   var WG = WMAP.WG, h, cost, lv;
+  if (WG && WG.rt) return WG.rt[gi] >= 0 ? { ty: WMAP_TY[WG.rt[gi]], lv: WG.rl[gi] } : null;   // gv 4+:資源由 wm_gen 範圍配額生成(WG.rt / rl;WMAP_TY 與 WMG_RES_TY 同序),外圍(d > reach)資源也回傳
   if (!WG || WG.k[gi] !== 0 || !isFinite(WG.d[gi]) || (WG.zone && WG.zone[gi])) return null;   // 城郊(zone 2)不放領地
   h = wmGenHash(WG.seed, gi, 77);
   if (h % 100 >= 20) return null;
@@ -46,12 +64,12 @@ function wmapDemoCellInfo(gi) {
 function wmapInfoOf(gi) { return WMAP.cellInfo ? WMAP.cellInfo(gi) : wmapDemoCellInfo(gi); }
 
 // ───────── 資料準備 ─────────
-function wmapGroundType(gi) {   // 地面種類(只影響外觀)
-  var WG = WMAP.WG, N = WG.size, k = WG.k[gi], x = gi % N, y = (gi - x) / N, n1, n2;
-  if (k === 6 || k === 8 || k === 9 || k === 11) return 'rammed';   // 主城 / 縣 / 郡:夯土
+function wmapGroundType(gi) {   // 地面種類(只影響外觀);雜訊用地面等向座標 wmHexGround(否則被拉伸)
+  var WG = WMAP.WG, N = WG.size, k = WG.k[gi], x = gi % N, y = (gi - x) / N, n1, n2, q = wmHexGround(x, y);
+  if (k === 6 || k === 8 || k === 9 || k === 11 || k === 12) return 'rammed';   // 主城 / 縣 / 郡 / 州:夯土
   if (k === 10) return 'rock';                                     // 關的山壁
   if (k === 1) return 'rock';
-  n1 = wmapNoise(WG.seed, x, y, 9); n2 = wmapNoise(WG.seed + 7, x, y, 7);
+  n1 = wmapNoise(WG.seed, q.x + 64, q.y + 64, 9); n2 = wmapNoise(WG.seed + 7, q.x + 64, q.y + 64, 7);
   if (k === 7) return n1 > 0.45 ? 'wood' : 'rock';
   if (n1 > 0.72) return 'dirt';
   if (n2 > 0.7) return 'wood';
@@ -64,26 +82,43 @@ function wmapPassAxis(nd) {   // 關口門牆朝向:0 = 道路沿 c(u)方向進�
   if (r > 0 && (WG.k[nd.gi - N] === 5 || WG.k[nd.gi + N] === 5)) return 1;
   return nd.adj >= 0 && nd.adj % N !== c ? 0 : 1;
 }
-function wmapNodeKey(nd) { return nd.type === 'pass' ? 'PASS' + wmapPassAxis(nd) : (nd.type === 'jun' ? 'JUN' : 'COUNTY'); }
-function wmapNodeDim(key, fw, fh) {   // → {cw, ch, art}:登錄的占地相符 = 用圖;否則退回規格尺寸 + 色塊
-  var P = typeof WMAP_PIECE !== 'undefined' ? WMAP_PIECE[key] : null, d = WMAP_NODE_DIM[key];
-  if (P && P.fw === fw && P.fh === fh) return { cw: P.cw, ch: P.ch, art: true };
-  return { cw: d ? d[0] : (fw + fh) * 128, ch: d ? d[1] : 560, art: false };
+function wmapNodeKey(nd) { return nd.type === 'pass' ? 'PASS' + wmapPassAxis(nd) : (nd.type === 'jun' ? 'JUN' : (nd.type === 'zhou' ? 'ZHOU' : 'COUNTY')); }
+function wmapImgOf(key, fw, fh) {   // 圖塊的畫布尺寸與錨點:WMAP_IMG(正式圖接口)優先,其次 WMAP_PIECE(程式圖;fw / fh 給了就要占地相符);都沒有 → null(畫六邊形稜柱色塊)
+  var im = typeof WMAP_IMG !== 'undefined' && WMAP_IMG ? WMAP_IMG[key] : null, P = typeof WMAP_PIECE !== 'undefined' && WMAP_PIECE ? WMAP_PIECE[key] : null;
+  if (P && fw !== undefined && (P.fw !== fw || P.fh !== fh)) return null;
+  if (im && im.w && im.h) return im;
+  if (P && P.cw && P.ch && P.ax !== undefined) return { w: P.cw, h: P.ch, ax: P.ax, ay: P.ay };
+  return null;
+}
+function wmapBaseH(fw, fh) { return 72 * (fw + fh - 2) + 180; }   // 圖塊底座高(格寬 256 單位;含側壁)
+function wmapNodeDim(key, fw, fh) {   // → {cw, ch, ax, ay, art}:有圖檔接口 WMAP_IMG[key] = 用圖;否則依規格 3 公式算尺寸 + 色塊
+  var im = wmapImgOf(key, fw, fh), bw = 192 * (fw + fh - 2) + 256, bh = wmapBaseH(fw, fh);
+  if (im && im.w && im.h) return { cw: im.w, ch: im.h, ax: im.ax !== undefined ? im.ax : 128 + 192 * (fh - 1), ay: im.ay !== undefined ? im.ay : im.h - bh + 72, art: true };
+  return { cw: bw, ch: Math.round(bh * 1.6), ax: 128 + 192 * (fh - 1), ay: Math.round(bh * 1.6) - bh + 72, art: false };
+}
+function wmapBuildLv() {   // 水格(河 / 淺灘 / 橋格)= 1:頂面下沉 T/2
+  var WG = WMAP.WG, n = WG.size * WG.size, i, k, lv = new Uint8Array(n);
+  WMAP.N = WG.size;
+  for (i = 0; i < n; i++) { k = WG.k[i]; if (k === 3 || k === 4 || (k === 5 && wmapBridge(i))) lv[i] = 1; }
+  WMAP.lv = lv; WMAP.lvWG = WG;
 }
 function wmapBuildData() {
-  var WG = WMAP.WG, N = WG.size, B = WG.border, n = N * N, i, x, y, gt = new Array(n), objs = [], p, id, P, info, h, c0, r0, tall, e, rty = new Int8Array(n).fill(-1), rlv = new Uint8Array(n), rok = new Uint8Array(n);
+  var WG = WMAP.WG, N = WG.size, B = WG.border, n = N * N, i, j, x, y, gt = new Array(n), objs = [], p, id, P, info, h, tall, e, rty = new Int8Array(n).fill(-1), rlv = new Uint8Array(n), rok = new Uint8Array(n), im, dmax, cl;
   WMAP.N = N; WMAP.B = B; WMAP.res = {}; WMAP.resList = []; WMAP.own = {};
+  wmapBuildLv();
   for (i = 0; i < n; i++) gt[i] = wmapGroundType(i);
   WMAP.ground = gt;
   for (i = 0; i < WG.pcs.length; i++) {   // 山 / 大石
     p = WG.pcs[i]; id = p.id; P = WMAP_PIECE[id]; if (!P) continue;
-    objs.push({ key: id, c0: p.gi % N, r0: Math.floor(p.gi / N), fw: P.fw, fh: P.fh, cw: P.cw, ch: P.ch, al: 1 });
+    im = wmapImgOf(id); dmax = 0;
+    for (j = 0; j < P.cells.length; j++) dmax = Math.max(dmax, P.cells[j][0] + P.cells[j][1]);   // 最前格 = c + r 最大(cells = [dr, dc])
+    objs.push({ key: id, c0: p.gi % N, r0: Math.floor(p.gi / N), fw: P.fw, fh: P.fh, cw: im ? im.w : P.cw, ch: im ? im.h : P.ch, ax: im ? im.ax : undefined, ay: im ? im.ay : undefined, art: !!im, cells: P.cells, dep: (p.gi % N) + Math.floor(p.gi / N) + dmax, al: 1 });
   }
-  if (WG.nodes) for (i = 0; i < WG.nodes.length; i++) {   // 縣城 3×3 / 郡城 4×4 / 關 2×3(整座一個物件;占地全部格,深度排序取最前格)
+  if (WG.nodes) for (i = 0; i < WG.nodes.length; i++) {   // 縣 4×4 / 郡 6×6 / 州 8×8 / 關 2×4(整座一個物件;占地全部格,深度排序取最前格)
     e = WG.nodes[i]; id = wmapNodeKey(e); P = wmapNodeDim(id, e.fw, e.fh);
-    objs.push({ key: id, c0: e.c0, r0: e.r0, fw: e.fw, fh: e.fh, cw: P.cw, ch: P.ch, al: 1, block: !P.art, nd: e });
+    objs.push({ key: id, c0: e.c0, r0: e.r0, fw: e.fw, fh: e.fh, cw: P.cw, ch: P.ch, ax: P.ax, ay: P.ay, al: 1, art: P.art, block: !P.art, dep: e.c0 + e.r0 + e.fw + e.fh - 2, nd: e });
   }
-  if (!WG.noCity) { P = wmapNodeDim('CITY', 3, 3); objs.push({ key: 'CITY', c0: WG.cx - 1, r0: WG.cy - 1, fw: 3, fh: 3, cw: P.cw, ch: P.ch, al: 1, block: !P.art, nd: null }); }
+  if (!WG.noCity) { P = wmapNodeDim('CITY', 3, 3); objs.push({ key: 'CITY', c0: WG.cx - 1, r0: WG.cy - 1, fw: 3, fh: 3, cw: P.cw, ch: P.ch, ax: P.ax, ay: P.ay, al: 1, art: P.art, block: !P.art, dep: WG.cx + WG.cy + 1, nd: null }); }
   for (i = 0; i < n; i++) {   // 領地(示範)與邊界帶裝飾
     x = i % N; y = (i - x) / N;
     if (WG.k[i] === 0) {
@@ -101,20 +136,25 @@ function wmapBuildData() {
       id = null;
       if (tall) id = h < 34 ? 'T1' : (h < 52 ? 'M1' : (h < 56 ? 'O1' : null));
       else id = h < 14 ? 'O1' : null;
-      if (id) { P = WMAP_PIECE[id]; objs.push({ key: id, c0: x, r0: y, fw: 1, fh: 1, cw: P.cw, ch: P.ch, al: 0.95 - 0.16 * (B - 1 - e) }); }
+      if (id) { P = WMAP_PIECE[id]; im = wmapImgOf(id); objs.push({ key: id, c0: x, r0: y, fw: 1, fh: 1, cw: im ? im.w : P.cw, ch: im ? im.h : P.ch, ax: im ? im.ax : undefined, ay: im ? im.ay : undefined, art: !!im, cells: [[0, 0]], dep: x + y, al: 0.95 - 0.16 * (B - 1 - e) }); }
     }
   }
   WMAP.F = wmapResPrep({ N: N, rty: rty, rlv: rlv, rok: rok });
-  objs.sort(function (a, b) { return ((a.r0 + a.fh - 1) + (a.c0 + a.fw - 1)) - ((b.r0 + b.fh - 1) + (b.c0 + b.fw - 1)) || (a.c0 - a.r0) - (b.c0 - b.r0); });
+  objs.sort(function (a, b) { return a.dep - b.dep || (a.c0 - a.r0) - (b.c0 - b.r0); });   // 排序鍵 = 占地中最前(c + r 最大)那格的中心 y
   WMAP.objs = objs;
 }
 
-// ───────── 縮放後的圖(依格大小與 DPR 預縮,分塊畫的時候 1:1 貼) ─────────
+// ───────── 縮放後的圖(依格寬與 DPR 預縮,分塊畫的時候 1:1 貼) ─────────
 function wmapScaled(key) {
   var s = WMAP.sc[key], a, k, w, h, c, g;
   if (s) return s;
-  a = wmapArtGet(key); if (!a) return null;
   k = WMAP.G.W / 256 * WMAP.dpr;
+  if (typeof WMAP_CITY_KEYS !== 'undefined' && WMAP_CITY_KEYS[key] === 1 && typeof wmapArtCityQ === 'function') {   // 城池:直接按目標倍率(= k)畫向量,不再先畫 1× 再縮(wmapArtCityQ 的第一參數 = 格寬 W)
+    a = wmapArtGet(key, wmapArtCityQ(WMAP.G.W, WMAP.dpr, WMAP.dpr <= 1));
+    if (!a) return null;
+    s = { c: a.c, k: 1 / WMAP.dpr }; WMAP.sc[key] = s; return s;
+  }
+  a = wmapArtGet(key); if (!a) return null;
   if (Math.abs(k - 1) < 0.03) { s = { c: a.c, k: 1 / WMAP.dpr }; }
   else {
     w = Math.max(1, Math.round(a.cw * k)); h = Math.max(1, Math.round(a.ch * k));
@@ -135,62 +175,93 @@ function wmapDrawArt(g, key, x, y, cw, ch) {   // (x, y) = 圖左上世界座標
   g.drawImage(s.c, x, y, cw * k, ch * k);
 }
 
+// ───────── 六邊形頂面貼圖(程式退路:256 × 180 單格圖塊,錨點 (128, 72);正式圖到了由 wmapArtTexHex 提供) ─────────
+function wmapVRng(seed) {
+  var a = seed >>> 0;
+  return function () {
+    var t;
+    a = (a + 0x6D2B79F5) >>> 0;
+    t = Math.imul(a ^ (a >>> 15), a | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function wmapVShade(hex, k) {
+  var n = parseInt(hex.slice(1), 16), r = (n >> 16) & 255, gg = (n >> 8) & 255, b = n & 255;
+  r = Math.max(0, Math.min(255, Math.round(r * k))); gg = Math.max(0, Math.min(255, Math.round(gg * k))); b = Math.max(0, Math.min(255, Math.round(b * k)));
+  return '#' + ((1 << 24) | (r << 16) | (gg << 8) | b).toString(16).slice(1);
+}
+function wmapHexVerts(cx, cy, W, H, infl) {   // 頂面六頂點(infl = 外擴 px)
+  var w = W / 2 + infl, h = H / 2 + infl * 0.6, q = W / 4;
+  return [cx - w, cy, cx - q, cy - h, cx + q, cy - h, cx + w, cy, cx + q, cy + h, cx - q, cy + h];
+}
+function wmapHexPath(g, cx, cy, W, H, infl) {
+  var p = wmapHexVerts(cx, cy, W, H, infl || 0);
+  g.moveTo(p[0], p[1]); g.lineTo(p[2], p[3]); g.lineTo(p[4], p[5]); g.lineTo(p[6], p[7]); g.lineTo(p[8], p[9]); g.lineTo(p[10], p[11]); g.closePath();
+}
+function wmapTexNeeded() { return ['grass', 'mud', 'wood', 'rock', 'rammed', 'river', 'shoal', 'farm_a', 'farm_b', 'mine', 'hunt']; }
+function wmapTexKickLoad() {   // 非同步載入頂面貼圖;載入完重烘(去抖);沒有 wmap_art.js 的貼圖函式 / 沒有 Promise → 全部走程式退路
+  var ks = wmapTexNeeded(), i;
+  if (typeof wmapTexLoad !== 'function' || typeof WMAP_TEX === 'undefined') return;
+  try { if (typeof wmapTexAutoRes === 'function') wmapTexSetRes(wmapTexAutoRes(WMAP.G.W, WMAP.dpr, WMAP.dpr <= 1, false)); if (typeof wmapTexTrim === 'function') wmapTexTrim(ks); } catch (e) { /* 用預設解析度 */ }
+  WMAP_TEX.onload = function () {
+    if (!WMAP.on) return;
+    if (WMAP.texT) return;
+    WMAP.texT = setTimeout(function () { WMAP.texT = 0; if (!WMAP.on) return; wmapClearChunks(); WMAP.pat = {}; WMAP.sc = {}; WMAP.bsig = ''; wmapSchedule(); }, 120);
+  };
+  for (i = 0; i < ks.length; i++) { try { wmapTexLoad(ks[i]); } catch (e) { /* 載入失敗 → 保持退路 */ } }
+}
+function wmapTexPat(g, key) {   // 貼圖鍵 → 世界錨定 pattern(未載入回 null);每縮放段快取
+  var k = 'tex_' + key, pc = WMAP.bakePat, p;
+  if (!pc || pc.g !== g) pc = WMAP.bakePat = { g: g };   // 同一張畫布每種貼圖只建一次 pattern(重用 → 相鄰格紋理連續)
+  p = pc[k];
+  if (p !== undefined) return p;
+  p = (typeof wmapTexReady === 'function' && wmapTexReady(key)) ? wmapTexPattern(g, key, wmapTexSg(WMAP.G.W), 0, 0) : null;
+  if (p) pc[k] = p;   // 沒載入不快取(載入後下一次烘焙就拿得到)
+  return p;
+}
+function wmapHexTileOf(type, v) { return wmapScaled(wmapArtHexKey(type, v)); }   // 程式 / 貼圖紋理的單格 256 × 180(已縮到格寬 × DPR)
+
 // ───────── 烘焙一塊 ─────────
 function wmapBakeChunk(ix, iy) {
   var t0 = performance.now(), CH = WMAP_CFG.chunk, G = WMAP.G, WG = WMAP.WG, N = G.size, B = WMAP.B, dpr = WMAP.dpr, x0 = ix * CH, y0 = iy * CH, x1 = x0 + CH, y1 = y0 + CH,
-    key = wmapChunkKey(ix, iy), rg = wmapCellsInRect(G, x0, y0, x1, y1, 0, G.W / 2), ch, g, c, r, gi, t, k, rc, i, o, bx, nb, e, d, tmp, tg, ent;
+    key = wmapChunkKey(ix, iy), rg = wmapCellsInRect(G, x0, y0, x1, y1, 0, 0), ch, g, c, r, gi, t, k, rc, i, o, bx, e, ent, cells = [], objs = [];
   ent = { used: WMAP.stamp, empty: false, cv: null };
   WMAP.chunks[key] = ent; WMAP.nChunks++;
-  // 物件先挑出來(有重疊的):畫在最後;若沒有任何格也沒有物件 → 空塊
-  var objs = [], cells = [];
+  if (!WMAP.lv || WMAP.lvWG !== WG) wmapBuildLv();
+  // 格:頂面外框(含側壁、水格下沉)與分塊相交者;依格中心 y(c + r)由小到大、同 y 由左到右(c 小的先)排序 = 前排蓋後排
   for (r = rg.r0; r <= rg.r1; r++) for (c = rg.c0; c <= rg.c1; c++) {
     rc = wmapCellRect(G, c, r);
-    if (rc.x + rc.w < x0 || rc.x > x1 || rc.y + rc.h < y0 || rc.y > y1) continue;
+    if (rc.x + rc.w < x0 || rc.x > x1 || rc.y + rc.h + G.T < y0 || rc.y > y1) continue;
     cells.push(r * N + c);
   }
+  cells.sort(function (a, b) { var ca = a % N, cb = b % N; return ((ca + (a - ca) / N) - (cb + (b - cb) / N)) || (ca - cb); });
   for (i = 0; i < WMAP.objs.length; i++) {
     o = WMAP.objs[i];
-    bx = wmapPieceBox(G, o.c0, o.r0, o.fw, o.fh, o.cw, o.ch);
+    bx = wmapPieceBox(G, o.c0, o.r0, o.fw, o.fh, o.cw, o.ch, o.ax, o.ay);
+    if (o.block || !o.art) { bx = { x: bx.x - G.W, y: bx.y - G.H * 3, w: bx.w + 2 * G.W, h: bx.h + G.H * 3 }; }   // 色塊退路:稜柱高度不照圖框,外擴一點
     if (bx.x + bx.w < x0 || bx.x > x1 || bx.y + bx.h < y0 || bx.y > y1) continue;
     objs.push(o);
   }
   if (!cells.length && !objs.length) { ent.empty = true; WMAP.bakes++; WMAP.bakeMs += performance.now() - t0; return ent; }
   ch = document.createElement('canvas'); ch.width = CH * dpr; ch.height = CH * dpr; ch.style.width = CH + 'px'; ch.style.height = CH + 'px'; ch.style.transform = 'translate(' + x0 + 'px,' + y0 + 'px)';
   g = ch.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, -x0 * dpr, -y0 * dpr);
-  // 1 地面 + 過渡
-  for (i = 0; i < cells.length; i++) {
-    gi = cells[i]; c = gi % N; r = (gi - c) / N;
-    t = wmapCellTop(G, c, r);
-    wmapBakeGround(g, gi, c, r, t.x - G.W / 2, t.y);
-  }
-  // 2 河(岸 → 水 → 高光)、路(邊 → 面)
-  for (i = 0; i < cells.length; i++) {
-    gi = cells[i]; k = WG.k[gi];
-    if (k === 3 || k === 4 || wmapBridge(gi)) {
-      c = gi % N; r = (gi - c) / N; nb = wmapRiverNb(gi);
-      g.save(); wmapArtIsoT(g, G, c, r); wmapArtRiver(g, 'bank', nb, false, 0, wmapRiverDg(gi)); g.restore();
-    }
-  }
-  for (i = 0; i < cells.length; i++) {
-    gi = cells[i]; k = WG.k[gi];
-    if (k === 3 || k === 4 || wmapBridge(gi)) {
-      c = gi % N; r = (gi - c) / N; nb = wmapRiverNb(gi);
-      g.save(); wmapArtIsoT(g, G, c, r); wmapArtRiver(g, 'water', nb, k === 4, 0, wmapRiverDg(gi)); wmapArtRiver(g, 'hi', nb, k === 4, wmGenHash(WG.seed, gi, 9)); g.restore();
-    }
-  }
+  // 1 地面:側壁 → 水格頂面(下沉 T/2)→ 陸地頂面 → 過渡 → 描邊(依貼圖鍵批次;前排蓋後排)
+  wmapBakeGround(g, cells);
+  // 2 路(邊 → 面)
   wmapBakeRoads(g, G, cells);
   // 3 資源地面層(斑塊 / 田塊 / 田埂,世界錨定)
   wmapBakeResGround(g, G, x0, y0, x1, y1);
-  // 4 物件層(既有山 / 大石 / 主城 / 邊界裝飾 + 散布物件 + 里程碑 + 旗,合併深度排序)
+  // 4 物件層(山 / 大石 / 城池 / 邊界裝飾 + 散布物件,合併深度排序)
   wmapBakeObjects(g, G, x0, y0, x1, y1, objs);
-  // 5 邊界帶霧(離地圖越遠越濃)
-  g.fillStyle = WMAP_PAL.fog;
+  // 5 邊界帶霧(離地圖越遠越濃;六邊形頂面)
+  g.fillStyle = WMAP_VCFG.fog;
   for (i = 0; i < cells.length; i++) {
     gi = cells[i]; if (WG.k[gi] !== 7) continue;
     c = gi % N; r = (gi - c) / N; e = Math.min(c, r, N - 1 - c, N - 1 - r);
     g.globalAlpha = 0.2 + 0.2 * (B - 1 - e);
-    t = wmapCellTop(G, c, r);
-    g.beginPath(); g.moveTo(t.x, t.y - 1); g.lineTo(t.x + G.W / 2 + 1, t.y + G.H / 2); g.lineTo(t.x, t.y + G.H + 1); g.lineTo(t.x - G.W / 2 - 1, t.y + G.H / 2); g.closePath(); g.fill();
+    t = wmapCellCenter(G, c, r);
+    g.beginPath(); wmapHexPath(g, t.x, t.y, G.W, G.H, 0.6); g.fill();
   }
   g.globalAlpha = 1;
   ent.cv = ch; WMAP.world.appendChild(ch);
@@ -202,113 +273,124 @@ function wmapResUV(G, x0, y0, x1, y1) {
   var a = wmapWorld2UV(G, x0, y0), b = wmapWorld2UV(G, x1, y0), c = wmapWorld2UV(G, x0, y1), d = wmapWorld2UV(G, x1, y1);
   return { u0: Math.min(a.u, b.u, c.u, d.u), u1: Math.max(a.u, b.u, c.u, d.u), v0: Math.min(a.v, b.v, c.v, d.v), v1: Math.max(a.v, b.v, c.v, d.v) };
 }
-function wmapResPat(g, id) {   // 紋理 pattern:1 張 = 世界 4×4 格,錨定世界原點(在「單位 = 格」的 transform 下填)
-  var pt, a;
+var WMAP_RES_TEX = ['farm_a', 'wood', 'rock', 'mine', 'hunt'];   // 與 WMAP_RES_ORDER 同序(farm lumber quarry mine hunt)的貼圖鍵:農田 / 林場 = 林地 / 採石場 = 岩地 / 礦土 / 獵場草土
+function wmapResFillStyle(g, tt, gold) {   // 資源地面填色:貼圖已載入用貼圖 pattern(田壟沿 c 軸是貼圖本身的屬性),否則舊程式紋理 gt_*
+  var key = tt === 0 && gold ? 'farm_b' : WMAP_RES_TEX[tt], p = wmapTexPat(g, key);
+  if (p) return p;
+  return wmapResPat(g, tt === 0 ? (gold ? 'gt_farm_b' : 'gt_farm_a') : 'gt_' + WMAP_RES_ORDER[tt]);
+}
+function wmapResPat(g, id) {   // 紋理 pattern:1 張 = 地面 3 × 3 格(世界錨定),轉 30°(地面座標)再套投影 → 田壟沿 c 軸(螢幕右下 20.6°);縮放時 WMAP.pat 清空重建
+  var pt, a, G = WMAP.G, s;
   WMAP.pat = WMAP.pat || {};
   if (WMAP.pat[id]) return WMAP.pat[id];
-  a = wmapArtGet(id); if (!a) return '#888';
+  a = wmapArtGet(id); if (!a) return '#888';   // TODO(WF5):wmapTexPattern 就緒後改呼叫
   pt = g.createPattern(a.c, 'repeat');
-  if (pt && pt.setTransform && typeof DOMMatrix !== 'undefined') pt.setTransform(new DOMMatrix().scale(4 / a.cw));
+  if (pt && pt.setTransform && typeof DOMMatrix !== 'undefined') { s = 3 / a.cw; pt.setTransform(new DOMMatrix().scale(0.8660254 * G.W, G.H).rotate(30).scale(s)); }
   WMAP.pat[id] = pt || '#888';
   return WMAP.pat[id];
 }
 function wmapBakeResGround(g, G, x0, y0, x1, y1) {
-  var F = WMAP.F, m = G.W * 0.5, b, pa, pc, i, j, p, an, x, y, tt, n, c, r, c0, c1, r0, r1;
+  var F = WMAP.F, m = G.W * 0.5, b, pa, pc, i, j, p, tt, n, c, r, rg, q, pts, ra, e, rd, pu, gx;
   if (!F || !WMAP.resList.length) return;
   b = wmapResUV(G, x0 - m, y0 - m, x1 + m, y1 + m);
   pa = wmapResPatches(F, WMAP.seed, b.u0, b.v0, b.u1, b.v1);
   pc = wmapResParcels(F, WMAP.seed, b.u0, b.v0, b.u1, b.v1);
-  g.save(); wmapArtIsoT(g, G, 0, 0);   // 整塊共用一次等角 transform(單位 = 格)
-  c0 = Math.max(0, Math.floor(b.u0)); c1 = Math.min(F.N - 1, Math.floor(b.u1)); r0 = Math.max(0, Math.floor(b.v0)); r1 = Math.min(F.N - 1, Math.floor(b.v1));
-  for (tt = 0; tt < 5; tt++) {   // 資源格整格鋪滿該種類紋理:每種 1 次 fill
+  rg = wmapCellsInRect(G, x0 - m, y0 - m, x1 + m, y1 + m, 0, 0);
+  for (tt = 0; tt < 5; tt++) {   // 資源格整格鋪滿該種類紋理(六邊形頂面):每種 1 次 fill
     n = 0; g.beginPath();
-    for (r = r0; r <= r1; r++) for (c = c0; c <= c1; c++) if (F.rty[r * F.N + c] === tt) { g.rect(c - 0.004, r - 0.004, 1.008, 1.008); n++; }
-    if (n) { g.fillStyle = wmapResPat(g, tt === 0 ? 'gt_farm_a' : 'gt_' + WMAP_RES_ORDER[tt]); g.fill(); }
+    for (r = rg.r0; r <= rg.r1; r++) for (c = rg.c0; c <= rg.c1; c++) if (F.rty[r * F.N + c] === tt) { q = wmapCellCenter(G, c, r); wmapHexPath(g, q.x, q.y, G.W, G.H, 0.4); n++; }
+    if (n) { g.fillStyle = wmapResFillStyle(g, tt, false); g.fill(); }
   }
   for (tt = 1; tt < 5; tt++) {   // 斑塊依種類合併成一條路徑填色(每種 1 次 fill)
     n = 0; g.beginPath();
     for (i = 0; i < pa.length; i++) {
       p = pa[i]; if (p.t !== tt) continue;
-      n++;
-      for (j = 0; j < 8; j++) {
-        an = j / 8 * Math.PI * 2; x = p.u + Math.cos(an) * p.r * p.k[j]; y = p.v + Math.sin(an) * p.r * p.k[j];
-        if (j) g.lineTo(x, y); else g.moveTo(x, y);
-      }
+      n++; pts = wmapResBlob(F, p);
+      for (j = 0; j < 8; j++) { q = wmapUV2World(G, pts[2 * j], pts[2 * j + 1]); if (j) g.lineTo(q.x, q.y); else g.moveTo(q.x, q.y); }
       g.closePath();
     }
-    if (n) { g.fillStyle = wmapResPat(g, 'gt_' + WMAP_RES_ORDER[tt]); g.fill(); }
+    if (n) { g.fillStyle = wmapResFillStyle(g, tt, false); g.fill(); }
   }
   g.globalAlpha = 1;
-  for (i = 0; i < pc.length; i++) { p = pc[i]; g.fillStyle = wmapResPat(g, p.gold ? 'gt_farm_b' : 'gt_farm_a'); g.fillRect(p.u - 0.005, p.v - 0.005, 0.51, 0.51); }
-  g.strokeStyle = '#c8a36a'; g.lineWidth = 0.03; g.lineCap = 'square'; g.beginPath();
-  for (i = 0; i < pc.length; i++) {
-    p = pc[i];
-    if (p.eT) { g.moveTo(p.u, p.v); g.lineTo(p.u + 0.5, p.v); }
-    if (p.eB) { g.moveTo(p.u, p.v + 0.5); g.lineTo(p.u + 0.5, p.v + 0.5); }
-    if (p.eL) { g.moveTo(p.u, p.v); g.lineTo(p.u, p.v + 0.5); }
-    if (p.eR) { g.moveTo(p.u + 0.5, p.v); g.lineTo(p.u + 0.5, p.v + 0.5); }
-  }
-  g.stroke();
-  g.restore();
-}
-// 土道路:整塊共用一次等角 transform(單位 = 格),所有路格的臂合併成一條路徑,邊 1 次 fill + 面 1 次 fill(世界錨定的 gt_road 紋理);橋另畫木板
-var WMAP_RD = { edge: 0.26, fill: 0.2, ext: 0.02, edgeCol: 'rgba(132,102,58,0.78)', bEdge: '#4a3b2c', bFill: '#a9835a', bPlank: '#7a5a36' };
-function wmapRoadShape(g, c, r, m, hw) {   // 一個路格的形狀:中心圓 + 朝 4 向(m 低 4 位)的臂 + 只有斜向相連時的斜臂(m 高 4 位)
-  var x = c + 0.5, y = r + 0.5, e = WMAP_RD.ext, i, dx, dy, k, ax, ay, px, py;
-  g.moveTo(x + hw, y); g.arc(x, y, hw, 0, 6.2831853);
-  if (m & 1) g.rect(x - hw, y - 0.5 - e, hw * 2, 0.5 + e);
-  if (m & 2) g.rect(x, y - hw, 0.5 + e, hw * 2);
-  if (m & 4) g.rect(x - hw, y, hw * 2, 0.5 + e);
-  if (m & 8) g.rect(x - 0.5 - e, y - hw, 0.5 + e, hw * 2);
-  if (m & 240) {
-    for (i = 0; i < 4; i++) {
-      if (!(m & (16 << i))) continue;
-      dx = i === 0 || i === 1 ? 1 : -1; dy = i === 1 || i === 2 ? 1 : -1;   // 右上、右下、左下、左上
-      k = 0.70710678; ax = x + dx * 0.5; ay = y + dy * 0.5; px = -dy * hw * k; py = dx * hw * k;
-      g.moveTo(x + px, y + py); g.lineTo(x - px, y - py); g.lineTo(ax - px, ay - py); g.lineTo(ax + px, ay + py);
+  for (gx = 0; gx < 2; gx++) {   // 田塊(c 向 0.5 × r 向 0.25 的平行四邊形)青苗 / 金穗各 1 次 fill
+    n = 0; g.beginPath();
+    for (i = 0; i < pc.length; i++) {
+      p = pc[i]; if ((p.gold ? 1 : 0) !== gx) continue;
+      n++;
+      q = wmapUV2World(G, p.u - 0.005, p.v - 0.005); g.moveTo(q.x, q.y);
+      q = wmapUV2World(G, p.u + p.w + 0.005, p.v - 0.005); g.lineTo(q.x, q.y);
+      q = wmapUV2World(G, p.u + p.w + 0.005, p.v + p.h + 0.005); g.lineTo(q.x, q.y);
+      q = wmapUV2World(G, p.u - 0.005, p.v + p.h + 0.005); g.lineTo(q.x, q.y);
       g.closePath();
     }
+    if (n) { g.fillStyle = wmapResFillStyle(g, 0, gx === 1); g.fill(); }
+  }
+  g.strokeStyle = '#c8a36a'; g.lineWidth = Math.max(0.6, G.W * 0.011); g.lineCap = 'square'; g.beginPath();
+  for (i = 0; i < pc.length; i++) {
+    p = pc[i];
+    if (p.eT) { q = wmapUV2World(G, p.u, p.v); e = wmapUV2World(G, p.u + p.w, p.v); g.moveTo(q.x, q.y); g.lineTo(e.x, e.y); }
+    if (p.eB) { q = wmapUV2World(G, p.u, p.v + p.h); e = wmapUV2World(G, p.u + p.w, p.v + p.h); g.moveTo(q.x, q.y); g.lineTo(e.x, e.y); }
+    if (p.eL) { q = wmapUV2World(G, p.u, p.v); e = wmapUV2World(G, p.u, p.v + p.h); g.moveTo(q.x, q.y); g.lineTo(e.x, e.y); }
+    if (p.eR) { q = wmapUV2World(G, p.u + p.w, p.v); e = wmapUV2World(G, p.u + p.w, p.v + p.h); g.moveTo(q.x, q.y); g.lineTo(e.x, e.y); }
+  }
+  g.stroke();
+}
+// 土道路:所有路格的臂合併成一條路徑,邊 1 次 fill + 面 1 次 fill(世界錨定的 gt_road 紋理);橋另畫木板。形狀在「地面等向座標」畫寬度再投影 → 與六邊形頂面同透視
+var WMAP_RD = { edge: 0.26, fill: 0.2, ext: 0.02, edgeCol: 'rgba(132,102,58,0.78)', bEdge: '#4a3b2c', bFill: '#a9835a', bPlank: '#7a5a36' };
+function wmapRoadShape(g, c, r, m, hw) {   // 一個路格的形狀:中心橢圓 + 朝 6 向(m 低 6 位,bit d = d 向鄰格)的臂,臂端到共用邊中點(再外延 ext)
+  var G = WMAP.G, p = wmapCellCenter(G, c, r), Sx = 0.8660254 * G.W, Sy = G.H, e = WMAP_RD.ext, d, gx, gy, L = 0.5 + e, px, py, pts, ar, i, j, n;
+  g.moveTo(p.x + hw * Sx, p.y); g.ellipse(p.x, p.y, hw * Sx, hw * Sy, 0, 0, 6.2831853);
+  for (d = 0; d < 6; d++) {
+    if (!(m & (1 << d))) continue;
+    gx = 0.8660254 * (WMHEX_DC[d] - WMHEX_DR[d]); gy = 0.5 * (WMHEX_DC[d] + WMHEX_DR[d]);   // d 向單位向量(地面座標,長度 1)
+    px = -gy * hw; py = gx * hw;
+    pts = [[p.x + px * Sx, p.y + py * Sy], [p.x - px * Sx, p.y - py * Sy], [p.x + (gx * L - px) * Sx, p.y + (gy * L - py) * Sy], [p.x + (gx * L + px) * Sx, p.y + (gy * L + py) * Sy]];
+    ar = 0; n = pts.length;
+    for (i = 0; i < n; i++) { j = (i + 1) % n; ar += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1]; }
+    if (ar < 0) pts.reverse();   // 與橢圓同繞向(螢幕座標順時針為正),nonzero 填色重疊不會挖洞
+    g.moveTo(pts[0][0], pts[0][1]); g.lineTo(pts[1][0], pts[1][1]); g.lineTo(pts[2][0], pts[2][1]); g.lineTo(pts[3][0], pts[3][1]); g.closePath();
   }
 }
 function wmapBakeRoads(g, G, cells) {
-  var WG = WMAP.WG, N = G.size, list = [], br = [], i, j, gi, k, c, r, m, x, y, h;
+  var WG = WMAP.WG, N = G.size, list = [], br = [], i, j, gi, k, c, r, m, x, y, h, d, gx, gy, p, Sx = 0.8660254 * G.W, Sy = G.H, t, px, py, ln;
   for (i = 0; i < cells.length; i++) {
     gi = cells[i]; k = WG.k[gi];
-    if (k !== 5 && !wmapGateMask()[gi]) continue;   // 路格 + 縣 / 郡的城門格(只接門格,牆格不接)
+    if (k !== 5 && !wmapGateMask()[gi]) continue;   // 路格 + 縣 / 郡 / 州的城門格(只接門格,牆格不接)
     c = gi % N; r = (gi - c) / N; m = wmapRoadArms(gi);
     if (k !== 5 && !m) continue;                      // 門外沒路的門不畫
     if (k === 5 && wmapBridge(gi)) br.push(c, r, m); else list.push(c, r, m);
   }
   if (!list.length && !br.length) return;
-  g.save(); wmapArtIsoT(g, G, 0, 0);
   if (list.length) {
     g.beginPath(); for (i = 0; i < list.length; i += 3) wmapRoadShape(g, list[i], list[i + 1], list[i + 2], WMAP_RD.edge);
     g.fillStyle = WMAP_RD.edgeCol; g.fill();
     g.beginPath(); for (i = 0; i < list.length; i += 3) wmapRoadShape(g, list[i], list[i + 1], list[i + 2], WMAP_RD.fill);
     g.fillStyle = wmapResPat(g, 'gt_road'); g.fill();
   }
-  if (br.length) {   // 橋:深邊 + 木板面 + 橫木板線
-    g.beginPath(); for (i = 0; i < br.length; i += 3) wmapRoadShape(g, br[i], br[i + 1], br[i + 2] & 15, WMAP_RD.edge + 0.04);
+  if (br.length) {   // 橋:深邊 + 木板面 + 橫木板線(橋格頂面是下沉的水面,橋面畫在陸地高度 = 比水面高 T/2)
+    g.beginPath(); for (i = 0; i < br.length; i += 3) wmapRoadShape(g, br[i], br[i + 1], br[i + 2], WMAP_RD.edge + 0.04);
     g.fillStyle = WMAP_RD.bEdge; g.fill();
-    g.beginPath(); for (i = 0; i < br.length; i += 3) wmapRoadShape(g, br[i], br[i + 1], br[i + 2] & 15, WMAP_RD.fill + 0.03);
+    g.beginPath(); for (i = 0; i < br.length; i += 3) wmapRoadShape(g, br[i], br[i + 1], br[i + 2], WMAP_RD.fill + 0.03);
     g.fillStyle = WMAP_RD.bFill; g.fill();
-    g.strokeStyle = WMAP_RD.bPlank; g.lineWidth = 0.03; g.beginPath();
+    g.strokeStyle = WMAP_RD.bPlank; g.lineWidth = Math.max(0.6, G.W * 0.011); g.beginPath();
     for (i = 0; i < br.length; i += 3) {
-      x = br[i] + 0.5; y = br[i + 1] + 0.5; m = br[i + 2]; h = WMAP_RD.fill + 0.03;
-      for (j = 0; j < 4; j++) {
-        k = 0.14 + j * 0.24 - 0.5;
-        if (m & 10) { g.moveTo(x + k, y - h); g.lineTo(x + k, y + h); }
-        if (m & 5) { g.moveTo(x - h, y + k); g.lineTo(x + h, y + k); }
+      p = wmapCellCenter(G, br[i], br[i + 1]); m = br[i + 2]; h = WMAP_RD.fill + 0.03;
+      for (d = 0; d < 6; d++) {
+        if (!(m & (1 << d))) continue;
+        gx = 0.8660254 * (WMHEX_DC[d] - WMHEX_DR[d]); gy = 0.5 * (WMHEX_DC[d] + WMHEX_DR[d]); px = -gy * h; py = gx * h;
+        for (j = 0; j < 4; j++) {
+          t = 0.06 + j * 0.13;
+          g.moveTo(p.x + (gx * t + px) * Sx, p.y + (gy * t + py) * Sy); g.lineTo(p.x + (gx * t - px) * Sx, p.y + (gy * t - py) * Sy);
+        }
       }
     }
     g.stroke();
   }
-  g.restore();
 }
 function wmapBakeObjects(g, G, x0, y0, x1, y1, objs) {
   var F = WMAP.F, k = G.W / 256, W = G.W, cfg = WMAP_RES_CFG, zi = WMAP.zi, items = [], sc = [], i, j, o, bx, b, pts, p, a, q, rg, ms, m, n, key, pos, f, it, ssz, rx;
   function hit(fx, fy, an) { return fx - an.ax * k < x1 && fx + (an.cw - an.ax) * k > x0 && fy - an.ay * k < y1 && fy + (an.ch - an.ay) * k > y0; }
-  for (i = 0; i < objs.length; i++) { o = objs[i]; items.push({ dep: (o.r0 + o.fh - 1) + (o.c0 + o.fw - 1), tie: o.c0 - o.r0, id: 0, ty: 0, o: o }); }
+  for (i = 0; i < objs.length; i++) { o = objs[i]; items.push({ dep: o.dep, tie: o.c0 - o.r0, id: 0, ty: 0, o: o }); }
   if (F && WMAP.resList.length) {
     b = wmapResUV(G, x0 - 0.6 * W, y0 - 0.15 * W, x1 + 0.6 * W, y1 + 1.4 * W);
     pts = wmapResPoints(F, WMAP.seed, b.u0, b.v0, b.u1, b.v1, zi);
@@ -325,80 +407,177 @@ function wmapBakeObjects(g, G, x0, y0, x1, y1, objs) {
   for (i = 0; i < items.length; i++) {
     it = items[i];
     if (it.ty === 0) {
-      o = it.o; bx = wmapPieceBox(G, o.c0, o.r0, o.fw, o.fh, o.cw, o.ch);
+      o = it.o;
       if (o.al < 1) g.globalAlpha = Math.max(0.3, o.al);
-      if (o.block) wmapBakeBlock(g, G, o); else wmapDrawArt(g, o.key, bx.x, bx.y, o.cw, o.ch);
+      if (o.block || !o.art) wmapBakeBlock(g, G, o);
+      else { bx = wmapPieceBox(G, o.c0, o.r0, o.fw, o.fh, o.cw, o.ch, o.ax, o.ay); wmapDrawArt(g, o.key, bx.x, bx.y, o.cw, o.ch); }
       if (o.al < 1) g.globalAlpha = 1;
       continue;
     }
     wmapDrawArt(g, it.key, it.fx - it.a.ax * k, it.fy - it.a.ay * k, it.a.cw, it.a.ch);
   }
 }
-// 缺圖退路:城池畫成簡單色塊(縣 / 郡 = 整個占地一塊;關 = 兩側山壁各格一塊,門道留給道路)
-function wmapBlock(g, G, c0, r0, fw, fh, up, cols) {
-  var T = wmapUV2World(G, c0, r0), R = wmapUV2World(G, c0 + fw, r0), B = wmapUV2World(G, c0 + fw, r0 + fh), L = wmapUV2World(G, c0, r0 + fh);
-  g.lineJoin = 'round'; g.strokeStyle = WMAP_PAL.ink; g.lineWidth = 1;
-  g.fillStyle = cols[0]; g.beginPath(); g.moveTo(L.x, L.y); g.lineTo(B.x, B.y); g.lineTo(B.x, B.y - up); g.lineTo(L.x, L.y - up); g.closePath(); g.fill(); g.stroke();
-  g.fillStyle = cols[1]; g.beginPath(); g.moveTo(B.x, B.y); g.lineTo(R.x, R.y); g.lineTo(R.x, R.y - up); g.lineTo(B.x, B.y - up); g.closePath(); g.fill(); g.stroke();
-  g.fillStyle = cols[2]; g.beginPath(); g.moveTo(T.x, T.y - up); g.lineTo(R.x, R.y - up); g.lineTo(B.x, B.y - up); g.lineTo(L.x, L.y - up); g.closePath(); g.fill(); g.stroke();
+// 缺圖退路:物件畫成六邊形稜柱(縣 / 郡 / 州 / 主城 = 占地每格一根;關 = 兩側山壁各格一根,門道留給道路;多格山 = 依 WMAP_PIECE.cells)
+function wmapHexPrism(g, G, cx, cy, up, cols) {   // (cx, cy) = 底面頂面中心(地面層);稜柱頂面升高 up;cols = [左面, 右面, 頂面]
+  var W = G.W, H = G.H, T = G.T, ty = cy - up, w2 = W / 2, q = W / 4, h2 = H / 2;
+  g.lineJoin = 'round'; g.strokeStyle = WMAP_VCFG.ink; g.lineWidth = Math.max(0.8, W * 0.012);
+  g.fillStyle = cols[0]; g.beginPath(); g.moveTo(cx - w2, ty); g.lineTo(cx - q, ty + h2); g.lineTo(cx - q, cy + h2 + T); g.lineTo(cx - w2, cy + T); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = wmapVShade(cols[0], 0.9); g.beginPath(); g.moveTo(cx - q, ty + h2); g.lineTo(cx + q, ty + h2); g.lineTo(cx + q, cy + h2 + T); g.lineTo(cx - q, cy + h2 + T); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = cols[1]; g.beginPath(); g.moveTo(cx + q, ty + h2); g.lineTo(cx + w2, ty); g.lineTo(cx + w2, cy + T); g.lineTo(cx + q, cy + h2 + T); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = cols[2]; g.beginPath(); wmapHexPath(g, cx, ty, W, H, 0); g.fill(); g.stroke();
+}
+function wmapBlock(g, G, cl, up, cols) {   // cl = [[c, r], …] 占地格
+  var i, c, r, p, a = cl.slice();
+  a.sort(function (u, v) { return (u[0] + u[1]) - (v[0] + v[1]) || u[0] - v[0]; });
+  for (i = 0; i < a.length; i++) { c = a[i][0]; r = a[i][1]; p = wmapCellCenter(G, c, r); wmapHexPrism(g, G, p.x, p.y, up, cols); }
 }
 function wmapBakeBlock(g, G, o) {
-  var k = G.W / 256, dia = (o.fw + o.fh) * G.H / 2, up = Math.max(G.H * 0.6, 0.5 * (o.ch * k - dia)), WG = WMAP.WG, N = G.size, i, gi, c, r, nd = o.nd,
-    cols = o.key === 'JUN' ? ['#a3a8a6', '#7c827f', '#c2c7c4'] : (o.key === 'COUNTY' ? ['#b9ab8e', '#8f8268', '#d3c7aa'] : (o.key === 'CITY' ? ['#d8c594', '#a79366', '#ecdcae'] : ['#8f8676', '#6b6355', '#aaa292']));
+  var k = G.W / 256, bh = wmapBaseH(o.fw, o.fh), up = Math.max(G.H * 0.6, Math.min(G.H * 3, 0.45 * (o.ch - bh) * k)), WG = WMAP.WG, N = G.size, i, gi, c, r, nd = o.nd, cl = [], P,
+    cols = o.key === 'JUN' ? ['#a3a8a6', '#7c827f', '#c2c7c4'] : (o.key === 'ZHOU' ? ['#b4a9bd', '#8a8095', '#cfc6d8'] : (o.key === 'COUNTY' ? ['#b9ab8e', '#8f8268', '#d3c7aa'] : (o.key === 'CITY' ? ['#d8c594', '#a79366', '#ecdcae'] : ['#8f8676', '#6b6355', '#aaa292'])));
   if (nd && nd.type === 'pass') {
     for (i = 0; i < nd.cells.length; i++) {
       gi = nd.cells[i]; if (WG.k[gi] !== 10) continue;
-      c = gi % N; r = (gi - c) / N; wmapBlock(g, G, c, r, 1, 1, G.H * 1.3, cols);
+      c = gi % N; r = (gi - c) / N; cl.push([c, r]);
     }
+    wmapBlock(g, G, cl, G.H * 1.3, cols);
     return;
   }
-  wmapBlock(g, G, o.c0, o.r0, o.fw, o.fh, up, cols);
+  if (!nd && o.key === 'CITY') {   // 主城:只畫真的是主城 / 庭院的格
+    for (r = o.r0; r < o.r0 + o.fh; r++) for (c = o.c0; c < o.c0 + o.fw; c++) { gi = r * N + c; if (c >= 0 && r >= 0 && c < N && r < N && (WG.k[gi] === 6 || WG.k[gi] === 8)) cl.push([c, r]); }
+    wmapBlock(g, G, cl, up, cols);
+    return;
+  }
+  if (!nd && o.cells) {   // 山 / 大石(多格):依拼塊格
+    P = o.cells; for (i = 0; i < P.length; i++) cl.push([o.c0 + P[i][1], o.r0 + P[i][0]]);
+    wmapBlock(g, G, cl, G.H * (o.key === 'O1' ? 0.5 : 1.6), ['#a79f8c', '#7b7463', '#c5beac']);
+    return;
+  }
+  for (r = o.r0; r < o.r0 + o.fh; r++) for (c = o.c0; c < o.c0 + o.fw; c++) cl.push([c, r]);
+  wmapBlock(g, G, cl, up, cols);
 }
-function wmapBakeGround(g, gi, c, r, x, y) {
-  var G = WMAP.G, WG = WMAP.WG, N = G.size, gt = WMAP.ground[gi], v = WG.g[gi], key = wmapArtGroundKey(gt, v), s = wmapScaled(key), D = [[0, -1], [1, 0], [0, 1], [-1, 0]], e, nc, nr, ngi, ngt, tmp, tg, ms, ns, dpr = WMAP.dpr, w = G.W, h = G.H;
-  if (s) g.drawImage(s.c, x - 0.5, y - 0.3, w + 1, h + 0.6);
-  for (e = 0; e < 4; e++) {   // 地面優先序較高的鄰格往本格滲(只在兩邊都是野外地面時)
-    nc = c + D[e][0]; nr = r + D[e][1];
+// ───────── 單格:側壁 + 頂面 + 過渡 + 描邊 ─────────
+function wmapLvAt(c, r) { var N = WMAP.N; if (c < 0 || r < 0 || c >= N || r >= N) return -1; return WMAP.lv[r * N + c]; }
+function wmapTopFill(g, list, W, H) {   // 頂面:同貼圖鍵的格合成一條路徑 + 1 次 fill(世界錨定 pattern;相鄰格紋理連續);沒有 pattern(貼圖未載入)→ 逐格貼程式紋理單格
+  var k = W / 256, groups = {}, i, e, key, tile;
+  for (i = 0; i < list.length; i++) {
+    e = list[i];
+    if (e.pat) { (groups[e.tkey] || (groups[e.tkey] = [])).push(e); continue; }
+    tile = wmapHexTileOf(e.atype, e.atype === 'river' || e.atype === 'shoal' ? (e.gi + (e.gi >> 3)) % 3 : e.v);
+    if (tile) g.drawImage(tile.c, e.cx - 128 * k, e.ty - 72 * k, 256 * k, 180 * k);
+  }
+  for (key in groups) {
+    g.beginPath();
+    for (i = 0; i < groups[key].length; i++) wmapHexPath(g, groups[key][i].cx, groups[key][i].ty, W, H, 0.5);
+    g.fillStyle = groups[key][0].pat; g.fill();
+  }
+}
+function wmapTopBevel(g, list, W, H) {   // 倒角(只給用 pattern 填的格;程式單格紋理自帶):6 條邊各 1 次 fill
+  var cols = typeof WMAP_BEVEL_COL !== 'undefined' ? WMAP_BEVEL_COL : ['rgba(255,244,200,0.3)', 'rgba(255,250,215,0.42)', 'rgba(255,244,200,0.22)', 'rgba(40,20,0,0.22)', 'rgba(30,15,0,0.34)', 'rgba(40,20,0,0.22)'], e, i, hp, ip, e2, n = 0, any = false, s = 0.86, ent;
+  for (i = 0; i < list.length; i++) if (list[i].pat) { any = true; break; }
+  if (!any) return;
+  for (e = 0; e < 6; e++) {
+    e2 = (e + 1) % 6;
+    g.beginPath();
+    for (i = 0; i < list.length; i++) {
+      ent = list[i]; if (!ent.pat) continue;
+      hp = wmapHexVerts(ent.cx, ent.ty, W, H, 0); ip = wmapHexVerts(ent.cx, ent.ty, W * s, H * s, 0);
+      g.moveTo(hp[2 * e], hp[2 * e + 1]); g.lineTo(hp[2 * e2], hp[2 * e2 + 1]); g.lineTo(ip[2 * e2], ip[2 * e2 + 1]); g.lineTo(ip[2 * e], ip[2 * e + 1]); g.closePath();
+    }
+    g.fillStyle = cols[e]; g.fill();
+  }
+}
+function wmapGroundWall(g, e, W, H, T, lw) {   // 側壁:SE / S / SW 面(左亮右暗),只畫「鄰格不存在或比本格低」的面
+  var cx = e.cx, ty = e.ty, w2 = W / 2, q = W / 4, h2 = H / 2, wc = e.water ? WMAP_VCFG.wall.water : (e.nbw ? WMAP_VCFG.wall.bank : (WMAP_VCFG.wall[e.gt] || WMAP_VCFG.wall.grass));
+  g.lineJoin = 'round'; g.lineWidth = lw; g.strokeStyle = WMAP_VCFG.ink;
+  if (e.f[2]) { g.fillStyle = wmapVShade(wc, 0.92); g.beginPath(); g.moveTo(cx - w2, ty); g.lineTo(cx - q, ty + h2); g.lineTo(cx - q, ty + h2 + T); g.lineTo(cx - w2, ty + T); g.closePath(); g.fill(); g.stroke(); }   // SW 面(左,亮)
+  if (e.f[1]) { g.fillStyle = wmapVShade(wc, 0.76); g.beginPath(); g.moveTo(cx - q, ty + h2); g.lineTo(cx + q, ty + h2); g.lineTo(cx + q, ty + h2 + T); g.lineTo(cx - q, ty + h2 + T); g.closePath(); g.fill(); g.stroke(); }   // S 面
+  if (e.f[0]) { g.fillStyle = wmapVShade(wc, 0.62); g.beginPath(); g.moveTo(cx + q, ty + h2); g.lineTo(cx + w2, ty); g.lineTo(cx + w2, ty + T); g.lineTo(cx + q, ty + h2 + T); g.closePath(); g.fill(); g.stroke(); }   // SE 面(右,暗)
+}
+function wmapGroundTrans(g, e) {   // 地形交界過渡帶:優先序較高的鄰格往本格滲(只在兩邊都是野外地面、本格不是水時);每個交界邊 1 張鄰格紋理 × 遮罩
+  var G = WMAP.G, WG = WMAP.WG, N = G.size, k = G.W / 256, d, nc, nr, ngi, ngt, nt, mk, tmp, tg;
+  for (d = 0; d < 6; d++) {
+    nc = e.c + WMHEX_DC[d]; nr = e.r + WMHEX_DR[d];
     if (nc < 0 || nr < 0 || nc >= N || nr >= N) continue;
-    ngi = nr * N + nc; ngt = WMAP.ground[ngi];
-    if (ngt === gt || !(ngt in WMAP_PRI) || !(gt in WMAP_PRI) || WMAP_PRI[ngt] <= WMAP_PRI[gt]) continue;
-    ns = wmapScaled(wmapArtGroundKey(ngt, WG.g[ngi])); ms = wmapScaled('mask_' + (e + 4 * ((wmGenHash(WG.seed, gi, 5)) & 1)));
-    if (!ns || !ms) continue;
-    tmp = WMAP.tmp; if (!tmp || tmp.width !== ns.c.width || tmp.height !== ns.c.height) { tmp = WMAP.tmp = document.createElement('canvas'); tmp.width = ns.c.width; tmp.height = ns.c.height; }
-    tg = tmp.getContext('2d'); tg.globalCompositeOperation = 'copy'; tg.drawImage(ns.c, 0, 0);
-    tg.globalCompositeOperation = 'destination-in'; tg.drawImage(ms.c, 0, 0, tmp.width, tmp.height);
+    ngi = nr * N + nc; if (WMAP.lv[ngi] === 1) continue; ngt = WMAP.ground[ngi];
+    if (ngt === e.gt || !(ngt in WMAP_PRI) || !(e.gt in WMAP_PRI) || WMAP_PRI[ngt] <= WMAP_PRI[e.gt]) continue;
+    nt = wmapHexTileOf(ngt, WG.g[ngi]); mk = wmapScaled('mask_' + (d + 6 * (wmGenHash(WG.seed, e.gi, 5) & 1)));
+    if (!nt || !mk) continue;
+    tmp = WMAP.tmp; if (!tmp || tmp.width !== nt.c.width || tmp.height !== nt.c.height) { tmp = WMAP.tmp = document.createElement('canvas'); tmp.width = nt.c.width; tmp.height = nt.c.height; }
+    tg = tmp.getContext('2d'); tg.globalCompositeOperation = 'copy'; tg.drawImage(nt.c, 0, 0);
+    tg.globalCompositeOperation = 'destination-in'; tg.drawImage(mk.c, 0, 0, tmp.width, tmp.height);
     tg.globalCompositeOperation = 'source-over';
-    g.drawImage(tmp, x, y, w, h);
+    g.drawImage(tmp, e.cx - 128 * k, e.ty - 72 * k, 256 * k, 180 * k);
+  }
+}
+function wmapBakeGround(g, cells) {   // 一塊內所有格(cells 已依 c + r、c 排序):① 側壁 ② 水格頂面(下沉 T/2)+ 倒角 + 高光 ③ 陸地頂面 + 倒角 ④ 交界過渡 ⑤ 描邊;頂面依貼圖鍵批次填
+  var G = WMAP.G, WG = WMAP.WG, N = G.size, W = G.W, H = G.H, T = G.T, w2 = W / 2, q = W / 4, h2 = H / 2, lw = Math.max(0.7, W * WMAP_VCFG.lw), E = [], water = [], land = [], i, j, d, gi, c, r, p, nc, nr, nl, e, kk, wl, atype, tkey;
+  for (i = 0; i < cells.length; i++) {
+    gi = cells[i]; c = gi % N; r = (gi - c) / N; p = wmapCellCenter(G, c, r); kk = WG.k[gi]; wl = WMAP.lv[gi] === 1;
+    atype = wl ? (kk === 4 ? 'shoal' : 'river') : WMAP.ground[gi];
+    e = { gi: gi, c: c, r: r, cx: p.x, ty: p.y + (wl ? T * 0.5 : 0), water: wl, ford: kk === 4, gt: WMAP.ground[gi], atype: atype, v: WG.g[gi], f: [false, false, false], nbw: false, pat: null, tkey: null };
+    for (d = 2; d <= 4; d++) {   // 側壁面:鄰格不存在或比本格低才看得到(全圖平地同高;水格下沉)
+      nl = wmapLvAt(c + WMHEX_DC[d], r + WMHEX_DR[d]);
+      if (nl < 0 || nl > WMAP.lv[gi]) { e.f[d - 2] = true; if (nl > 0) e.nbw = true; }
+    }
+    tkey = typeof wmapTexKeyOf === 'function' ? wmapTexKeyOf(atype, atype === 'dirt' ? 0 : e.v) : null;
+    if (tkey) { e.tkey = tkey; e.pat = wmapTexPat(g, tkey); }
+    E.push(e); (wl ? water : land).push(e);
+  }
+  for (i = 0; i < E.length; i++) if (E[i].f[0] || E[i].f[1] || E[i].f[2]) wmapGroundWall(g, E[i], W, H, T, lw);
+  if (water.length) {
+    wmapTopFill(g, water, W, H); wmapTopBevel(g, water, W, H);
+    for (i = 0; i < water.length; i++) {   // 水面高光:流向線(河)/ 踏石(淺灘),wmapArtRiver 的 'hi' 層;局部座標 = 頂面中心、x 單位 0.866W、y 單位 H
+      e = water[i]; g.save(); wmapArtIsoT(g, G, e.c, e.r); g.translate(0, T * 0.5 / H); wmapArtRiver(g, 'hi', wmapRiverNb(e.gi), e.ford, wmGenHash(WG.seed, e.gi, 9), wmapRiverDg(e.gi)); g.restore();
+    }
+  }
+  if (land.length) {
+    wmapTopFill(g, land, W, H); wmapTopBevel(g, land, W, H);
+    if (WMAP_VCFG.trans) for (i = 0; i < land.length; i++) wmapGroundTrans(g, land[i]);
+  }
+  if (WMAP_VCFG.edge !== 'none') {   // 描邊:每格只畫上方三邊(N / NE / NW,與後排共用)+ 可見側壁的下緣;全部合成一條路徑 1 次 stroke
+    g.lineWidth = lw; g.lineJoin = 'round'; g.lineCap = 'round'; g.strokeStyle = 'rgba(74,59,44,' + WMAP_VCFG.edgeA + ')'; g.beginPath();
+    for (i = 0; i < E.length; i++) {
+      e = E[i];
+      for (j = 0; j < 3; j++) {
+        d = j === 0 ? 0 : (j === 1 ? 1 : 5);
+        if (WMAP_VCFG.edge === 'diff') {
+          nc = e.c + WMHEX_DC[d]; nr = e.r + WMHEX_DR[d];
+          if (nc >= 0 && nr >= 0 && nc < N && nr < N && WMAP.ground[nr * N + nc] === e.gt && WMAP.lv[nr * N + nc] === WMAP.lv[e.gi]) continue;
+        }
+        if (d === 0) { g.moveTo(e.cx - q, e.ty - h2); g.lineTo(e.cx + q, e.ty - h2); }
+        else if (d === 1) { g.moveTo(e.cx + q, e.ty - h2); g.lineTo(e.cx + w2, e.ty); }
+        else { g.moveTo(e.cx - w2, e.ty); g.lineTo(e.cx - q, e.ty - h2); }
+      }
+      if (e.f[2]) { g.moveTo(e.cx - w2, e.ty); g.lineTo(e.cx - q, e.ty + h2); }
+      if (e.f[1]) { g.moveTo(e.cx - q, e.ty + h2); g.lineTo(e.cx + q, e.ty + h2); }
+      if (e.f[0]) { g.moveTo(e.cx + q, e.ty + h2); g.lineTo(e.cx + w2, e.ty); }
+    }
+    g.stroke();
   }
 }
 function wmapKAt(c, r) { var N = WMAP.N; if (c < 0 || r < 0 || c >= N || r >= N) return 7; return WMAP.WG.k[r * N + c]; }
-function wmapBridge(gi) {   // 道路格兩側(上下或左右)都是河 = 橋
-  var N = WMAP.N, c = gi % N, r = (gi - c) / N, k;
+function wmapBridge(gi) {   // 道路格在某一軸的兩側(6 向中相對的一對)都是河 = 橋
+  var N = WMAP.N, c = gi % N, r = (gi - c) / N, k, d;
   if (WMAP.WG.k[gi] !== 5) return false;
   k = function (a, b) { var v = wmapKAt(a, b); return v === 3 || v === 4; };
-  return (k(c, r - 1) && k(c, r + 1)) || (k(c - 1, r) && k(c + 1, r));
+  for (d = 0; d < 3; d++) if (k(c + WMHEX_DC[d], r + WMHEX_DR[d]) && k(c + WMHEX_DC[d + 3], r + WMHEX_DR[d + 3])) return true;
+  return false;
 }
-function wmapRiverNb(gi) {   // 河四鄰:[r−1, c+1, r+1, c−1]
-  var N = WMAP.N, c = gi % N, r = (gi - c) / N, D = [[0, -1], [1, 0], [0, 1], [-1, 0]], out = [false, false, false, false], i, v, kk = WMAP.WG.k[gi];
-  for (i = 0; i < 4; i++) {
-    v = wmapKAt(c + D[i][0], r + D[i][1]);
-    out[i] = v === 3 || v === 4 || v === 7;
-  }
-  if (kk === 5) {   // 橋:只畫河的兩個方向
-    if ((out[0] && out[2]) && !(out[1] && out[3])) { out[1] = false; out[3] = false; } else if (out[1] && out[3]) { out[0] = false; out[2] = false; }
-  }
-  return out;
-}
-function wmapRiverDg(gi) {   // 兩個相鄰方向與其斜角鄰格都是河 → 補洞用
-  var N = WMAP.N, c = gi % N, r = (gi - c) / N, D = [[0, -1], [1, 0], [0, 1], [-1, 0]], out = [false, false, false, false], i, a, b, v1, v2, v3;
-  for (i = 0; i < 4; i++) {
-    a = D[i]; b = D[(i + 1) & 3];
-    v1 = wmapKAt(c + a[0], r + a[1]); v2 = wmapKAt(c + b[0], r + b[1]); v3 = wmapKAt(c + a[0] + b[0], r + a[1] + b[1]);
-    out[i] = (v1 === 3 || v1 === 4) && (v2 === 3 || v2 === 4) && (v3 === 3 || v3 === 4);
+function wmapRiverNb(gi) {   // 河 6 鄰:[d 0~5] 是水 / 淺灘 / 邊界(橋格只留河的那一軸)
+  var N = WMAP.N, c = gi % N, r = (gi - c) / N, out = [false, false, false, false, false, false], d, v, kk = WMAP.WG.k[gi], pair = -1;
+  for (d = 0; d < 6; d++) { v = wmapKAt(c + WMHEX_DC[d], r + WMHEX_DR[d]); out[d] = v === 3 || v === 4 || v === 7; }
+  if (kk === 5) {   // 橋:只畫河的那一軸(兩側都是水的那對)
+    for (d = 0; d < 3; d++) if (out[d] && out[d + 3]) { pair = d; break; }
+    for (d = 0; d < 6; d++) if (d % 3 !== pair) out[d] = false;
   }
   return out;
 }
-function wmapGateMask() {   // 縣 / 郡 / 關的城門格(node.gates[*].gi)= 1;道路只接這些格,不接其他占地格
+function wmapRiverDg(gi) {   // 相鄰兩向 (d, d + 1) 都是水(補角用)
+  var nb = wmapRiverNb(gi), out = [false, false, false, false, false, false], d;
+  for (d = 0; d < 6; d++) out[d] = nb[d] && nb[(d + 1) % 6];
+  return out;
+}
+function wmapGateMask() {   // 縣 / 郡 / 州 / 關的城門格(node.gates[*].gi)= 1;道路只接這些格,不接其他占地格
   var WG = WMAP.WG, N = WG.size || WMAP.N, m, i, j, nd;
   if (WMAP.gmWG === WG && WMAP.gm) return WMAP.gm;
   m = new Uint8Array(N * N);
@@ -406,23 +585,14 @@ function wmapGateMask() {   // 縣 / 郡 / 關的城門格(node.gates[*].gi)= 1;
   WMAP.gmWG = WG; WMAP.gm = m;
   return m;
 }
-function wmapRoadArms(gi) {   // 路格 / 城門格的接邊:低 4 位 = 4 向 [r−1, c+1, r+1, c−1] 相連;高 4 位 = 只有斜向相連(8 鄰)[右上, 右下, 左下, 左上]。城池牆格(非門格)= 0
-  var N = WMAP.N, WG = WMAP.WG, gm = wmapGateMask(), c = gi % N, r = (gi - c) / N, road = WG.k[gi] === 5, D = [[0, -1], [1, 0], [0, 1], [-1, 0]], X = [[1, -1], [1, 1], [-1, 1], [-1, -1]], m = 0, i, v, a, b, nc, nr;
-  function gate(cc, rr) { return cc >= 0 && rr >= 0 && cc < N && rr < N && gm[rr * N + cc] === 1; }
+function wmapRoadArms(gi) {   // 路格 / 城門格的接邊:bit d = 朝 d 向(0 N、1 NE、2 SE、3 S、4 SW、5 NW)鄰格相連;城池牆格(非門格)= 0
+  var N = WMAP.N, WG = WMAP.WG, gm = wmapGateMask(), c = gi % N, r = (gi - c) / N, road = WG.k[gi] === 5, m = 0, d, v, nc, nr;
   if (!road && !gm[gi]) return 0;
-  for (i = 0; i < 4; i++) {
-    nc = c + D[i][0]; nr = r + D[i][1]; v = wmapKAt(nc, nr);
-    if (v === 5) m |= 1 << i;
-    else if (road && (v === 6 || v === 7 || v === 8)) m |= 1 << i;                            // 路還接城 / 庭院 / 邊界(通到地圖邊)
-    else if (road && (v === 9 || v === 11) && gate(nc, nr)) m |= 1 << i;                     // 縣 / 郡:只接城門格
-  }
-  if (!road) return m;
-  for (i = 0; i < 4; i++) {   // 斜向:斜鄰是路,且夾著它的兩個直鄰都不是路 / 門格(沒有直角相連)
-    v = wmapKAt(c + X[i][0], r + X[i][1]);
-    if (v !== 5) continue;
-    a = wmapKAt(c + X[i][0], r); b = wmapKAt(c, r + X[i][1]);
-    if (a === 5 || b === 5 || gate(c + X[i][0], r) || gate(c, r + X[i][1])) continue;
-    m |= 16 << i;
+  for (d = 0; d < 6; d++) {
+    nc = c + WMHEX_DC[d]; nr = r + WMHEX_DR[d]; v = wmapKAt(nc, nr);
+    if (v === 5) m |= 1 << d;
+    else if (road && (v === 6 || v === 7 || v === 8)) m |= 1 << d;                                                                     // 路還接城 / 庭院 / 邊界(通到地圖邊)
+    else if (road && (v === 9 || v === 11 || v === 12) && nc >= 0 && nr >= 0 && nc < N && nr < N && gm[nr * N + nc] === 1) m |= 1 << d;   // 縣 / 郡 / 州:只接城門格
   }
   return m;
 }
@@ -461,11 +631,12 @@ function wmapEnsureChunks(px, py, budget) {
   return miss !== 0;   // true = 還有東西要烘(下一幀繼續)
 }
 
-// ───────── 覆蓋層:我的框 / 選取框 ─────────
+// ───────── 覆蓋層:我的框 / 選取框(六邊形;背景圖用行內 SVG,不依賴 css 的菱形底圖) ─────────
 function wmapMkNode(cls, parent) { var d = document.createElement('div'); d.className = cls; parent.appendChild(d); return d; }
+var WMAP_OWN_URI = "url(\"data:image/svg+xml," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 56.25' preserveAspectRatio='none'><path d='M3 28.1 26 2.5 74 2.5 97 28.1 74 53.7 26 53.7Z' fill='#d03a22' fill-opacity='.14' stroke='#c4301b' stroke-width='3.2' stroke-linejoin='round'/></svg>") + "\")";
 function wmapUpdateOverlay(px, py) {
   var G = WMAP.G, i, gi, c, r, t, sig, el, pad = G.W, fl = [], vw = WMAP.vw, vh = WMAP.vh, N = G.size, k;
-  for (k in WMAP.own) {   // 我的領地:朱紅菱形框(唯一的格線,代表產權);只放視窗內的
+  for (k in WMAP.own) {   // 我的領地:朱紅六邊形框(唯一的格線,代表產權);只放視窗內的
     gi = +k; c = gi % N; r = (gi - c) / N;
     t = wmapCellTop(G, c, r);
     if (t.x + G.W / 2 < px - pad || t.x - G.W / 2 > px + vw + pad || t.y + G.H < py - pad || t.y > py + vh + pad) continue;
@@ -477,31 +648,59 @@ function wmapUpdateOverlay(px, py) {
   for (i = 0; i < fl.length; i++) {
     gi = fl[i]; c = gi % N; r = (gi - c) / N; t = wmapCellTop(G, c, r);
     el = WMAP.fpool[i] || (WMAP.fpool[i] = wmapMkNode('wmap-own', WMAP.world));
-    el.style.display = ''; el.style.width = G.W + 'px'; el.style.height = G.H + 'px';
+    el.style.display = ''; el.style.width = G.W + 'px'; el.style.height = G.H + 'px'; el.style.backgroundImage = WMAP_OWN_URI;
     el.style.transform = 'translate(' + Math.round(t.x - G.W / 2) + 'px,' + Math.round(t.y) + 'px)';
   }
   for (; i < WMAP.fpool.length; i++) WMAP.fpool[i].style.display = 'none';
 }
-function wmapSelUri(w, h, cellH) {   // 多格選取框的底圖:像素 viewBox(線寬不隨占地變粗),樣式同 css 單格框
-  var a = cellH * 0.11, b = cellH * 0.055, iy = a / 2, ix = iy * 2, d = 'M' + (w / 2) + ' ' + iy + 'L' + (w - ix) + ' ' + (h / 2) + 'L' + (w / 2) + ' ' + (h - iy) + 'L' + ix + ' ' + (h / 2) + 'Z', s;
-  s = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " + w + ' ' + h + "'><path d='" + d + "' fill='#fff1a8' fill-opacity='.22' stroke='#fff6c8' stroke-width='" + a + "' stroke-linejoin='round'/><path d='" + d + "' fill='none' stroke='#d99a12' stroke-width='" + b + "' stroke-linejoin='round'/></svg>";
-  return 'data:image/svg+xml,' + encodeURIComponent(s);
+function wmapHexVert(G, d) {   // 頂面第 d 個頂點相對中心(0 = 左尖角,順時針:左、左上、右上、右、右下、左下)
+  var W = G.W, H = G.H;
+  return [[-W / 2, 0], [-W / 4, -H / 2], [W / 4, -H / 2], [W / 2, 0], [W / 4, H / 2], [-W / 4, H / 2]][d];
 }
-function wmapPlaceSel() {   // 選取框 = 單一元素:資源格 1 格、城池 = 整個占地(縣 3×3 / 郡 4×4 / 關 2×3)、主城 3×3 外框
-  var G = WMAP.G, WG = WMAP.WG, N = G.size, gi = WMAP.sel, nd, c0, r0, fw = 1, fh = 1, t, el, w, h, i, city;
+function wmapSelShape(G, cl) {   // 占地格群的選取框:外框 bbox + SVG(每格六邊形淡填 + 外緣邊線);cl = [[c, r]…] → {x, y, w, h, uri}
+  var set = {}, i, d, e, c, r, p, x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, w, h, d1 = '', d2 = '', pad = Math.max(2, G.H * 0.08), V, a, b, sw, sh, svg, rc;
+  function f(n) { return Math.round(n * 10) / 10; }
+  for (i = 0; i < cl.length; i++) set[cl[i][0] + ',' + cl[i][1]] = 1;
+  for (i = 0; i < cl.length; i++) {
+    p = wmapCellCenter(G, cl[i][0], cl[i][1]);
+    x0 = Math.min(x0, p.x - G.W / 2); x1 = Math.max(x1, p.x + G.W / 2); y0 = Math.min(y0, p.y - G.H / 2); y1 = Math.max(y1, p.y + G.H / 2);
+  }
+  x0 -= pad; y0 -= pad; x1 += pad; y1 += pad; w = x1 - x0; h = y1 - y0;
+  for (i = 0; i < cl.length; i++) {
+    c = cl[i][0]; r = cl[i][1]; p = wmapCellCenter(G, c, r);
+    for (d = 0; d < 6; d++) { V = wmapHexVert(G, d); d1 += (d ? 'L' : 'M') + f(p.x - x0 + V[0]) + ' ' + f(p.y - y0 + V[1]); }
+    d1 += 'Z';
+    for (d = 0; d < 6; d++) {   // 方向 d(0 N…5 NW)對應邊 = 頂點 (d + 1) % 6 → (d + 2) % 6(N = 左上 → 右上)
+      if (set[(c + WMHEX_DC[d]) + ',' + (r + WMHEX_DR[d])]) continue;
+      a = wmapHexVert(G, (d + 1) % 6); b = wmapHexVert(G, (d + 2) % 6);
+      d2 += 'M' + f(p.x - x0 + a[0]) + ' ' + f(p.y - y0 + a[1]) + 'L' + f(p.x - x0 + b[0]) + ' ' + f(p.y - y0 + b[1]);
+    }
+  }
+  sw = Math.max(1.6, G.H * 0.11); sh = Math.max(0.9, G.H * 0.055);
+  svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " + f(w) + ' ' + f(h) + "'><path d='" + d1 + "' fill='#fff1a8' fill-opacity='.22'/><path d='" + d2 + "' fill='none' stroke='#fff6c8' stroke-width='" + f(sw) + "' stroke-linecap='round'/><path d='" + d2 + "' fill='none' stroke='#d99a12' stroke-width='" + f(sh) + "' stroke-linecap='round'/></svg>";
+  rc = { x: x0, y: y0, w: w, h: h, uri: 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")' };
+  return rc;
+}
+function wmapSelCells(gi) {   // 選取 gi 對應的占地格群:城池 = 整塊 c × r 矩形、主城 = 主城 / 庭院格、其他 = 該格
+  var WG = WMAP.WG, N = WG.size, nd, cl = [], c, r, c0, r0, city = WG.k[gi] === 6 || WG.k[gi] === 8, i;
+  nd = city ? null : wmNodeAt(WG, gi);
+  if (nd) { for (r = nd.r0; r < nd.r0 + nd.fh; r++) for (c = nd.c0; c < nd.c0 + nd.fw; c++) cl.push([c, r]); }
+  else if (city) { for (r = WG.cy - 1; r <= WG.cy + 1; r++) for (c = WG.cx - 1; c <= WG.cx + 1; c++) if (c >= 0 && r >= 0 && c < N && r < N && (WG.k[r * N + c] === 6 || WG.k[r * N + c] === 8)) cl.push([c, r]); }
+  if (!cl.length) { c0 = gi % N; r0 = (gi - c0) / N; cl.push([c0, r0]); }
+  void i;
+  return cl;
+}
+function wmapPlaceSel() {   // 選取框 = 單一元素:資源格 1 格、城池 = 整個占地(縣 4×4 / 郡 6×6 / 州 8×8 / 關 2×4)、主城 7 + 庭院格
+  var G = WMAP.G, gi = WMAP.sel, el, sh, i;
   WMAP.selEls = WMAP.selEls || [];
   for (i = 1; i < WMAP.selEls.length; i++) WMAP.selEls[i].style.display = 'none';
   if (gi < 0) { if (WMAP.selEls[0]) WMAP.selEls[0].style.display = 'none'; return; }
-  city = WG.k[gi] === 6 || WG.k[gi] === 8;
-  nd = city ? null : wmNodeAt(WG, gi);
-  if (nd) { c0 = nd.c0; r0 = nd.r0; fw = nd.fw; fh = nd.fh; }
-  else if (city) { c0 = WG.cx - 1; r0 = WG.cy - 1; fw = 3; fh = 3; }
-  else { c0 = gi % N; r0 = (gi - c0) / N; }
-  t = wmapCellTop(G, c0, r0); w = (fw + fh) * G.W / 2; h = (fw + fh) * G.H / 2;
+  sh = wmapSelShape(G, wmapSelCells(gi));
   el = WMAP.selEls[0] || (WMAP.selEls[0] = wmapMkNode('wmap-sel', WMAP.world));
-  el.style.display = ''; el.style.width = w + 'px'; el.style.height = h + 'px';
-  el.style.backgroundImage = fw * fh > 1 ? 'url("' + wmapSelUri(w, h, G.H) + '")' : '';
-  el.style.transform = 'translate(' + Math.round(t.x - fh * G.W / 2) + 'px,' + Math.round(t.y) + 'px)';
+  el.style.display = ''; el.style.width = Math.round(sh.w) + 'px'; el.style.height = Math.round(sh.h) + 'px';
+  el.style.backgroundImage = sh.uri;
+  el.style.transform = 'translate(' + Math.round(sh.x) + 'px,' + Math.round(sh.y) + 'px)';
+  el.setAttribute('data-w', String(Math.round(sh.w))); el.setAttribute('data-h', String(Math.round(sh.h)));
 }
 
 // ───────── 畫面更新 ─────────
@@ -514,7 +713,7 @@ function wmapFrame() {
   WMAP.world.style.transform = 'translate3d(' + (-p.px) + 'px,' + (-p.py) + 'px,0)';
   more = wmapEnsureChunks(p.px, p.py, 3);
   wmapUpdateOverlay(p.px, p.py);
-  if (WMAP.hud) WMAP.hud.textContent = 's=' + WMAP.G.s + ' 塊 ' + WMAP.nChunks + ' 烘 ' + WMAP.bakes + ' 節點 ' + WMAP.root.getElementsByTagName('*').length;
+  if (WMAP.hud) WMAP.hud.textContent = 'W=' + WMAP.G.W + ' 塊 ' + WMAP.nChunks + ' 烘 ' + WMAP.bakes + ' 節點 ' + WMAP.root.getElementsByTagName('*').length;
   if (more) wmapSchedule();
 }
 function wmapSchedule() { if (WMAP.raf || !WMAP.on) return; WMAP.raf = requestAnimationFrame(wmapFrame); }
@@ -525,26 +724,32 @@ function wmapResize() {
   wmapSchedule();
 }
 function wmapSetCam(u, v) { WMAP.cam = wmapCamClamp(WMAP.G, { u: u, v: v }, { border: WMAP.B }); wmapSchedule(); }
+function wmapZoomUi() {   // 縮放標籤 + 放大鈕在最大段時停用
+  var b;
+  if (WMAP.zoomEl) WMAP.zoomEl.textContent = ['遠', '中', '近'][WMAP.zi];
+  b = WMAP.root ? WMAP.root.querySelector('.wmap-btn[data-z="1"]') : null;
+  if (b) { b.disabled = WMAP.zi >= WMAP_CFG.zooms.length - 1; b.style.opacity = b.disabled ? '0.35' : ''; }
+}
 function wmapSetZoom(idx, ax, ay) {
   var i = Math.max(0, Math.min(WMAP_CFG.zooms.length - 1, idx | 0)), G0 = WMAP.G, G1;
   if (i === WMAP.zi) return;
   if (ax === undefined) { ax = WMAP.vw / 2; ay = WMAP.vh / 2; }
   G1 = wmapGeom(WMAP_CFG.zooms[i], WMAP.N);
   WMAP.cam = wmapCamClamp(G1, wmapAnchorZoom(G0, G1, WMAP.cam, WMAP.vw, WMAP.vh, ax, ay), { border: WMAP.B });
-  WMAP.zi = i; WMAP.G = G1; WMAP.sc = {}; WMAP.tmp = null; WMAP.bsig = '';
+  WMAP.zi = i; WMAP.G = G1; WMAP.sc = {}; WMAP.tmp = null; WMAP.bsig = ''; WMAP.pat = {}; WMAP.tile = {}; WMAP.mask = {};
   wmapClearChunks(); wmapPlaceSel();
   var p = wmapCamPxNow();
   WMAP.world.style.transform = 'translate3d(' + (-p.px) + 'px,' + (-p.py) + 'px,0)';
   wmapEnsureChunks(p.px, p.py, 99);   // 縮放後可見塊同步烘好,不閃
   wmapSchedule();
-  if (WMAP.zoomEl) WMAP.zoomEl.textContent = ['遠', '中', '近'][i];
+  wmapZoomUi();
 }
-function wmapInvalidate() { wmapClearChunks(); WMAP.bsig = ''; WMAP.sc = {}; wmapBuildData(); wmapSchedule(); }
+function wmapInvalidate() { wmapClearChunks(); WMAP.bsig = ''; WMAP.sc = {}; WMAP.pat = {}; WMAP.tile = {}; WMAP.mask = {}; wmapBuildData(); wmapSchedule(); }
 
 // ───────── 命中 / 選取 ─────────
-function wmapTall(c, r) {   // 往上凸的資源領地點擊框(世界座標);城池(縣 / 郡 / 關 / 主城)改走 wmapNodeShapes 的點選形
+function wmapTall(c, r) {   // 往上凸的資源領地點擊框(世界座標);城池(縣 / 郡 / 州 / 關 / 主城)改走 wmapNodeShapes 的點選形
   var G = WMAP.G, N = G.size, gi = r * N + c, bx;
-  if (WMAP.res[gi]) { bx = wmapCellTop(G, c, r); return { x: bx.x - G.W * 0.28, y: bx.y - G.H * 0.6, w: G.W * 0.56, h: G.H * 1.1 }; }   // 資源格:整格菱形偏上 + 往上 0.6 格(里程碑 / 大樹的高度)
+  if (WMAP.res[gi]) { bx = wmapCellCenter(G, c, r); return { x: bx.x - G.W * 0.28, y: bx.y - G.H * 1.1, w: G.W * 0.56, h: G.H * 1.1 }; }   // 資源格:頂面中心往上 1.1 格高(里程碑 / 大樹的高度)
   return null;
 }
 function wmapPolyHas(p, x, y) {   // 多邊形(攤平 [x0,y0,x1,y1…])包含點?(射線法)
@@ -556,12 +761,25 @@ function wmapPolyHas(p, x, y) {   // 多邊形(攤平 [x0,y0,x1,y1…])包含點
   }
   return ins;
 }
-function wmapNodeShapes() {   // 城池點選形:占地菱形 + 往上拉高 0.8 × (圖高 − 菱形高) 的六邊形;依最前格由前到後排序(前面的先測);縮放 / 換世界才重算
+function wmapHull(pts) {   // 凸包(Andrew monotone chain);pts = [[x, y]…] → 攤平 [x0, y0, …]
+  var a = pts.slice().sort(function (u, v) { return u[0] - v[0] || u[1] - v[1]; }), lo = [], up = [], i, out = [];
+  function cr(o, p, q) { return (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]); }
+  for (i = 0; i < a.length; i++) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], a[i]) <= 0) lo.pop(); lo.push(a[i]); }
+  for (i = a.length - 1; i >= 0; i--) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], a[i]) <= 0) up.pop(); up.push(a[i]); }
+  lo.pop(); up.pop(); lo = lo.concat(up);
+  for (i = 0; i < lo.length; i++) out.push(lo[i][0], lo[i][1]);
+  return out;
+}
+function wmapNodeShapes() {   // 城池點選形:占地頂面外殼 + 往上拉高 0.8 × (圖高 − 底座高) 的凸包;依最前格由前到後排序(前面的先測);縮放 / 換世界才重算
   var WG = WMAP.WG, G = WMAP.G, k = G.W / 256, list = [], i, nd, d, key;
   if (WMAP.nsWG === WG && WMAP.nsS === G.s && WMAP.ns) return WMAP.ns;
   function add(node, gi, c0, r0, fw, fh, ch) {
-    var T = wmapUV2World(G, c0, r0), R = wmapUV2World(G, c0 + fw, r0), B = wmapUV2World(G, c0 + fw, r0 + fh), L = wmapUV2World(G, c0, r0 + fh), up = 0.8 * Math.max(0, ch * k - (fw + fh) * G.H / 2);
-    list.push({ node: node, gi: gi, dep: (r0 + fh - 1) + (c0 + fw - 1), p: [L.x, L.y, L.x, L.y - up, T.x, T.y - up, R.x, R.y - up, R.x, R.y, B.x, B.y] });
+    var up = 0.8 * Math.max(0, ch - wmapBaseH(fw, fh)) * k, ca = [[c0, r0], [c0 + fw - 1, r0], [c0, r0 + fh - 1], [c0 + fw - 1, r0 + fh - 1]], pts = [], j, e, p, V;
+    for (j = 0; j < 4; j++) {
+      p = wmapCellCenter(G, ca[j][0], ca[j][1]);
+      for (e = 0; e < 6; e++) { V = wmapHexVert(G, e); pts.push([p.x + V[0], p.y + V[1]], [p.x + V[0], p.y + V[1] - up]); }
+    }
+    list.push({ node: node, gi: gi, dep: c0 + r0 + fw + fh - 2, p: wmapHull(pts) });
   }
   if (WG.nodes) for (i = 0; i < WG.nodes.length; i++) {
     nd = WG.nodes[i]; key = wmapNodeKey(nd); d = wmapNodeDim(key, nd.fw, nd.fh);
@@ -574,11 +792,11 @@ function wmapNodeShapes() {   // 城池點選形:占地菱形 + 往上拉高 0.8
 }
 function wmapCellText(gi) {
   var WG = WMAP.WG, N = WG.size, c = gi % N, r = (gi - c) / N, k = WG.k[gi], info = WMAP.res[gi], s = '(' + c + ',' + r + ') ' + WMAP_KNAME[k], nd;
-  if (k === 6 || k === 8) return '(' + WG.cx + ',' + WG.cy + ') 我的主城(H 形 7 格)';
+  if (k === 6 || k === 8) return '(' + WG.cx + ',' + WG.cy + ') 我的主城(中心 + 6 鄰 + 庭院)';
   nd = wmNodeAt(WG, gi);
-  if (nd) {   // 縣 3×3 / 郡 4×4 / 關 2×3:點城內任何格(含關門道)都是同一座
-    return '(' + (nd.gi % N) + ',' + Math.floor(nd.gi / N) + ') ' + (nd.type === 'pass' ? '關口' : (nd.type === 'jun' ? '郡城' : '縣城')) + ' ' + Math.min(nd.fw, nd.fh) + '×' + Math.max(nd.fw, nd.fh)
-      + (nd.type === 'pass' ? ' · 門道可通行・不可占領' : ' · 城內不可走不可占領') + (isFinite(nd.d) ? ' · 沿道路去程 ' + wmGoMins(nd.type === 'pass' ? nd.d : nd.d + 1).toFixed(1) + ' 分' : '');   // 關走到門外格就開打(cost = d),縣 / 郡最後一步進門(d + 1)
+  if (nd) {   // 縣 4×4 / 郡 6×6 / 州 8×8 / 關 2×4:點城內任何格(含關門道)都是同一座
+    return '(' + (nd.gi % N) + ',' + Math.floor(nd.gi / N) + ') ' + (nd.type === 'pass' ? '關口' : (nd.type === 'jun' ? '郡城' : (nd.type === 'zhou' ? '州城' : '縣城'))) + ' ' + Math.min(nd.fw, nd.fh) + '×' + Math.max(nd.fw, nd.fh)
+      + (nd.type === 'pass' ? ' · 門道可通行・不可占領' : ' · 城內不可走不可占領') + (isFinite(nd.d) ? ' · 沿道路去程 ' + wmGoMins(nd.type === 'pass' ? nd.d : nd.d + 1).toFixed(1) + ' 分' : '');   // 關走到門外格就開打(cost = d),縣 / 郡 / 州最後一步進門(d + 1)
   }
   if (k !== 0) return s + (k === 1 || k === 2 || k === 3 ? ' · 不能通行' : '');
   if (info) s += ' Lv' + info.lv + ' ' + WMAP_RES[info.ty];
@@ -586,7 +804,7 @@ function wmapCellText(gi) {
   if (!isFinite(WG.d[gi])) return s + ' · 超出行軍範圍';
   return s + ' · 去程 ' + wmGoMins(WG.d[gi]).toFixed(1) + ' 分';
 }
-function wmapHit(x, y) {   // x, y = 視窗內像素 → {gi, node};先測城池點選形(縣 / 郡 / 關 / 主城),再測格(含資源領地往上凸的框)
+function wmapHit(x, y) {   // x, y = 視窗內像素 → {gi, node};先測城池點選形(縣 / 郡 / 州 / 關 / 主城),再測格(含資源領地往上凸的框)
   var p = wmapCamPxNow(), wx = p.px + x, wy = p.py + y, sh = wmapNodeShapes(), i, gi;
   for (i = 0; i < sh.length; i++) if (wmapPolyHas(sh[i].p, wx, wy)) return { gi: sh[i].gi, node: sh[i].node };
   gi = wmapGiAt(WMAP.G, wx, wy, { border: WMAP.B, tall: wmapTall });
@@ -595,7 +813,7 @@ function wmapHit(x, y) {   // x, y = 視窗內像素 → {gi, node};先測城池
 function wmapSelect(gi) {
   var nd = null;
   if (gi >= 0) {
-    if (WMAP.WG.k[gi] === 6 || WMAP.WG.k[gi] === 8) gi = WMAP.WG.c0;   // 主城任一格 / 庭院缺口 = 點主城
+    if (WMAP.WG.k[gi] === 6 || WMAP.WG.k[gi] === 8) gi = WMAP.WG.c0;   // 主城任一格 / 庭院 = 點主城
     else { nd = wmNodeAt(WMAP.WG, gi); if (nd) gi = nd.gi; }           // 城池任一格 / 關門道 = 該城池(以主城門格代表)
   }
   WMAP.sel = gi;
@@ -668,17 +886,19 @@ function wmapMount(o) {
   o = o || {};
   WG = wmGen(o.seed !== undefined ? o.seed : 20261116, o.size);
   WMAP.WG = WG; WMAP.N = WG.size; WMAP.B = WG.border; WMAP.seed = WG.seed;
-  WMAP.dpr = Math.min(2, window.devicePixelRatio || 1);
-  WMAP.zi = WMAP_CFG.zoomDef; WMAP.G = wmapGeom(WMAP_CFG.zooms[WMAP.zi], WG.size);
+  WMAP.dpr = (typeof wmapArtLowQ === 'function' && wmapArtLowQ()) ? 1 : Math.min(WMAP_CFG.dprCap, window.devicePixelRatio || 1);
+  WMAP.zi = (typeof window !== 'undefined' && window.innerWidth && window.innerHeight && window.innerWidth < window.innerHeight) ? 0 : WMAP_CFG.zoomDef;   // 直向預設格寬 64(規格 7 風險 4),橫向 96
+  WMAP.G = wmapGeom(WMAP_CFG.zooms[WMAP.zi], WG.size);
   WMAP.dbg = /[?&]wmapdbg=1(&|$)/.test(String(window.location.search || ''));
-  WMAP.chunks = {}; WMAP.nChunks = 0; WMAP.sc = {}; WMAP.pat = {}; WMAP.fpool = []; WMAP.bsig = ''; WMAP.bakes = 0; WMAP.bakeMs = 0; WMAP.ptrs = {}; WMAP.drag = null; WMAP.pinch = null; WMAP.sel = -1; WMAP.listeners = [];
+  WMAP.chunks = {}; WMAP.nChunks = 0; WMAP.sc = {}; WMAP.pat = {}; WMAP.tile = {}; WMAP.mask = {}; WMAP.lv = null; WMAP.tmp = null; WMAP.fpool = []; WMAP.bsig = ''; WMAP.bakes = 0; WMAP.bakeMs = 0; WMAP.ptrs = {}; WMAP.drag = null; WMAP.pinch = null; WMAP.sel = -1; WMAP.listeners = [];
   wmapBuildData();
+  wmapTexKickLoad();
   parent = o.parent || document.body;
   html = '<div id="wmapVp"><div id="wmapWorld"></div></div><div class="wmap-ctl"><button type="button" class="wmap-btn" data-z="1" aria-label="放大">+</button><span class="wmap-zl"></span><button type="button" class="wmap-btn" data-z="-1" aria-label="縮小">−</button>'
     + '<button type="button" class="wmap-btn wmap-home" data-z="0" aria-label="回主城">城</button></div><div class="wmap-card" style="display:none"></div>' + (WMAP.dbg ? '<div class="wmap-hud"></div>' : '');
   WMAP.root = document.createElement('div'); WMAP.root.id = 'wmapRoot'; WMAP.root.innerHTML = html; parent.appendChild(WMAP.root);
   WMAP.vp = WMAP.root.querySelector('#wmapVp'); WMAP.world = WMAP.root.querySelector('#wmapWorld'); WMAP.card = WMAP.root.querySelector('.wmap-card'); WMAP.hud = WMAP.root.querySelector('.wmap-hud'); WMAP.zoomEl = WMAP.root.querySelector('.wmap-zl');
-  WMAP.zoomEl.textContent = ['遠', '中', '近'][WMAP.zi];
+  wmapZoomUi();
   WMAP.selEls = [];
   WMAP.root.querySelector('.wmap-ctl').addEventListener('click', function (e) {
     var b = e.target.closest ? e.target.closest('.wmap-btn') : null, z;

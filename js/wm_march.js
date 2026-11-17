@@ -1,7 +1,7 @@
 // js/wm_march.js — M1 MS1 行軍純函式(設計_行軍停止與相遇_規格.md 第 1~3 節;設計_M1視覺原型_實作計畫.md W3 / W4)。
 // 做什麼:軍隊「現在在哪、算哪一格」由航段 lg(路徑 + 起點偏移 + 起始時刻 + 剩餘毫秒)這個純函式決定;
 //        停止 / 繼續 / 改目標 / 撤退 / 閒置到期 / 相遇後改寫,全都只是「產生一個新航段」。純函式:不碰 DOM、不讀時間(now 由呼叫端傳)、不改傳入的 lg,node 可測。
-// 整數:時間用整數毫秒、距離用整數千分格(直步 1000、斜步 1414,不用浮點 sqrt);格界用中點規則(d < 中點屬前一格,d >= 中點屬後一格)。
+// 整數:時間用整數毫秒、距離用整數千分格(六邊形格:鄰格 6 向每步一律 1000,沒有斜步;不用浮點 sqrt);格界用中點規則(d < 中點屬前一格,d >= 中點屬後一格)。
 // 命名:全域一律 wmMarch* / WMARCH_*(舊外勤已佔 wm_*.js、WM_CFG、wmNorm…);ES2017,不用 ?. ??;UTF-8 + CRLF。
 // 載入順序:不依賴任何檔(WMG_CFG 有就讀 size / goBase / goK / backDiv,沒有用預設);放在 wm_gen.js 之後即可。
 //
@@ -12,8 +12,9 @@
 //   k:'wait' = 待發(站在 p[0]);k:'done' = 不畫。舊行程沒有 lg → wmMarchLegOf(trip) 現場轉成虛擬航段(存檔不用遷移)。
 //
 // ───────── 公開 API ─────────
-//   WMARCH_CFG                          FIGHT 3000、HOLD 28800000(8h)、HOLD_OUT 7200000(2h,共享世界補給外)、CMD_GAP 5000、RESUME_MIN 1000、STEP 1000、DIAG 1414、BACK_DIV 4、ENC_GRACE 5000
-//   wmMarchExpand(p, size) → {cells, D, cs, rs, dirs, L}   路徑逐格展開(快取在 p 陣列上,WeakMap)
+//   WMARCH_CFG                          FIGHT 3000、HOLD 28800000(8h)、HOLD_OUT 7200000(2h,共享世界補給外)、CMD_GAP 5000、RESUME_MIN 1000、STEP 1000、BACK_DIV 4、ENC_GRACE 5000
+//   wmMarchExpand(p, size) → {cells, D, cs, rs, dirs, L} | 'bad'   路徑逐格展開(快取在 p 陣列上,WeakMap);六邊形格只允許 6 向步:轉折點之間 (dc, dr) 異號(含反斜角 (+1,-1) / (-1,+1) 與任何要走反斜角的線段)回 'bad'(不快取)
+//   wmMarchNew(o) 遇 'bad' 路徑回 'bad';wmMarchStop / Redirect / Retreat 組出的新路徑 'bad' 時回 {ok:false, err:'bad'}
 //   wmMarchNew(o) → lg                  建新 mv 航段 o = {p, size, t0, M, g, on, hold, b:{p, M, a0?}, hm, v, w, fm}(L / b.L 自動算)
 //   wmMarchLegOf(trip, size) → lg       trip.lg 優先;舊行程(path / t0 / goMs / backMs / state)轉虛擬航段
 //   wmMarchAt(trip|lg, t, size) → st    {k, phase:'wait'|'go'|'fight'|'idle'|'back'|'done', seg, d, i(所屬格在 cells 的索引), gi(所屬格), c, r(格座標浮點), dir, mir, dc, dr, moving, X}
@@ -33,7 +34,7 @@
 // 相遇引擎範圍:只做「找出相遇事件」(wmMarchEncList / wmMarchEncFirst)與「相遇後改寫航段」(wmMarchOutcome);
 //   TODO(NE 系列):戰鬥結算、hp 延續、連打、事件迴圈(結算後重算受影響的隊)、arb 仲裁與 x/$eid 紀錄。
 
-var WMARCH_CFG = { FIGHT: 3000, HOLD: 28800000, HOLD_OUT: 7200000, CMD_GAP: 5000, RESUME_MIN: 1000, STEP: 1000, DIAG: 1414, BACK_DIV: 4, ENC_GRACE: 5000 };
+var WMARCH_CFG = { FIGHT: 3000, HOLD: 28800000, HOLD_OUT: 7200000, CMD_GAP: 5000, RESUME_MIN: 1000, STEP: 1000, BACK_DIV: 4, ENC_GRACE: 5000 };
 var WMARCH_CACHE = (typeof WeakMap === 'function') ? new WeakMap() : null;
 var WMARCH_VCACHE = (typeof WeakMap === 'function') ? new WeakMap() : null;
 
@@ -42,7 +43,10 @@ function wmMarchFloorDiv(a, b) { var q = Math.floor(a / b); while (q * b > a) q-
 function wmMarchCeilDiv(a, b) { var q = Math.ceil(a / b); while (q * b < a) q++; while ((q - 1) * b >= a) q--; return q; }
 function wmMarchSize(n) { return n > 0 ? n : ((typeof WMG_CFG !== 'undefined' && WMG_CFG.size) ? WMG_CFG.size : 64); }
 
-// ───────── 方向(同 wmapArmyDirOf,本檔自備以免依賴)─────────
+// ───────── 方向(本檔自備以免依賴)─────────
+// 六邊形格的 6 個鄰格步 (dc, dr):(1,0) → {0,0}、(0,1) → {0,1}、(-1,0) → {1,1}、(0,-1) → {1,0}、(1,1) → {0,prevMir}(螢幕正下)、(-1,-1) → {1,prevMir}(螢幕正上);
+// 即 wmHexArt 表的「美術列」欄(dir 0 前 / 1 後,mir 左右鏡像,N / S 沿用上一段 mir)。表本身已正確、不用改。
+// 注意:這是航段內部舊 2 列表示法;畫面用的 6 向軍隊圖(dir 0~3)由 wmMarchPose 交給 wmapArmyDirOf 重算,兩者不要混用。
 function wmMarchDirOf(dc, dr, prevMir) {
   var ac = Math.abs(dc), ar = Math.abs(dr), sc, sr, pm = prevMir ? 1 : 0;
   sc = ac < ar * 0.5 ? 0 : (dc > 0 ? 1 : -1);
@@ -66,11 +70,12 @@ function wmMarchExpand(p, size) {
   for (k = 1; k < p.length; k++) {
     cur = p[k - 1]; tg = p[k];
     cx = cur % size; cy = (cur - cx) / size; tx = tg % size; ty = (tg - tx) / size;
+    if ((tx - cx) * (ty - cy) < 0) return 'bad';   // 六邊形格:(+1,-1) / (-1,+1) 不相鄰,異號位移走不出 6 向步
     while (cx !== tx || cy !== ty) {
       dx = tx > cx ? 1 : (tx < cx ? -1 : 0); dy = ty > cy ? 1 : (ty < cy ? -1 : 0);
       if (dx && dy && Math.abs(tx - cx) !== Math.abs(ty - cy)) { if (Math.abs(tx - cx) > Math.abs(ty - cy)) dy = 0; else dx = 0; }
       cx += dx; cy += dy;
-      st = (dx && dy) ? WMARCH_CFG.DIAG : WMARCH_CFG.STEP;
+      st = WMARCH_CFG.STEP;
       cells.push(cy * size + cx); cs.push(cx); rs.push(cy); D.push(D[D.length - 1] + st);
     }
   }
@@ -84,7 +89,8 @@ function wmMarchExpand(p, size) {
   if (WMARCH_CACHE && p) WMARCH_CACHE.set(p, { size: size, X: X });
   return X;
 }
-function wmMarchLenOf(p, size) { return wmMarchExpand(p, size).L; }
+function wmMarchLenOf(p, size) { var X = wmMarchExpand(p, size); return X === 'bad' ? NaN : X.L; }
+function wmMarchBadP(p, size) { return wmMarchExpand(p, size) === 'bad'; }
 function wmMarchRev(p) { return p.slice().reverse(); }
 // 逐格(cells)壓成轉折點
 function wmMarchTurns(cells, size) {
@@ -131,6 +137,7 @@ function wmMarchTin(seg, X, i) {
 // ───────── 舊行程 → 虛擬航段 ─────────
 function wmMarchNew(o) {
   var size = wmMarchSize(o.size), L = wmMarchLenOf(o.p, size), b = null, leg;
+  if (L !== L || (o.b && wmMarchBadP(o.b.p, size))) return 'bad';
   if (o.b) b = { p: o.b.p, a0: o.b.a0 || 0, L: wmMarchLenOf(o.b.p, size), M: o.b.M };
   leg = { k: 'mv', v: o.v | 0, t0: o.t0, p: o.p, n: size, a0: o.a0 || 0, L: L, M: o.M, w: o.w || 0, on: o.on || 'fight', g: o.g !== undefined ? o.g : o.p[o.p.length - 1] };
   if (b) leg.b = b;
@@ -229,8 +236,9 @@ function wmMarchPose(trip, now, o) {
   var out = { vis: false, phase: 'done', c: 0, r: 0, dir: 0, mir: 0, alpha: 1, rolled: false, moving: false, dc: 1, dr: 0, gi: -1 };
   s = wmMarchAt(leg, t, size);
   if (s.phase === 'done') return out;
-  ba = (typeof WMAP_ARMY_CFG !== 'undefined' && WMAP_ARMY_CFG.backAlpha !== undefined) ? WMAP_ARMY_CFG.backAlpha : 0.6;
   out.vis = true; out.phase = s.phase; out.c = s.c; out.r = s.r; out.dir = s.dir; out.mir = s.mir; out.dc = s.dc; out.dr = s.dr; out.moving = s.moving; out.gi = s.gi;
+  if (typeof wmapArmyDirOf === 'function') { ba = wmapArmyDirOf(s.dc, s.dr, 0); out.dir = ba.dir; out.mir = ba.mir; }   // 軍隊層已改 6 向圖列(dir 0~3):由 dc / dr 以同一函式重算,與 wmapArmyPose 一致(沒載入軍隊層時保留航段的 2 列表示法)
+  ba = (typeof WMAP_ARMY_CFG !== 'undefined' && WMAP_ARMY_CFG.backAlpha !== undefined) ? WMAP_ARMY_CFG.backAlpha : 0.6;
   if (s.phase === 'back') { out.rolled = true; out.alpha = ba; }
   else if (s.seg.k === 'back' && s.phase === 'fight') { out.rolled = true; out.alpha = ba; }
   return out;
@@ -289,6 +297,7 @@ function wmMarchStop(leg, now, o) {
   if (seg.hm && cut.i === 0) return { ok: true, cancel: true, cut: cut };   // 停在主城格:取消出征,直接回城
   back = o.back ? { p: o.back.p, a0: o.back.a0 || 0, L: o.back.L !== undefined ? o.back.L : wmMarchLenOf(o.back.p, size), M: o.back.M } : wmMarchBackFallback(seg, cut, size);
   if (!back) return wmMarchErr('needback');
+  if (!(back.L >= 0) || wmMarchBadP(back.p, size)) return wmMarchErr('bad');
   hold = o.hold || wmMarchHold(seg);
   idle = { k: 'idle', v: (seg.v | 0) + 1, t0: now, p: seg.p, n: size, a0: s.d, L: seg.L, M: 0, w: 0, on: seg.on, g: seg.g, rm: wmMarchEta(seg) - now, hu: now + hold, b: back };
   if (seg.b) idle.bt = seg.b;
@@ -318,6 +327,7 @@ function wmMarchRedirect(leg, now, o) {
   cut = wmMarchCut(seg, s.d, size);
   sp = wmMarchSplice(cut, o.route);
   if (!sp || !(o.M >= 0)) return wmMarchErr('route');
+  if (wmMarchBadP(sp.p, size)) return wmMarchErr('bad');
   mv = { k: 'mv', v: (seg.v | 0) + 1, t0: now, p: sp.p, n: size, a0: sp.a0, L: wmMarchLenOf(sp.p, size), M: Math.max(o.M, WMARCH_CFG.RESUME_MIN), w: 0, on: o.on || seg.on || 'fight', g: o.g !== undefined ? o.g : sp.p[sp.p.length - 1] };
   if (o.back) { b = { p: o.back.p, a0: o.back.a0 || 0, M: o.back.M }; b.L = o.back.L !== undefined ? o.back.L : wmMarchLenOf(b.p, size); mv.b = b; }
   if (o.hold) mv.hd = o.hold; else if (seg.hd) mv.hd = seg.hd;
@@ -335,6 +345,7 @@ function wmMarchRetreat(leg, now, o) {
   if (o.route) {
     sp = wmMarchSplice(cut, o.route);
     if (!sp) return wmMarchErr('route');
+    if (wmMarchBadP(sp.p, size)) return wmMarchErr('bad');
     M = o.M;
     if (!(M >= 0)) return wmMarchErr('route');
     bk = { p: sp.p, a0: sp.a0, L: wmMarchLenOf(sp.p, size), M: M };

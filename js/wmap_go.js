@@ -11,12 +11,12 @@
 //   wmapGoFast() → bool                       網址 ?wmfast=1
 //   wmapGoSpd(slots) → 係數                   全隊最慢兵種係數(WMG_CFG.spd:騎 0.85 弓 1 槍 1 械 1.25 盾 1.10;預設 1)
 //   wmapGoPtId(gi) → 'w'+gi
-//   wmapGoRoute(WG, src, goal) → {cells, cost}|null   Dijkstra(8 向、不切牆角、道路 ×0.5、淺灘 ×1.5);goal = gi(可為縣 / 關單格)或 'home'(任一主城格)
+//   wmapGoRoute(WG, src, goal) → {cells, cost}|null   Dijkstra(六邊形 6 向、每步 1、道路 / 鋪路層 ×0.5、淺灘 ×1.5;無斜步、無切牆角);goal = gi(可為縣 / 關單格)或 'home'(任一主城格)
 //   wmapGoTarget(WG, gi, info) → {ok, reason, kind:'res'|'county'|'jun'|'pass', gi, cost, cells, path, ty, lv, node}   info = {ty:'farm'..., lv}(資源格;wmapInfoOf(gi))
 //        城池(gv 3):點城內任何格 / 關門道都算打這座;gi = node.gi(主城門格)。縣 / 郡:cells = 主城 → node.adj(主城門前格)的路徑 + node.gi(最後一步進門),cost = node.d + 1;
 //        關:規格 1.5,走到朝主城端的門外格 node.adj 開打、不進門道:cells 止於 adj,cost = node.d。tg.end = cells 最後一格(改目標 / 繞路重算用)
 //   wmapGoNeedMigrate(W, WG) → bool           存檔世界版本 g2.gv(沒記 = 2)≠ WG.gv
-//   wmapGoMigrate(W, cs, WG, now) → {changed, from, to, home, node, res, keep}   gv 重排:g2 行程立即回城、縣 / 郡 / 關舊點清掉、資源點新地圖上不是平地或在城郊 → 刪點與 g2.own(不補償);備份 .bak_gv2 由 UI 層寫
+//   wmapGoMigrate(W, cs, WG, now) → {changed, from, to, home, node, res, keep, rd, dead}   gv 重排:g2 行程立即回城、縣 / 郡 / 關舊點清掉、資源點新地圖上不是平地 / 在城郊 / 已不是資源格(gv 4 起,WG.rt)→ 刪點與 g2.own(不補償);仍是資源格的保留並把 ty / lv 同步成新地圖的值;備份 .bak_gv<舊版> 由 UI 層寫
 //   wmapGoPlan(W, WG, tg, team, now, o) → {goMs, backMs, goMins, backMins, cost, spd}   預估(不改任何狀態)
 //   wmapGoDraft(W, WG, tg) → pt               目標的實體化草稿(不放進 W、不動 W.pc;算守軍戰力 / 勝算用)
 //   wmapGoOdds(W, cs, team, tg, now) → {my, foe, tag:'穩勝'|'五五'|'難勝', cls}
@@ -50,7 +50,7 @@ function wmapGoIsPtId(id) { return typeof id === 'string' && /^w\d+$/.test(id); 
 
 // ───────── 路徑(Dijkstra,同 wmDistCalc 的成本模型,單源)─────────
 function wmapGoRoute(WG, src, goal) {
-  var N = WG.size, n = N * N, k = WG.k, dist = new Float64Array(n), pv = new Int32Array(n), done = new Uint8Array(n), h = wmgHeap(), i, u, ux, uy, j, x, y, v, w, nd, ok, cells, cur;
+  var N = WG.size, n = N * N, k = WG.k, rd = WG.rd || null, dist = new Float64Array(n), pv = new Int32Array(n), done = new Uint8Array(n), h = wmgHeap(), i, u, ux, uy, j, x, y, v, w, nd, ok, cells, cur;
   if (!(src >= 0 && src < n)) return null;
   for (i = 0; i < n; i++) { dist[i] = Infinity; pv[i] = -1; }
   dist[src] = 0; h.push(0, src);
@@ -66,13 +66,12 @@ function wmapGoRoute(WG, src, goal) {
       return { cells: cells, cost: dist[u] };
     }
     ux = u % N; uy = (u - ux) / N; nd = dist[u];
-    for (j = 0; j < 8; j++) {
-      x = ux + WMG_DX8[j]; y = uy + WMG_DY8[j];
+    for (j = 0; j < 6; j++) {
+      x = ux + WMHEX_DC[j]; y = uy + WMHEX_DR[j];
       if (x < 0 || y < 0 || x >= N || y >= N) continue;
       v = y * N + x;
       if (v !== goal && !wmgWalk(k[v])) continue;
-      if (j >= 4 && (!wmgWalk(k[uy * N + x]) || !wmgWalk(k[y * N + ux]))) continue;
-      w = nd + (j >= 4 ? 1.4142135623730951 : 1) * wmgMul(k[v]);
+      w = nd + wmgMul(k[v], rd && rd[v]);
       if (w >= dist[v]) continue;
       dist[v] = w; pv[v] = u; h.push(w, v);
     }
@@ -110,7 +109,7 @@ function wmapGoCat(tg) { return tg.kind === 'res' ? 'res' : tg.kind; }
 // 草稿:呼叫 wdGenPt 但還原 W.pc,不放進 W.pts
 function wmapGoDraft(W, WG, tg) {
   var pc = W.pc, o, pt;
-  o = tg.kind === 'res' ? { lv: Math.max(1, Math.min(9, tg.lv)), ty: tg.ty } : { idx: tg.node ? tg.node.ti : 0 };
+  o = tg.kind === 'res' ? { lv: Math.max(1, Math.min(10, tg.lv)), ty: tg.ty } : { idx: tg.node ? tg.node.ti : 0 };
   pt = wdGenPt(W, wmapGoCat(tg), o);
   W.pc = pc;
   pt.id = wmapGoPtId(tg.gi);
@@ -319,29 +318,35 @@ function wmapGoSummary(events) {
 
 // ───────── 世界版本重排(gv 2 → 3:縣 / 郡 / 關改占地,地形全變)─────────
 // 規則:g2 行程立即回城(兵力不損);cat county / jun / pass 的 'w…' 點全刪(新城池重新可打,名聲不追回);
-//   資源點(cat 'res')與 g2.own:新地圖上該格仍是平地(k 0)且不在城郊 / 占地 → 保留,否則刪點與 own 記錄,不補償;完成後 g2.gv = WG.gv。
+//   資源點(cat 'res')與 g2.own:新地圖上該格仍是平地(k 0)、不在城郊 / 占地、且(有 WG.rt 時)仍是資源格 → 保留並把 ty / lv 同步成新地圖的資源,否則刪點與 own 記錄,不補償;完成後 g2.gv = WG.gv。
 function wmapGoNeedMigrate(W, WG) {
   var gv = W && W.g2 && W.g2.gv > 0 ? W.g2.gv : 2;   // 沒記錄的舊存檔 = gv 2(v66 以前的 wmap 世界都是 gv 2)
   return !!(WG && WG.gv > 0 && gv !== WG.gv);
 }
 function wmapGoMigrate(W, cs, WG, now) {
-  var out = { changed: false, from: 0, to: 0, home: 0, node: 0, res: 0, keep: 0 }, g, i, p, gi, ev, trips, key, bad;
+  var out = { changed: false, from: 0, to: 0, home: 0, node: 0, res: 0, keep: 0, rd: 0, dead: 0 }, g, i, p, gi, ev, trips, key, bad, sync;
   if (!W || !WG || !wmapGoNeedMigrate(W, WG)) return out;
   g = typeof wmapSettleG2 === 'function' ? wmapSettleG2(W) : (W.g2 = W.g2 && W.g2.own ? W.g2 : { v: 1, own: {}, n: 0, oh: {} });
   out.changed = true; out.from = g.gv > 0 ? g.gv : 2; out.to = WG.gv;
   ev = [];
   trips = W.trips.slice();
   for (i = 0; i < trips.length; i++) if (trips[i].g2) { wdTripHome(W, cs, trips[i], now, ev, false); out.home++; }
-  bad = function (c) { return !(WG.k[c] === 0 && !(WG.zone && WG.zone[c])); };
+  bad = function (c) { return !(WG.k[c] === 0 && !(WG.zone && WG.zone[c])) || (WG.rt && !(WG.rt[c] >= 0)); };
+  sync = function (o, c) {   // gv 4:資源重排後同一格的種類 / 等級可能變了,以新地圖為準(與 wmapGoDraft 同樣上限 10;gv 5 起清空 g2.yg.dead 與道路層 rd 清單)
+    if (!WG.rt || !(WG.rt[c] >= 0) || typeof WMG_RES_TY === 'undefined') return;
+    o.ty = WMAPGO_TY[WMG_RES_TY[WG.rt[c]]] || o.ty; o.lv = Math.max(1, Math.min(10, WG.rl[c] | 0));
+  };
   W.pts = W.pts.filter(function (x) {
     if (!wmapGoIsPtId(x.id)) return true;
     gi = +x.id.slice(1);
     if (x.cat === 'county' || x.cat === 'jun' || x.cat === 'pass') { out.node++; return false; }
     if (x.cat === 'res' && bad(gi)) { out.res++; return false; }
-    if (x.cat === 'res') out.keep++;
+    if (x.cat === 'res') { out.keep++; sync(x, gi); }
     return true;
   });
-  for (key in g.own) if (bad(+key)) { delete g.own[key]; }
+  for (key in g.own) { if (bad(+key)) delete g.own[key]; else sync(g.own[key], +key); }
+  if (Array.isArray(g.rd)) { out.rd = g.rd.length; g.rd = []; }   // 道路層(鋪路隊)清單:格幾何全變,舊鋪路格作廢
+  if (g.yg && Array.isArray(g.yg.dead)) { out.dead = g.yg.dead.length; g.yg.dead = []; }   // 野怪已擊殺紀錄(key = bk × 16 + 序號,新地圖野怪位置全變)
   g.gv = WG.gv;
   return out;
 }

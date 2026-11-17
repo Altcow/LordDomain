@@ -45,6 +45,7 @@ function wmapUiCamLoad() {
   try { o = JSON.parse(s); } catch (e2) { return false; }
   if (!o || typeof o.u !== 'number' || typeof o.v !== 'number' || !isFinite(o.u) || !isFinite(o.v)) return false;
   zi = typeof WMAP_CFG !== 'undefined' ? WMAP_CFG.zooms.indexOf(o.s) : -1;
+  if (zi < 0 && typeof o.s === 'number' && o.s > WMAP_CFG.zooms[WMAP_CFG.zooms.length - 1]) zi = WMAP_CFG.zooms.length - 1;   // 舊存檔記著近景 104 → 夾回最大可用段(中景 64)
   if (zi >= 0) wmapSetZoom(zi);
   wmapSetCam(o.u, o.v);
   return true;

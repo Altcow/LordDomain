@@ -622,7 +622,7 @@ function wdGuardEnd(W, cs, pt, t, events) {
 function wdArriveSingle(W, cs, trip, t, events) {
   var pt = wdPt(W, trip.pt), rp, pick, teams;
   events.push({ t: t, k: 'arrive', team: trip.team, pt: trip.pt });
-  if (!pt || (pt.cat === 'res' && pt.owner) || pt.cl) { trip.st = 'back'; trip.tHome = t + wdBackMs(trip); events.push({ t: t, k: 'miss', team: trip.team, pt: trip.pt }); return; }
+  if (!pt || (pt.cat === 'res' && pt.owner) || pt.cl || (pt.cat === 'yg' && typeof wmapMobGone === 'function' && wmapMobGone(W, pt, t))) { trip.st = 'back'; trip.tHome = t + wdBackMs(trip); events.push({ t: t, k: 'miss', team: trip.team, pt: trip.pt }); return; }
   rp = wdAssault(W, cs, pt, [trip], 'seq', t, events);
   if (rp.win && pt.cat === 'res' && trip.auto) {   // 自動派遣打下的點:自動挑 1 張閒置卡駐守
     teams = wdTeams();
@@ -694,7 +694,7 @@ function wdHandle(W, cs, ev, events) {
   else if (ev.k === 'beast') {
     n = W.pts.filter(function (p) { return p.cat === 'beast' && !p.act; }).length;
     W.nb += WD_CFG.beastEvery;
-    if (n < WD_CFG.beastMax) { pt = wdGenPt(W, 'beast'); W.pts.push(pt); events.push({ t: ev.t, k: 'beast', pt: pt.id, ptName: pt.ty }); }
+    if (n < WD_CFG.beastMax && !(typeof wmapMobOn === 'function' && wmapMobOn())) { pt = wdGenPt(W, 'beast'); W.pts.push(pt); events.push({ t: ev.t, k: 'beast', pt: pt.id, ptName: pt.ty }); }
   } else if (ev.k === 'camp') {
     pt = wdGenPt(W, 'camp');
     i = W.pts.indexOf(ev.ref);

@@ -1,0 +1,334 @@
+[
+  {
+    "key": "grass",
+    "src": "01_草地_513.webp",
+    "flipped": false,
+    "files": {
+      "1024": {
+        "file": "tex_grass_1024.webp",
+        "bytes": 314224,
+        "quality": 92
+      },
+      "512": {
+        "file": "tex_grass_512.webp",
+        "bytes": 95960,
+        "quality": 89
+      }
+    },
+    "meanRGB": [
+      120.3,
+      199.1,
+      40.1
+    ],
+    "meanSaturation": 0.7976,
+    "seam": {
+      "repeatEdgeDiff": 9.12,
+      "borderLumDeviation": 1.0
+    }
+  },
+  {
+    "key": "mud",
+    "src": "02_泥土.webp",
+    "flipped": false,
+    "files": {
+      "1024": {
+        "file": "tex_mud_1024.webp",
+        "bytes": 233754,
+        "quality": 92
+      },
+      "512": {
+        "file": "tex_mud_512.webp",
+        "bytes": 84328,
+        "quality": 92
+      }
+    },
+    "meanRGB": [
+      172.2,
+      112.3,
+      62.6
+    ],
+    "meanSaturation": 0.6378,
+    "seam": {
+      "repeatEdgeDiff": 7.11,
+      "borderLumDeviation": 0.89
+    }
+  },
+  {
+    "key": "wood",
+    "src": "03_林地地面.webp",
+    "flipped": false,
+    "files": {
+      "1024": {
+        "file": "tex_wood_1024.webp",
+        "bytes": 344616,
+        "quality": 89
+      },
+      "512": {
+        "file": "tex_wood_512.webp",
+        "bytes": 101806,
+        "quality": 86
+      }
+    },
+    "meanRGB": [
+      89.6,
+      113.2,
+      28.5
+    ],
+    "meanSaturation": 0.7594,
+    "seam": {
+      "repeatEdgeDiff": 16.06,
+      "borderLumDeviation": 2.16
+    }
+  },
+  {
+    "key": "rock",
+    "src": "04_岩地.webp",
+    "flipped": false,
+    "files": {
+      "1024": {
+        "file": "tex_rock_1024.webp",
+        "bytes": 255350,
+        "quality": 92
+      },
+      "512": {
+        "file": "tex_rock_512.webp",
+        "bytes": 86396,
+        "quality": 92
+      }
+    },
+    "meanRGB": [
+      130.3,
+      121.9,
+      117.4
+    ],
+    "meanSaturation": 0.0987,
+    "seam": {
+      "repeatEdgeDiff": 10.93,
+      "borderLumDeviation": 0.47
+    },
+    "rockBefore": {
+      "meanRGB": [
+        147.2,
+        118.8,
+        97.2
+      ],
+      "meanSaturation": 0.3393
+    }
+  },
+  {
+    "key": "rammed",
+    "src": "05_夯土.webp",
+    "flipped": false,
+    "files": {
+      "1024": {
+        "file": "tex_rammed_1024.webp",
+        "bytes": 228922,
+        "quality": 92
+      },
+      "512": {
+        "file": "tex_rammed_512.webp",
+        "bytes": 74584,
+        "quality": 92
+      }
+    },
+    "meanRGB": [
+      217.4,
+      156.8,
+      79.4
+    ],
+    "meanSaturation": 0.6351,
+    "seam": {
+      "repeatEdgeDiff": 6.76,
+      "borderLumDeviation": 1.45
+    }
+  },
+  {
+    "key": "suburb",
+    "src": "06_城郊草地.webp",
+    "flipped": false,
+    "files": {
+      "1024": {
+        "file": "tex_suburb_1024.webp",
+        "bytes": 278116,
+        "quality": 92
+      },
+      "512": {
+        "file": "tex_suburb_512.webp",
+        "bytes": 100844,
+        "quality": 92
+      }
+    },
+    "meanRGB": [
+      145.7,
+      203.7,
+      50.1
+    ],
+    "meanSaturation": 0.7547,
+    "seam": {
+      "repeatEdgeDiff": 8.92,
+      "borderLumDeviation": 1.42
+    }
+  },
+  {
+    "key": "mine",
+    "src": "07_礦土_514.webp",
+    "flipped": false,
+    "files": {
+      "1024": {
+        "file": "tex_mine_1024.webp",
+        "bytes": 282698,
+        "quality": 92
+      },
+      "512": {
+        "file": "tex_mine_512.webp",
+        "bytes": 93854,
+        "quality": 92
+      }
+    },
+    "meanRGB": [
+      78.7,
+      58.6,
+      45.5
+    ],
+    "meanSaturation": 0.425,
+    "seam": {
+      "repeatEdgeDiff": 7.78,
+      "borderLumDeviation": 0.12
+    }
+  },
+  {
+    "key": "farm_a",
+    "src": "08_農田青苗.webp",
+    "flipped": true,
+    "files": {
+      "1024": {
+        "file": "tex_farm_a_1024.webp",
+        "bytes": 307846,
+        "quality": 92
+      },
+      "512": {
+        "file": "tex_farm_a_512.webp",
+        "bytes": 110760,
+        "quality": 92
+      }
+    },
+    "meanRGB": [
+      139.2,
+      120.9,
+      45.8
+    ],
+    "meanSaturation": 0.6984,
+    "seam": {
+      "repeatEdgeDiff": 34.27,
+      "borderLumDeviation": 0.0
+    }
+  },
+  {
+    "key": "farm_b",
+    "src": "09_農田金穗.webp",
+    "flipped": true,
+    "files": {
+      "1024": {
+        "file": "tex_farm_b_1024.webp",
+        "bytes": 315952,
+        "quality": 86
+      },
+      "512": {
+        "file": "tex_farm_b_512.webp",
+        "bytes": 111164,
+        "quality": 86
+      }
+    },
+    "meanRGB": [
+      201.2,
+      148.0,
+      23.9
+    ],
+    "meanSaturation": 0.8784,
+    "seam": {
+      "repeatEdgeDiff": 35.37,
+      "borderLumDeviation": 0.94
+    }
+  },
+  {
+    "key": "hunt",
+    "src": "10_獵場_516.webp",
+    "flipped": false,
+    "files": {
+      "1024": {
+        "file": "tex_hunt_1024.webp",
+        "bytes": 335032,
+        "quality": 92
+      },
+      "512": {
+        "file": "tex_hunt_512.webp",
+        "bytes": 110630,
+        "quality": 92
+      }
+    },
+    "meanRGB": [
+      160.6,
+      170.0,
+      57.4
+    ],
+    "meanSaturation": 0.6787,
+    "seam": {
+      "repeatEdgeDiff": 10.94,
+      "borderLumDeviation": 4.29
+    }
+  },
+  {
+    "key": "river",
+    "src": "11_河水面_515.webp",
+    "flipped": false,
+    "files": {
+      "1024": {
+        "file": "tex_river_1024.webp",
+        "bytes": 165598,
+        "quality": 92
+      },
+      "512": {
+        "file": "tex_river_512.webp",
+        "bytes": 67602,
+        "quality": 92
+      }
+    },
+    "meanRGB": [
+      67.6,
+      200.4,
+      235.0
+    ],
+    "meanSaturation": 0.715,
+    "seam": {
+      "repeatEdgeDiff": 5.92,
+      "borderLumDeviation": 2.17
+    }
+  },
+  {
+    "key": "shoal",
+    "src": "12_淺灘_517.webp",
+    "flipped": false,
+    "files": {
+      "1024": {
+        "file": "tex_shoal_1024.webp",
+        "bytes": 240952,
+        "quality": 92
+      },
+      "512": {
+        "file": "tex_shoal_512.webp",
+        "bytes": 84724,
+        "quality": 92
+      }
+    },
+    "meanRGB": [
+      119.6,
+      200.4,
+      196.5
+    ],
+    "meanSaturation": 0.4105,
+    "seam": {
+      "repeatEdgeDiff": 8.94,
+      "borderLumDeviation": 1.44
+    }
+  }
+]

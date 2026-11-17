@@ -1687,7 +1687,7 @@ var BN_FX_ULT_SCENE = {
     { g: 'shake', amt: 0.08, delay: 0.3 },
     { g: 'flash', col: '#ff5a20', str: 0.1, dur: 0.4, delay: 0.5 }
   ] },
-  u_lvbu: { items: [   // 飛將無雙(鬼神附體):紅黑閃屏微震 → 鬼神虛影從四周附身 → 方天畫戟巨大刀影 + 多道紅色戟光連斬
+  u_lvbu: { items: [   // 飛將衝陣(鬼神附體):紅黑閃屏微震 → 鬼神虛影從四周附身 → 方天畫戟巨大刀影 + 多道紅色戟光連斬
     { g: 'flash', col: '#c0102a', str: 0.18, dur: 0.45, delay: 0 },
     { g: 'flash', col: '#000000', str: 0.14, dur: 0.4, delay: 0.1 },
     { g: 'shake', amt: 0.14, delay: 0 },

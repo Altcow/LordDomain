@@ -10,7 +10,7 @@ function huntFacName(k) { return STUDY_FAC_NAME[k] || '?'; }
 function huntHead(ctx) {
   var now = Date.now(), sta = studyStamina(now), st = studyTick(now), cs = eqCs(), ib = studyIntro(cs, st), h = '', open = studyOpen();
   h += '<div class="eq-kv hunt-sta"><span>' + eqArt('xf_2', 'eq-xf') + ' 城主體力</span><b>' + sta.n + ' / ' + sta.max + (sta.nextIn ? '(下 1 點 ' + huntFmtMs(sta.nextIn) + ')' : '') + '</b></div>';
-  h += '<div class="eq-kv"><span>今日可訪(存 2 天)</span><b>人才·寶物 ' + st.cnt.talent + ' / ' + STUDY_CFG.cnt.talent.max + ',馬 ' + st.cnt.horse + ' / ' + STUDY_CFG.cnt.horse.max + '</b></div>';
+  h += '<div class="eq-kv"><span>今日可訪(存 2 天)</span><b>' + (featureOn('seek_talent') ? '人才·寶物 ' + st.cnt.talent + ' / ' + STUDY_CFG.cnt.talent.max + ',' : '') + '馬 ' + st.cnt.horse + ' / ' + STUDY_CFG.cnt.horse.max + '</b></div>';   // @DORMANT seek_talent
   if (ib) {
     h += '<div class="eq-kv"><span>引薦人</span><b>' + eqEsc(ib.e.name) + '(魅力 ' + ib.mei + (ib.pts ? ',金 +' + (ib.pts * STUDY_CFG.intro.gold).toFixed(2).replace(/\.?0+$/, '') + '、紫 +' + (ib.pts * STUDY_CFG.intro.purple).toFixed(2).replace(/\.?0+$/, '') + ' 個百分點' : ',無加成') + ';陣營 ' + (ib.facKey ? huntFacName(ib.facKey) : '隨機') + ')</b> <button class="eq-b sub" data-a="intro">' + (ctx.pickIntro ? '收起' : '更換') + '</button></div>';
     if (ctx.pickIntro) {
@@ -60,6 +60,7 @@ function huntHtml(ctx) {
   var h = '<div class="eq-page eq-2c eq-hunt"><div class="eq-l">';
   h += '<div class="eq-smithrow">' + eqArt('st_host', 'eq-smith') + '<div class="eq-bubble">' + eqEsc(ctx.say || '遠道而來,想訪哪一位?') + '</div></div></div><div class="eq-r">';
   h += huntHead(ctx);
+  if (!featureOn('seek_talent') && ctx.tab !== 'horse') ctx.tab = 'horse';   // @DORMANT seek_talent
   if (ctx.tab === 'clue') h += huntExchangeHtml(ctx);
   else {
     h += huntBtns(ctx, ctx.tab);
@@ -67,8 +68,9 @@ function huntHtml(ctx) {
   }
   return h + '</div></div>';
 }
+function huntTabList() { return HUNT_TABS.filter(function (t) { return featureOn('seek_talent') || t[0] === 'horse'; }); }   // @DORMANT seek_talent:關閉時只剩尋訪馬
 function huntTabsHtml(ctx) {
-  return HUNT_TABS.map(function (t) { return '<button class="ld-tab' + (ctx.tab === t[0] ? ' on' : '') + '" data-a="tab" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('');
+  return huntTabList().map(function (t) { return '<button class="ld-tab' + (ctx.tab === t[0] ? ' on' : '') + '" data-a="tab" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('');
 }
 function huntRender(el, ctx) {
   ctx.hEl = el;
@@ -77,14 +79,14 @@ function huntRender(el, ctx) {
   el.onclick = function (ev) { huntClick(ctx, ev); };
 }
 function huntReasonText(r) {
-  return { closed: '書院還沒開放', cnt: '今日次數用完了(每天 0:00 補)', sta: '城主體力不夠', nocard: '名冊沒有人,沒有引薦人', bad: '無法尋訪' }[r] || '無法尋訪';
+  return { closed: '書院還沒開放', cnt: '今日次數用完了(每天 0:00 補)', sta: '城主體力不夠', nocard: '名冊沒有人,沒有引薦人', bad: '無法尋訪', seekoff: '尋訪人才・寶物尚未開放' }[r] || '無法尋訪';
 }
 function huntClick(ctx, ev) {
   var n = eqFindAct(ev, ctx.hEl) || eqFindAct(ev, ctx.tabsEl), a, v, x, r, cs, st;
   if (!n) return false;
   a = n.getAttribute('data-a'); v = n.getAttribute('data-v');
   cs = eqCs();
-  if (a === 'tab') { ctx.tab = v; ctx.res = null; ctx.pickIntro = false; huntRender(ctx.hEl, ctx); return true; }
+  if (a === 'tab') { if (v !== 'horse' && !featureOn('seek_talent')) v = 'horse'; ctx.tab = v; ctx.res = null; ctx.pickIntro = false; huntRender(ctx.hEl, ctx); return true; }   // @DORMANT seek_talent
   if (a === 'intro') { ctx.pickIntro = !ctx.pickIntro; huntRender(ctx.hEl, ctx); return true; }
   if (a === 'setintro') { st = studyRead(Date.now()); st.intro = v || ''; studyWrite(st); ctx.pickIntro = false; huntRender(ctx.hEl, ctx); return true; }
   if (a === 'fac') { ctx.fac = v; huntRender(ctx.hEl, ctx); return true; }
@@ -110,7 +112,7 @@ if (typeof ldNavRegister === 'function') {
   ldNavRegister({
     id: 'study', title: '書院', bg: 'sc_study',
     res: function () { var s = studyStamina(Date.now()); return [['⚡', s.n + '/' + s.max]]; },
-    build: function (el, ctx) { if (!ctx.tab) ctx.tab = 'talent'; ctx.res = null; ctx.pickIntro = false; huntRender(el, ctx); },
+    build: function (el, ctx) { if (!ctx.tab || (ctx.tab !== 'horse' && !featureOn('seek_talent'))) ctx.tab = featureOn('seek_talent') ? 'talent' : 'horse'; ctx.res = null; ctx.pickIntro = false; huntRender(el, ctx); },   // @DORMANT seek_talent
     onShow: function (el, ctx) {
       huntRender(el, ctx);
       if (!HUNT_TIMER && typeof setInterval === 'function') HUNT_TIMER = setInterval(function () { var e = ctx.hEl && ctx.hEl.querySelector ? ctx.hEl.querySelector('.hunt-sta b') : null, s; if (!e || !e.isConnected) return; s = studyStamina(Date.now()); e.textContent = s.n + ' / ' + s.max + (s.nextIn ? '(下 1 點 ' + huntFmtMs(s.nextIn) + ')' : ''); }, 5000) || 0;
