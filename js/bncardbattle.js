@@ -27,6 +27,8 @@ var BNCB_SPD_DEF = 2;   // 發動率重平衡(2026-11-15):每場變長(平均 6~
 // 回 {mySide, enemySide, mine:[單位], enemy:[單位], byId, open:{hp,dead}, steps, win, reason, reasonTxt, maxRound, endTxt, seed}
 // 單位 = {id, side, name, fig, fac, sex, main, traits, gr, troop, dt(謀略型 'strat' 或 ''), row, pos, boss, star, mx, hp0};mine / enemy 依 row 0→2(前鋒、中衛、主將)
 var BNCB_POS = ['前鋒', '中衛', '主將'];
+// 戰法條件加成觸發的浮字(2 字,同被動標籤):引爆 / 必暴 / 加成 …
+function bncbCbLabel(e) { return ({ det: '引爆', crit: e.st === 'blind' ? '必暴' : '暴擊', mul: '加成', pierce: '破盾', hit: '追擊', chance: '連動', proc: '附加', ext: '延長', leech: '吸血', cleanse: '淨化' })[e.k] || '條件'; }
 function bncbPassLabel(name) { return Array.from(String(name || '')).slice(0, 2).join(''); }
 function bncbSteps(rec, mySide) {
   var me = mySide === 'B' ? 'B' : 'A', stars = (rec.opts && rec.opts.stars) || [], rc, S, res, hp = {}, hp0 = {}, dead = {}, rows = {}, rows0 = {}, byId = {}, sides = { A: [], B: [] }, steps = [], st = null, cur = {}, k = [], idx = {}, rep, init, e, i, j, its, line, basic, endTxt = '', ultOn = false, nm, hitBig;
@@ -76,6 +78,7 @@ function bncbSteps(rec, mySide) {
     else if (e.t === 'ccimm') st.pre.push({ t: 'passive', u: e.tgt, label: '免控' });
     else if (e.t === 'immune') st.pre.push({ t: 'passive', u: e.tgt, label: '免疫' });
     else if (e.t === 'react') st.pre.push({ t: 'passive', u: e.tgt, label: '反應' });
+    else if (e.t === 'cb') st.pre.push({ t: 'passive', u: e.u, label: bncbCbLabel(e) });
     else if (e.t === 'dmg') {
       hp[e.tgt] = e.hp;
       nm = null;

@@ -3,7 +3,7 @@
 var BN_ATTACK = { atk_single: 1, atk_front: 1, atk_back: 1, atk_all: 1, atk_pierce: 1, atk_cross: 1, atk_multi: 1, atk_snipe: 1, atk_exec: 1, execute_chain: 1, lifesteal: 1, dot_spread: 1 };
 var BN_TEAM_KINDS = { heal_hot: 1, heal_all: 1, buff_all: 1, rate_up: 1, shield_all: 1, cleanse: 1, resist: 1, cd_reduce: 0 };
 // debuff_multi(S0)params.list 的狀態 → 既有 kind(elec 屬 B9,未收)
-var BN_MULTI_KIND = { atk_down: 'debuff_atk', def_down: 'debuff_def', spd_down: 'debuff_spd', mark: 'mark', silence: 'silence', timid: 'timid', rate_down: 'rate_down', heal_reduce: 'heal_reduce', burn: 'dot_burn', poison: 'dot_poison', bleed: 'dot_bleed' };
+var BN_MULTI_KIND = { int_down: 'debuff_int', atk_down: 'debuff_atk', def_down: 'debuff_def', spd_down: 'debuff_spd', mark: 'mark', silence: 'silence', timid: 'timid', rate_down: 'rate_down', heal_reduce: 'heal_reduce', burn: 'dot_burn', poison: 'dot_poison', bleed: 'dot_bleed' };
 
 function bnIsAttack(eff, o) {
   if (!BN_ATTACK[eff.kind]) return false;
@@ -216,6 +216,8 @@ function bnCast(S, u, inst, o) {
     loss = Math.min(u.hp - 1, Math.round(u.maxHp * P.hpCost));
     if (loss > 0) { u.hp -= loss; bnEv(S, 'dmg', { src: u.id, tgt: u.id, v: loss, abs: 0, ty: 'self', hp: u.hp }); }
   }
+  var cbPrev = S.cbCur;
+  S.cbCur = (d.params && d.params.cb && d.params.cb.length) ? bnCbSnap(S, u, d, d.params.cb) : null;   // 條件加成:施放開始時快照條件
   bnApplyEffect(S, u, eff, res, o);
   if (P.extra && !S.over) {
     for (i = 0; i < P.extra.length; i++) {
@@ -231,6 +233,7 @@ function bnCast(S, u, inst, o) {
     bnApplyEffect(S, u, e2, res, o);
   }
   if (P.leech && res.dmg > 0 && u.alive && !S.over) bnHeal(S, u, u, res.dmg * P.leech, {});   // 嗜血(S0):本戰法造成傷害的比例回復自身
+  S.cbCur = cbPrev;
   if (!S.over) bnAttachParams(S, u, eff, res, o);
   if (!o.noCd) {
     inst.cd = bnCdOf(inst);
@@ -288,7 +291,7 @@ function bnApplyEffect(S, u, eff, res, o) {
   S.curEff = prevEff; S.curEffU = prevU;
 }
 function bnApplyEffect2(S, u, eff, res, o) {
-  var P = eff.params || {}, kind = eff.kind, sc = o.scale || 1, targets, t, i, j, v, ty, hits, r, mul, hh, d, left, hp, tmp, cnt, p2, pw = eff.power, prevLs;
+  var P = eff.params || {}, kind = eff.kind, sc = o.scale || 1, targets, t, i, j, v, ty, hits, r, mul, hh, d, left, hp, tmp, cnt, p2, pw = eff.power, prevLs, cbp, r2;
   if (bnIsAttack(eff, o)) {
     targets = bnTargetsFor(S, u, eff, res, o);
     if (!res.main || eff.isExtra !== true) { if (!res.main) res.main = targets; }
@@ -303,13 +306,17 @@ function bnApplyEffect2(S, u, eff, res, o) {
       for (j = 0; j < hits; j++) {
         var tb = (P.bounce && j > 0) ? bnRandAlive(S, u) : t;   // 彈射(S0):第 2 段起改打隨機存活敵人(bounce 無則沿用原目標)
         if (!tb || !tb.alive || S.over) break;
+        cbp = S.cbCur ? bnCbPre(S, u, eff, tb) : null;
         mul = bnAtkMul(S, u, eff, sc, tb);
+        if (cbp) mul *= cbp.mul;
         hh = { ty: ty, mul: mul, kind: kind, sk: eff.sk, pierce: kind === 'atk_pierce', cat: eff.sk ? eff.sk.cat : '', wx: wx, vsSk: eff.isExtra ? null : (sk && sk.vs) || null, vsCrit: o.vsCrit || 0 };
         if (P.critAdd) hh.critAdd = P.critAdd;   // S0 暴擊欄位:會心 / 重擊 / 必殺(只有新戰法帶這些欄位)
         if (P.critDmg) hh.critDmg = P.critDmg;
         if (P.forceCrit) hh.forceCrit = true;
+        if (cbp) { if (cbp.critAdd) hh.critAdd = (hh.critAdd || 0) + cbp.critAdd; if (cbp.forceCrit) hh.forceCrit = true; if (cbp.pierce) hh.cbPierce = cbp.pierce; if (cbp.noRx) hh.noRx = true; }
         r = bnHitWithRx(S, u, tb, hh);
         if (r) { res.hits++; res.dmg += r.dmg || 0; if (r.killed) res.kills.push(tb); }
+        if (cbp && cbp.post.length && r && !r.evaded && !S.over) { r2 = bnCbPost(S, u, eff, tb, r, cbp); if (r2) { res.dmg += r2.dmg || 0; if (r2.killed) res.kills.push(tb); } }
       }
       // 附帶:stun 類在傷害之後
       if (wx && t.alive && !t.st.wx_mark) bnStatusApply(S, u, t, 'wx_mark', { el: wx, left: BN_DATA.wx.markRounds, noRes: true }, {});   // 五行印
@@ -327,8 +334,10 @@ function bnApplyEffect2(S, u, eff, res, o) {
     case 'heal_single': case 'heal_all':
       for (i = 0; i < targets.length; i++) {
         v = u.base.heal * bnPct(kind, eff, sc) * (1 + (u.mods.healPct || 0)) * (1 + ((P.healPower && P.healPower.troopBonus) || 0));
+        if (S.cbCur) v *= bnCbMulOf(S, u, eff, targets[i]);
         S.stats.healCasts[u.side]++;
         bnHeal(S, u, targets[i], v, { xl: pw === 'XL' });
+        if (S.cbCur) bnCbSupCleanse(S, u, eff, targets[i]);
       }
       break;
     case 'heal_hot':
@@ -344,7 +353,9 @@ function bnApplyEffect2(S, u, eff, res, o) {
     case 'shield_single': case 'shield_all':
       for (i = 0; i < targets.length; i++) {
         v = u.base.sh * bnPct(kind, eff, sc) * (1 + (P.shieldBoost || 0)) * (1 + ((P.healPower && P.healPower.troopBonus) || 0));
+        if (S.cbCur) v *= bnCbMulOf(S, u, eff, targets[i]);
         bnShield(S, u, targets[i], v, {});
+        if (S.cbCur) bnCbSupCleanse(S, u, eff, targets[i]);
       }
       break;
     case 'cleanse':
@@ -400,6 +411,9 @@ function bnApplyEffect2(S, u, eff, res, o) {
       for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], did, { val: bnPct(kind, eff, sc), left: bnDurOf(eff, o) }, {});
       break;
     }
+    case 'debuff_int':   // 降智:只降謀略(狀態 int_down,bnMag)
+      for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'int_down', { val: bnPct(kind, eff, sc), left: bnDurOf(eff, o) }, {});
+      break;
     case 'mark':
       for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'mark', { val: bnPct('mark', eff, sc), left: bnDurOf(eff, o, 2), noRes: false }, {});
       break;
@@ -440,13 +454,13 @@ function bnApplyEffect2(S, u, eff, res, o) {
       }
       break;
     case 'dot_burn':
-      for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'burn', { val: bnMag(S, u) * bnKT('dot_burn', pw) * sc * (u.mods.burnOut || 1), n: P.turns || (pw === 'XL' ? BN_DATA.dotRoundsXL : BN_DATA.dotRounds), act: true }, {});
+      for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'burn', { val: bnMag(S, u) * bnKT('dot_burn', pw) * sc * (u.mods.burnOut || 1) * (S.cbCur ? bnCbMulOf(S, u, eff, targets[i]) : 1), n: P.turns || (pw === 'XL' ? BN_DATA.dotRoundsXL : BN_DATA.dotRounds), act: true }, {});
       break;
     case 'dot_poison':
-      for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'poison', { val: bnKT('dot_poison', pw) * sc, n: P.turns || BN_DATA.poisonRounds, act: true }, {});
+      for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'poison', { val: bnKT('dot_poison', pw) * sc * (S.cbCur ? bnCbMulOf(S, u, eff, targets[i]) : 1), n: P.turns || BN_DATA.poisonRounds, act: true }, {});
       break;
     case 'dot_bleed':
-      for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'bleed', { val: bnAtk(S, u) * bnKT('dot_bleed', pw) * sc, n: P.turns || BN_DATA.dotRounds, act: true }, {});
+      for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'bleed', { val: bnAtk(S, u) * bnKT('dot_bleed', pw) * sc * (S.cbCur ? bnCbMulOf(S, u, eff, targets[i]) : 1), n: P.turns || BN_DATA.dotRounds, act: true }, {});
       break;
     case 'counter':
       for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'counter', { val: bnKT('counter', pw) * sc, left: bnDurOf(eff, o) }, { });
@@ -617,11 +631,138 @@ function bnFateDice(S, u, eff, res, o) {
   }
   if (res.skillEv) res.skillEv.dx = dx;
 }
+// ───────── 戰法條件加成 params.cb(2026-11-18,設計_戰法條件加成_規格.md) ─────────
+// params.cb = [{ on:'tgt'|'self', st:條件, then:{ mul|crit|pierce|hit|det|chance|proc|ext|leech|cleanse } }]。bnCast 開頭快照每個單位的條件(S.cbCur),本次施放自己附上的狀態不會觸發(避免自己餵自己);
+// 加成型(mul / crit / pierce)每擊生效,結算型(hit / det / leech / ext / cleanse / proc)每次施放對每個目標最多 1 次;事件 cb {u,id,st,tgt,k},統計 S.stats.cb[戰法 id]。沒有 cb 的戰法不經過此區,不抽亂數。
+var BN_CB_STS = { burn: ['burn'], poison: ['poison'], bleed: ['bleed'], down: ['stun', 'sleep'], paralyze: ['paralyze'], timid: ['timid'], silence: ['silence'], blind: ['debuff_hit'], atkdown: ['atk_down'], intdown: ['int_down'], weak: ['def_down', 'mark'] };
+function bnCbCond(x, st) {
+  var k, a = BN_CB_STS[st], i;
+  if (st === 'ctrl') { for (k in x.st) if (BN_NEG[k] === 'control') return true; return false; }
+  if (a) { for (i = 0; i < a.length; i++) if (x.st[a[i]]) return true; return false; }
+  switch (st) {
+    case 'tshield': case 'sshield': return !!x.st.shield;
+    case 'tlow': case 'slow': return x.hp < x.maxHp * 0.5;
+    case 'sleech': return !!x.st.lifesteal;
+    case 'combo': return !!x.st.dblhit;
+    case 'hheal': return !!x.st.hit_heal;
+  }
+  return false;
+}
+function bnCbSnap(S, u, d, list) {
+  var snap = {}, j, x;
+  for (j = 0; j < S.units.length; j++) {
+    x = S.units[j];
+    if (!x.alive) continue;
+    snap[x.id] = list.map(function (c) { return bnCbCond(c.on === 'self' ? u : x, c.st); });
+  }
+  return { sk: d, u: u, list: list, snap: snap, done: {} };
+}
+function bnCbFire(S, u, ent, i, t, k) {
+  var C = S.cbCur, key = i + ':' + t.id + ':' + k;
+  if (C.done[key]) return false;
+  C.done[key] = 1;
+  bnEv(S, 'cb', { u: u.id, id: C.sk.id, st: ent.st, tgt: t.id, k: k });
+  S.stats.cb[C.sk.id] = (S.stats.cb[C.sk.id] || 0) + 1;
+  return true;
+}
+function bnCbMatch(S, u, eff, t) {
+  var C = S.cbCur, out = [], sn, i, cn;
+  if (!C || !t || eff.sk !== C.sk || u !== C.u) return out;
+  sn = C.snap[t.id];
+  if (!sn) return out;
+  cn = S.stats.cbN[C.sk.id] || (S.stats.cbN[C.sk.id] = { n: 0, m: sn.map(function () { return 0; }) });   // 統計:被檢查次數 n、各條目條件成立次數 m(校準工具用)
+  cn.n++;
+  for (i = 0; i < sn.length; i++) if (sn[i]) { out.push(i); cn.m[i]++; }
+  return out;
+}
+// 命中前:算 mul / crit / pierce / noRx(det 這一擊不觸發反應),並列出命中後要結算的條目
+function bnCbPre(S, u, eff, t) {
+  var m = bnCbMatch(S, u, eff, t), r, i, ent, th;
+  if (!m.length) return null;
+  r = { mul: 1, critAdd: 0, post: [] };
+  for (i = 0; i < m.length; i++) {
+    ent = S.cbCur.list[m[i]]; th = ent.then || {};
+    if (th.mul) { bnCbFire(S, u, ent, m[i], t, 'mul'); r.mul *= 1 + (BN_DATA.bonusVs[th.mul] || 0); }
+    if (th.crit) { bnCbFire(S, u, ent, m[i], t, 'crit'); if (th.crit === 'XL') r.forceCrit = true; else r.critAdd += BN_DATA.cb.crit[th.crit] || 0; }
+    if (th.pierce) { bnCbFire(S, u, ent, m[i], t, 'pierce'); r.pierce = th.pierce; }
+    if (th.det) r.noRx = true;
+    if (th.det || th.hit || th.leech || th.ext || th.cleanse || th.proc) r.post.push(m[i]);
+  }
+  r.mul = Math.min(r.mul, BN_DATA.cb.condCap);
+  return r;
+}
+// 非攻擊戰法(治療 / 護盾 / 持續傷害):只吃 mul(治療量 / 護盾量 / 持續傷害提高);cleanse 另由 bnCbSupCleanse 處理
+function bnCbMulOf(S, u, eff, t) {
+  var m, r, i, ent;
+  if (!S.cbCur) return 1;
+  m = bnCbMatch(S, u, eff, t);
+  r = 1;
+  for (i = 0; i < m.length; i++) { ent = S.cbCur.list[m[i]]; if (ent.then && ent.then.mul) { bnCbFire(S, u, ent, m[i], t, 'mul'); r *= 1 + (BN_DATA.bonusVs[ent.then.mul] || 0); } }
+  return Math.min(r, BN_DATA.cb.condCap);
+}
+function bnCbSupCleanse(S, u, eff, t) {
+  var m, i, ent;
+  if (!S.cbCur) return;
+  m = bnCbMatch(S, u, eff, t);
+  for (i = 0; i < m.length; i++) { ent = S.cbCur.list[m[i]]; if (ent.then && ent.then.cleanse && bnCbFire(S, u, ent, m[i], t, 'cleanse')) bnCleanse(S, t, 1, null); }
+}
+// 命中後結算(hit / det / leech / ext / cleanse / proc);res = 這一擊的結果;回傳追加傷害結果(給 res.dmg / kills 累計)或 null
+function bnCbPost(S, u, eff, t, res, pre) {
+  var i, ent, th, idx, x = null, r2, b, extra, mult, j, st, a, nn;
+  for (i = 0; i < pre.post.length && !S.over; i++) {
+    idx = pre.post[i]; ent = S.cbCur.list[idx]; th = ent.then || {}; st = ent.st;
+    if (th.det && t.alive && bnCbFire(S, u, ent, idx, t, 'det')) {   // 引爆:消耗狀態換傷害,只打單體
+      mult = BN_DATA.cb.det[th.det] || 1.5; extra = 0; nn = 0;
+      if (st === 'burn' && t.st.burn) { b = t.st.burn; extra = b.val * 100 / (100 + bnSres(S, t)) * BN_DATA.K * BN_DATA.burnTickK * (b.n || 1) * mult; bnStatusRemove(S, t, 'burn', 'det'); }
+      else if (st === 'poison' && t.st.poison) { b = t.st.poison; extra = t.maxHp * b.val * (b.n || 1) * mult; bnStatusRemove(S, t, 'poison', 'det'); }
+      else if (st === 'bleed' && t.st.bleed) { b = t.st.bleed; extra = b.val * BN_DATA.K * (b.n || 1) * mult; bnStatusRemove(S, t, 'bleed', 'det'); }
+      else if (BN_CB_STS[st]) {
+        a = BN_CB_STS[st];
+        for (j = 0; j < a.length; j++) if (t.st[a[j]] && BN_NEG[a[j]] === 'debuff') { bnStatusRemove(S, t, a[j], 'det'); nn = 1; }
+        if (nn) extra = (res.dmg || 0) * (mult - 1);
+      }
+      if (extra > 0 && t.alive) { r2 = bnHit(S, u, t, { ty: 'dot', dot: 'rx', fixed: extra, mul: 1, noGuard: true, cb: eff.dmg === 'strat' || (!eff.dmg && u.dt === 'strat') ? 'strat' : 1 }); if (r2) x = r2; }
+    }
+    if (th.hit && t.alive && res.dmg > 0 && bnCbFire(S, u, ent, idx, t, 'hit')) {   // 追加一段:本次傷害 × hit
+      r2 = bnHit(S, u, t, { ty: 'dot', dot: 'rx', fixed: res.dmg * th.hit, mul: 1, noGuard: true, cb: eff.dmg === 'strat' || (!eff.dmg && u.dt === 'strat') ? 'strat' : 1 });
+      if (r2) { if (x) x = { dmg: (x.dmg || 0) + (r2.dmg || 0), killed: x.killed || r2.killed }; else x = r2; }
+    }
+    if (th.leech && res.dmg > 0 && u.alive && bnCbFire(S, u, ent, idx, t, 'leech')) bnHeal(S, u, u, res.dmg * (BN_DATA.cb.leech[th.leech] || 0), {});
+    if (th.ext && t.alive && bnCbFire(S, u, ent, idx, t, 'ext')) {   // 延長:現有狀態 +1 回合(控制類總長最多 2)
+      a = BN_CB_STS[st] || (st === 'ctrl' ? Object.keys(t.st).filter(function (k) { return BN_NEG[k] === 'control'; }) : []);
+      for (j = 0; j < a.length; j++) {
+        b = t.st[a[j]];
+        if (!b) continue;
+        if (b.left !== undefined && b.left < 900) { if (BN_NEG[a[j]] !== 'control' || b.left < 2) b.left += 1; }
+        else if (b.n !== undefined) b.n += 1;
+      }
+    }
+    if (th.cleanse && u.alive && bnCbFire(S, u, ent, idx, u, 'cleanse')) bnCleanse(S, u, 1, null);
+    if (th.proc && t.alive && bnCbFire(S, u, ent, idx, t, 'proc') && S.rng() < th.proc.p) {   // 附加控制(照常受抵禦 / 免疫)
+      if (th.proc.id === 'stun') bnStatusApply(S, u, t, 'stun', { act: true, left: undefined }, {});
+      else bnStatusApply(S, u, t, th.proc.id, { left: th.proc.dur || 1 }, {});
+    }
+  }
+  return x;
+}
+// 控制機率加成:目標符合條件時,本戰法附帶控制的施加機率提高(只在該戰法自己施放期間)
+function bnCbChance(S, u, t) {
+  var C = S.cbCur, sn, i, ent, add = 0;
+  if (!C || u !== C.u || !S.curEff || S.curEff.sk !== C.sk) return 0;
+  sn = C.snap[t.id];
+  if (!sn) return 0;
+  for (i = 0; i < sn.length; i++) {
+    ent = C.list[i];
+    if (sn[i] && ent.then && ent.then.chance) { bnCbFire(S, u, ent, i, t, 'chance'); add += BN_DATA.cb.chance[ent.then.chance] || 0; }
+  }
+  return add;
+}
 function bnChance(S, P, t, u) {
   var vc = t && u ? bnVsChanceTo(S, u, t) : 0, c;
   if (P.chance === undefined) return true;
   c = typeof P.chance === 'number' ? (P.chance > 1 ? P.chance / 100 : P.chance) : (BN_DATA.chanceMap[P.chance] || 0.7);
   if (vc > c) c = vc;
+  if (S.cbCur && t && u) c += bnCbChance(S, u, t);
   if (c >= 1) return true;
   return S.rng() < c;
 }
@@ -641,7 +782,7 @@ function bnPzConduct(S, u, t) {
   return bnStatusApply(S, u, z, 'paralyze', { left: BN_DATA.paralyze.conductLeft, val: BN_DATA.paralyze.spd }, {});
 }
 function bnCleanse(S, t, n, src) {
-  var order = ['heal_reduce', 'stun', 'sleep', 'paralyze', 'fear', 'confuse', 'timid', 'silence', 'ult_lock', 'burn', 'poison', 'bleed', 'debuff_hit', 'atk_down', 'def_down', 'spd_down', 'rate_down', 'mark', 'wx_mark', 'fuse'], i, c = 0, hadPoison;
+  var order = ['heal_reduce', 'stun', 'sleep', 'paralyze', 'fear', 'confuse', 'timid', 'silence', 'ult_lock', 'burn', 'poison', 'bleed', 'debuff_hit', 'atk_down', 'int_down', 'def_down', 'spd_down', 'rate_down', 'mark', 'wx_mark', 'fuse'], i, c = 0, hadPoison;
   for (i = 0; i < order.length && c < n; i++) {
     if (t.st[order[i]]) {
       hadPoison = order[i] === 'poison' || order[i] === 'bleed';
@@ -1086,7 +1227,7 @@ function bnPasTargetEff(S, o, inst, ctx, trig) {
   var d = inst.def, P = d.params || {}, tg = P.target || d.target, kind = d.kind;
   if (!tg) {
     if (kind === 'heal_hot' || kind === 'heal_all' || kind === 'shield_all' || kind === 'buff_all' || kind === 'rate_up') tg = 'ally_all';
-    else if (kind === 'mark' || kind === 'debuff_atk' || kind === 'debuff_def' || kind === 'debuff_spd' || kind === 'dot_burn' || kind === 'dot_poison' || kind === 'dot_bleed' || kind === 'silence' || kind === 'stun' || kind === 'fear' || kind === 'rate_down' || kind === 'debuff_hit' || kind === 'sleep' || kind === 'paralyze') tg = 'enemy_one';
+    else if (kind === 'mark' || kind === 'debuff_atk' || kind === 'debuff_def' || kind === 'debuff_spd' || kind === 'dot_burn' || kind === 'dot_poison' || kind === 'dot_bleed' || kind === 'silence' || kind === 'stun' || kind === 'fear' || kind === 'rate_down' || kind === 'debuff_hit' || kind === 'debuff_int' || kind === 'sleep' || kind === 'paralyze') tg = 'enemy_one';
     else tg = 'self';
   }
   return { kind: kind, power: d.power, dmg: d.dmg, params: P, target: tg, sk: d };

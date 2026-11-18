@@ -1,0 +1,38 @@
+/* css/wmap_search.css — 搜尋標記(js/wmap_search.js;設計_領地等級分佈與搜尋標記_規格.md 第 4 節)。
+   標示層:單一容器 .wmap-findL(明滅只動它的 opacity,合成層處理)+ 每格 .wmap-find(行內 SVG:粗的紅白相間虛線、無底色);膠囊 .wmsr-pill(標示中才存在);搜尋頁 .wmsr-*。 */
+#wmapRoot .wmap-findL { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 1; pointer-events: none; animation: wmfind 1.6s ease-in-out infinite alternate; will-change: opacity; }
+#wmapRoot .wmap-find { position: absolute; left: 0; top: 0; pointer-events: none; background-size: 100% 100%; background-repeat: no-repeat; }
+@keyframes wmfind { from { opacity: 1; } to { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { #wmapRoot .wmap-findL { animation: none; } }
+
+/* 膠囊:左下兩顆鈕(三顆)上方;不是固定說明欄,沒有在搜尋就不存在 */
+#wmapRoot .wmsr-pill { position: absolute; z-index: 6; left: calc(env(safe-area-inset-left, 0px) + 8px); bottom: calc(62px + env(safe-area-inset-bottom, 0px) + 8px + 54px + 8px); display: flex; align-items: stretch; max-width: calc(100% - 140px); height: 34px; box-sizing: border-box; border: 3px solid #2a170a; border-radius: 17px; overflow: hidden; background: linear-gradient(#fff3cf, #f0d28a); box-shadow: 0 2px 0 #0006; color: #3b2410; font: 900 13px/1 var(--ld-font, system-ui, sans-serif); }
+#wmapRoot .wmsr-pill button { margin: 0; padding: 0 10px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; touch-action: manipulation; }
+#wmapRoot .wmsr-pill .wmsr-pt { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px 0 12px; }
+#wmapRoot .wmsr-pill .wmsr-pb { min-width: 30px; border-left: 2px solid #2a170a; font-size: 18px; }
+#wmapRoot .wmsr-pill .wmsr-px { color: #b8281a; font-size: 15px; }
+#wmapRoot .wmsr-pill button:active { background: rgba(0, 0, 0, .12); }
+/* 左下第三顆鈕:與前兩顆同尺寸,沿用 .wmh-pb 樣式(在 wmap_home.css) */
+
+/* 搜尋頁(ldNav 滿版頁的內容區) */
+.wmsr-page { box-sizing: border-box; max-width: 560px; margin: 0 auto; padding: 8px 12px calc(52px + env(safe-area-inset-bottom, 0px)); color: #3b2410; font-family: var(--ld-font, system-ui, sans-serif); }
+.wmsr-s { margin: 0 0 10px; }
+.wmsr-s.dim .wmsr-cs { opacity: .45; }
+.wmsr-h { margin: 0 0 5px; font: 900 13px/1.3 var(--ld-font, system-ui, sans-serif); color: #ffeebd; text-shadow: 0 1px 0 #000a; }
+.wmsr-cs { display: flex; flex-wrap: wrap; gap: 6px; }
+.wmsr-c { min-width: 52px; height: 36px; padding: 0 10px; box-sizing: border-box; border: 2px solid #2a170a; border-radius: 10px; background: linear-gradient(#fff3cf, #f0d28a); color: #3b2410; font: 900 13px/1 var(--ld-font, system-ui, sans-serif); cursor: pointer; touch-action: manipulation; }
+.wmsr-c.wmsr-ca { background: linear-gradient(#e9e2d4, #cfc6b4); }
+.wmsr-c.on { background: linear-gradient(#ff6a4f, #d03a22); color: #fff; box-shadow: inset 0 0 0 2px #fff8; }
+.wmsr-c:active { transform: translateY(1px); }
+.wmsr-cnt { margin: 12px 0 6px; padding: 8px 12px; border: 2px solid #2a170a; border-radius: 10px; background: #fff3cf; font: 900 15px/1.2 var(--ld-font, system-ui, sans-serif); text-align: center; font-variant-numeric: tabular-nums; }
+.wmsr-list { display: flex; flex-direction: column; gap: 5px; }
+.wmsr-r { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 38px; padding: 0 8px 0 12px; border: 2px solid #2a170a; border-radius: 10px; background: linear-gradient(#fff9e6, #f6e4b4); font: 700 13px/1.2 var(--ld-font, system-ui, sans-serif); }
+.wmsr-rt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wmsr-go { flex: none; height: 30px; padding: 0 12px; border: 2px solid #2a170a; border-radius: 8px; background: linear-gradient(#ffd96a, #e6a82a); color: #3b2410; font: 900 13px/1 var(--ld-font, system-ui, sans-serif); cursor: pointer; }
+.wmsr-empty { padding: 14px; text-align: center; color: #f6e2b0; font: 700 13px/1.3 var(--ld-font, system-ui, sans-serif); }
+.wmsr-foot { position: sticky; bottom: 0; display: flex; gap: 8px; justify-content: center; padding: 6px 0 calc(6px + env(safe-area-inset-bottom, 0px)); margin-top: 6px; background: linear-gradient(rgba(38, 22, 9, 0), rgba(38, 22, 9, .96) 45%); }
+.wmsr-do { flex: 1; max-width: 260px; height: 36px; border: 2px solid #2a170a; border-radius: 10px; background: linear-gradient(#ff6a4f, #d03a22); color: #fff; font: 900 14px/1 var(--ld-font, system-ui, sans-serif); box-shadow: 0 2px 0 #0006; cursor: pointer; }
+.wmsr-do.off, .wmsr-do:disabled { background: linear-gradient(#cfc6b4, #aaa08c); color: #eee8da; cursor: default; }
+.wmsr-clr { height: 36px; padding: 0 12px; border: 2px solid #2a170a; border-radius: 10px; background: linear-gradient(#fff3cf, #f0d28a); color: #3b2410; font: 900 13px/1 var(--ld-font, system-ui, sans-serif); cursor: pointer; }
+.wmsr-clr[hidden] { display: none; }
+@media (orientation: landscape) and (max-height: 480px) { .wmsr-page { padding-bottom: calc(44px + env(safe-area-inset-bottom, 0px)); } .wmsr-c { height: 32px; } .wmsr-do, .wmsr-clr { height: 30px; } .wmsr-foot { padding-top: 2px; padding-bottom: calc(2px + env(safe-area-inset-bottom, 0px)); margin-top: 2px; } }

@@ -330,5 +330,32 @@
       "repeatEdgeDiff": 8.94,
       "borderLumDeviation": 1.44
     }
+  },
+  {
+    "key": "sand",
+    "src": "14_沙地.webp",
+    "flipped": false,
+    "files": {
+      "1024": {
+        "file": "tex_sand_1024.webp",
+        "bytes": 155894,
+        "quality": 92
+      },
+      "512": {
+        "file": "tex_sand_512.webp",
+        "bytes": 53012,
+        "quality": 92
+      }
+    },
+    "meanRGB": [
+      249.7,
+      186.3,
+      76.0
+    ],
+    "meanSaturation": 0.6941,
+    "seam": {
+      "repeatEdgeDiff": 4.91,
+      "borderLumDeviation": 0.02
+    }
   }
 ]

@@ -30,7 +30,7 @@
 //   wmapMobSync(W, cs, now, out)            對帳(wmapSettleSync 尾端呼叫):掉落進 out.credit、標記擊殺、清舊 pt
 //   wmapMobNorm(raw) → yg;wmapMobIsPtId(id) / wmapMobParse(id) → {bk, i, gi}|null;wmapMobBrief(rp, size) → {…};wmapMobOn() → bool
 
-var WMOB_CFG = { hours: [8, 12, 20], tz: 8 * 3600000, DAY: 86400000, road: 3, wild: 6, perLayer: 2, layers: [8, 16, 24], gap: 3, coinPerLv: 60, grainH: 3, names: ['流寇', '山賊', '悍匪'], bands: [[1, 3], [4, 6], [7, 9]], deadKeep: 4, scanMax: 6 };
+var WMOB_CFG = { hours: [8, 12, 20], tz: 8 * 3600000, DAY: 86400000, road: 3, wild: 6, perLayer: 2, layers: [8, 16, 24], core: 4, gap: 3, coinPerLv: 60, grainH: 3, names: ['流寇', '山賊', '悍匪'], bands: [[1, 3], [4, 6], [7, 9]], deadKeep: 4, scanMax: 6 };
 var WMOB = { WG: null, info: null, pool: null, poolKey: null };
 // 野怪強度:v = GRID_CFG.foeV[Lv-1](只借數字表)× 類型 vMul × vK;vK = 品階下修(B / C 戰法)的占位補償,E 包實測後調(規格 2.3)
 WMOB_CFG.vK = 1.05;
@@ -114,8 +114,18 @@ function wmapMobTags(WG) {
   try { WG.mobTag = tag; } catch (e) { /* 凍結物件:不快取 */ }
   return tag;
 }
+// 席位視圖(多人預留,規格 D.1 第 6 項 / 影響評估 B 第 4 項):野怪改成個人副本 —— 位置種子 = hash(世界種子, 席位, 批次),分層用「自己席位」的距離。席位 0 / 沒有席位資料 = WG 本身(單機行為不變)。
+function wmapMobSeatView(WG, seat) {
+  var c, v, sd;
+  if (!(seat > 0) || !WG.seats || !WG.seats[seat] || typeof wmGenSeatDist !== 'function') return WG;
+  if (WG._mobSv && WG._mobSv[seat]) return WG._mobSv[seat];
+  c = wmGenSeatDist(WG, seat, WMOB_CFG.layers[2]); sd = WG.seats[seat];
+  v = Object.create(WG); v.d = c.d; v.d0 = c.d; v.seed = wmGenHash(WG.seed, seat, 99); v.cx = sd.c; v.cy = sd.r; v.c0 = sd.gi; v.seat = seat; v.mobTag = null;
+  try { if (!WG._mobSv) WG._mobSv = {}; WG._mobSv[seat] = v; } catch (e) { /* 凍結物件:不快取 */ }
+  return v;
+}
 function wmapMobPool(WG, infoFn) {
-  var key = WMOB, N = WG.size, n = N * N, road = [], wild = [[], [], []], gi, x, y, k, k2, cx = WG.cx, cy = WG.cy, bad, j, nb, ly, info = infoFn || wmapMobInfo;
+  var key = WMOB, N = WG.size, n = N * N, road = [], wild = [[], [], []], gi, x, y, k, k2, cx = WG.cx, cy = WG.cy, bad, j, nb, ly, info = infoFn || wmapMobInfo, dc = WG.d0 || WG.d;
   if (WMOB.pool && WMOB.poolKey === WG && !infoFn) return WMOB.pool;
   for (gi = 0; gi < n; gi++) {
     if (!isFinite(WG.d[gi])) continue;
@@ -123,6 +133,7 @@ function wmapMobPool(WG, infoFn) {
     if (WG.nodeOf && WG.nodeOf[gi] >= 0) continue;            // 城內 / 關門道
     x = gi % N; y = (gi - x) / N;
     if (wmHexDist(x, y, cx, cy) <= 2) continue;   // 主城 2 格內(六邊形距離)
+    if (dc[gi] <= WMOB_CFG.core) continue;        // gv 6:核心環(凍結路徑成本 d0 ≤ 4)空地讓給玩家,道路野怪也不刷(規格 領地等級分佈 2.5)
     k = WG.k[gi];
     if (k === 5) {   // 道路:不含橋(旁邊有河 / 淺灘者視為橋頭,保守排除)
       bad = false; nb = wmHexNbs(gi, N);   // 6 鄰
@@ -168,7 +179,8 @@ function wmapMobPick(WG, list, bk, slot, taken, secBan, want, tag) {   // want /
   }
   return list[wmGenHash(WG.seed, bk, slot * 1009 + 777) % list.length];
 }
-function wmapMobGen(WG, bk, infoFn) {
+function wmapMobGen(WG, bk, infoFn, seat) {   // seat > 0:該席位的個人副本(wmapMobSeatView);預設 = 席位 0(單機)
+  if (seat > 0) WG = wmapMobSeatView(WG, seat);
   var P = wmapMobPool(WG, infoFn), out = [], taken = [], i = 0, ly, s, gi, lv, b, first, N = WG.size, C = WMOB_CFG, secPrev, odd = ((bk % 2) + 2) % 2, tkRoad = ['sz', 'sz', 'yl'],
     tkLay = [['sm', 'sz'], ['sm', odd ? 'pj' : 'yl'], ['pj', odd ? 'yl' : 'sm']], tk;   // 每批類型表(規格 1.2):道路 山賊 2 + 運糧隊 1;近 山蠻 + 山賊;中 山蠻 + (偶批 運糧隊 / 奇批 叛軍);遠 叛軍 + (偶批 山蠻 / 奇批 運糧隊)
   for (s = 0; s < C.road; s++) {

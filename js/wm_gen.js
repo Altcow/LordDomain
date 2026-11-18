@@ -46,8 +46,10 @@
 // 例:wmGoMins(1)=2.0(相鄰夾 2)、wmGoMins(8)=4.0、wmGoMins(24)=10.0;沿道路每格成本 0.5。
 
 var WMG_CFG = {
-  size: 64, border: 4, reach: 24, keep: 4,          // 世界邊長;邊界帶格數(不可點不可走);可達成本上限;主城外保留平地圈(wmHexDist ≤ keep)
-  gv: 5,                                            // 生成器版本(改演算法就遞增;存檔記錄,不同 = 重新生成)
+  size: 128, border: 4, reach: 24, keep: 4,         // 世界邊長(gv 6:128;舊 64 仍可傳參數);邊界帶格數(不可點不可走);可達成本上限;主城外保留平地圈(wmHexDist ≤ keep)
+  seats: 30, seatSize: 96, seatMargin: 8, seatGap: 22, seatJit: 2,   // 席位數(世界邊長 < seatSize 只有 1 席 = 舊單機圖)、席位離邊界帶最小距離、六角晶格最大間距(自動縮到放得下)、位置抖動(格)
+  countyPer: 1, junPer: 1 / 3, passPer: 0.4,        // 多席位:每席縣數、每席郡數、每席關數(單席維持 countyN / junN / passN)
+  gv: 6,                                            // 生成器版本(改演算法就遞增;存檔記錄,不同 = 重新生成)
   mtnCount: 40, mtnRef: 3136,                       // 山拼塊數 40 / 3136 個可玩格(64×64 扣邊界帶 = 56×56);其他尺寸按可玩格數等比例
   mtnW: [['M1', 3], ['M2c', 1.5], ['M2r', 1.5], ['M2v', 1], ['M3l', 2], ['M3r', 2], ['M4', 2]],   // 拼塊權重
   rockP: 0.02,                                      // 大石散佈機率(平地格)
@@ -60,8 +62,14 @@ var WMG_CFG = {
   countyN: 6, passN: 3, junN: 2, zhouN: 0, countyR: [11, 17], junR: [18, 21], zhouR: [20, 0], spiralR: 9, gapE: 3, ring: 1, roadMax: 0.085,   // 縣數、關數、郡數、縣 / 郡中心離主城格數範圍、城池間最小間隔(占地矩形邊對邊空 3 格)、城郊圈數、道路格占可玩格上限
   fp: { county: [4, 4], jun: [6, 6], zhou: [8, 8], pass: [2, 4] },   // 占地 [fw, fh];關 = [沿路, 橫跨](axis 1 時對調)
   gateIx: { county: 2, jun: 3, zhou: 4 },           // 縣 / 郡 / 州正門在前面(side 1 / 2)上的格索引(從 r / c 小的一端數;圖上實量後回填)
-  res: { rho: 0.55, w: 3, slack: 1.25, outMax: 0.85, blockMax: 0.35, layers: [8, 16, 24], ranges: [5, 10, 10], outRanges: 10, dmin: [3, 4, 5], outDmin: 5,
-    bulk: [{ 1: 2, 2: 2, 3: 2 }, { 4: 4, 5: 2, 6: 1 }, { 5: 3, 6: 4 }], high: [15, 9, 4, 2], outLv: [6, 6, 6, 6, 6, 7, 7, 7, 8, 8] }   // 資源範圍配額(設計_地形資源與鋪路隊_規格.md 1.2)
+  // 資源配額(gv 6;設計_領地等級分佈與搜尋標記_規格.md 2.3):單席 = 可達範圍(去程 ≤ 10 分)每位玩家 Lv1 5、Lv2 10、Lv3 150、Lv4 325、Lv5 300、Lv6 50;Lv7~10 只在縣 / 郡 / 關外圍
+  res: { rho: 0.55, w: 3, slack: 1.25, outMax: 0.9, blockMax: 0.35, layers: [3.5, 9, 17, 24], ranges: [1, 5, 10, 10], dmin: [2, 3, 4, 5], outRanges: 10, outDmin: 5,
+    bulk: [{ 1: 1, 2: 2 }, { 3: 4, 4: 1 }, { 3: 1, 4: 4, 5: 2 }, { 4: 2, 5: 4, 6: 1 }],
+    nodeHigh: { county: [7, 7, 8], pass: [7, 8, 8, 9], jun: [8, 9, 9, 10, 10] }, nodeR: 3, nodeGap: 2, nodeMinHex: { 7: 12, 8: 13, 9: 15, 10: 17 }, outLv: [5, 4, 5, 3, 5, 4, 6, 5, 4, 5] },
+  // 多席位(每席自然領域約 420 格:路徑成本最近的席位;配額 = 單席每席約 ×0.4,讓總密度維持約 52%;等級帶以「核心環 + 其餘格依成本排名等比例切層」避免小領域缺格)
+  resM: { rho: 0.55, w: 3, slack: 1.25, outMax: 0.9, blockMax: 0.35, rank: true, core: 3.5, frac: [0.28, 0.74, 1], dMin: 0.4, fMin: 0.3, fMax: 1.8, dens: 0.66, base: 200, layers: [], ranges: [1, 3, 4, 2], dmin: [2, 3, 3, 4], outRanges: 0, outDmin: 5, missTol: 2,
+    bulk: [{ 1: 1, 2: 2 }, { 3: 3, 4: 1 }, { 3: 1, 4: 2, 5: 2 }, { 4: 1, 5: 2, 6: 1 }],
+    nodeHigh: { county: [7, 7, 8], pass: [7, 8, 8, 9], jun: [8, 9, 9, 10, 10] }, nodeR: 3, nodeGap: 2, nodeMinHex: { 7: 9, 8: 10, 9: 11, 10: 12 }, outLv: [5, 4, 5, 3, 5, 4, 6, 5, 4, 5] }
 };
 var WMG_K = { plain: 0, mount: 1, rock: 2, river: 3, ford: 4, road: 5, city: 6, edge: 7, yard: 8, county: 9, pass: 10, jun: 11, zhou: 12 };
 var WMG_CITY_CELLS = [[-1, -1], [0, -1], [1, 0], [1, 1], [0, 1], [-1, 0], [0, 0]];   // [dc, dr]:6 鄰(WMHEX 順序)+ 中央
@@ -146,11 +154,12 @@ function wmgHeap() {   // 最小堆積(鍵, 值);允許重複值(惰性刪除)
 
 // ───────── 距離(Dijkstra,多源 = 主城 7 格) ─────────
 // 回 {d: Float32Array, pv: Int32Array};成本 > maxCost 的格不展開(d = Infinity)。6 向(wmHex),進入格的成本 = 1 × 該格倍率。
-function wmDistCalc(WG, maxCost) {
+function wmDistCalc(WG, maxCost, src) {   // src = 起點格清單(席位 s 的 7 格);不傳 = 主城(k 6)
   var N = WG.size, n = N * N, k = WG.k, rd = WG.rd || null, WK = WMG_WALK, HC = WMHEX_DC, HR = WMHEX_DR, dist = new Float64Array(n), pv = new Int32Array(n), d32 = new Float32Array(n), done = new Uint8Array(n), h = wmgHeap(), i, u, ux, uy, j, x, y, v, w, nd;
   if (!(maxCost >= 0)) maxCost = WMG_CFG.reach;
   for (i = 0; i < n; i++) { dist[i] = Infinity; pv[i] = -1; }
-  for (i = 0; i < n; i++) if (k[i] === 6) { dist[i] = 0; h.push(0, i); }
+  if (src) { for (i = 0; i < src.length; i++) { dist[src[i]] = 0; h.push(0, src[i]); } }
+  else for (i = 0; i < n; i++) if (k[i] === 6) { dist[i] = 0; h.push(0, i); }
   while (h.size()) {
     u = h.pop();
     if (done[u]) continue;
@@ -220,7 +229,7 @@ function wmGoMins(cost, spd, mode) {
   cost = Number(cost);
   if (!isFinite(cost) || cost < 0) cost = 0;
   v = C.goBase + C.goK * cost * s * m;
-  v = Math.max(C.goMin, Math.min(C.goMax, v));
+  v = Math.max(C.goMin, cost <= C.reach ? Math.min(C.goMax, v) : v);   // gv 6:可達範圍(成本 ≤ reach)內夾 2~10 分;超出範圍不封頂(1 + 0.375 × 成本,系統自選最優路線由 wmapGoRoute 負責)
   return Math.round(v * 10) / 10;
 }
 function wmBackMins(goMins) { return Number(goMins) / WMG_CFG.backDiv; }
@@ -267,7 +276,7 @@ function wmGenCheck(WG) {
   // 4 城池:放得下(數量)、每座主城門前格主城到得了
   if (WG.nfail && WG.nfail.length) for (i = 0; i < WG.nfail.length; i++) reasons.push(WG.nfail[i]);
   if (WG.nodes) {
-    if (WG.nodes.length !== WMG_CFG.countyN + WMG_CFG.junN + WMG_CFG.zhouN + WMG_CFG.passN) reasons.push('城池數量 ' + WG.nodes.length);
+    if (WG.nodes.length !== (WG.nodeN >= 0 ? WG.nodeN : WMG_CFG.countyN + WMG_CFG.junN + WMG_CFG.zhouN + WMG_CFG.passN)) reasons.push('城池數量 ' + WG.nodes.length);
     for (i = 0; i < WG.nodes.length; i++) if (!(WG.nodes[i].adj >= 0 && isFinite(WG.nodes[i].d))) { reasons.push('城池 ' + i + ' 主城到不了'); break; }
   }
   // 5 資源(gv 4,規格 1.5):配額達成、每層候選格 ≥ 座位 × slack、全圖密度 ≥ 50%、任一 3×3 區塊山 + 石 + 河 + 淺灘 ≤ blockMax
@@ -301,12 +310,69 @@ function wmgBfs(N, src) {   // 6 向多源 BFS 格距(上限 99)
   }
   return d;
 }
+// ───────── 席位(gv 6;設計_多人共享世界影響評估.md B.1 / D.1 第 6 項)─────────
+// 世界一次生成 S 個席位(每席一座主城 3×3 外框):席位 0 = 世界中心(= 現行主城,k 6 / 8,單機玩家);其餘席位只「保留」九宮格(zone 3、k 0,資源 / 山 / 城池 / 野怪都不放),
+// 之後某席啟用時由多人層把九宮格改成主城(wmGenSeatCells 給 7 格)。席位位置 = 六角晶格(地面等向座標)+ 雜湊抖動,離中心由近到遠排序(「由中間往外填」的出生點順序)。
+function wmgSeatsFor(N) { var C = WMG_CFG, P = N - 2 * C.border; return N < C.seatSize ? 1 : Math.max(1, Math.min(C.seats, Math.round(P * P / 480))); }   // 世界邊長 < seatSize = 單席舊圖;之後每 480 個可玩格一席(96 → 16、128 → 30、160 → 30)
+function wmgSeatPos(N, n, seed) {
+  var C = WMG_CFG, cx = N >> 1, cy = N >> 1, lo = C.border + C.seatMargin, hi = N - 1 - C.border - C.seatMargin, out = [{ c: cx, r: cy }], s, pts = [], i, j, a, b, c, r, q, jit = C.seatJit, h, jc, jr, d;
+  if (n <= 1) return out;
+  for (s = C.seatGap; s >= 6; s -= 0.25) {
+    pts = [];
+    for (j = -16; j <= 16; j++) for (i = -16; i <= 16; i++) {
+      if (!i && !j) continue;
+      a = (i + (j & 1) * 0.5) * s / 0.8660254; b = 2 * j * s * 0.8660254;   // a = c − r、b = c + r(相對中心)
+      c = cx + Math.round((a + b) / 2); r = cy + Math.round((b - a) / 2);
+      if (c < lo || c > hi || r < lo || r > hi) continue;
+      pts.push({ c: c, r: r, d: 0, o: j * 100 + i });
+    }
+    if (pts.length >= n - 1) break;
+  }
+  for (i = 0; i < pts.length; i++) pts[i].d = wmHexDist(cx, cy, pts[i].c, pts[i].r);
+  pts.sort(function (p, q2) { return p.d - q2.d || p.o - q2.o; });
+  for (q = 0; q < pts.length && out.length < n; q++) {
+    h = wmGenHash01(seed, q, 41); d = wmGenHash01(seed, q, 42);
+    jc = Math.round((h - 0.5) * 2 * jit); jr = Math.round((d - 0.5) * 2 * jit);
+    out.push({ c: Math.max(lo, Math.min(hi, pts[q].c + jc)), r: Math.max(lo, Math.min(hi, pts[q].r + jr)) });
+  }
+  return out;
+}
+function wmGenSeatCells(WG, s) { var o = WG.seats[s], N = WG.size; return o ? WMG_CITY_CELLS.map(function (p) { return (o.r + p[1]) * N + o.c + p[0]; }) : []; }
+function wmGenSeatYard(WG, s) { var o = WG.seats[s], N = WG.size; return o ? WMG_CITY_YARD.map(function (p) { return (o.r + p[1]) * N + o.c + p[0]; }) : []; }
+function wmGenSeatDist(WG, s, maxCost) {   // 席位 s 的路徑成本場(同 wmDistCalc;預設 reach = 10 分鐘可達範圍;席位 0 = WG.d0 / WG.d 的來源)
+  var src = wmGenSeatCells(WG, s);
+  return src.length ? wmDistCalc(WG, maxCost, src) : null;
+}
+function wmGenSeatOf(WG, gi) { return WG.so && gi >= 0 && gi < WG.so.length ? WG.so[gi] : -1; }   // 格所屬席位(路徑成本最近 = 自然領域;−1 = 不可達)
+function wmgSeatDist(WG) {   // 全席位多源 Dijkstra:ds = 到最近席位的成本、so = 該席位序號(資源配額 / 等級帶的依據)
+  var N = WG.size, n = N * N, k = WG.k, rd = WG.rd || null, WK = WMG_WALK, HC = WMHEX_DC, HR = WMHEX_DR, dist = new Float64Array(n), so = new Int8Array(n), d32 = new Float32Array(n), done = new Uint8Array(n), h = wmgHeap(), i, s, q, u, ux, uy, j, x, y, v, w, nd, cs;
+  for (i = 0; i < n; i++) { dist[i] = Infinity; so[i] = -1; }
+  for (s = 0; s < WG.seats.length; s++) { cs = wmGenSeatCells(WG, s); for (q = 0; q < cs.length; q++) { dist[cs[q]] = 0; so[cs[q]] = s; h.push(0, cs[q]); } }
+  while (h.size()) {
+    u = h.pop();
+    if (done[u]) continue;
+    done[u] = 1;
+    ux = u % N; uy = (u - ux) / N; nd = dist[u];
+    for (j = 0; j < 6; j++) {
+      x = ux + HC[j]; y = uy + HR[j];
+      if (x < 0 || y < 0 || x >= N || y >= N) continue;
+      v = y * N + x;
+      if (!WK[k[v]]) continue;
+      w = nd + ((k[v] === 5 || (rd && rd[v])) ? 0.5 : (k[v] === 4 ? 1.5 : 1));
+      if (w >= dist[v]) continue;
+      dist[v] = w; so[v] = so[u]; h.push(w, v);
+    }
+  }
+  for (i = 0; i < n; i++) d32[i] = dist[i];
+  return { d: d32, so: so };
+}
+
 function wmgRes(WG) {
-  var C = WMG_CFG, R = C.res, N = WG.size, n = N * N, k = WG.k, seed = WG.seed, d0 = WG.d0, zone = WG.zone, cx = WG.cx, cy = WG.cy, W = R.w, rho = R.rho,
-    rt = new Int8Array(n), rl = new Uint8Array(n), rg = new Int16Array(n), wood = new Uint8Array(n), dirt = new Uint8Array(n), sM = new Uint8Array(n), sK = new Uint8Array(n), sR = new Uint8Array(n),
-    cand = [], fit = [], nearTab = {}, ranges = [], layerCells = [0, 0, 0], layerSeats = [0, 0, 0], st = { s1: 0, s2: 0, relax: 0, miss: 0, missReach: 0, placed: 0, minSlack: 99 },
-    rot = wmGenHash(seed, 1, 600) / 4294967296, ang = new Float64Array(n), i, x, y, g, ggx, ggy, dM, dK, dR, dW, t, b, r, rid = 0, TP = 2 * Math.PI, kk, seatsOf, split, cl, out, need, sec,
-    LY = R.layers, HIGHL = [], lvv, hh, ci, kb, bulkL;
+  var C = WMG_CFG, N = WG.size, n = N * N, k = WG.k, seed = WG.seed, d0 = WG.d0, ds = WG.ds || WG.d0, so = WG.so, zone = WG.zone, seats = WG.seats, S = seats.length,
+    R = S > 1 ? C.resM : C.res, W = R.w, rho = R.rho, LY = R.layers, L = R.ranges.length, rank = !!R.rank,
+    rt = new Int8Array(n), rl = new Uint8Array(n), rg = new Int16Array(n), wood = new Uint8Array(n), dirt = new Uint8Array(n), sM = new Uint8Array(n), sK = new Uint8Array(n), sR = new Uint8Array(n), isC = new Uint8Array(n), posG = new Float32Array(n),
+    cand = [], fit = [], nearTab = {}, ranges = [], layerCells = [], layerSeats = [], st = { s1: 0, s2: 0, relax: 0, miss: 0, missReach: 0, placed: 0, minSlack: 99, high: 0, highMiss: 0, highRelax: 0 },
+    rots = [], bySeat = [], ang = new Float64Array(n), i, x, y, g, ggx, ggy, dM, dK, dR, dW, t, b, r, rid = 0, TP = 2 * Math.PI, kk, seatsOf, split, cl, out, need, sec, ci, kb, bulkL, hh, s, sd, lay, fS = 1;
   var floor = Math.floor, atan2 = Math.atan2, imul = Math.imul;
   function hx(sx, a, b) {   // = wmGenHash01(sx, a, b)(本地內聯)
     var h = imul(((sx ^ 0x9e3779b9) | 0) ^ a, 0x85ebca6b); h ^= h >>> 13;
@@ -320,6 +386,8 @@ function wmgRes(WG) {
     a = hx(s3, x0, y0); b = hx(s3, x0 + 1, y0); c = hx(s3, x0, y0 + 1); d = hx(s3, x0 + 1, y0 + 1);
     return a + (b - a) * tx + (c - a) * ty + (a - b - c + d) * tx * ty;
   }
+  if (!so) { so = new Int8Array(n); for (i = 0; i < n; i++) so[i] = isFinite(d0[i]) ? 0 : -1; }
+  for (s = 0; s < S; s++) { rots.push(wmGenHash(seed, 1, 600 + s) / 4294967296); bySeat.push([]); }
   rt.fill(-1); rg.fill(-1);
   for (i = 0; i < n; i++) {
     kk = k[i];
@@ -328,10 +396,11 @@ function wmgRes(WG) {
       x = i % N; y = (i - x) / N; ggx = 0.8660254 * (x - y); ggy = 0.5 * (x + y);
       if (nz(seed, ggx, ggy, 9) > 0.72) dirt[i] = 1; else if (nz(seed + 7, ggx, ggy, 7) > 0.7) wood[i] = 1;
     }
-    if (kk === 0 && !zone[i] && isFinite(d0[i])) {
-      cand.push(i); x = i % N; y = (i - x) / N;
-      g = atan2(0.5 * ((x - cx) + (y - cy)), 0.8660254 * ((x - cx) - (y - cy))) / TP; if (g < 0) g += 1;   // 相對主城的地面角度
-      ang[i] = (g + rot) % 1;
+    if (kk === 0 && !zone[i] && isFinite(d0[i]) && so[i] >= 0) {
+      cand.push(i); isC[i] = 1; x = i % N; y = (i - x) / N; sd = seats[so[i]];
+      g = atan2(0.5 * ((x - sd.c) + (y - sd.r)), 0.8660254 * ((x - sd.c) - (y - sd.r))) / TP; if (g < 0) g += 1;   // 相對所屬席位主城的地面角度
+      ang[i] = (g + rots[so[i]]) % 1;
+      bySeat[so[i]].push(i);
     }
   }
   dM = wmgBfs(N, sM); dK = wmgBfs(N, sK); dR = wmgBfs(N, sR); dW = wmgBfs(N, wood);
@@ -349,15 +418,15 @@ function wmgRes(WG) {
     if (!a) { a = nearTab[key] = new Uint8Array(n); a.fill(255); }
     return a;
   }
-  function eqSplit(cells, S) {
+  function eqSplit(cells, S2) {
     var a = cells.slice().sort(function (p, q) { return ang[p] - ang[q] || p - q; }), o = [], j;
-    for (j = 0; j < S; j++) o.push([]);
-    for (j = 0; j < a.length; j++) o[Math.floor(j * S / a.length)].push(a[j]);
+    for (j = 0; j < S2; j++) o.push([]);
+    for (j = 0; j < a.length; j++) o[Math.floor(j * S2 / a.length)].push(a[j]);
     return o;
   }
-  var sd = (seed ^ 0x9e3779b9) | 0, posA = null;
+  var sd0 = (seed ^ 0x9e3779b9) | 0, posA = null;
   function h01(a, b) {   // = wmGenHash01(seed, a, b)(本地內聯:vm / 全域函式查找在熱迴圈很慢)
-    var h = imul(sd ^ a, 0x85ebca6b); h ^= h >>> 13;
+    var h = imul(sd0 ^ a, 0x85ebca6b); h ^= h >>> 13;
     h = imul(h ^ b, 0xc2b2ae35); h ^= h >>> 16;
     h = imul(h, 0x27d4eb2d); h ^= h >>> 15;
     return (h >>> 0) / 4294967296;
@@ -394,61 +463,130 @@ function wmgRes(WG) {
     }
     return false;
   }
-  function fillRange(cells, lo, hi, dmin, seats, layer) {
-    var Lmin = 99, Lmax = 0, span = Math.min(hi, 40) - lo, defer = [], j, s2, ok, m0 = st.miss, id = rid++, pT;
-    for (j = 0; j < seats.length; j++) { if (seats[j][1] < Lmin) Lmin = seats[j][1]; if (seats[j][1] > Lmax) Lmax = seats[j][1]; }
-    if (seats.length && cells.length / seats.length < st.minSlack) st.minSlack = cells.length / seats.length;
+  function fillRange(cells, dmin, seatsL, layer) {
+    var Lmin = 99, Lmax = 0, defer = [], j, s2, ok, m0 = st.miss, id = rid++, pT;
+    for (j = 0; j < seatsL.length; j++) { if (seatsL[j][1] < Lmin) Lmin = seatsL[j][1]; if (seatsL[j][1] > Lmax) Lmax = seatsL[j][1]; }
+    if (seatsL.length && cells.length / seatsL.length < st.minSlack) st.minSlack = cells.length / seatsL.length;
     posA = new Float64Array(cells.length);
-    for (j = 0; j < cells.length; j++) { rg[cells[j]] = id; posA[j] = ((d0[cells[j]] < 40 ? d0[cells[j]] : 40) - lo) / span; }
-    seats.sort(function (p, q) { return q[1] - p[1] || p[0] - q[0]; });
-    for (j = 0; j < seats.length; j++) {
-      s2 = seats[j]; pT = Lmax === Lmin ? 0.5 : (s2[1] - Lmin) / (Lmax - Lmin);
+    for (j = 0; j < cells.length; j++) { rg[cells[j]] = id; posA[j] = posG[cells[j]]; }
+    seatsL.sort(function (p, q) { return q[1] - p[1] || p[0] - q[0]; });
+    for (j = 0; j < seatsL.length; j++) {
+      s2 = seatsL[j]; pT = Lmax === Lmin ? 0.5 : (s2[1] - Lmin) / (Lmax - Lmin);
       if (pick(cells, s2[0], s2[1], 1, dmin, pT)) { st.s1++; st.placed++; } else defer.push(s2);
     }
     for (j = 0; j < defer.length; j++) {
       s2 = defer[j]; pT = Lmax === Lmin ? 0.5 : (s2[1] - Lmin) / (Lmax - Lmin);
       ok = pick(cells, s2[0], s2[1], 2, dmin, pT);
-      if (ok) { st.s2++; st.placed++; } else { st.miss++; if (layer < 3) st.missReach++; }
+      if (ok) { st.s2++; st.placed++; } else { st.miss++; if (layer < L) st.missReach++; }
     }
-    ranges.push({ id: id, layer: layer, cells: cells.length, seats: seats.length, miss: st.miss - m0 });
+    ranges.push({ id: id, layer: layer, cells: cells.length, seats: seatsL.length, miss: st.miss - m0 });
   }
-  for (lvv = 0; lvv < R.high.length; lvv++) for (hh = 0; hh < R.high[lvv]; hh++) HIGHL.push(7 + lvv);   // 遠層高等級清單(每種 30 座:Lv7 ×15、Lv8 ×9、Lv9 ×4、Lv10 ×2)
-  for (b = 0; b < 3; b++) {
-    cl = [];
-    for (ci = 0; ci < cand.length; ci++) { i = cand[ci]; if ((b === 0 || d0[i] > LY[b - 1]) && d0[i] <= LY[b]) cl.push(i); }
-    layerCells[b] = cl.length;
-    split = eqSplit(cl, R.ranges[b]);
-    bulkL = Object.keys(R.bulk[b]);
-    for (r = 0; r < R.ranges[b]; r++) {
-      seatsOf = [];
-      for (t = 0; t < 5; t++) {
-        for (kb = 0; kb < bulkL.length; kb++) for (hh = 0; hh < R.bulk[b][bulkL[kb]]; hh++) seatsOf.push([t, +bulkL[kb]]);
-        if (b === 2) for (hh = 0; hh < 3; hh++) seatsOf.push([t, HIGHL[((r + 2 * t) % 10) + 10 * hh]]);
+  // 城池外圍高等級群(Lv7~10;規格 2.3):先放,各層配額的 pick 會自然跳過這些格
+  (function () {
+    var NH = R.nodeHigh, nodes = WG.nodes || [], seatC = new Uint8Array(n), dSeat, hb = new Uint8Array(n), ni, nd, cl2, cells2, slots, sl, lv, best, bs, rad, q, e, minHex, sc2, x0, y0, x1, y1, xx, yy, gi2, hd, cc, ci3, rr2, hr, px, py, hexD = wmHexDist;
+    if (!NH) return;
+    for (i = 0; i < S; i++) seatC[seats[i].r * N + seats[i].c] = 1;
+    dSeat = wmgBfs(N, seatC);
+    for (ni = 0; ni < nodes.length; ni++) {
+      nd = nodes[ni]; slots = NH[nd.type];
+      if (!slots || !slots.length) continue;
+      cl2 = []; cells2 = nd.cells;
+      x0 = Math.max(0, nd.c0 - R.nodeR - 3); x1 = Math.min(N - 1, nd.c0 + nd.fw - 1 + R.nodeR + 3);
+      y0 = Math.max(0, nd.r0 - R.nodeR - 3); y1 = Math.min(N - 1, nd.r0 + nd.fh - 1 + R.nodeR + 3);
+      for (yy = y0; yy <= y1; yy++) for (xx = x0; xx <= x1; xx++) {
+        gi2 = yy * N + xx;
+        if (!isC[gi2]) continue;
+        hd = 99;
+        for (ci3 = 0; ci3 < cells2.length; ci3++) { cc = cells2[ci3]; px = cc % N; py = (cc - px) / N; q = hexD(xx, yy, px, py); if (q < hd) hd = q; }
+        if (hd >= 2 && hd <= R.nodeR + 2) cl2.push({ gi: gi2, hd: hd });
       }
-      layerSeats[b] += seatsOf.length;
-      fillRange(split[r], b === 0 ? 0 : LY[b - 1], LY[b], R.dmin[b], seatsOf, b);
+      for (sl = 0; sl < slots.length; sl++) {
+        lv = slots[sl]; minHex = R.nodeMinHex[lv]; best = -1;
+        for (rr2 = 0; rr2 < 2 && best < 0; rr2++) {   // 第 2 輪:離席位最小距離不限
+          for (rad = R.nodeR; rad <= R.nodeR + 2 && best < 0; rad++) {
+            bs = -1;
+            for (q = 0; q < cl2.length; q++) {
+              e = cl2[q];
+              if (e.hd > rad || rt[e.gi] >= 0 || hb[e.gi]) continue;
+              if (rr2 === 0 && dSeat[e.gi] < minHex) continue;
+              sc2 = h01(e.gi, 700 + ni * 16 + sl);
+              if (sc2 > bs) { bs = sc2; best = e.gi; }
+            }
+          }
+          if (best >= 0 && rr2 === 1) st.highRelax++;
+        }
+        if (best < 0) { st.highMiss++; continue; }
+        rt[best] = (ni + sl * 3) % 5; rl[best] = lv; rg[best] = 99; st.high++;
+        px = best % N; py = (best - px) / N;
+        hr = wmHexRange(px, py, R.nodeGap - 1, N);
+        for (q = 0; q < hr.length; q++) hb[hr[q]] = 1;
+      }
+    }
+  })();
+  // 每席位:自然領域(路徑成本最近)的候選格 → 等級帶(cost 模式:依成本切層;rank 模式:核心環以外依成本排名等比例切層)→ 每層依角度均分成範圍 → 每範圍同一張配額表
+  for (b = 0; b < L; b++) { layerCells.push(0); layerSeats.push(0); }
+  out = [];
+  for (s = 0; s < S; s++) {
+    cl = bySeat[s];
+    if (rank) {   // rank 模式:核心環以外的配額依自然領域大小縮放(領地小的席位不硬塞滿、大的席位多一些),組成比例不變
+      hh = 0;
+      for (ci = 0; ci < cl.length; ci++) if (ds[cl[ci]] <= R.core) hh++;
+      fS = Math.max(R.fMin, Math.min(R.fMax, (cl.length - hh) * R.dens / R.base)); hh = 0;
+    }
+    lay = []; for (b = 0; b < L; b++) lay.push([]);
+    if (!rank) {
+      for (ci = 0; ci < cl.length; ci++) {
+        i = cl[ci]; t = ds[i];
+        for (b = 0; b < L; b++) if (t <= LY[b]) break;
+        if (b >= L) { out.push(i); continue; }
+        lay[b].push(i);
+        posG[i] = (Math.min(t, 40) - (b === 0 ? 0 : LY[b - 1])) / (Math.min(LY[b], 40) - (b === 0 ? 0 : LY[b - 1]));
+      }
+    } else {
+      cl = cl.slice().sort(function (p, q) { return ds[p] - ds[q] || p - q; });
+      for (ci = 0; ci < cl.length && ds[cl[ci]] <= R.core; ci++) { lay[0].push(cl[ci]); posG[cl[ci]] = ds[cl[ci]] / R.core; }
+      x = cl.length - ci; y = ci;
+      for (b = 1; b < L; b++) {
+        t = b === L - 1 ? cl.length : y + Math.round(x * (R.frac[b - 1] - (b > 1 ? R.frac[b - 2] : 0)));
+        if (t > cl.length) t = cl.length;
+        for (g = y; g < t; g++) { lay[b].push(cl[g]); posG[cl[g]] = (g - y) / Math.max(1, t - y - 1); }
+        y = t;
+      }
+    }
+    for (b = 0; b < L; b++) {
+      layerCells[b] += lay[b].length;
+      split = eqSplit(lay[b], R.ranges[b]);
+      bulkL = Object.keys(R.bulk[b]);
+      for (r = 0; r < R.ranges[b]; r++) {
+        seatsOf = [];
+        for (t = 0; t < 5; t++) for (kb = 0; kb < bulkL.length; kb++) for (hh = 0, kk = rank && b > 0 ? Math.floor(R.bulk[b][bulkL[kb]] * fS + h01(s * 977 + r * 31 + b, t * 16 + kb)) : R.bulk[b][bulkL[kb]]; hh < kk; hh++) seatsOf.push([t, +bulkL[kb]]);
+        layerSeats[b] += seatsOf.length;
+        fillRange(split[r], R.dmin[b], seatsOf, b);
+      }
     }
   }
-  out = [];
-  for (ci = 0; ci < cand.length; ci++) if (d0[cand[ci]] > LY[2]) out.push(cand[ci]);
-  need = Math.max(0, Math.ceil(rho * cand.length) - st.placed);
+  if (!rank) for (ci = 0; ci < out.length; ci++) { i = out[ci]; posG[i] = (Math.min(ds[i], 40) - LY[L - 1]) / (40 - LY[L - 1]); }
+  need = Math.max(0, Math.ceil(rho * cand.length) - st.placed - st.high);
   need = Math.min(need, Math.floor(out.length * R.outMax));
-  sec = eqSplit(out, R.outRanges);
-  for (r = 0; r < R.outRanges; r++) {
-    seatsOf = [];
-    for (hh = 0; hh < Math.floor(need / R.outRanges) + (r < need % R.outRanges ? 1 : 0); hh++) seatsOf.push([(hh + r) % 5, R.outLv[(hh * 7 + r) % R.outLv.length]]);
-    fillRange(sec[r], LY[2], 40, R.outDmin, seatsOf, 3);
+  if (R.outRanges && out.length) {
+    sec = eqSplit(out, R.outRanges);
+    for (r = 0; r < R.outRanges; r++) {
+      seatsOf = [];
+      for (hh = 0; hh < Math.floor(need / R.outRanges) + (r < need % R.outRanges ? 1 : 0); hh++) seatsOf.push([(hh + r) % 5, R.outLv[(hh * 7 + r) % R.outLv.length]]);
+      fillRange(sec[r], R.outDmin, seatsOf, L);
+    }
   }
   WG.rt = rt; WG.rl = rl; WG.rg = rg;
   WG.res = { ty: WMG_RES_TY, ranges: ranges, layerCells: layerCells, layerSeats: layerSeats, cand: cand.length, placed: st.placed, s1: st.s1, s2: st.s2, relax: st.relax, miss: st.miss, missReach: st.missReach,
-    minSlack: st.minSlack, density: cand.length ? st.placed / cand.length : 0, stage2: st.s1 + st.s2 ? st.s2 / (st.s1 + st.s2) : 0 };
+    minSlack: st.minSlack, density: cand.length ? (st.placed + st.high) / cand.length : 0, stage2: st.s1 + st.s2 ? st.s2 / (st.s1 + st.s2) : 0, high: st.high, highMiss: st.highMiss, highRelax: st.highRelax, seats: S };
   return WG;
 }
 function wmgResCheck(WG, reasons) {
-  var R = WMG_CFG.res, s = WG.res, N = WG.size, k = WG.k, B = WG.border, P = N - 2 * B, e = [0, Math.floor(P / 3), Math.floor(2 * P / 3), P], b, x2, y2, x, y, tt, cc, kk, bad = false;
-  if (s.missReach > 0) reasons.push('資源配額缺 ' + s.missReach + ' 座');
-  for (b = 0; b < 3; b++) if (s.layerCells[b] < s.layerSeats[b] * R.slack) { reasons.push('資源第 ' + (b + 1) + ' 層候選格 ' + s.layerCells[b] + ' < 座位 × ' + R.slack); break; }
-  if (s.density < 0.5) reasons.push('資源密度 ' + Math.round(s.density * 1000) / 10 + '% < 50%');
+  var R = WG.seats && WG.seats.length > 1 ? WMG_CFG.resM : WMG_CFG.res, s = WG.res, N = WG.size, k = WG.k, B = WG.border, P = N - 2 * B, e = [0, Math.floor(P / 3), Math.floor(2 * P / 3), P], b, x2, y2, x, y, tt, cc, kk, bad = false, dMin, tol = Math.floor((R.missTol || 0) * (WG.seats ? WG.seats.length : 1));
+  if (s.missReach > tol) reasons.push('資源配額缺 ' + s.missReach + ' 座');
+  for (b = 0; b < s.layerCells.length; b++) if (s.layerCells[b] < s.layerSeats[b] * R.slack) { reasons.push('資源第 ' + (b + 1) + ' 層候選格 ' + s.layerCells[b] + ' < 座位 × ' + R.slack); break; }
+  dMin = (R.dMin || 0.5) * (WG.seats && WG.seats.length > 1 ? Math.min(1, WG.seats.length / wmgSeatsFor(N)) : 1);   // 多席位:席位數少於這個邊長的預設數時(例如 128×128 只放 10 席),每席配額封頂,密度下限照比例降
+  if (s.density < dMin) reasons.push('資源密度 ' + Math.round(s.density * 1000) / 10 + '% < ' + Math.round(dMin * 100) + '%');
   for (y2 = 0; y2 < 3 && !bad; y2++) for (x2 = 0; x2 < 3 && !bad; x2++) {
     tt = 0; cc = 0;
     for (y = B + e[y2]; y < B + e[y2 + 1]; y++) for (x = B + e[x2]; x < B + e[x2 + 1]; x++) { cc++; kk = k[y * N + x]; if (kk >= 1 && kk <= 4) tt++; }
@@ -528,8 +666,9 @@ function wmgNodeD(WG) {   // 只重算每座城池門前格的路徑成本(鋪�
   for (i = 0; i < WG.nodes.length; i++) WG.nodes[i].d = all[WG.nodes[i].adj];
   return all;
 }
-function wmgBuild(seed, N) {
-  var C = WMG_CFG, B = C.border, n = N * N, k = new Uint8Array(n), g = new Uint8Array(n), pm = new Int16Array(n), pcs = [], rng = wmgRng(seed),
+function wmgBuild(seed, N, S) {
+  S = S >= 1 ? Math.floor(S) : 1;
+  var C = WMG_CFG, multi = S > 1, seats = wmgSeatPos(N, S, seed), nC = multi ? Math.round(S * C.countyPer) : C.countyN, nJ = multi ? Math.round(S * C.junPer) : C.junN, nP = multi ? Math.round(S * C.passPer) : C.passN, SPR = multi ? 14 : C.spiralR, keepMap = new Uint8Array(N * N), gapMap = new Uint8Array(N * N), si, sq, sr, B = C.border, n = N * N, k = new Uint8Array(n), g = new Uint8Array(n), pm = new Int16Array(n), pcs = [], rng = wmgRng(seed),
     nodesOut = null, zone = new Uint8Array(n), nodeOf = new Int8Array(n), nfail = [], mainPaths = [], cx = N >> 1, cy = N >> 1, c0 = cy * N + cx, lo = B, hi = N - 1 - B, i, x, y, dx, dy, WG, r, t;
   for (i = 0; i < n; i++) {
     x = i % N; y = (i - x) / N;
@@ -539,7 +678,16 @@ function wmgBuild(seed, N) {
   for (i = 0; i < WMG_CITY_CELLS.length; i++) k[(cy + WMG_CITY_CELLS[i][1]) * N + cx + WMG_CITY_CELLS[i][0]] = 6;
   for (i = 0; i < WMG_CITY_YARD.length; i++) k[(cy + WMG_CITY_YARD[i][1]) * N + cx + WMG_CITY_YARD[i][0]] = 8;
   var KEEP = C.keep;
-  function keep(gx, gy) { return wmHexDist(cx, cy, gx, gy) <= KEEP; }
+  for (si = 0; si < S; si++) {   // 席位:保留圈(山 / 石 / 城池不放)、河讓出圈;席位 1~ 先蓋成主城形狀(k 6 / 8、zone 3)讓路 / 城池 / 山避開,生成尾端還原成平地(只留 zone 3)
+    sq = wmHexRange(seats[si].c, seats[si].r, KEEP, N);
+    for (i = 0; i < sq.length; i++) keepMap[sq[i]] = 1;
+    sq = wmHexRange(seats[si].c, seats[si].r, C.riverGap - 1, N);
+    for (i = 0; i < sq.length; i++) gapMap[sq[i]] = 1;
+    if (si === 0) continue;
+    for (i = 0; i < WMG_CITY_CELLS.length; i++) { sr = (seats[si].r + WMG_CITY_CELLS[i][1]) * N + seats[si].c + WMG_CITY_CELLS[i][0]; k[sr] = 6; zone[sr] = 3; }
+    for (i = 0; i < WMG_CITY_YARD.length; i++) { sr = (seats[si].r + WMG_CITY_YARD[i][1]) * N + seats[si].c + WMG_CITY_YARD[i][0]; k[sr] = 8; zone[sr] = 3; }
+  }
+  function keep(gx, gy) { return keepMap[gy * N + gx] === 1; }
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
   function addPiece(id, gi) {
     var cells = WMG_PIECES[id], r0 = Math.floor(gi / N), c0b = gi % N, m, q, idx = pcs.length;
@@ -552,7 +700,7 @@ function wmgBuild(seed, N) {
     var vert = rng() < 0.5, side = rng() < 0.5 ? 1 : -1, a, b, rlo, rhi, db, nb, hl, hh, list = [], gx, gy, step;
     if (side > 0) { rlo = cx + C.riverGap; rhi = hi; } else { rlo = lo; rhi = cx - C.riverGap; }
     b = clamp(cx + side * (9 + Math.floor(rng() * 12)), rlo, rhi);
-    function mark(aa, bb) { gx = vert ? bb : aa; gy = vert ? aa : bb; var q = gy * N + gx; if (k[q] === 0) { k[q] = 3; list.push(q); } }
+    function mark(aa, bb) { gx = vert ? bb : aa; gy = vert ? aa : bb; var q = gy * N + gx; if (k[q] === 0 && !gapMap[q]) { k[q] = 3; list.push(q); } }
     for (a = lo; a <= hi; a++) {
       db = 0;
       if (rng() < 0.45) {
@@ -586,7 +734,7 @@ function wmgBuild(seed, N) {
   // 2b 縣 / 郡 / 關(gv 3):占地矩形 + 外圍 1 圈城郊(zone 2)。先放關(前兩座跨在兩條通邊主路上、第 3 座靠邊另鋪路到邊界),再放郡、縣;
   //    道路網 = 主城 → 各城池「門前格」的最小生成樹(A*,過河成橋):縣 / 郡四面有門只接一面(= 主城門),關的門道本身就是道路
   (function () {
-    var nodes = [], FP = C.fp, npass = 0, h01 = function (a1, b1) { return wmGenHash01(seed, a1, b1 + 700); }, p, pa, j, c, a, rr, tx, ty, tries, R, R2, m, q, d, bd, bi, bj, inN, conn, pt, sp, ports, cl, path, s0, o0, fr, e, d1, d2, dir, ax, cc0, rr0, ord = { county: 0, jun: 1, zhou: 2, pass: 3 };
+    var nodes = [], FP = C.fp, npass = 0, sd, sIdx, seatPts = [], hexD = wmHexDist, h01 = function (a1, b1) { return wmGenHash01(seed, a1, b1 + 700); }, p, pa, j, c, a, rr, tx, ty, tries, R, R2, m, q, d, bd, bi, bj, inN, conn, pt, sp, ports, cl, path, s0, o0, fr, e, d1, d2, dir, ax, cc0, rr0, ord = { county: 0, jun: 1, zhou: 2, pass: 3 };
     function mk(type, c0b, r0, axis) {
       var f = FP[type], sw = type === 'pass' && axis === 1;
       return { type: type, c0: c0b, r0: r0, fw: sw ? f[1] : f[0], fh: sw ? f[0] : f[1], axis: type === 'pass' ? axis : -1 };
@@ -633,6 +781,15 @@ function wmgBuild(seed, N) {
       }
       return null;
     }
+    function around(type, sd2, a2, rr2) {   // 目標附近螺旋找;放不下換角度 / 半徑再找(第 0 次 = 舊行為)
+      var f = FP[type], t2, R3, aa, r3;
+      for (t2 = 0; t2 < (multi ? 8 : 1); t2++) {
+        aa = a2 + t2 * 0.9; r3 = rr2 + (t2 % 3) * 2;
+        R3 = spiral(type, Math.round(sd2.c + Math.cos(aa) * r3) - Math.floor(f[0] / 2), Math.round(sd2.r + Math.sin(aa) * r3) - Math.floor(f[1] / 2), 0, SPR, null);
+        if (R3) return R3;
+      }
+      return null;
+    }
     function lay(pth) { var z; for (z = 0; z < pth.length; z++) if (k[pth[z]] === 0 || k[pth[z]] === 3) k[pth[z]] = 5; }
 
     // 關 1~2:沿兩條主路(path[0] = 邊界端)從外往內找「門外 1 + 門道 2 + 門外 1」連續 4 格同向的直段,外端門外格離可玩區邊 1 起,最遠 14 格(1~4 優先)
@@ -654,7 +811,7 @@ function wmgBuild(seed, N) {
       if (R) { put(R); R.ti = npass++; }
     }
     // 關(其餘):靠邊的雜湊角度;軸 = 最近邊界方向;外端門外格離邊 2~3 格,另鋪一條路到邊界
-    for (tries = 0; npass < C.passN && tries < 12; tries++) {
+    for (tries = 0; npass < nP && tries < nP * 3 + 12; tries++) {
       a = h01(tries, 3) * 2 * Math.PI;
       tx = Math.max(lo + 3, Math.min(hi - 3, Math.round(cx + Math.cos(a) * 60))); ty = Math.max(lo + 3, Math.min(hi - 3, Math.round(cy + Math.sin(a) * 60)));
       d1 = tx - lo; d2 = hi - tx; e = ty - lo; dir = hi - ty; q = Math.min(d1, d2, e, dir);
@@ -677,52 +834,61 @@ function wmgBuild(seed, N) {
       path = wmgRoadPath(k, N, seed, s0.oc, s0.ro, tx, ty);
       if (path) lay(path); else nfail.push('關 ' + R.ti + ' 外端鋪不到邊界');
     }
-    while (npass < C.passN) { nfail.push('關放不下'); npass++; }
+    while (npass < nP) { nfail.push('關放不下'); npass++; }
     // 州城(共享世界;M1 zhouN = 0):黃金角螺旋散開、半徑依序外擴,先於郡 / 縣放(大的先放)
     for (j = 0; j < C.zhouN; j++) {
       a = h01(0, 7) * 2 * Math.PI + j * 2.399963229728653;
       rr = C.zhouR[0] + ((C.zhouR[1] > 0 ? C.zhouR[1] : (hi - lo) / 2 - 8) - C.zhouR[0]) * Math.sqrt((j + 0.5) / C.zhouN);
-      R = spiral('zhou', Math.round(cx + Math.cos(a) * rr) - Math.floor(FP.zhou[0] / 2), Math.round(cy + Math.sin(a) * rr) - Math.floor(FP.zhou[1] / 2), 0, C.spiralR, null);
+      R = spiral('zhou', Math.round(cx + Math.cos(a) * rr) - Math.floor(FP.zhou[0] / 2), Math.round(cy + Math.sin(a) * rr) - Math.floor(FP.zhou[1] / 2), 0, SPR, null);
       if (R) { put(R); R.ti = j; } else nfail.push('州 ' + j + ' 放不下');
     }
     // 郡:兩座相對(a0 與 a0 + π),中心離主城 junR
-    for (j = 0; j < C.junN; j++) {
-      a = h01(0, 5) * 2 * Math.PI + j * Math.PI;
+    for (j = 0; j < nJ; j++) {
+      sd = multi ? seats[(j * 3 + 1) % S] : { c: cx, r: cy };
+      a = multi ? h01(j, 5) * 2 * Math.PI : h01(0, 5) * 2 * Math.PI + j * Math.PI;
       rr = C.junR[0] + h01(j, 6) * (C.junR[1] - C.junR[0]);
-      R = spiral('jun', Math.round(cx + Math.cos(a) * rr) - Math.floor(FP.jun[0] / 2), Math.round(cy + Math.sin(a) * rr) - Math.floor(FP.jun[1] / 2), 0, C.spiralR, null);
+      R = around('jun', sd, a, rr);
       if (R) { put(R); R.ti = j; } else nfail.push('郡 ' + j + ' 放不下');
     }
     // 縣:6 個扇區環繞主城,角度加抖動,中心離主城 countyR
-    for (c = 0; c < C.countyN; c++) {
-      a = ((c + 0.2 + 0.6 * h01(c, 1)) / C.countyN) * 2 * Math.PI;
+    for (c = 0; c < nC; c++) {
+      sd = multi ? seats[c % S] : { c: cx, r: cy };
+      a = multi ? h01(c, 1) * 2 * Math.PI : ((c + 0.2 + 0.6 * h01(c, 1)) / nC) * 2 * Math.PI;
       rr = C.countyR[0] + h01(c, 2) * (C.countyR[1] - C.countyR[0]);
-      R = spiral('county', Math.round(cx + Math.cos(a) * rr) - Math.floor(FP.county[0] / 2), Math.round(cy + Math.sin(a) * rr) - Math.floor(FP.county[1] / 2), 0, C.spiralR, null);
+      R = around('county', sd, a, rr);
       if (R) { put(R); R.ti = c; } else nfail.push('縣 ' + c + ' 放不下');
     }
     // 道路網:Prim 最小生成樹(主城為根)。每座城池挑「已連上的接路格 → 門外格」曼哈頓距離最近的一組,A* 鋪到門外格;那一門 = 主城門
     ports = wmHexRing(cx, cy, 2, N).map(function (gi2) { return [gi2 % N, Math.floor(gi2 / N)]; }).filter(function (z) { return wmgWalk(k[z[1] * N + z[0]]); });   // 主城距離 2 的 12 格中可走的
     conn = [{ city: true, type: 'city', src: ports.length ? ports : [[cx + 2, cy]] }];
     inN = nodes.slice();
+    for (sIdx = 1; sIdx < S; sIdx++) {   // 其他席位:接進同一棵道路樹(ports = 主城外 2 圈的可走格,每 3 格取 1)
+      seatPts = wmHexRing(seats[sIdx].c, seats[sIdx].r, 2, N).filter(function (gi2) { return wmgWalk(k[gi2]); }).filter(function (gi2, ix) { return ix % 3 === 0; });
+      inN.push({ type: 'seat', ti: sIdx, mg: -1, g: seatPts.map(function (gi2) { return { oc: gi2 % N, ro: Math.floor(gi2 / N) }; }) });
+    }
+    function pairD(cq, nn) {   // 已連上的 cq 與待連 nn 的距離(含偏好加成)
+      var dd = Infinity, j2, c2, e2;
+      for (j2 = 0; j2 < cq.src.length; j2++) for (c2 = 0; c2 < nn.g.length; c2++) { e2 = hexD(cq.src[j2][0], cq.src[j2][1], nn.g[c2].oc, nn.g[c2].ro); if (e2 < dd) dd = e2; }
+      if (cq.city || cq.type === 'seat') dd += 4;   // 主城端偏好縣連主城、關接縣
+      if (nn.type === 'pass' && cq.type === 'pass') dd += 6;
+      return dd;
+    }
+    for (m = 0; m < inN.length; m++) { inN[m].bd = pairD(conn[0], inN[m]); inN[m].bq = 0; }   // Prim:每個待連節點記「到已連集合」的最近一筆(新連上的只更新一次,同距離保留先到者 = 與全量掃描同結果)
     while (inN.length) {
       bd = Infinity; bi = -1; bj = -1;
-      for (m = 0; m < inN.length; m++) for (q = 0; q < conn.length; q++) {
-        d = Infinity;
-        for (j = 0; j < conn[q].src.length; j++) for (c = 0; c < inN[m].g.length; c++) d = Math.min(d, wmHexDist(conn[q].src[j][0], conn[q].src[j][1], inN[m].g[c].oc, inN[m].g[c].ro));
-        if (conn[q].city) d += 4;   // 主城端偏好縣連主城、關接縣
-        if (inN[m].type === 'pass' && conn[q].type === 'pass') d += 6;
-        if (d < bd) { bd = d; bi = m; bj = q; }
-      }
+      for (m = 0; m < inN.length; m++) if (inN[m].bd < bd) { bd = inN[m].bd; bi = m; bj = inN[m].bq; }
       pt = inN.splice(bi, 1)[0]; sp = conn[bj];
       cl = [];
-      for (j = 0; j < sp.src.length; j++) for (c = 0; c < pt.g.length; c++) cl.push({ d: wmHexDist(sp.src[j][0], sp.src[j][1], pt.g[c].oc, pt.g[c].ro), s: j, g: c });
+      for (j = 0; j < sp.src.length; j++) for (c = 0; c < pt.g.length; c++) cl.push({ d: hexD(sp.src[j][0], sp.src[j][1], pt.g[c].oc, pt.g[c].ro), s: j, g: c });
       cl.sort(function (u, v) { return u.d - v.d || u.g - v.g || u.s - v.s; });
       path = null;
       for (m = 0; m < cl.length && m < 8 && !path; m++) {
         path = wmgRoadPath(k, N, seed, sp.src[cl[m].s][0], sp.src[cl[m].s][1], pt.g[cl[m].g].oc, pt.g[cl[m].g].ro);
         if (path) { lay(path); pt.mg = cl[m].g; }
       }
-      if (!path) nfail.push((pt.type === 'pass' ? '關 ' : (pt.type === 'jun' ? '郡 ' : (pt.type === 'zhou' ? '州 ' : '縣 '))) + pt.ti + ' 鋪不到路');
-      conn.push({ type: pt.type, src: pt.type === 'pass' || pt.mg < 0 ? pt.g.map(function (g) { return [g.oc, g.ro]; }) : [[pt.g[pt.mg].oc, pt.g[pt.mg].ro]] });
+      if (!path && pt.type !== 'seat') nfail.push((pt.type === 'pass' ? '關 ' : (pt.type === 'jun' ? '郡 ' : (pt.type === 'zhou' ? '州 ' : '縣 '))) + pt.ti + ' 鋪不到路');
+      conn.push({ type: pt.type, src: pt.type === 'pass' || pt.type === 'seat' || pt.mg < 0 ? pt.g.map(function (g) { return [g.oc, g.ro]; }) : [[pt.g[pt.mg].oc, pt.g[pt.mg].ro]] });
+      for (m = 0; m < inN.length; m++) { d = pairD(conn[conn.length - 1], inN[m]); if (d < inN[m].bd) { inN[m].bd = d; inN[m].bq = conn.length - 1; } }
     }
     for (j = 0; j < nodes.length; j++) if (nodes[j].type === 'pass') for (c = 0; c < 2; c++) { q = nodes[j].g[c].ro * N + nodes[j].g[c].oc; if (k[q] === 0) k[q] = 5; }   // 關兩端門外格一定是路
     // 輸出:縣 → 郡 → 關,同類依 ti;id = 序號
@@ -785,13 +951,19 @@ function wmgBuild(seed, N) {
     }
   })();
 
+  for (si = 1; si < S; si++) {   // 其他席位的九宮格還原成平地(zone 3 保留;之後啟用時由多人層改回主城)
+    for (i = 0; i < WMG_CITY_CELLS.length; i++) k[(seats[si].r + WMG_CITY_CELLS[i][1]) * N + seats[si].c + WMG_CITY_CELLS[i][0]] = 0;
+    for (i = 0; i < WMG_CITY_YARD.length; i++) k[(seats[si].r + WMG_CITY_YARD[i][1]) * N + seats[si].c + WMG_CITY_YARD[i][0]] = 0;
+  }
   nodesOut = nodesOut || [];
-  WG = { gv: C.gv, size: N, seed: seed, seed0: seed, tries: 1, fallback: false, border: B, cx: cx, cy: cy, c0: c0, k: k, g: g, pm: pm, pcs: pcs, nodes: nodesOut, nodeOf: nodeOf, zone: zone, nfail: nfail, d: null, pv: null, chk: null };
+  WG = { gv: C.gv, size: N, seed: seed, seed0: seed, tries: 1, fallback: false, border: B, cx: cx, cy: cy, c0: c0, k: k, g: g, pm: pm, pcs: pcs, nodes: nodesOut, nodeOf: nodeOf, zone: zone, nfail: nfail, d: null, pv: null, chk: null, seats: seats.map(function (o, idx) { return { id: idx, c: o.c, r: o.r, gi: o.r * N + o.c, act: idx === 0 }; }), seatN: S, nodeN: nC + nJ + nP + C.zhouN, ds: null, so: null };
   r = wmDistCalc(WG, Infinity);   // 只跑一次全圖 Dijkstra:d / pv = 成本 ≤ reach 的部分(Dijkstra 到某格的值與是否設上限無關),d0 = 全圖
   WG.d0 = r.d; WG.d = new Float32Array(n); WG.pv = new Int32Array(n);
   for (i = 0; i < n; i++) { if (r.d[i] <= C.reach) { WG.d[i] = r.d[i]; WG.pv[i] = r.pv[i]; } else { WG.d[i] = Infinity; WG.pv[i] = -1; } }
   wmgNodeAdj(WG, WG.d0);
   WG.rd = null;
+  if (multi) { r = wmgSeatDist(WG); WG.ds = r.d; WG.so = r.so; }
+  else { WG.ds = WG.d0; WG.so = new Int8Array(n); for (i = 0; i < n; i++) WG.so[i] = isFinite(WG.d0[i]) ? 0 : -1; }
   wmgRes(WG);
   t = wmGenCheck(WG);
   WG.chk = t;
@@ -799,17 +971,18 @@ function wmgBuild(seed, N) {
 }
 
 // 生成世界:seed 整數(0~2³²−1);size 預設 WMG_CFG.size。檢查失敗 seed+1 重試最多 retry 次,仍失敗用保底種子(wmGenCheck 結果在 WG.chk)
-function wmGen(seed, size) {
-  var C = WMG_CFG, N = Math.floor(Number(size)) || C.size, s, t, WG;
+function wmGen(seed, size, opt) {   // opt = {seats: 席位數(預設 wmgSeatsFor(size):size ≥ 96 → 30、否則 1 = 舊單機圖;單機只啟用席位 0)}
+  var C = WMG_CFG, N = Math.floor(Number(size)) || C.size, s, t, WG, S;
   if (N < 2 * C.border + 15) N = 2 * C.border + 15;
   s = (Math.floor(Number(seed)) || 0) >>> 0;
   seed = s;
+  S = opt && opt.seats >= 1 ? Math.floor(opt.seats) : wmgSeatsFor(N);
   for (t = 0; t < C.retry; t++) {
-    WG = wmgBuild(s, N);
+    WG = wmgBuild(s, N, S);
     if (WG.chk.ok) { WG.seed0 = seed; WG.tries = t + 1; return WG; }
     s = (s + 1) >>> 0;
   }
-  WG = wmgBuild(C.fallbackSeed, N);
+  WG = wmgBuild(C.fallbackSeed, N, S);
   WG.seed0 = seed; WG.tries = C.retry + 1; WG.fallback = true;
   return WG;
 }

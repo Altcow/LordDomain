@@ -13,7 +13,7 @@
 // 版面:不做 844×390 等比縮放,直向 / 橫向都用真實尺寸排版(手機優先,按鈕 ≥ 44px)。
 // ES2017;不用 ?. ??;不用 canvas;全域 bnRpt 前綴。
 
-var BNRPT = { el: null, rec: null, data: null, opts: {}, hidden: false, saved: false };
+var BNRPT = { el: null, rec: null, data: null, opts: {}, hidden: false, saved: false, view: 'ov', prevView: 'ov', round: 1, brief: true, unit: null, rounds: null, conf: false };
 var BNRPT_GRC = ['#5b5b5b', '#2e7d4f', '#2f5fa8', '#7a3fa0', '#b8860b'];
 // 戰報可否重播:rec.v 須 ≥ BN_REC_VER(普攻改射程內隨機後,舊戰報重算結果可能不同)。舊版只顯示結果,不給重播。
 function bnRptReplayable(rec) { return !!rec && (rec.v | 0) >= BN_REC_VER; }
@@ -62,6 +62,7 @@ function bnRptBuild(rec, mySide) {
   function kindOf(ev) {
     var c;
     if (ev.ctr) return 'ctr';
+    if (ev.cb && cur[ev.src]) { c = cur[ev.src]; return (c[0] === 'follow' || c[2] === 'pursuit') ? 'follow' : (c[2] === 'ult' ? 'ult' : 'skill'); }   // 條件加成(det / hit)的追加傷害算回原戰法
     if (ev.dot || ev.ty === 'dot') return 'dot';
     if (ev.basic) return 'basic';
     if (ev.rx) return 'skill';
@@ -72,8 +73,9 @@ function bnRptBuild(rec, mySide) {
   }
   function bucket(ev) {
     if (ev.basic || ev.ctr) return ['__basic', '普攻', 'basic', ''];
+    if (ev.cb && cur[ev.src]) return cur[ev.src];
     if (ev.dot) return ['__dot', '持續傷害', 'dot', ''];
-    if (ev.rx) { var rd = BN_SKILLS[ev.rx]; return [ev.rx, rd ? rd.name : ev.rx, 'react', rd ? rd.power : '']; }
+    if (ev.rx) { var rd = BN_SKILLS[ev.rx], rxN = ''; if (!rd && typeof BN_COMBOS !== 'undefined') BN_COMBOS.reactions.forEach(function (x) { if (x.id === ev.rx) rxN = x.name; }); return [ev.rx, rd ? rd.name : (rxN || ev.rx), 'react', rd ? rd.power : '']; }   // 反應列顯示中文名(rx_breach → 陷陣破堅等),不外露代碼
     if (cur[ev.src]) return cur[ev.src];
     return ['__misc', '其他', 'misc', ''];
   }
@@ -94,7 +96,7 @@ function bnRptBuild(rec, mySide) {
         rw.dmg += e.v;
         dk = kindOf(e); dd = detOf(e.src)[dk]; dd.n++;
         if (dk === 'dot') dd.v += e.v;
-        else if (e.ty === 'strat') { dd.st += e.v; rw.st += e.v; } else { dd.ph += e.v; rw.ph += e.v; }
+        else if (e.ty === 'strat' || e.cb === 2) { dd.st += e.v; rw.st += e.v; } else { dd.ph += e.v; rw.ph += e.v; }
         if (e.basic) bnRptRowGet(rowsAll, e.src, '__basic', '普攻', 'basic', '', true).cnt++;
       }
     }
@@ -124,12 +126,14 @@ function bnRptBuild(rec, mySide) {
     return { side: sd, open: Math.round(sOpen), left: Math.round(sLeft), wounded: Math.max(0, Math.round(sOpen - sLeft)), pct: sOpen > 0 ? Math.max(0, Math.min(1, sLeft / sOpen)) : 0, dmg: sD, heal: sH, units: units };
   }
   uOut = { mine: sideOut(me), enemy: sideOut(en) };
-  return {
+  var outD = {
     mySide: me, enemySide: en, win: w,
     mineRes: w === me ? '勝' : (w === 'draw' ? '平' : '敗'), enemyRes: w === en ? '勝' : (w === 'draw' ? '平' : '敗'),
     reason: res.reason, reasonTxt: BNLOG_WHY[res.reason] || String(res.reason || ''), maxRound: res.rounds | 0, seed: rec.seed >>> 0,
     mine: uOut.mine, enemy: uOut.enemy, hpRes: res.hp
   };
+  Object.defineProperty(outD, '_S', { value: S, enumerable: false });   // 逐回合(bnRptRounds)用;不進 JSON
+  return outD;
 }
 
 // 範例戰鬥(?rpt=1 與測試用):我方 劉備(主將) / 關羽 / 張飛(副將);敵方 曹操 / 夏侯惇 / 呂布 —— 以名冊名人組 3v3,固定種子
@@ -243,7 +247,7 @@ function bnRptConfetti(seed) {
 }
 // 場景背景:同 bnstage 的場景找圖規則(rec.opts.scene → bnstScenePath),載入成功才換上,否則維持 CSS 預設圖
 function bnRptScene() {
-  var bg = BNRPT.el && BNRPT.el.querySelector ? BNRPT.el.querySelector('.bnr-bg') : null, sc = BNRPT.rec && BNRPT.rec.opts ? BNRPT.rec.opts.scene : '', src, im;
+  var bg = BNRPT.el && BNRPT.el.querySelector ? BNRPT.el.querySelector('.rp-bg') : null, sc = BNRPT.rec && BNRPT.rec.opts ? BNRPT.rec.opts.scene : '', src, im;
   if (!bg || typeof bnstScenePath !== 'function' || typeof Image === 'undefined') return;
   src = bnstScenePath(sc);
   im = new Image();
@@ -280,12 +284,246 @@ function bnRptResultHtml(d) {
     '<div class="bnr-foot">' + (o.loot !== undefined ? bnRptLootHtml(o.loot) : '') + '<div class="bnr-btns">' + bnRptBtnsHtml() + '</div></div>' +
     (win ? bnRptConfetti(d.seed) : '') + '</div>';
 }
+// ───────── 戰報版面重設計(2026-11-18;設計_戰報版面重設計_規格.md):一個滿版頁、三個分頁〔總覽〕〔統計〕〔逐回合〕+ 滿版子頁〔武將明細〕 ─────────
+// 狀態 BNRPT.view = 'ov'|'st'|'rd'|'unit';BNRPT.round(0 = 開戰前);BNRPT.brief(簡略,預設 true);BNRPT.prevView(明細返回哪個分頁);BNRPT.unit(明細的單位 id)。
+// 純函式(node 可測):bnRptRounds / bnRptRoundHtml / bnRptOverviewHtml / bnRptStatsHtml / bnRptUnitPageHtml / bnRptPageHtml。bnRptBuild 把重跑的狀態放在 d._S(不可列舉,不進 JSON)。
+// 顏色(決 3):傷害依類型 物理橘 / 策略紫 / 持續金;治療綠;條件加成(戰法 cb)追加傷害加 〔條件加成〕 小標。
+var BNRPT_POS = ['前鋒', '中衛', '主將'];
+var BNRPT_DOT = { burn: '燃燒', poison: '中毒', bleed: '流血', thorns: '荊棘', rx: '反應' };
+function bnRptSideOf(d, S, id) { return S.units[id] && S.units[id].side === d.mySide ? 'mine' : 'enemy'; }
+function bnRptNm(d, S, id) { var u = S.units[id]; if (!u) return '?'; return '<b class="' + (u.side === d.mySide ? 'nM' : 'nF') + '">' + bnRptEsc(u.spec.name) + '</b>'; }
+function bnRptSkName(id, fb) { return (BN_SKILLS[id] && BN_SKILLS[id].name) || fb || String(id || ''); }
+function bnRptStN(id) { return typeof bnLogStName === 'function' ? bnLogStName(id) : String(id || ''); }
+function bnRptFmt(v) { return String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+// 事件 → 回合結構:{ prep:[{title,lines}], rounds:[{r, first:'mine'|'enemy', acts:[行動段]}], end:{text,win} };
+// 行動段 = { u, side, ord, extra, hpAt(行動開始時兵力), dmgSum / healSum(開戰至該段結束的累計), lines:[{lv:1|2, k, v(true = 簡略模式隱藏), src, tgt, val, html}] };u = -1 為回合開頭的系統段(疲兵等)
+// k:skill basic kill skip trig(lv1);dmg heal shield evade cb rx roll st(lv2)。每個 dmg 事件(src ≠ tgt)恰好一列;各武將傷害 / 治療列加總 = u.dmg / u.heal。
+function bnRptRounds(S, d) {
+  var ev = S.events || [], hp = {}, cumD = {}, cumH = {}, rounds = [], prep = { sk: [], bond: [], st: [] }, cur = null, act = null, ord = 0, pendUlt = false, i, e, j, endTxt = '', endWin = d.win;
+  function nm(id) { return bnRptNm(d, S, id); }
+  function closeAct() { if (act && act.u >= 0) { act.dmgSum = cumD[act.u] | 0; act.healSum = cumH[act.u] | 0; } act = null; }
+  function ensure() { if (!act) { act = { u: -1, side: '', ord: 0, lines: [] }; if (cur) cur.acts.push(act); } return act; }
+  function add(lv, k, v, html, o) { var ln = { lv: lv, k: k, v: !!v, html: html }, key; if (o) for (key in o) ln[key] = o[key]; if (!cur) return ln; ensure().lines.push(ln); return ln; }
+  for (i = 0; i < ev.length; i++) {
+    e = ev[i];
+    if (e.t === 'init') { for (j = 0; j < e.units.length; j++) hp[e.units[j].id] = e.units[j].hp; continue; }
+    if (e.t === 'round') { closeAct(); cur = { r: e.n, first: e.first === d.mySide ? 'mine' : 'enemy', fat: e.fat || 0, acts: [] }; rounds.push(cur); ord = 0; continue; }
+    if (e.t === 'end') { closeAct(); continue; }
+    if (e.t === 'act') { closeAct(); act = { u: e.u, side: bnRptSideOf(d, S, e.u), ord: ++ord, extra: !!e.x, hpAt: Math.round(hp[e.u] || 0), lines: [] }; if (cur) cur.acts.push(act); continue; }
+    if (!cur) {   // 開戰前:被動 / 羈絆 / 加成
+      if (e.t === 'trigger') prep.sk.push({ lv: 2, k: 'trig', v: false, html: nm(e.u) + ' 的【' + bnRptEsc(bnRptSkName(e.id)) + '】' + ((typeof BNT_TRIG !== 'undefined' && BNT_TRIG[e.trig]) ? '(' + BNT_TRIG[e.trig] + ')' : '') });
+      else if (e.t === 'bond') prep.bond.push({ lv: 2, k: 'bond', v: false, html: '羈絆「' + bnRptEsc(e.name || e.id) + '」生效' });
+      else if (e.t === 'status' && e.tgt >= 0) prep.st.push({ lv: 2, k: 'st', v: false, html: nm(e.tgt) + ' 獲得〔' + bnRptEsc(bnRptStN(e.id)) + '〕' + (e.left ? ' ' + e.left + ' 回合' : '') });
+      continue;
+    }
+    switch (e.t) {
+      case 'ult': pendUlt = true; break;
+      case 'skill': add(1, 'skill', false, nm(e.u) + (pendUlt ? ' 施放大招' : ' 發動戰法') + '<span class="skn">【' + bnRptEsc(e.name || bnRptSkName(e.id)) + '】</span>' + (e.rc ? '(第 ' + e.rc + ' 次再放)' : '') + (e.as !== undefined ? '(' + nm(e.as) + ' 補刀)' : '')); pendUlt = false; break;
+      case 'prep': add(1, 'skill', false, nm(e.u) + ' 蓄力準備<span class="skn">【' + bnRptEsc(bnRptSkName(e.id)) + '】</span>'); break;
+      case 'trigger': add(1, 'trig', false, nm(e.u) + ' 觸發<span class="skn">【' + bnRptEsc(bnRptSkName(e.id)) + '】</span>' + ((typeof BNT_TRIG !== 'undefined' && BNT_TRIG[e.trig]) ? '(' + BNT_TRIG[e.trig] + ')' : '')); break;
+      case 'dmg': {
+        var cls, tx;
+        hp[e.tgt] = e.hp;
+        if (e.src >= 0 && e.src !== e.tgt) cumD[e.src] = (cumD[e.src] || 0) + e.v;
+        if (e.basic && !e.ctr && !e.via && e.src >= 0) add(1, 'basic', false, nm(e.src) + ' 對 ' + nm(e.tgt) + ' 普攻');
+        else if (e.ctr && e.src >= 0) add(1, 'basic', false, nm(e.src) + ' 反擊 ' + nm(e.tgt));
+        cls = e.cb ? (e.cb === 2 ? 'st' : 'ph') : (e.ty === 'strat' ? 'st' : (e.ty === 'phys' ? 'ph' : 'dt'));
+        if (e.ty === 'self') tx = nm(e.tgt) + ' 損失兵力 <b class="dt">' + bnRptFmt(e.v) + '</b>(自損)';
+        else if (e.dot && !e.cb) tx = nm(e.tgt) + ' 受〔' + (BNRPT_DOT[e.dot] || '持續') + '〕損失兵力 <b class="dt">' + bnRptFmt(e.v) + '</b>';
+        else tx = nm(e.tgt) + ' 損失兵力 <b class="' + cls + '">' + bnRptFmt(e.v) + '</b>' + (e.cb ? ' <em class="cbm">條件加成</em>' : '') + (e.crit ? ' <em class="crit">暴擊</em>' : '') + (e.pv > 0 ? ' <em class="pv">克制</em>' : (e.pv < 0 ? ' <em class="pv x">被克</em>' : '')) + (e.abs ? ' <span class="rm">(護盾吸收 ' + bnRptFmt(e.abs) + ')</span>' : '') + (e.via !== undefined ? ' <span class="rm">(' + nm(e.via) + ' 援護代受)</span>' : '');
+        add(2, 'dmg', false, tx + ' <span class="rm">(剩 ' + bnRptFmt(e.hp) + ')</span>', { src: e.src, tgt: e.tgt, val: e.v, ty: e.ty, cb: e.cb ? 1 : 0 });
+        break;
+      }
+      case 'heal': hp[e.tgt] = e.hp; if (e.src >= 0) cumH[e.src] = (cumH[e.src] || 0) + e.v; add(2, 'heal', false, nm(e.tgt) + ' 恢復兵力 <b class="hl">+' + bnRptFmt(e.v) + '</b> <span class="rm">(剩 ' + bnRptFmt(e.hp) + ')</span>', { src: e.src, tgt: e.tgt, val: e.v }); break;
+      case 'shield': add(2, 'shield', false, nm(e.tgt) + ' 獲得護盾 <b class="hl">+' + bnRptFmt(e.v) + '</b>', { src: e.src, tgt: e.tgt, val: e.v }); break;
+      case 'revive': hp[e.tgt] = e.hp; add(2, 'heal', false, nm(e.tgt) + ' 復活,兵力 <b class="hl">' + bnRptFmt(e.hp) + '</b>'); break;
+      case 'kill': add(1, 'kill', false, '<i class="rp-x">✖</i>' + nm(e.tgt) + ' 潰滅,無法再戰', { tgt: e.tgt }); break;
+      case 'skip': add(1, 'skip', false, nm(e.u) + ' 無法行動(' + bnRptEsc(BNLOG_WHY[e.why] || e.why || '') + ')'); break;
+      case 'evade': add(2, 'evade', false, e.miss ? nm(e.src) + ' 致盲,攻擊落空' : (e.dr ? nm(e.tgt) + ' 機率閃避,閃開了 ' + nm(e.src) + ' 的攻擊' : nm(e.tgt) + ' 閃避了 ' + (e.src >= 0 ? nm(e.src) + ' 的' : '') + '攻擊')); break;
+      case 'cb': add(2, 'cb', false, '<span class="cbt">【條件加成】</span>' + nm(e.u) + '「' + bnRptEsc(bnRptSkName(e.id)) + '」' + bnRptEsc(typeof bntCbEvText === 'function' ? bntCbEvText(e.st, e.k) : e.st + ' → ' + e.k) + ' <span class="rm">(' + nm(e.tgt) + ')</span>'); break;
+      case 'react': add(2, 'rx', true, '反應「' + bnRptEsc(e.name || e.id) + '」'); break;
+      case 'roll': add(2, 'roll', true, nm(e.u) + '「' + bnRptEsc(bnRptSkName(e.id)) + '」發動率 ' + (e.p | 0) + '% → ' + (e.ok ? '發動' : '未發動') + (e.pity ? '(保底)' : '')); break;
+      case 'status': add(2, 'st', true, (e.tgt >= 0 ? nm(e.tgt) : '全場') + ' 獲得〔' + bnRptEsc(bnRptStN(e.id)) + '〕' + (e.left ? ' ' + e.left + ' 回合' : '')); break;
+      case 'unstatus': add(2, 'st', true, nm(e.tgt) + ' 的〔' + bnRptEsc(bnRptStN(e.id)) + '〕解除'); break;
+      case 'resist': case 'immune': case 'ccimm': add(2, 'st', true, nm(e.tgt) + (e.t === 'resist' ? ' 抵禦了〔' : (e.t === 'ccimm' ? ' 抗控擋下〔' : ' 免疫〔')) + bnRptEsc(bnRptStN(e.id)) + '〕'); break;
+      case 'move': add(2, 'st', true, nm(e.u) + ' 移位'); break;
+      case 'chain': case 'chaincap': add(2, 'st', true, '連鎖'); break;
+      default: break;
+    }
+  }
+  closeAct();
+  if (S.result) endTxt = S.result.reason === 'wipe' ? ((S.result.winner === 'draw' ? '雙方' : (S.result.winner === d.mySide ? '敵方' : '我方')) + '全軍潰滅') : bnRptEsc(d.reasonTxt || '回合上限');
+  return {
+    prep: [{ title: '戰法', lines: prep.sk }, { title: '羈絆', lines: prep.bond }, { title: '開戰加成', lines: prep.st }].filter(function (s) { return s.lines.length; }),
+    rounds: rounds,
+    end: { win: endWin, text: endTxt + ' · ' + (d.mineRes === '勝' ? '我方勝利' : (d.mineRes === '敗' ? '我方戰敗' : '平手')) + '(第 ' + d.maxRound + ' 回合)' }
+  };
+}
+// 單一回合條列(r = 0 開戰前;簡略時 v = true 的列完全不輸出)
+function bnRptRoundHtml(R, r, brief, o) {
+  var h = '', rd, i, j, a, ln, lines, ind;
+  o = o || {};
+  if (r === 0) {
+    if (!R.prep.length) return '<p class="rp-none">開戰前沒有被動、羈絆或加成</p>';
+    R.prep.forEach(function (s) { h += '<div class="rp-psec"><h5>' + s.title + '</h5>' + s.lines.map(function (l) { return '<p class="rp-l2">' + l.html + '</p>'; }).join('') + '</div>'; });
+    return h;
+  }
+  rd = R.rounds[r - 1];
+  if (!rd) return '';
+  h = '<div class="rp-rsep">第 ' + rd.r + ' 回合 · ' + (rd.first === 'mine' ? '我方' : '敵方') + '先手' + (rd.fat ? ' · 疲兵 ' + rd.fat + ' 層' : '') + '</div>';
+  for (i = 0; i < rd.acts.length; i++) {
+    a = rd.acts[i];
+    lines = a.lines.filter(function (l) { return !(brief && l.v); });
+    if (!lines.length && a.u < 0) continue;
+    h += '<div class="rp-act ' + (a.side === 'mine' ? 'me' : (a.side === 'enemy' ? 'foe' : 'sys')) + '"' + (a.u >= 0 ? ' data-u="' + a.u + '"' : '') + '>';
+    if (a.u >= 0 && o.units && o.units[a.u]) h += '<div class="rp-ah">' + bnRptFace(o.units[a.u]) + '<b class="' + (a.side === 'mine' ? 'nM' : 'nF') + '">' + bnRptEsc(o.units[a.u].name) + '</b><span class="ord">' + (a.extra ? '追加行動' : '第 ' + a.ord + ' 手') + '</span><span class="ast">兵 <b>' + bnRptFmt(a.hpAt) + '</b> · 傷 <b class="k">' + bnRptFmt(a.dmgSum || 0) + '</b> · 療 <b class="h">' + bnRptFmt(a.healSum || 0) + '</b></span></div>';
+    for (j = 0; j < lines.length; j++) {
+      ln = lines[j];
+      if (ln.lv === 1) h += '<p class="rp-l1' + (ln.k === 'kill' ? ' kill' : '') + '">' + (ln.k === 'kill' ? '' : '<i class="rp-ic ' + (ln.k === 'basic' ? 'ar' : 'sk') + '"></i>') + ln.html + '</p>';
+      else h += '<p class="rp-l2' + (ln.v ? ' v' : '') + (ln.k === 'cb' ? ' cb' : '') + '">' + ln.html + '</p>';
+    }
+    h += '</div>';
+  }
+  return h;
+}
+// 卡片上的 3 個戰法列:大招 > 主動 > 追擊 > 指揮 > 被動,不足 3 個補普攻
+function bnRptSk3(u) {
+  var ord = { ult: 0, active: 1, pursuit: 2, command: 3, passive: 4 }, rows = u.sk.filter(function (r) { return r.id.indexOf('__') !== 0 && r.cat !== 'react' && r.cat !== 'misc'; }).sort(function (a, b) { return (ord[a.cat] === undefined ? 9 : ord[a.cat]) - (ord[b.cat] === undefined ? 9 : ord[b.cat]); }).slice(0, 3);
+  if (rows.length < 3) rows.push({ id: '__basic', name: '普攻', pw: 'N' });
+  return rows.slice(0, 3);
+}
+// 戰法品階徽章:BN_SKILL_TIER(S 紅 / A 紫 / B 藍 / C 綠);普攻 = 灰「普」
+function bnRptTier(id) { return (typeof BN_SKILL_TIER !== 'undefined' && BN_SKILL_TIER[id]) || ''; }
+function bnRptG(id) { var t = bnRptTier(id); return '<i class="rp-g ' + (/^[SABC]$/.test(t) ? t : 'N') + '">' + (/^[SABC]$/.test(t) ? t : '普') + '</i>'; }
+function bnRptCardV2(u, side, isMvp, maxDmg) {
+  var pct = u.hpOpen > 0 ? Math.max(0, Math.min(100, Math.round(u.hp / u.hpOpen * 100))) : 0, ps = bnRptPhSt(u), tot = Math.max(1, ps[0] + ps[1]), wd = maxDmg > 0 ? Math.round(u.dmg / maxDmg * 100) : 0;
+  return '<div class="rp-cd' + (u.dead ? ' dead' : '') + '" data-act="unit" data-u="' + u.id + '" role="button" tabindex="0"><span class="rp-pos">' + (BNRPT_POS[u.row] || u.pos) + '</span>' +
+    '<span class="rp-fig g' + (u.gr | 0) + '">' + bnRptImg(u) + '<i class="rp-tp">' + bnRptEsc(String(u.troop || '').charAt(0)) + '</i>' + (u.star && side === 'mine' ? '<i class="rp-star">' + '★'.repeat(Math.min(3, u.star)) + '</i>' : '') + (isMvp ? '<i class="rp-mvp">MVP</i>' : '') + (u.dead ? '<i class="rp-ko">潰</i>' : '') + '<b class="rp-nm">' + bnRptEsc(u.name) + '</b></span>' +
+    '<span class="rp-hp"><u><i style="width:' + pct + '%"></i></u><em>' + (u.dead ? '潰' : bnRptFmt(u.hp)) + '</em></span>' +
+    '<span class="rp-dm"><u><i class="p" style="width:' + Math.round(wd * ps[0] / tot) + '%"></i><i class="s" style="width:' + Math.round(wd * ps[1] / tot) + '%"></i></u><em>傷 <b>' + bnRptFmt(u.dmg) + '</b></em></span>' +
+    '<span class="rp-sks">' + bnRptSk3(u).map(function (r) { return '<span class="rp-sk">' + bnRptG(r.id) + '<span>' + bnRptEsc(r.name) + '</span></span>'; }).join('') + '</span></div>';
+}
+function bnRptTeamV2(s, key, label, mvp, maxDmg) {
+  return '<div class="rp-team ' + (key === 'mine' ? 'me' : 'foe') + '"><div class="rp-band"><b>' + label + '</b><span>總傷害 <b class="n">' + bnRptFmt(s.dmg) + '</b></span><span>治療 <b class="hl">' + bnRptFmt(s.heal) + '</b></span></div><div class="rp-cards">' + s.units.map(function (u) { return bnRptCardV2(u, key, u === mvp, maxDmg); }).join('') + '</div></div>';
+}
+function bnRptBarV2(key, label, s) {
+  var pct = s.open > 0 ? Math.round(s.left / s.open * 100) : 0;
+  return '<div class="rp-bar ' + (key === 'mine' ? 'me' : 'foe') + '"><span class="lb">' + label + '</span><u><i style="width:' + pct + '%"></i><s>傷兵 ' + bnRptFmt(s.wounded) + '</s></u><span class="nv">' + bnRptFmt(s.left) + '<small>/' + bnRptFmt(s.open) + '</small></span></div>';
+}
+// 總覽:結果頭(印章 + 雙方兵力條 + 回合 / 原因)+ 我方帶 / 3 卡 + 戰果條 + 敵方帶 / 3 卡
+function bnRptOverviewHtml(d, loot) {
+  var res = d.mineRes, mvp = bnRptMvp(d), maxD = Math.max(d.mine.units.concat(d.enemy.units).reduce(function (m, u) { return Math.max(m, u.dmg); }, 0), 1), cl = res === '勝' ? 'win' : (res === '敗' ? 'lose' : 'draw'), el = bnRptLootCheck(loot);
+  return '<section class="rp-v rp-ov"><div class="rp-res"><div class="rp-stamp ' + cl + '">' + res + '</div><div class="rp-bars">' + bnRptBarV2('mine', '我方', d.mine) + bnRptBarV2('enemy', '敵方', d.enemy) + '<div class="rp-meta">第 <b>' + d.maxRound + '</b> 回合 · ' + bnRptEsc(d.reasonTxt) + '</div></div><div class="rp-stamp sl ' + (res === '勝' ? 'lose' : (res === '敗' ? 'win' : 'draw')) + '">' + (res === '勝' ? '敗' : (res === '敗' ? '勝' : '平')) + '</div></div>' +
+    '<div class="rp-teams">' + bnRptTeamV2(d.mine, 'mine', '我方', mvp, maxD) + (el ? '<div class="rp-loot"><b>戰果</b>' + el + '</div>' : '') + bnRptTeamV2(d.enemy, 'enemy', '敵方', mvp, maxD) + '</div></section>';
+}
+function bnRptLootCheck(loot) {
+  var list = Array.isArray(loot) ? loot : (loot ? [loot] : []), parts = [];
+  list.forEach(function (x) {
+    if (typeof x === 'object' && x) parts.push(bnRptEsc(x.name || '') + (x.v !== undefined ? ' ' + bnRptEsc(x.v) : ''));
+    else if (x !== undefined && x !== null && x !== '') parts.push(bnRptEsc(x));
+  });
+  return parts.map(function (p) { return '<span>' + p + '</span>'; }).join('');
+}
+// 統計:兩隊各一組;總傷害欄 = 數字 + 物理 / 策略雙段條(長度 = 占全場最高者比例);點列 → 武將明細
+function bnRptStatsHtml(d) {
+  var maxD = Math.max(d.mine.units.concat(d.enemy.units).reduce(function (m, u) { return Math.max(m, u.dmg); }, 0), 1);
+  function nz(v, c) { return v > 0 ? '<span class="rp-td ' + (c || '') + '">' + bnRptFmt(v) + '</span>' : '<span class="rp-td ' + (c === 'lx' ? 'lx' : '') + '"><span class="z">—</span></span>'; }
+  function row(u, key) {
+    var ps = bnRptPhSt(u), tot = Math.max(1, ps[0] + ps[1]), wd = Math.round(u.dmg / maxD * 100), dd = u.det || {};
+    return '<div class="rp-tr' + (u.dead ? ' dead' : '') + '" data-act="unit" data-u="' + u.id + '" role="button" tabindex="0"><span></span><span class="rp-who"><span class="rp-av g' + (u.gr | 0) + '">' + bnRptFace(u) + '</span><span><b>' + bnRptEsc(u.name) + '</b><small>' + (BNRPT_POS[u.row] || u.pos) + (u.dead ? ' · 潰' : '') + '</small></span></span>' +
+      '<span class="rp-td k">' + (u.dmg > 0 ? bnRptFmt(u.dmg) : '<span class="z">—</span>') + '<u><i class="p" style="width:' + Math.round(wd * ps[0] / tot) + '%"></i><i class="s" style="width:' + Math.round(wd * ps[1] / tot) + '%"></i></u></span>' +
+      '<span class="rp-td lx">' + (dd.acts | 0) + '</span>' + nz(ps[0], 'lx') + nz(ps[1], 'lx') + nz(u.heal, 'h') + nz(dd.taken | 0, 't') + nz(dd.kills | 0, '') + '</div>';
+  }
+  function grp(s, key) {
+    var ac = 0, ph = 0, st = 0, tk = 0, kl = 0;
+    s.units.forEach(function (u) { var p = bnRptPhSt(u), dd = u.det || {}; ac += dd.acts | 0; ph += p[0]; st += p[1]; tk += dd.taken | 0; kl += dd.kills | 0; });
+    return '<div class="rp-grp ' + (key === 'mine' ? 'me' : 'foe') + '"><i class="rp-wm">' + ((key === 'mine') === (d.mineRes === '勝') && d.mineRes !== '平' ? '勝' : (d.mineRes === '平' ? '平' : '敗')) + '</i>' + s.units.map(function (u) { return row(u, key); }).join('') +
+      '<div class="rp-tr sum"><span></span><span class="rp-who">隊伍合計</span><span class="rp-td">' + bnRptFmt(s.dmg) + '</span><span class="rp-td lx">' + ac + '</span>' + nz(ph, 'lx') + nz(st, 'lx') + nz(s.heal, 'h') + nz(tk, 't') + nz(kl, '') + '</div></div>';
+  }
+  return '<section class="rp-v rp-st"><div class="rp-tbl"><div class="rp-tr rp-th"><span></span><span>武將</span><span>總傷害</span><span class="lx">出手</span><span class="lx">物理</span><span class="lx">策略</span><span>治療</span><span>承受</span><span>擊倒</span></div>' + grp(d.mine, 'mine') + grp(d.enemy, 'enemy') + '<div class="rp-hint">點任一列看該武將明細 · 長條 = 物理(橘)+ 策略(紫)占全場最高傷害比例</div></div></section>';
+}
+// 武將明細子頁(滿版):英雄卡 + 傷害來源表 + 戰法表(沿用 bnRptDtlHtml)
+function bnRptUnitPageHtml(d, uid) {
+  var u = null, side = 'mine', ps, tot, d0;
+  d.mine.units.forEach(function (x) { if (x.id === uid) { u = x; side = 'mine'; } });
+  d.enemy.units.forEach(function (x) { if (x.id === uid) { u = x; side = 'enemy'; } });
+  if (!u) return '';
+  ps = bnRptPhSt(u); tot = Math.max(1, ps[0] + ps[1]); d0 = u.det || {};
+  return '<section class="rp-v rp-un"><div class="rp-hero"><span class="rp-fig g' + (u.gr | 0) + '">' + bnRptImg(u) + '<i class="rp-tp">' + bnRptEsc(String(u.troop || '').charAt(0)) + '</i></span><div><h3>' + bnRptEsc(u.name) + '<small>' + (BNRPT_POS[u.row] || u.pos) + (u.star && side === 'mine' ? ' · ' + u.star + '星' : '') + ' · ' + bnRptEsc(u.troop || '') + (u.dead ? ' · 潰滅' : '') + '</small></h3>' +
+    '<div class="rp-hhp"><u><i style="width:' + (u.hpOpen > 0 ? Math.round(u.hp / u.hpOpen * 100) : 0) + '%"></i></u><span>兵力 ' + bnRptFmt(u.hp) + ' / ' + bnRptFmt(u.hpOpen) + '</span></div>' +
+    '<div class="rp-chips"><span>出手 <b>' + (d0.acts | 0) + '</b></span><span>擊倒 <b>' + (d0.kills | 0) + '</b></span><span>承受 <b class="t">' + bnRptFmt(d0.taken | 0) + '</b></span><span>受治療 <b class="h">' + bnRptFmt(d0.healIn | 0) + '</b></span>' + (d0.shield ? '<span>護盾 <b>' + bnRptFmt(d0.shield) + '</b></span>' : '') + '</div>' +
+    '<div class="rp-stack"><i style="flex:' + ps[0] + ';background:#ffb066"></i><i style="flex:' + ps[1] + ';background:#c79bff"></i></div><div class="rp-chips"><span>總傷害 <b>' + bnRptFmt(u.dmg) + '</b></span><span class="p">物理 ' + bnRptFmt(ps[0]) + '</span><span class="s">策略 ' + bnRptFmt(ps[1]) + '</span><span>治療 <b class="h">' + bnRptFmt(u.heal) + '</b></span></div></div></div>' +
+    '<div class="bnr-dtl rp-dtl">' + bnRptDtlHtml(u).replace(/^<div class="bnr-dtl">/, '').replace(/<\/div>$/, '') + '</div></section>';
+}
+// 逐回合頁:回合列 + 條列 + 武將軌(直式:回合列在上、武將軌在下;橫式:左右側欄)
+function bnRptRdPageHtml(d, R, brief, r, rec) {
+  var units = {}, h = '', i, o = d.mine.units.concat(d.enemy.units), used = {}, nR = R.rounds.length;
+  o.forEach(function (u) { units[u.id] = u; });
+  if (r > 0 && R.rounds[r - 1]) R.rounds[r - 1].acts.forEach(function (a) { if (a.u >= 0) used[a.u] = 1; });
+  h += '<section class="rp-v rp-rd"><div class="rp-rds"><span class="rp-rc' + (r === 0 ? ' on' : '') + '" data-act="round" data-r="0">開戰前</span>';
+  for (i = 1; i <= nR; i++) h += '<span class="rp-rc' + (r === i ? ' on' : '') + '" data-act="round" data-r="' + i + '">' + i + '</span>';
+  h += '<span class="rp-brief' + (brief ? ' on' : '') + '" data-act="brief">' + (brief ? '簡略' : '完整') + '</span></div><div class="rp-lw"><div class="rp-log">' +
+    (rec && !bnRptReplayable(rec) ? '<p class="rp-old">舊版戰報,逐回合為重算結果,可能與當時不同</p>' : '') + bnRptRoundHtml(R, r, brief, { units: units });
+  if (r === nR && nR > 0) h += '<div class="rp-endl">' + R.end.text + '</div>';
+  h += '</div><div class="rp-dock">';
+  d.mine.units.forEach(function (u) { h += '<span class="rp-av me g' + (u.gr | 0) + (used[u.id] || r === 0 ? '' : ' idle') + '" data-act="dock" data-u="' + u.id + '">' + bnRptFace(u) + '</span>'; });
+  h += '<i class="rp-dsep"></i>';
+  d.enemy.units.forEach(function (u) { h += '<span class="rp-av foe g' + (u.gr | 0) + (used[u.id] || r === 0 ? '' : ' idle') + '" data-act="dock" data-u="' + u.id + '">' + bnRptFace(u) + '</span>'; });
+  return h + '</div></div></section>';
+}
+function bnRptTabsHtml(cls) {
+  var t = [['ov', '總覽'], ['st', '統計'], ['rd', '逐回合']], v = BNRPT.view === 'unit' ? BNRPT.prevView : BNRPT.view;
+  return t.map(function (x) { return '<span class="rp-tb' + (v === x[0] ? ' on' : '') + '" data-act="tab" data-v="' + x[0] + '" role="button" tabindex="0">' + x[1] + '</span>'; }).join('');
+}
+// 整頁:頂欄(左上返回 / 標題 / 橫式頁籤 / 右側動作圖示)+ 內容 + 底部分頁列(直式)
+function bnRptPageHtml(d) {
+  var o = BNRPT.opts || {}, lid = o.logId, v = BNRPT.view, unit = null, acts = '', h, body, title = '戰報', nav = '';
+  if (v === 'unit') {
+    d.mine.units.concat(d.enemy.units).forEach(function (x) { if (x.id === BNRPT.unit) unit = x; });
+    title = (unit ? unit.name : '') + ' · 明細';
+    nav = '<span class="rp-nav2"><span class="rp-ib" data-act="unav" data-d="-1" role="button" aria-label="上一位"><i>‹</i></span><span class="rp-ib" data-act="unav" data-d="1" role="button" aria-label="下一位"><i>›</i></span></span>';
+  } else {
+    if (bnRptReplayable(BNRPT.rec)) acts += '<span class="rp-ib" data-act="replay" role="button" aria-label="重播"><i><span class="rp-play"></span></i></span>';
+    if (lid && typeof bnLogSave === 'function') acts += '<span class="rp-ib' + (BNRPT.saved ? ' off' : '') + '" data-act="save" role="button" aria-label="儲存戰報"><i>' + (BNRPT.saved ? '★' : '☆') + '</i></span>';
+    if (o.share !== undefined ? o.share : bnRptShareOk(lid)) acts += '<span class="rp-ib" data-act="share" role="button" aria-label="分享戰報碼"><i><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="3.5" r="2"/><circle cx="12.5" cy="12.5" r="2"/><path d="M5.3 7l5.4-2.6M5.3 9l5.4 2.6"/></svg></i></span>';
+    acts = '<span class="rp-acts">' + acts + '</span>';
+  }
+  if (v === 'ov') body = bnRptOverviewHtml(d, o.loot);
+  else if (v === 'st') body = bnRptStatsHtml(d);
+  else if (v === 'rd') body = bnRptRdPageHtml(d, BNRPT.rounds || (BNRPT.rounds = bnRptRounds(d._S, d)), BNRPT.brief, BNRPT.round, BNRPT.rec);
+  else body = bnRptUnitPageHtml(d, BNRPT.unit);
+  h = '<div class="rp rpv-' + v + '"><div class="rp-bg"></div><div class="rp-top"><span class="rp-back" data-act="' + (v === 'unit' ? 'uback' : 'leave') + '" role="button" tabindex="0" aria-label="返回"><span>返回</span></span><b class="rp-ttl">' + bnRptEsc(title) + '</b>' + (v === 'unit' ? '' : '<nav class="rp-ttabs">' + bnRptTabsHtml() + '</nav>') + (v === 'unit' ? nav : acts) + '</div>' +
+    '<main class="rp-views">' + body + '</main>' + (v === 'unit' ? '' : '<nav class="rp-btabs">' + bnRptTabsHtml() + '</nav>') + (v === 'ov' && d.mineRes === '勝' && !BNRPT.conf ? bnRptConfetti(d.seed) : '') + '</div>';
+  return h;
+}
 function bnRptRender() {
   var el = BNRPT.el, d = BNRPT.data;
   if (!el || !d) return;
-  el.innerHTML = bnRptResultHtml(d);
-  el.className = 'ld-noselect bnr-v-result';
+  el.innerHTML = bnRptPageHtml(d);
+  el.className = 'ld-noselect bnr-v-' + BNRPT.view;
+  BNRPT.conf = true;   // 勝利彩帶只在第一次進總覽播
   bnRptScene();
+}
+// 明細頁 ‹ ›:依 我方 3 位 + 敵方 3 位 的順序循環
+function bnRptUnitStep(dir) {
+  var d = BNRPT.data, list, i;
+  if (!d) return;
+  list = d.mine.units.concat(d.enemy.units).map(function (u) { return u.id; });
+  i = list.indexOf(BNRPT.unit);
+  BNRPT.unit = list[(Math.max(0, i) + dir + list.length) % list.length];
+  bnRptRender();
+}
+// 逐回合頁底部武將軌:點頭像 → 捲到該武將本回合的行動段並金框標示
+function bnRptDockJump(uid) {
+  var el = BNRPT.el, box, t, old, i;
+  if (!el || !el.querySelector) return;
+  old = el.querySelectorAll ? el.querySelectorAll('.rp-act.cur') : [];
+  for (i = 0; i < old.length; i++) old[i].classList.remove('cur');
+  t = el.querySelector('.rp-act[data-u="' + uid + '"]');
+  if (!t) return;
+  t.classList.add('cur');
+  box = el.querySelector('.rp-log');
+  if (box) { try { box.scrollTop = Math.max(0, t.offsetTop - box.offsetTop - 4); } catch (e) { /* 略過 */ } }
 }
 function bnRptToast(m) { if (typeof showToast === 'function') { try { showToast(m); } catch (e) { /* 略過 */ } } }
 function bnRptOnClick(e) {
@@ -293,6 +531,13 @@ function bnRptOnClick(e) {
   if (!b) return;
   a = b.getAttribute('data-act');
   if (a === 'tg') { bnRptDetailToggle(b); return; }
+  if (a === 'tab') { BNRPT.view = b.getAttribute('data-v') || 'ov'; bnRptRender(); return; }
+  if (a === 'unit') { BNRPT.prevView = BNRPT.view === 'unit' ? BNRPT.prevView : BNRPT.view; BNRPT.view = 'unit'; BNRPT.unit = +b.getAttribute('data-u'); bnRptRender(); return; }
+  if (a === 'uback') { BNRPT.view = BNRPT.prevView || 'ov'; bnRptRender(); return; }
+  if (a === 'unav') { bnRptUnitStep(+b.getAttribute('data-d') || 1); return; }
+  if (a === 'round') { BNRPT.round = +b.getAttribute('data-r') || 0; bnRptRender(); return; }
+  if (a === 'brief') { BNRPT.brief = !BNRPT.brief; bnRptRender(); return; }
+  if (a === 'dock') { bnRptDockJump(+b.getAttribute('data-u')); return; }
   if (a === 'leave' || a === 'close') { bnRptLeave(); return; }
   if (a === 'txt') { bnRptTxt(); return; }
   if (a === 'replay') {   // 重播:關掉戰報開戲台;戲台「離開」或播完會回到這份戰報(帶同樣的戰果 / 儲存 / 離開動作)
@@ -327,6 +572,7 @@ function bnRptHide(on) {
 // 離開 / 返回鍵:關掉戰報,再做 opts.onLeave(例:回關卡選擇 / 入口)
 function bnRptLeave() {
   var f = BNRPT.opts && BNRPT.opts.onLeave;
+  if (BNRPT.el && BNRPT.view === 'unit') { BNRPT.view = BNRPT.prevView || 'ov'; bnRptRender(); return true; }   // 武將明細 → 回進來的分頁
   if (!bnRptClose()) return false;
   if (typeof f === 'function') f();
   return true;
@@ -337,6 +583,7 @@ function bnRptOpen(rec, opts) {
   if (typeof document === 'undefined' || !document.body) return false;
   if (BNRPT.el) bnRptClose();
   BNRPT.rec = rec; BNRPT.opts = o; BNRPT.data = bnRptBuild(rec, o.mySide === 'B' ? 'B' : 'A'); BNRPT.hidden = false; BNRPT.saved = false;
+  BNRPT.view = 'ov'; BNRPT.prevView = 'ov'; BNRPT.round = 1; BNRPT.brief = true; BNRPT.unit = null; BNRPT.rounds = null; BNRPT.conf = false;
   el = document.createElement('div');
   el.id = 'bnRpt'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', '戰報');
   el.className = 'ld-noselect';
@@ -351,7 +598,7 @@ function bnRptClose() {
   if (!el) return false;
   el.removeEventListener('click', bnRptOnClick);
   if (el.parentNode) el.parentNode.removeChild(el);
-  BNRPT.el = null; BNRPT.data = null; BNRPT.rec = null; BNRPT.hidden = false; BNRPT.saved = false;
+  BNRPT.el = null; BNRPT.data = null; BNRPT.rec = null; BNRPT.hidden = false; BNRPT.saved = false; BNRPT.rounds = null;
   return true;
 }
 function bnRptIsOpen() { return !!(BNRPT.el && BNRPT.el.parentNode); }

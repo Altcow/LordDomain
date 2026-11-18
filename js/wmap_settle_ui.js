@@ -75,7 +75,7 @@ function wmapSettleUiCardInfo(gi, W, now) {
     sub = '放棄中・剩 ' + wmapGoUiDur(st.qLeft) + '(期間仍占名額、照常產出)';
     btns = '<button type="button" class="wgc-b pri" data-wgo="unquit">取消放棄</button>';
   } else {
-    sub = '我的領地・' + wmapSettleUiRateTxt(st.rate) + '・名額 ' + used + '/' + cap;
+    sub = (st.working ? '占領中 ' + wmapGoUiMmss(st.wLeft) + '・完成後開始產出' : '我的領地') + '・' + wmapSettleUiRateTxt(st.rate) + '・名額 ' + used + '/' + cap;   // 占領作業中顯示倒數(wmapSettleStatus.working)
     btns = '<button type="button" class="wgc-b warn" data-wgo="quit">放棄</button>';
   }
   return { sub: sub, btns: btns };

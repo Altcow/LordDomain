@@ -65,7 +65,7 @@ var BN_DATA = {
     cleanse: [1, 2, 99, 99], revive: [0.2, 0.3, 0.4, 0.5],
     buff_atk: [0.10, 0.15, 0.20, 0.30], buff_def: [0.10, 0.15, 0.20, 0.30], buff_spd: [8, 12, 16, 22], buff_crit: [0.08, 0.12, 0.16, 0.24], buff_all: [0.05, 0.08, 0.10, 0.15], buff_all_spd: [5, 8, 10, 15],
     rate_up: [0.05, 0.10, 0.15, 0.20], rate_down: [0.05, 0.10, 0.15, 0.20],   // 戰法發動率 ± 百分點(取代士氣類)
-    debuff_atk: [0.10, 0.15, 0.20, 0.30], debuff_def: [0.10, 0.15, 0.20, 0.30], debuff_spd: [8, 12, 16, 22], debuff_hit: [0.15, 0.25, 0.35, 0.45], mark: [0.10, 0.15, 0.20, 0.30],
+    debuff_atk: [0.10, 0.15, 0.20, 0.30], debuff_def: [0.10, 0.15, 0.20, 0.30], debuff_spd: [8, 12, 16, 22], debuff_hit: [0.15, 0.25, 0.35, 0.45], debuff_int: [0.10, 0.15, 0.20, 0.30], mark: [0.10, 0.15, 0.20, 0.30],
     silence: [1, 1, 2, 2], taunt: [1, 2, 2, 3], taunt_def: [0, 0.10, 0.20, 0.30], fear_skip: [0.20, 0.30, 0.40, 0.50], bind: [1, 1, 1, 2],
     dot_burn: [0.15, 0.20, 0.25, 0.30], dot_poison: [0.03, 0.04, 0.05, 0.06], dot_bleed: [0.15, 0.20, 0.25, 0.30],
     counter: [0.4, 0.5, 0.6, 0.8], reorder_spd: [0, 5, 10, 15], guard: [0.3, 0.5, 0.7, 1.0], lifesteal_pct: [0.2, 0.3, 0.4, 0.5],
@@ -108,7 +108,9 @@ var BN_DATA = {
   summonMax: 2,
   starSkillPlus: 0.05,         // 升星 3 星起「戰法強化」:主動 / 追擊 / 大招效果檔位視為 +5 %(PLACEHOLDER)
   stackKillAtk: 0.05,
-  bonusVs: { S: 0.2, M: 0.4, L: 0.7, XL: 1.0 },       // params.bonusVsStatus.mult 檔位 → 加成
+  // 戰法條件加成 params.cb(2026-11-18):mul 沿用 bonusVs;crit 加暴擊率(XL = 必暴)/ det 引爆倍率 / chance 控制機率加成 / leech 回血比例 / condCap 同一擊條件乘數上限
+  cb: { crit: { S: 0.1, M: 0.2, L: 0.35 }, det: { S: 1.2, M: 1.5, L: 2.0 }, chance: { S: 0.15, M: 0.25, L: 0.35 }, leech: { S: 0.15, M: 0.25, L: 0.35 }, condCap: 2.0 },
+  bonusVs: { S: 0.2, M: 0.4, L: 0.7, XL: 1.0 },     // params.bonusVsStatus.mult 檔位 → 加成
   stepMul: { S: 0.05, M: 0.08, L: 0.12, XL: 0.15 },   // perFacAlly / perAlly / crowd_scale 每階加成
   chanceMap: { S: 0.5, M: 0.7, L: 0.9, XL: 1.0 },     // 控制類 params.chance 檔位 → 機率
   followMul: { S: 0.6, M: 0.9, L: 1.2, XL: 1.6 },     // 羈絆 follow_up 的普攻倍率

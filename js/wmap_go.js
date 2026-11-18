@@ -51,10 +51,11 @@ function wmapGoIsPtId(id) { return typeof id === 'string' && /^w\d+$/.test(id); 
 
 // ───────── 路徑(Dijkstra,同 wmDistCalc 的成本模型,單源)─────────
 function wmapGoRoute(WG, src, goal) {
-  var N = WG.size, n = N * N, k = WG.k, rd = WG.rd || null, dist = new Float64Array(n), pv = new Int32Array(n), done = new Uint8Array(n), h = wmgHeap(), i, u, ux, uy, j, x, y, v, w, nd, ok, cells, cur;
+  var N = WG.size, n = N * N, k = WG.k, rd = WG.rd || null, dist = new Float64Array(n), pv = new Int32Array(n), done = new Uint8Array(n), h = wmgHeap(), i, u, ux, uy, j, x, y, v, w, nd, ok, cells, cur, home;
   if (!(src >= 0 && src < n)) return null;
   for (i = 0; i < n; i++) { dist[i] = Infinity; pv[i] = -1; }
   dist[src] = 0; h.push(0, src);
+  home = src === WG.c0;   // 從主城中心出發:穿過主城占地(k 6)不計成本 = 與 WG.d / d0 同口徑(主城 7 格都是 0)
   while (h.size()) {
     u = h.pop();
     if (done[u]) continue;
@@ -72,7 +73,7 @@ function wmapGoRoute(WG, src, goal) {
       if (x < 0 || y < 0 || x >= N || y >= N) continue;
       v = y * N + x;
       if (v !== goal && !wmgWalk(k[v])) continue;
-      w = nd + wmgMul(k[v], rd && rd[v]);
+      w = nd + (home && k[v] === 6 ? 0 : wmgMul(k[v], rd && rd[v]));
       if (w >= dist[v]) continue;
       dist[v] = w; pv[v] = u; h.push(w, v);
     }
@@ -90,7 +91,15 @@ function wmapGoAdjOwn(WG, gi, own) {
   for (i = 0; i < nb.length; i++) if (own[nb[i]]) return true;
   return false;
 }
-function wmapGoTarget(WG, gi, info, own) {
+function wmapGoPaveAdj(WG, gi, own, W) {   // 空地緊鄰己方錨點(主城占地 / 己方領地 / 已占空地 / 己方道路)?有 W 才用 wmapSettleAnchors,否則只看 own + 主城占地
+  var anc, nb, i, c;
+  if (W && typeof wmapSettleAnchors === 'function') anc = wmapSettleAnchors(W, WG);
+  else { anc = new Uint8Array(WG.size * WG.size); c = wmCityCells(WG).concat(wmCityYard(WG)); for (i = 0; i < c.length; i++) anc[c[i]] = 1; if (own) for (i in own) anc[+i] = 1; }
+  nb = wmHexNbs(gi, WG.size);
+  for (i = 0; i < nb.length; i++) if (anc[nb[i]]) return true;
+  return false;
+}
+function wmapGoTarget(WG, gi, info, own, W) {
   var N, k, nd, cells, base, cost, pass, rt;
   if (!WG || !(gi >= 0 && gi < WG.k.length)) return { ok: false, reason: 'target' };
   N = WG.size; k = WG.k[gi];
@@ -107,7 +116,14 @@ function wmapGoTarget(WG, gi, info, own) {
     return { ok: true, reason: '', kind: nd.type, gi: gi, WG: WG, node: nd, cost: cost, cells: cells, end: cells[cells.length - 1], path: wmMarchTurns(cells, N), ty: '', lv: 0 };
   }
   if (k === 0) {
-    if (!info) return { ok: false, reason: 'empty' };
+    if (!info) {   // 空地:傳了 W(wmapGoDispatch)且緊鄰己方錨點 → kind 'pave'(跳過戰鬥,由 wmap_eng / wmapSettleEmptyStart 接手;不設距離上限、系統自選最優路線);否則 'empty'
+      if (W && !(WG.zone && WG.zone[gi]) && !(WG.rt && WG.rt[gi] >= 0) && wmapGoPaveAdj(WG, gi, own, W)) {
+        rt = isFinite(WG.d[gi]) ? { cells: wmPathCells(WG, gi), cost: WG.d[gi] } : wmapGoRoute(WG, WG.c0, gi);
+        if (!rt || !rt.cells) return { ok: false, reason: 'unreach' };
+        return { ok: true, reason: '', kind: 'pave', gi: gi, WG: WG, node: null, cost: rt.cost, cells: rt.cells, end: gi, path: wmMarchTurns(rt.cells, N), ty: '', lv: 0 };
+      }
+      return { ok: false, reason: 'empty' };
+    }
     if (!isFinite(WG.d[gi])) {   // 超出 WG.d 可達上限(24):緊鄰己方領地的資源格仍可打(長途出兵不設距離上限,11/17),另算整條路;不相鄰的維持 unreach
       if (!wmapGoAdjOwn(WG, gi, own)) return { ok: false, reason: 'unreach' };
       rt = wmapGoRoute(WG, WG.c0, gi);
@@ -161,8 +177,9 @@ function wmapGoDispatch(W, cs, team, gi, now, o) {
   o = o || {};
   var WG = o.WG, r = wdRun(W, cs, now), tg, pt0, chk, pt, plan, trip;
   if (r.frozen) return { ok: false, reason: 'frozen', events: r.events };
-  tg = wmapGoTarget(WG, gi, o.info, wmapGoOwnSet(W));
+  tg = wmapGoTarget(WG, gi, o.info, wmapGoOwnSet(W), W);
   if (!tg.ok) return { ok: false, reason: tg.reason, events: r.events };
+  if (tg.kind === 'pave') return { ok: false, reason: 'pave', tg: tg, events: r.events };   // 空地:不打,資料層由 wmapSettleEmptyStart / wmap_eng 接手(UI 之後接)
   gi = tg.gi;
   pt0 = wdPt(W, wmapGoPtId(gi));
   if (pt0 && (pt0.owner || pt0.cl)) return { ok: false, reason: 'owned', events: r.events };
@@ -318,6 +335,14 @@ function wmapGoOwnSet(W) {
   }
   return out;
 }
+function wmapGoOwnSetAll(W, now) {   // 資源領地 + 已完成占領的空地(連地 / 相鄰判斷用;不含作業中;now 預設 ldNow())
+  var out = wmapGoOwnSet(W), em = W.g2 && W.g2.em ? W.g2.em : null, k;
+  if (!(now >= 0)) now = typeof ldNow === 'function' ? ldNow() : Date.now();
+  if (em) for (k in em) if (em[k].t1 <= now) out[+k] = 1;
+  return out;
+}
+function wmapGoMigNotice(W) { var m = W && W.g2 ? W.g2.mg : null; return m && m.n > 0 ? { n: m.n, from: m.from, to: m.to, t: m.t } : null; }   // 開檔第一次顯示「地圖資源重排,收回 N 塊領地」;顯示後呼叫 wmapGoMigAck
+function wmapGoMigAck(W) { if (W && W.g2 && W.g2.mg) { delete W.g2.mg; return true; } return false; }
 function wmapGoSummary(events) {
   var o = { arrive: 0, report: 0, win: 0, lose: 0, home: 0, idleend: 0, miss: 0 }, i, e;
   for (i = 0; i < (events || []).length; i++) {
@@ -338,30 +363,60 @@ function wmapGoNeedMigrate(W, WG) {
   var gv = W && W.g2 && W.g2.gv > 0 ? W.g2.gv : 2;   // 沒記錄的舊存檔 = gv 2(v66 以前的 wmap 世界都是 gv 2)
   return !!(WG && WG.gv > 0 && gv !== WG.gv);
 }
+// gv 6(128×128 + 席位 + 等級重排):世界邊長可能變了(舊世界 64),舊領地座標依「離主城的相對位置」平移到新圖(c、r 各 + (新邊長 − 舊邊長) / 2),再套同一套規則;
+//   收回數量(owner 'me' 的領地不再是資源格)= out.taken,寫進 g2.mg 讓 UI 在開檔後顯示一次「地圖資源重排,收回 N 塊領地」(wmapGoMigNotice / wmapGoMigAck);不補償。
+//   道路層 g2.rd:只在地形沒變(同邊長、WG.tries === 1、種子相同或舊檔沒記)時保留,並只留仍是平地的格;否則清空。
 function wmapGoMigrate(W, cs, WG, now) {
-  var out = { changed: false, from: 0, to: 0, home: 0, node: 0, res: 0, keep: 0, rd: 0, dead: 0 }, g, i, p, gi, ev, trips, key, bad, sync;
+  var out = { changed: false, from: 0, to: 0, home: 0, node: 0, res: 0, keep: 0, rd: 0, rdKeep: 0, dead: 0, taken: 0, em: 0 }, g, i, p, gi, ev, trips, key, bad, sync, oldN, N, shift, remap, taken = {}, terrainSame, ng, nk, oh2, em2;
   if (!W || !WG || !wmapGoNeedMigrate(W, WG)) return out;
   g = typeof wmapSettleG2 === 'function' ? wmapSettleG2(W) : (W.g2 = W.g2 && W.g2.own ? W.g2 : { v: 1, own: {}, n: 0, oh: {} });
   out.changed = true; out.from = g.gv > 0 ? g.gv : 2; out.to = WG.gv;
+  N = WG.size; oldN = g.sz > 0 ? g.sz : 64; shift = (N - oldN) / 2;
+  terrainSame = oldN === N && WG.tries === 1 && (typeof g.sd !== 'number' || g.sd === WG.seed);
   ev = [];
   trips = W.trips.slice();
   for (i = 0; i < trips.length; i++) if (trips[i].g2) { wdTripHome(W, cs, trips[i], now, ev, false); out.home++; }
-  bad = function (c) { return !(WG.k[c] === 0 && !(WG.zone && WG.zone[c])) || (WG.rt && !(WG.rt[c] >= 0)); };
+  remap = function (old) {   // 舊格號 → 新格號(邊長沒變 = 同號;出界 = −1)
+    var c, r;
+    if (oldN === N) return old;
+    c = old % oldN + shift; r = Math.floor(old / oldN) + shift;
+    return (c >= 0 && r >= 0 && c < N && r < N) ? r * N + c : -1;
+  };
+  bad = function (c) { return c < 0 || !(WG.k[c] === 0 && !(WG.zone && WG.zone[c])) || (WG.rt && !(WG.rt[c] >= 0)); };
   sync = function (o, c) {   // gv 4:資源重排後同一格的種類 / 等級可能變了,以新地圖為準(與 wmapGoDraft 同樣上限 10;gv 5 起清空 g2.yg.dead 與道路層 rd 清單)
     if (!WG.rt || !(WG.rt[c] >= 0) || typeof WMG_RES_TY === 'undefined') return;
     o.ty = WMAPGO_TY[WMG_RES_TY[WG.rt[c]]] || o.ty; o.lv = Math.max(1, Math.min(10, WG.rl[c] | 0));
   };
   W.pts = W.pts.filter(function (x) {
     if (!wmapGoIsPtId(x.id)) return true;
-    gi = +x.id.slice(1);
     if (x.cat === 'county' || x.cat === 'jun' || x.cat === 'pass') { out.node++; return false; }
-    if (x.cat === 'res' && bad(gi)) { out.res++; return false; }
-    if (x.cat === 'res') { out.keep++; sync(x, gi); }
+    gi = remap(+x.id.slice(1));
+    if (x.cat === 'res' && bad(gi)) { out.res++; if (x.owner === 'me') taken[+x.id.slice(1)] = 1; return false; }
+    if (x.cat === 'res') { out.keep++; x.id = 'w' + gi; sync(x, gi); }
     return true;
   });
-  for (key in g.own) { if (bad(+key)) delete g.own[key]; else sync(g.own[key], +key); }
-  if (Array.isArray(g.rd)) { out.rd = g.rd.length; g.rd = []; }   // 道路層(鋪路隊)清單:格幾何全變,舊鋪路格作廢
+  ng = {};
+  for (key in g.own) {
+    gi = remap(+key);
+    if (bad(gi)) { taken[+key] = 1; continue; }
+    sync(g.own[key], gi); ng[gi] = g.own[key];
+  }
+  g.own = ng;
+  oh2 = {};
+  for (key in g.oh) { gi = remap(+key); if (gi >= 0) oh2[gi] = g.oh[key]; }
+  g.oh = oh2;
+  if (g.em) {   // 空地占領:搬到新位置;新位置不再是空地(變成資源格 / 地形)就丟(不算領地)
+    em2 = {};
+    for (key in g.em) { gi = remap(+key); if (gi >= 0 && typeof wmapSettleEmptyAt === 'function' && wmapSettleEmptyAt(WG, gi)) em2[gi] = g.em[key]; else out.em++; }
+    g.em = em2;
+  }
+  if (Array.isArray(g.rd)) {   // 道路層(鋪路隊)清單:地形沒變才留(只留仍是平地的格)
+    out.rd = g.rd.length;
+    if (terrainSame) { g.rd = g.rd.filter(function (c) { return c >= 0 && c < N * N && WG.k[c] === 0; }); out.rdKeep = g.rd.length; } else g.rd = [];
+  }
   if (g.yg && Array.isArray(g.yg.dead)) { out.dead = g.yg.dead.length; g.yg.dead = []; }   // 野怪已擊殺紀錄(key = bk × 16 + 序號,新地圖野怪位置全變)
-  g.gv = WG.gv;
+  out.taken = Object.keys(taken).length;
+  if (out.taken > 0) g.mg = { n: out.taken, from: out.from, to: out.to, t: now };
+  g.gv = WG.gv; g.sz = WG.size; g.sd = WG.seed;
   return out;
 }

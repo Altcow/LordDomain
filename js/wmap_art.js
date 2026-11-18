@@ -29,15 +29,19 @@
 //   wmapArtRiver(g, pass, nb, ford, h, dg) / wmapArtRoad(g, pass, nb, h)   在 wmapArtIsoT 座標畫河 / 路單格;pass 'bank' 'water' 'hi' / 'edge' 'fill';nb = [d0…d5] 六鄰是否同類;dg[i](i = 0~5)= 鄰向 i 與 i+1 與它們之間的斜鄰都同類 → 補滿該 1/6 角
 //   WMAP_DIR6 = 六個鄰向的邊中點(局部座標)
 //   wmapArtClear()    清快取(測試用;不清貼圖)
+//   山 / 城池精靈圖(2026-11-18 美術整合,assets/wmap/obj/art_meta.json,tools/wmap_obj_prep.py --kind mt|city 產生):
+//        wmapArtSprKick(need?)  載入索引與圖檔(need = {鍵: 1},只載這些鍵所在的檔;省略 = 全部;可重複呼叫補載;失敗保持程式備用)。載入後 wmapArtGet(key) 回 {c: Image, spr: {sx, sy, sw, sh, ox, oy, ow, oh, mir}, res, cw, ch, ax, ay, fw, fh, img: true};
+//        cw / ch / ax / ay 仍是 WMAP_PIECE 的拼塊畫布與錨點(放置 / 命中不變),spr = 精靈在畫布內的位置(美術單位)與圖檔內矩形;鏡像鍵 M2r ← M2c、M3r ← M3l、PASS1 ← PASS0(spr.mir)。縣 / 郡 / 州 / 關 / 主城 / 山 / 邊界大樹 T1 舊程式畫法保留為缺圖備用。
+//        wmapArtSprInstall(meta, 檔名, Image) / wmapArtSprReset() / wmapArtSprMem() → 解碼位元組 / wmapArtSprScaled(entry, k) → 取樣來源(畫面層 wmapScaled 用)
 //
-// ───────── 地面貼圖取樣(規格第 4 節 + tools/proto_hex_texture.html;貼圖 assets/wmap/tex/tex_<key>_<1024|512>.webp,key = grass mud wood rock rammed suburb mine farm_a farm_b hunt river shoal sand;sand 2026-11-17 起,tex_sand 缺檔時用程式退路 #E2C477 + 小點) ─────────
+// ───────── 地面貼圖取樣(規格第 4 節 + tools/proto_hex_texture.html;貼圖 assets/wmap/tex/tex_<key>_<1024|512>.webp,key = grass mud wood rock rammed suburb mine farm_a farm_b hunt river shoal sand;sand 2026-11-17 起;tex_sand_512 / 1024 2026-11-18 入庫(14_沙地,接縫優於草地 → 不鏡像直接平移),缺檔時用程式退路 #E2C477 + 小點) ─────────
 //   地面 → 貼圖鍵:grass→grass、dirt→mud、wood→wood、rock→rock、rammed→rammed、suburb→suburb、mine→mine、farm a / b→farm_a / farm_b、hunt→hunt、river→river、shoal→shoal、sand→sand(wmapTexKeyOf(type, vi))
 //   wmapTexLoad(key) → Promise<bool>     非同步載入 + 快取;載入前所有呼叫端自動退回程式退路;載入完會清掉對應 hx_ 快取並呼叫 WMAP_TEX.onload(key)(畫面層據此重烘)
 //   wmapTexReady(key) → bool;wmapTexSet(key, imgOrCanvas) 直接塞圖(測試 / 預載用);wmapTexReset(key) 釋放;wmapTexTrim(keepKeys[]) 只留清單內的貼圖(畫面只用到的幾種)
 //   wmapTexPattern(ctx, key, sg, ox, oy) → CanvasPattern | null    取樣 pattern。sg = 每「1024 參考貼圖像素」對應畫布 px(512 版內部自動 ×2);矩陣 = translate(−ox, −oy) · scale(sg, sg × 0.65);(ox, oy) = 畫布原點的世界座標(整張畫布 / 同一世界共用 → 相鄰格紋理連續;省略 = 0)。fill 時目前 transform 要是單位矩陣
 //   wmapTexSg(W, span) → W × span / 1024    一張貼圖涵蓋 span 格寬(預設 5)的 sg
 //   wmapTexSat(v?) → 飽和度(0~1.5,預設 0.65;傳值就改並重建貼圖;rock 已調灰,不套)
-//   wmapTexMirror(key, on?) → bool   該貼圖是否 2×2 鏡像拼貼(預設 true,兜底免無縫);farm_a / farm_b 強制 false(田壟有方向,單向平移);mud / shoal 可呼叫 wmapTexMirror('mud', false) 改成直接平移
+//   wmapTexMirror(key, on?) → bool   該貼圖是否 2×2 鏡像拼貼(預設 true,兜底免無縫);farm_a / farm_b 強制 false(田壟有方向,單向平移);sand 預設 false(貼圖本身無縫,取樣瓦片 1 MB 而非 4 MB);mud / shoal 可呼叫 wmapTexMirror('mud', false) 改成直接平移
 //   wmapTexSetRes(res)  貼圖取樣解析度 256 | 512(預設)| 1024:每種貼圖鏡像拼貼後畫布 = (2 × res)² RGBA(512 → 4 MB、256 → 1 MB、1024 → 16 MB;不鏡像的只有 1 / 4 大);wmapTexAutoRes(W, dpr, lowQ, allowHi) → 建議 res;wmapTexMem() → 位元組
 //   wmapArtTexHex(g, x, y, W, H, key, opts) → bool   用貼圖畫一格六邊形(側壁 → 頂面 → 倒角 → 描邊);key = 貼圖鍵;貼圖未載入 → 畫程式退路並回 false。
 //        opts:{sg, ox, oy(同 wmapTexPattern), pat(已建好的 pattern,批次畫時重用)、sides(側壁位元,預設 7,0 不畫)、T(預設 H/4)、wallCol、bevel(預設 true)、line(描邊粗,預設 max(1, W × 0.032),0 不畫)、lineCol}
@@ -184,7 +188,7 @@ function wmapArtHexWall(g, x, y, W, H, T, col, sides) {
 var WMAP_TEX_KEYS = ['grass', 'mud', 'wood', 'rock', 'rammed', 'suburb', 'mine', 'farm_a', 'farm_b', 'hunt', 'river', 'shoal', 'sand'];
 var WMAP_TEX_OF = { grass: 'grass', dirt: 'mud', wood: 'wood', rock: 'rock', rammed: 'rammed', suburb: 'suburb', mine: 'mine', hunt: 'hunt', river: 'river', shoal: 'shoal', sand: 'sand' };
 var WMAP_TEX_PROC = { grass: ['grass', 0], mud: ['dirt', 0], wood: ['wood', 0], rock: ['rock', 0], rammed: ['rammed', 0], suburb: ['suburb', 0], mine: ['mine', 0], farm_a: ['farm', 0], farm_b: ['farm', 1], hunt: ['hunt', 0], river: ['river', 0], shoal: ['shoal', 0], sand: ['sand', 0] };
-var WMAP_TEX = { base: 'assets/wmap/tex/', res: 512, sat: 0.65, span: 5, m: {}, mir: {}, nomirror: { farm_a: 1, farm_b: 1 }, nosat: { rock: 1 }, onload: null };
+var WMAP_TEX = { base: 'assets/wmap/tex/', res: 512, sat: 0.65, span: 5, m: {}, mir: {}, nomirror: { farm_a: 1, farm_b: 1, sand: 1 }, nosat: { rock: 1 }, onload: null };
 function wmapTexKeyOf(type, vi) {
   if (type === 'farm') return (vi === 'b' || vi === 1) ? 'farm_b' : 'farm_a';
   return WMAP_TEX_OF[type] || null;
@@ -1044,6 +1048,88 @@ function wmapArtSetSrc(key, url) {
     img.onerror = function () { ok(false); };
     img.src = url;
   });
+}
+
+// ───────── 山 / 城池 精靈圖(2026-11-18 美術整合):assets/wmap/obj/art_meta.json 登錄,載入後 wmapArtGet(key) 回 {c: Image, spr: {…}, …} ─────────
+// 索引條目 {f, x, y, w, h, s, ox, oy}:檔 f 內的矩形 (x, y, w, h)(px);s = 每美術單位的像素數;(ox, oy) = 精靈左上在拼塊畫布(cw × ch,見 WMAP_IMG)內的位置(美術單位)。
+// 畫法(wmap_view.js 的 wmapDrawArt):畫布左上 + (ox, oy) × k,大小 (w / s) × (h / s) × k,k = W / 256;拼塊畫布仍是 WMAP_PIECE 的 cw × ch、錨點不變,所以物件放置 / 命中 / 缺圖退路完全不變。
+// 鏡像鍵:M2r ← M2c、M3r ← M3l、PASS1 ← PASS0(水平鏡像,ox' = cw − ox − ow);缺檔 / 載入失敗 → 該鍵維持程式備用,不報錯。
+var WMAP_SPR = { base: 'assets/wmap/obj/', st: 0, files: {}, req: {}, pend: [], meta: null, loaded: 0 };   // st:0 未開始、1 載入索引中、2 索引就緒、−1 失敗
+var WMAP_SPR_MIR = { M2r: 'M2c', M3r: 'M3l', PASS1: 'PASS0' };
+function wmapArtSprEntry(key, m, img, mir) {   // → wmapArtImgs 條目 | null
+  var info = WMAP_IMG[key], P = WMAP_PIECE[key], ow, oh;
+  if (!info || !m || !(m.s > 0)) return null;
+  ow = m.w / m.s; oh = m.h / m.s;
+  return { c: img, cw: info.w, ch: info.h, ax: info.ax, ay: info.ay, fw: P ? P.fw : 1, fh: P ? P.fh : 1, q: 1, pw: m.w, ph: m.h, img: true, res: m.s,
+    spr: { sx: m.x, sy: m.y, sw: m.w, sh: m.h, ox: mir ? info.w - m.ox - ow : m.ox, oy: m.oy, ow: ow, oh: oh, mir: !!mir } };
+}
+function wmapArtSprInstall(meta, fn, img) {   // 一個圖檔載入完:登錄它所含的鍵(含鏡像鍵),清這些鍵的程式圖快取
+  var sp = meta && meta.sprites ? meta.sprites : {}, key, mk, e, n = 0;
+  WMAP_SPR.files[fn] = img;
+  for (key in sp) {
+    if (sp[key].f !== fn) continue;
+    if (!wmapArtImgs[key] || wmapArtImgs[key].spr) { e = wmapArtSprEntry(key, sp[key], img, false); if (e) { wmapArtImgs[key] = e; delete wmapArtCache[key]; n++; } }
+    for (mk in WMAP_SPR_MIR) {
+      if (WMAP_SPR_MIR[mk] !== key || (wmapArtImgs[mk] && !wmapArtImgs[mk].spr)) continue;
+      e = wmapArtSprEntry(mk, sp[key], img, true); if (e) { wmapArtImgs[mk] = e; delete wmapArtCache[mk]; n++; }
+    }
+  }
+  WMAP_SPR.loaded++;
+  return n;
+}
+function wmapArtSprReset() { var k; for (k in wmapArtImgs) if (wmapArtImgs[k].spr) { delete wmapArtImgs[k]; delete wmapArtCache[k]; } WMAP_SPR.files = {}; WMAP_SPR.req = {}; WMAP_SPR.pend = []; WMAP_SPR.loaded = 0; WMAP_SPR.st = 0; WMAP_SPR.meta = null; }
+function wmapArtSprMem() {   // 已解碼的精靈圖檔位元組(RGBA)
+  var k, n = 0, im;
+  for (k in WMAP_SPR.files) { im = WMAP_SPR.files[k]; n += (im.naturalWidth || im.width || 0) * (im.naturalHeight || im.height || 0) * 4; }
+  return n;
+}
+function wmapArtSprWanted(need, k) {   // need = {鍵: 1}(這張圖用到的拼塊 / 城池鍵;省略 = 全要);鏡像鍵要它的來源
+  var mk;
+  if (!need || need[k]) return true;
+  for (mk in WMAP_SPR_MIR) if (WMAP_SPR_MIR[mk] === k && need[mk]) return true;
+  return false;
+}
+function wmapArtSprLoadFiles(need) {   // meta 已就緒:載入 need 用到、且還沒要過的圖檔
+  var S = WMAP_SPR, meta = S.meta, files = {}, k;
+  for (k in meta.sprites) if (wmapArtSprWanted(need, k) && !S.req[meta.sprites[k].f]) files[meta.sprites[k].f] = 1;
+  Object.keys(files).forEach(function (fn) {
+    var img = new Image();
+    S.req[fn] = 1;
+    img.onload = function () {
+      wmapArtSprInstall(meta, fn, img);
+      if (typeof WMAP_TEX === 'object' && typeof WMAP_TEX.onload === 'function') { try { WMAP_TEX.onload('spr'); } catch (err) { /* 畫面層回呼出錯不影響圖檔載入 */ } }
+    };
+    img.onerror = function () { /* 這個檔缺 / 壞:它的鍵維持程式備用 */ };
+    img.src = S.base + fn;
+  });
+}
+function wmapArtSprKick(need) {   // 非同步載入 art_meta.json 與其圖檔(只載 need 用到的鍵所在的檔,省記憶體:例如第一季沒有州城就不載州城圖;可重複呼叫,只補載新需要的檔);全部走 try / catch,失敗保持程式備用
+  var S = WMAP_SPR;
+  if (S.st === -1 || typeof fetch !== 'function' || typeof Image === 'undefined') return;
+  try {
+    if (S.st === 2) { wmapArtSprLoadFiles(need); return; }
+    S.pend.push(need || null);
+    if (S.st === 1) return;
+    S.st = 1;
+    fetch(S.base + 'art_meta.json').then(function (r) { if (!r.ok) throw new Error('http'); return r.json(); }).then(function (meta) {
+      var p = S.pend, i;
+      S.meta = meta; S.st = 2; S.pend = [];
+      for (i = 0; i < p.length; i++) wmapArtSprLoadFiles(p[i]);
+    }).catch(function () { S.st = -1; });
+  } catch (e) { S.st = -1; }
+}
+function wmapArtSprScaled(a, k) {   // 精靈的取樣來源:k = 目標每美術單位像素;縮小超過約 1.7 倍就先縮成小畫布(省 drawImage 成本與鋸齒),否則直接取原圖矩形
+  var p = a.spr, w, h, c, g, mid, mg;
+  if (!(k > 0) || k >= a.res * 0.6 || typeof document === 'undefined') return { c: a.c, sx: p.sx, sy: p.sy, sw: p.sw, sh: p.sh };
+  w = Math.max(1, Math.round(p.ow * k)); h = Math.max(1, Math.round(p.oh * k));
+  c = wmapArtCv(w, h); g = c.getContext ? c.getContext('2d') : null;
+  if (!g) return { c: a.c, sx: p.sx, sy: p.sy, sw: p.sw, sh: p.sh };
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  if (k < a.res * 0.3) {   // 縮很多:先半縮再縮
+    mid = wmapArtCv(Math.max(1, Math.round(p.sw / 2)), Math.max(1, Math.round(p.sh / 2))); mg = mid.getContext('2d'); mg.imageSmoothingQuality = 'high';
+    mg.drawImage(a.c, p.sx, p.sy, p.sw, p.sh, 0, 0, mid.width, mid.height); g.drawImage(mid, 0, 0, w, h);
+  } else g.drawImage(a.c, p.sx, p.sy, p.sw, p.sh, 0, 0, w, h);
+  return { c: c, sx: 0, sy: 0, sw: w, sh: h };
 }
 
 // ───────── 登錄表 ─────────

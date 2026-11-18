@@ -3,7 +3,7 @@
 // 數值取自 BN_DATA.kinds 等表(隨平衡調整自動同步);PLACEHOLDER 字樣不顯示給玩家。ES2017;不用 ?. ??。
 // 戰鬥改版(2026-11-06):沒有士氣;大招 = 低機率戰法;對象條件 vs 一律寫成「對 XXX 時…」「被 XXX 攻擊時…」「XXX 在我方時…」。
 // B4:名人專屬詞條戰鬥面(BN_FIG_TRAIT)由 bnXTraitText / bnXTraitInfoFix 顯示。
-// 全域:bnSkillText bnSkillParts bnSkillHead bnTraitText bnXTraitText bnXTraitInfoFix bnFigTraitOf bnFigTraitText bnCardSkillIds bnCardSkillRows bnSkillShort bnSkillInfo bnSkillsBlockHtml bnSkillCatName BN_TEXT_CATS
+// 全域:bntCbText(戰法條件加成文字)bnSkillText bnSkillParts bnSkillHead bnTraitText bnXTraitText bnXTraitInfoFix bnFigTraitOf bnFigTraitText bnCardSkillIds bnCardSkillRows bnSkillShort bnSkillInfo bnSkillsBlockHtml bnSkillCatName BN_TEXT_CATS
 
 var BN_TEXT_CATS = { command: '指揮', active: '主動', pursuit: '追擊', passive: '被動', ult: '大招' };
 var BNT_PW = { S: 0, M: 1, L: 2, XL: 3 };
@@ -21,7 +21,7 @@ var BNT_TRIG = {
 };
 var BNT_ST = {
   burn: '燃燒', poison: '中毒', bleed: '流血', stun: '暈眩', sleep: '睡眠', paralyze: '麻痺', bind: '定身', silence: '沉默', fear: '威懾', taunt: '嘲諷', mark: '標記', timid: '怯戰', confuse: '擾亂',
-  atk_down: '攻擊下降', def_down: '防禦下降', spd_down: '速度下降', rate_down: '發動率下降', rate_up: '發動率提升', debuff_hit: '命中下降', wx_mark: '五行印', invert: '陰陽互換',
+  atk_down: '攻擊下降', def_down: '防禦下降', spd_down: '速度下降', rate_down: '發動率下降', rate_up: '發動率提升', debuff_hit: '致盲', int_down: '謀略下降', wx_mark: '五行印', invert: '陰陽互換',
   atk_up: '攻擊提升', def_up: '防禦提升', spd_up: '速度提升', crit_up: '暴擊提升', stealth: '隱匿', evade: '規避', dodge_rate: '閃避', shield: '護盾', ward: '抵禦', undying: '不倒', guard: '援護', counter: '反擊', heal_block: '禁療', heal_reduce: '治療降低', reorder: '插隊', swap: '換位', control: '控制類狀態', debuff: '減益類狀態', dot: '持續傷害類狀態', any: '任何負面狀態'
 };
 BNT_ST.dblhit = '連擊'; BNT_ST.hit_heal = '受擊回氣'; BNT_ST.lifesteal = '吸血'; BNT_ST.critdmg_up = '暴擊傷害提升'; BNT_ST.thorns = '荊棘'; BNT_ST.fuse = '引信'; BNT_ST.lag = '遲滯';
@@ -166,10 +166,11 @@ function bntClause(kind, target, power, P, d, isExtra) {
     case 'mark': return '標記' + bntTg(target, 'enemy_one') + ',使其受到的傷害 +' + bntPct(bntKT(kind, pw)) + dur;
     case 'debuff_atk': return bntTg(target, 'enemy_one') + '攻擊 −' + bntPct(bntKT(kind, pw)) + dur;
     case 'debuff_def': return bntTg(target, 'enemy_one') + '防禦 −' + bntPct(bntKT(kind, pw)) + dur;
+    case 'debuff_int': return bntTg(target, 'enemy_one') + '謀略 −' + bntPct(bntKT(kind, pw)) + dur;
     case 'debuff_spd': return bntTg(target, 'enemy_one') + '速度 −' + Math.round(bntKT(kind, pw)) + dur;
     case 'rate_up': return bntTg(target, 'ally_all') + '戰法發動率 +' + bntPct(typeof P.amount === 'number' ? (P.amount > 1 ? P.amount / 100 : P.amount) : bntKT(kind, pw, sc)) + (P.scaleByLostHp ? '(自身兵力越低提升越多)' : '') + dur;
     case 'rate_down': return bntTg(target, 'enemy_one') + '戰法發動率 −' + bntPct(typeof P.amount === 'number' ? (P.amount > 1 ? P.amount / 100 : P.amount) : bntKT(kind, pw, sc)) + dur;
-    case 'debuff_hit': return '使' + bntTg(target, 'enemy_one') + bntChanceTxt(P) + '命中下降:攻擊有 ' + bntPct(typeof P.val === 'number' ? P.val : bntKT(kind, pw)) + ' 機率落空' + (typeof P.dur === 'number' ? ',持續 ' + P.dur + ' 回合' : dur);
+    case 'debuff_hit': return '使' + bntTg(target, 'enemy_one') + bntChanceTxt(P) + '致盲:攻擊有 ' + bntPct(typeof P.val === 'number' ? P.val : bntKT(kind, pw)) + ' 機率落空' + (typeof P.dur === 'number' ? ',持續 ' + P.dur + ' 回合' : dur);
     case 'buff_steal': n = P.count !== undefined ? P.count : bntKT(kind, pw); return '偷走' + bntTg(target, 'enemy_one') + (target === 'enemy_all' ? '每人' : '') + ' ' + n + ' 個增益(攻防速、暴擊、發動率、規避、護盾等),轉給' + (P.giveTo && P.giveTo !== 'self' ? bntTg(P.giveTo, 'ally_all') : '自己');
     case 'invert': n = P.count !== undefined ? P.count : bntKT(kind, pw); return (P.dir === 'ally_debuff_to_buff' || (target && target.indexOf('ally') === 0) ? '把' + bntTg(target, 'ally_all') + '身上最多 ' + n + ' 個減益陰陽互換成同等增益' : '把' + bntTg(target, 'enemy_one') + '身上最多 ' + n + ' 個增益陰陽互換成同等減益');
     case 'wx_mark': return '在' + bntTg(target, 'enemy_one') + '身上留下五行印:被剋屬性的五行戰法命中時傷害 +' + bntPct(BN_DATA.wx.mark) + '(消耗印記)';
@@ -230,6 +231,32 @@ function bntClause(kind, target, power, P, d, isExtra) {
   }
 }
 
+// 戰法條件加成 params.cb(bn_effects.js bnCb*;設計_戰法條件加成_規格.md):條件 → 效果的白話句。種類只列玩家看得到的詞,不含內部 id
+var BNT_CBST = { burn: '燃燒', poison: '中毒', bleed: '流血', down: '無法行動', paralyze: '麻痺', timid: '怯戰', silence: '沉默', ctrl: '受到控制', blind: '致盲', atkdown: '攻擊下降', intdown: '謀略下降', weak: '防禦下降或被標記', tshield: '有護盾', tlow: '兵力低於 50%', sshield: '有護盾', slow: '兵力低於 50%', sleech: '吸血中', combo: '連擊中', hheal: '受擊回氣中' };
+var BNT_CBSTD = { burn: '燃燒', poison: '中毒', bleed: '流血', blind: '致盲', atkdown: '攻擊下降', intdown: '謀略下降', weak: '易傷' };
+function bntCbOne(e, d) {
+  var th = e.then || {}, k = Object.keys(th)[0], v = th[k], cond = (e.on === 'self' ? '自身' : '目標') + (BNT_CBST[e.st] || '特定狀態') + (/[%d]$/.test(BNT_CBST[e.st] || '') ? ' ' : '') + '時', sup = d && /^(heal|shield)_/.test(d.kind || ''), what = sup ? (/^shield/.test(d.kind) ? '護盾量' : '治療量') : '傷害', n, c;
+  switch (k) {
+    case 'mul': return cond + what + ' +' + bntPct(BN_DATA.bonusVs[v] || 0);
+    case 'crit': return cond + (v === 'XL' ? '必定暴擊' : '暴擊率 +' + bntPct(BN_DATA.cb.crit[v] || 0));
+    case 'pierce': return cond + '無視 50% 護盾';
+    case 'hit': return cond + '追加一段攻擊(本次傷害 ×' + (Math.round(v * 100) / 100) + ')';
+    case 'det':
+      if (e.st === 'burn' || e.st === 'poison' || e.st === 'bleed') return cond + '引爆' + BNT_CBSTD[e.st] + '(移除),一次造成剩餘' + BNT_CBSTD[e.st] + '傷害 ×' + BN_DATA.cb.det[v];
+      return cond + '引爆並移除' + (BNT_CBSTD[e.st] || '該狀態') + ',追加本次傷害 ×' + (Math.round((BN_DATA.cb.det[v] - 1) * 100) / 100);
+    case 'chance': return cond + '本戰法附帶的控制機率 +' + Math.round((BN_DATA.cb.chance[v] || 0) * 100) + ' 個百分點';
+    case 'proc': return cond + '有 ' + Math.round(v.p * 100) + '% 機率使其' + (v.id === 'stun' ? '暈眩' : (v.id === 'timid' ? '怯戰' : '沉默')) + ' ' + (v.dur || 1) + ' 回合';
+    case 'ext': return cond + '該狀態延長 1 回合';
+    case 'leech': return cond + '回復造成傷害的 ' + bntPct(BN_DATA.cb.leech[v] || 0);
+    case 'cleanse': return cond + (sup ? '順帶解除其 1 個負面狀態' : '解除自身 1 個負面狀態');
+  }
+  return '';
+}
+// 戰報 / 紀錄一行:條件 + 觸發的效果(事件 cb {st,k})
+var BNT_CBK = { mul: '傷害提高', crit: '暴擊', pierce: '無視護盾', hit: '追加一擊', det: '引爆', chance: '控制機率提高', proc: '附加控制', ext: '狀態延長', leech: '吸血', cleanse: '淨化' };
+function bntCbEvText(st, k) { return (BNT_CBST[st] || '條件') + ' → ' + (BNT_CBK[k] || '加成'); }
+function bntCbText(cb, d) { return (cb || []).map(function (e) { return bntCbOne(e, d); }).filter(Boolean).join(';'); }
+
 // 附帶說明(extra / 禁療 / 抵禦 / 加成 / 缺陷 …)
 function bntNotes(d, P) {
   var out = [], i, ex, hb, r, b, pf, rk;
@@ -252,6 +279,7 @@ function bntNotes(d, P) {
   }
   if (P.immuneHealBlock) out.push('有限次數免疫禁療');
   if (P.bonusVsStatus) { b = P.bonusVsStatus; out.push('目標處於' + bntStName(b.status) + '時,傷害額外 +' + bntPct(BN_DATA.bonusVs[b.mult] || 0.4)); }
+  if (P.cb && P.cb.length) out.push('條件加成:' + bntCbText(P.cb, d));
   if (P.perFacAlly) { pf = P.perFacAlly; out.push('隊中每有 1 名' + (pf.fac !== undefined ? bntFacName(pf.fac) : '同陣營') + '友軍,效果再提升 ' + bntPct(BN_DATA.stepMul[pf.step] || 0.08) + '(最多 ' + bntS(pf.max, 4) + ' 層)'); }
   if (P.perAlly) { pf = P.perAlly; out.push('隊中每有 1 名同' + (pf.by === 'troop' ? '兵種(' + bntS(pf.key) + ')' : '類型') + '友軍,效果再提升 ' + bntPct(BN_DATA.stepMul[pf.step] || 0.08)); }
   if (P.crowd_scale) out.push('我方存活人數越多,傷害越高');
@@ -488,7 +516,7 @@ var BNT_TS = { self: '自身', ally_one: '我單體', ally_all: '我全隊', all
   enemy_all: '敵全隊', enemy_lowest: '敵最弱', enemy_highest_atk: '敵最強', enemy_cross: '敵十字', enemy_col: '敵縱列', members: '夥伴' };
 var BNT_KS = {
   heal_single: '回復兵力', heal_all: '回復兵力', heal_hot: '持續回復', shield_single: '加護盾', shield_all: '加護盾', cleanse: '解除負面', revive: '復活', dispel: '驅散增益', counter: '反擊', guard: '承傷', reorder: '插隊出手',
-  swap: '換位', rate_up: '發動率提升', rate_down: '發動率下降', buff_steal: '偷取增益', debuff_hit: '命中下降', invert: '陰陽互換', wx_mark: '五行印', evade: '規避攻擊', dodge_rate: '機率閃避', stealth: '隱匿', immune: '免疫控制', resist: '獲得抵禦', heal_reduce: '治療降低', cd_reduce: '縮短冷卻', cd_reset: '冷卻歸零', extra_turn: '額外行動', self_sacrifice: '自損換資源',
+  swap: '換位', rate_up: '發動率提升', rate_down: '發動率下降', buff_steal: '偷取增益', debuff_hit: '致盲', debuff_int: '謀略下降', invert: '陰陽互換', wx_mark: '五行印', evade: '規避攻擊', dodge_rate: '機率閃避', stealth: '隱匿', immune: '免疫控制', resist: '獲得抵禦', heal_reduce: '治療降低', cd_reduce: '縮短冷卻', cd_reset: '冷卻歸零', extra_turn: '額外行動', self_sacrifice: '自損換資源',
   summon: '召喚援兵', trap: '布下伏兵', stack_charge: '累積層數', undying: '死戰不倒', stat_mod: '微調能力', execute_chain: '擊倒連動', stun: '暈眩', sleep: '沉睡', paralyze: '麻痺', silence: '沉默', timid: '怯戰', bind: '定身', confuse: '擾亂',
   taunt: '嘲諷', fear: '威懾', mark: '標記易傷', dot_burn: '燃燒', dot_poison: '中毒', dot_bleed: '流血', dot_spread: '火勢蔓延'
 };

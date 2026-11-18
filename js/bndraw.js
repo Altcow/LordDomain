@@ -31,7 +31,7 @@ var BN_ST_ICON = { atk_up: 1, atk_down: 1, def_up: 1, def_down: 1, spd_up: 1, st
 var BN_ST_NAME = {
   stun: '暈眩', fear: '威懾', confuse: '擾亂', timid: '怯戰', silence: '計窮', ult_lock: '封大', atk_down: '攻↓', def_down: '防↓', spd_down: '速↓', mark: '標記',
   critdmg_up: '暴傷↑', thorns: '荊棘', fuse: '引信', lag: '遲滯', burn: '燃燒', poison: '中毒', bleed: '流血', heal_reduce: '禁療', atk_up: '攻↑', def_up: '防↑', spd_up: '速↑', crit_up: '暴↑', taunt: '嘲諷', guard: '援護', evade: '規避',
-  ward: '抵禦', ccimm: '抗控', shield: '護盾', heal_hot: '回春', rate_up: '率↑', rate_down: '率↓', debuff_hit: '盲', wx_mark: '五行印', stealth: '隱匿', undying: '不倒', sleep: '睡眠', paralyze: '麻痺', dodge_rate: '閃避',
+  ward: '抵禦', ccimm: '抗控', shield: '護盾', heal_hot: '回春', rate_up: '率↑', rate_down: '率↓', debuff_hit: '致盲', int_down: '智↓', wx_mark: '五行印', stealth: '隱匿', undying: '不倒', sleep: '睡眠', paralyze: '麻痺', dodge_rate: '閃避',
   lifesteal: '吸血', counter: '反擊', dblhit: '連擊', hit_heal: '回氣'   // 2026-11-17 命運骰子:吸血 / 反擊上身時畫面補名稱;連擊 / 受擊回氣為新狀態
 };
 var BN_ST_GOOD = { atk_up: 1, def_up: 1, spd_up: 1, crit_up: 1, taunt: 1, guard: 1, evade: 1, dodge_rate: 1, ward: 1, ccimm: 1, shield: 1, heal_hot: 1, amp_atk: 1, rate_up: 1, stealth: 1, undying: 1, critdmg_up: 1, thorns: 1, lifesteal: 1, counter: 1, dblhit: 1, hit_heal: 1 };
@@ -532,7 +532,7 @@ var BNST_POP = { dur: 0.6, gap: 0.12, size: 0.8, good: '#ffd75a', bad: '#c890ff'
 var BN_ST_POP = {
   atk_up: '攻擊提升', def_up: '防禦提升', spd_up: '速度提升', crit_up: '暴擊提升', atk_down: '攻擊', def_down: '防禦', spd_down: '速度',
   stun: '暈眩', fear: '威懾', confuse: '擾亂', timid: '怯戰', silence: '計窮', ult_lock: '封大招', mark: '標記', burn: '燃燒', poison: '中毒', bleed: '流血', heal_reduce: '禁療',
-  taunt: '嘲諷', guard: '援護', evade: '規避', ward: '抵禦', heal_hot: '回春', amp_atk: '增傷', shield: '護盾', rate_up: '發動率', rate_down: '發動率', debuff_hit: '命中', wx_mark: '五行印', stealth: '隱匿', undying: '不倒'
+  taunt: '嘲諷', guard: '援護', evade: '規避', ward: '抵禦', heal_hot: '回春', amp_atk: '增傷', shield: '護盾', rate_up: '發動率', rate_down: '發動率', debuff_hit: '致盲', int_down: '謀略', wx_mark: '五行印', stealth: '隱匿', undying: '不倒'
 };
 function bnPlStK(P) { var s = P.speed || 1; return s <= 1 ? 1 : 1 + (s - 1) * 0.6; }   // 3× → 2.2 倍模擬秒 ≈ 實際 0.44 秒
 function bnPlStPopTxt(id) { var nm = BN_ST_POP[id] || BN_ST_NAME[id] || ''; return nm ? (BN_ST_GOOD[id] ? '+' : '−') + nm : ''; }
@@ -674,6 +674,9 @@ function bnPlEvent(P, e) {
       if (v && e.id === 'rx_invert') { c = bnPlCenter(v); bnPlFx(P, 'stc_yinyang_flip', c.x, c.y, { file: 'fxc_yy_flip', alt: 'morale_burst', mode: 7, size: L.sh * 0.9, dur: 0.55 }); }
       if (v && BN_FX_RX[e.id]) { c = bnPlCenter(v); bnPlFx(P, BN_FX_RX[e.id].file, c.x, c.y, { file: BN_FX_RX[e.id].file, alt: BN_FX_RX[e.id].alt, mode: 7, size: L.sh * 0.95, dur: 0.5 }); }   // 魔幻反應:冰裂 / 感電(缺圖退回 fx_*)
       return 0.2;
+    case 'cb':   // 戰法條件加成觸發:目標頭上浮字(引爆 / 必暴 / 加成 …)
+      v = P.vu[e.tgt]; if (v) bnPlText(P, v, ({ det: '引爆!', crit: e.st === 'blind' ? '必暴!' : '暴擊!', mul: '加成!', pierce: '破盾!', hit: '追擊!', chance: '連動!', proc: '附加!', ext: '延長!', leech: '吸血!', cleanse: '淨化!' })[e.k] || '條件!', '#ffd75a', 0.9, 2, 0.7);
+      return 0.1;
     case 'bond':
       P.banner = { text: e.name || '羈絆', t: 0, dur: 0.8, big: false };
       return 0;
@@ -1097,7 +1100,7 @@ var BN_ST_VIS = {
   timid: { fx: 'rope', col: '#c8b890' },                        // 怯戰 / 定身(bind 別名):腳下束縛圈
 };
 (function () {   // 增益 / 減益圈(金色上升 / 紫色下落)
-  var g = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'ward', 'guard', 'taunt', 'heal_hot', 'undying', 'stealth', 'amp_atk', 'critdmg_up', 'lifesteal', 'counter', 'dblhit', 'hit_heal'], b = ['atk_down', 'def_down', 'spd_down', 'rate_down', 'debuff_hit', 'mark', 'wx_mark', 'heal_reduce'], i;
+  var g = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'ward', 'guard', 'taunt', 'heal_hot', 'undying', 'stealth', 'amp_atk', 'critdmg_up', 'lifesteal', 'counter', 'dblhit', 'hit_heal'], b = ['atk_down', 'def_down', 'spd_down', 'rate_down', 'debuff_hit', 'int_down', 'mark', 'wx_mark', 'heal_reduce'], i;
   for (i = 0; i < g.length; i++) BN_ST_VIS[g[i]] = { fx: 'buff', col: '#ffd75a' };
   for (i = 0; i < b.length; i++) BN_ST_VIS[b[i]] = { fx: 'debuff', col: '#c890ff' };
 })();

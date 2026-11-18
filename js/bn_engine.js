@@ -7,7 +7,7 @@
 //   bnInit(rec) → state        rec = {v:BN_REC_VER, seed, teamA:[spec], teamB:[spec], opts:{events:true, scene:''}}(spec 由 bn_units.js 產生;舊紀錄的 opts.autoUlt 不再使用)
 // 戰報版本 BN_REC_VER:2 = 普攻改「射程內隨機」(2026-11-13)。rec.v < BN_REC_VER 的舊戰報結果可能已不同,不可重播(只能看文字結果)。
 // 3 = 戰法發動率重平衡(2026-11-15):發動率查表 / 取消冷卻 / 保底 / 每場上限 / 同次 2 招 / pf / K 0.55 / 疲兵 / healK。
-var BN_REC_VER = 5;   // 5 = 克制 ×1.15 / ×0.85(2026-11-17);4 = 適性新制 + 謀略型 dt(2026-11-16);舊戰報 / 舊碼一律拒絕
+var BN_REC_VER = 6;   // 6 = 戰法條件加成 params.cb + 降智 int_down(2026-11-18);5 = 克制 ×1.15 / ×0.85(2026-11-17);4 = 適性新制 + 謀略型 dt(2026-11-16);舊戰報 / 舊碼一律拒絕
 //   bnStep(state) → events[]   推進一個「行動」(或回合結束)
 //   bnRunToEnd(state) → state          跑到結束;bnRun(rec) = bnInit + bnRunToEnd
 //   state.over / state.result = {winner:'A'|'B'|'draw', reason:'wipe'|'limit', rounds, hp:{A,B}}
@@ -63,7 +63,7 @@ function bnEv(S, t, o) {
 // ───────── 單位 / 站位查詢 ─────────
 var BN_NEG = {
   stun: 'control', fear: 'control', confuse: 'control', timid: 'control', silence: 'control', ult_lock: 'control', sleep: 'control', paralyze: 'control',
-  atk_down: 'debuff', def_down: 'debuff', spd_down: 'debuff', mark: 'debuff', rate_down: 'debuff', debuff_hit: 'debuff', wx_mark: 'debuff',
+  atk_down: 'debuff', def_down: 'debuff', spd_down: 'debuff', mark: 'debuff', rate_down: 'debuff', debuff_hit: 'debuff', int_down: 'debuff', wx_mark: 'debuff',
   burn: 'dot', poison: 'dot', bleed: 'dot', heal_reduce: 'heal_block',
   lag: 'control', fuse: 'debuff'   // S0:遲滯(敵方本回合排最後行動)、引信(延遲爆發)
 };
@@ -175,7 +175,7 @@ function bnAtkMod(S, u) {
   return bnClamp(m, BN_DATA.clamp.lo, BN_DATA.clamp.hi);
 }
 function bnAtk(S, u) { return u.base.atk * (1 + bnAtkMod(S, u)); }
-function bnMag(S, u) { return u.base.mag * (1 + bnAtkMod(S, u)); }
+function bnMag(S, u) { return u.base.mag * (1 + (u.st.int_down ? bnClamp(bnAtkMod(S, u) - u.st.int_down.val, BN_DATA.clamp.lo, BN_DATA.clamp.hi) : bnAtkMod(S, u))); }   // 降智 int_down:只降謀略
 function bnDef(S, u) {
   var m = 0;
   if (u.st.def_up) m += u.st.def_up.val;
@@ -536,7 +536,7 @@ function bnApplyDmg(S, a, t, dmg, h, crit, viaOf) {
   var absorbed = 0, shield = t.st.shield, hpLost, cons, sum = t.team ? t.team.summon : null, i, ign;
   if (shield && h.dot !== 'burn' && dmg > 0) {
     cons = h.pierce ? BN_DATA.pierceShield : 1;
-    ign = (h.rx && h.rx.shieldIgnore) ? (1 - h.rx.shieldIgnore) : 1;
+    ign = (h.rx && h.rx.shieldIgnore) ? (1 - h.rx.shieldIgnore) : (h.cbPierce ? 1 - h.cbPierce : 1);   // cbPierce = 條件加成 pierce
     absorbed = Math.min(dmg * ign, shield.val / cons);
     shield.val -= absorbed * cons;
     absorbed = Math.round(absorbed);
@@ -566,7 +566,7 @@ function bnApplyDmg(S, a, t, dmg, h, crit, viaOf) {
   } else { S.stats.dmgTaken[t.side] += hpLost; }
   t.dmgRound += hpLost;
   t.dmgTakenTotal = (t.dmgTakenTotal || 0) + hpLost;
-  bnEv(S, 'dmg', { src: a ? a.id : -1, tgt: t.id, v: hpLost, abs: absorbed, ty: h.dot ? 'dot' : h.ty, crit: crit ? 1 : 0, hp: t.hp, via: viaOf >= 0 ? viaOf : undefined, dot: h.dot || undefined, ctr: h.counter ? 1 : undefined, basic: h.basic ? 1 : undefined, rx: h.rx ? h.rx.id : undefined, pv: (h.pv && (h.ty === 'phys' || h.ty === 'strat') && !h.dot) ? h.pv : undefined });
+  bnEv(S, 'dmg', { src: a ? a.id : -1, tgt: t.id, v: hpLost, abs: absorbed, ty: h.dot ? 'dot' : h.ty, crit: crit ? 1 : 0, hp: t.hp, via: viaOf >= 0 ? viaOf : undefined, dot: h.dot || undefined, ctr: h.counter ? 1 : undefined, basic: h.basic ? 1 : undefined, rx: h.rx ? h.rx.id : undefined, cb: h.cb ? (h.cb === 'strat' ? 2 : 1) : undefined, pv: (h.pv && (h.ty === 'phys' || h.ty === 'strat') && !h.dot) ? h.pv : undefined });
   if (S.chain) S.chain.hits++;
   var killed = false;
   if (t.hp <= 0) {
@@ -694,7 +694,7 @@ function bnNewStats() {
     dmg: { A: 0, B: 0 }, dmgTaken: { A: 0, B: 0 }, healNom: { A: 0, B: 0 }, healAct: { A: 0, B: 0 }, healEvents: { A: 0, B: 0 }, healBlockedEvents: { A: 0, B: 0 }, hbLoss: { A: 0, B: 0 },
     shieldGiven: { A: 0, B: 0 }, kills: { A: 0, B: 0 }, roundKills: 0, killsPerRound: [], oneRoundKills: 0, evaded: 0, revives: 0, guardShared: 0,
     negTry: 0, resistBlock: 0, immuneBlock: 0, ccimmBlock: 0, wardUsed: 0, wardGiven: 0, hbTry: 0, hbApplied: 0, hbOn: 0, hbTurnsSum: 0, hbBlockedByWard: 0,
-    hbCasts: 0, fullHpUnitRounds: 0, hasHB: { A: false, B: false }, hbSrc: { A: 0, B: 0 }, hasWard: { A: false, B: false }, negTryBy: { A: 0, B: 0 }, resistBlockBy: { A: 0, B: 0 }, hbRollOK: 0, actDmg: [], skillUse: {}, chainLens: [], chainCap: 0, chainDmgPct: [], actions: 0, ults: 0, rolls: 0, rollOk: 0, castsPerAct: [], recasts: 0, assists: 0, reactions: 0, bondFires: 0, healCasts: { A: 0, B: 0 }, hasHealer: { A: false, B: false },
+    hbCasts: 0, fullHpUnitRounds: 0, hasHB: { A: false, B: false }, hbSrc: { A: 0, B: 0 }, hasWard: { A: false, B: false }, negTryBy: { A: 0, B: 0 }, resistBlockBy: { A: 0, B: 0 }, hbRollOK: 0, actDmg: [], skillUse: {}, cb: {}, cbN: {}, chainLens: [], chainCap: 0, chainDmgPct: [], actions: 0, ults: 0, rolls: 0, rollOk: 0, castsPerAct: [], recasts: 0, assists: 0, reactions: 0, bondFires: 0, healCasts: { A: 0, B: 0 }, hasHealer: { A: false, B: false },
     sleepOn: 0, sleepSkip: 0, wakeRoll: 0, wakes: 0, pzOn: 0, pzRoll: 0, pzSkip: 0, pzConduct: 0   // 睡眠 / 麻痺統計(bn_sim 用)
   };
 }

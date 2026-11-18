@@ -135,12 +135,14 @@ function wmhomeBuildMenu(root) {
 
 // ───────── 左下兩顆圖示鈕 ─────────
 function wmhomeBuildPair(root) {
-  var p = wmhomeEl('div', 'wmh-pair'), a = wmhomeEl('button', 'wmh-pb'), h = wmhomeEl('button', 'wmh-pb');
+  var p = wmhomeEl('div', 'wmh-pair'), a = wmhomeEl('button', 'wmh-pb'), h = wmhomeEl('button', 'wmh-pb'), s3 = wmhomeEl('button', 'wmh-pb');
   a.setAttribute('type', 'button'); a.setAttribute('data-wmp', 'map'); a.setAttribute('aria-label', '地圖');
   a.innerHTML = wmhomeSvg('<path d="M3 8l8-3 10 3 8-3v19l-8 3-10-3-8 3z" fill="#f6e2b0" stroke="#3b2410" stroke-width="2" stroke-linejoin="round"/><path d="M11 5v19M21 8v19" stroke="#3b2410" stroke-width="1.6" fill="none"/><circle cx="23" cy="14" r="3" fill="#d03a22" stroke="#3b2410" stroke-width="1.4"/>') + '<span>地圖</span>';
   h.setAttribute('type', 'button'); h.setAttribute('data-wmp', 'home'); h.setAttribute('aria-label', '回歸城池');
   h.innerHTML = wmhomeSvg('<path d="M3 16L16 5l13 11" fill="none" stroke="#3b2410" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 15v13h18V15" fill="#f6e2b0" stroke="#3b2410" stroke-width="2" stroke-linejoin="round"/><path d="M13 28v-8h6v8" fill="#d03a22" stroke="#3b2410" stroke-width="1.6"/>') + '<span>回歸城池</span>';
-  p.appendChild(a); p.appendChild(h);
+  s3.setAttribute('type', 'button'); s3.setAttribute('data-wmp', 'search'); s3.setAttribute('aria-label', '搜尋');   // 第三顆〔搜尋〕(js/wmap_search.js;自繪放大鏡 SVG)
+  s3.innerHTML = (typeof wmsearchIcon === 'function' ? wmsearchIcon() : wmhomeSvg('<circle cx="13" cy="13" r="8" fill="#fff3cf" stroke="#3b2410" stroke-width="2.4"/><path d="M19.2 19.2 27 27" stroke="#3b2410" stroke-width="4" stroke-linecap="round"/>')) + '<span>搜尋</span>';
+  p.appendChild(a); p.appendChild(h); p.appendChild(s3);
   p.addEventListener('pointerdown', function (ev) { ev.stopPropagation(); });
   p.addEventListener('click', function (ev) {
     var t = ev.target, k;
@@ -149,6 +151,7 @@ function wmhomeBuildPair(root) {
     k = t.getAttribute('data-wmp');
     wmhomeMenuSet(false);
     if (k === 'map') wmfullOpen();
+    else if (k === 'search') { if (typeof wmsearchOpen === 'function') wmsearchOpen(); }
     else if (typeof wmapSetCam === 'function' && WMAP.WG) wmapSetCam(WMAP.WG.cx + 0.5, WMAP.WG.cy + 0.5);
   });
   root.appendChild(p);
@@ -283,6 +286,7 @@ function wmfullBuild() {
   }
   for (k in (WMAP.own || {})) { p = wmapPnlMiniXY(+k, N, px); g.fillStyle = '#d03a22'; g.fillRect(Math.round(p.x) - 3, Math.round(p.y) - 2, 6, 4); g.strokeStyle = '#3b2410'; g.lineWidth = 1; g.strokeRect(Math.round(p.x) - 3, Math.round(p.y) - 2, 6, 4); }
   g.fillStyle = '#d03a22'; q = quad(WG.cx - 1, WG.cy - 1, 3, 3); g.fill(); g.strokeStyle = '#3b2410'; g.lineWidth = 2; g.stroke();
+  if (typeof wmsearchFullDraw === 'function') wmsearchFullDraw(g, N, px);   // 搜尋標示中:同條件的格畫紅色小六邊形外框
   WMFULL.cv = cv; WMFULL.base = base;
   WMFULL.ms = performance.now() - t0; WMFULL.bytes = (px * ph * 4) * 2;
   return { cv: cv, ms: WMFULL.ms, bytes: WMFULL.bytes };

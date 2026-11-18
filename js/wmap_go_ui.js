@@ -45,7 +45,7 @@ function wmapGoUiCtx() {   // {W, cs}:沿用舊地圖頁的狀態(第一次用�
 }
 // 世界版本重排(gv 2 / 3 → 4):先把 world.v2 備份成 .bak_gv<舊版>(gv 3 → .bak_gv3;只寫一次、不覆蓋),再重排並存檔、提示一次
 function wmapGoUiMigrate() {
-  var m, v, bk;
+  var m, v, bk, nt;
   WMAPGO.mig = 1;
   if (!wmapGoNeedMigrate(WDUI.W, WMAP.WG)) return;
   bk = '.bak_gv' + (WDUI.W.g2 && WDUI.W.g2.gv > 0 ? WDUI.W.g2.gv : 2);
@@ -54,7 +54,12 @@ function wmapGoUiMigrate() {
     if (v && localStorage.getItem(WDUI_KEY + bk) === null) localStorage.setItem(WDUI_KEY + bk, v);
   } catch (e) { /* 備份失敗(容量 / 無痕)不影響重排 */ }
   m = wmapGoMigrate(WDUI.W, WDUI.cs, WMAP.WG, ldNow());
-  if (m.changed) { wmapGoUiSave(); wmapGoUiToast('地圖改版:縣城 / 郡城 / 關口與資源重新排列' + (m.home ? ',出征中的 ' + m.home + ' 隊已回城' : '') + (m.res ? ',' + m.res + ' 塊領地因地形變動失效' : '')); }
+  if (m.changed) {
+    nt = typeof wmapGoMigNotice === 'function' ? wmapGoMigNotice(WDUI.W) : null;   // gv 6:收回領地提示只顯示一次
+    if (nt && typeof wmapGoMigAck === 'function') wmapGoMigAck(WDUI.W);
+    wmapGoUiSave();
+    wmapGoUiToast(nt ? '地圖資源重排,收回 ' + nt.n + ' 塊領地' + (m.home ? ',出征中的 ' + m.home + ' 隊已回城' : '') : '地圖改版:縣城 / 郡城 / 關口與資源重新排列' + (m.home ? ',出征中的 ' + m.home + ' 隊已回城' : '') + (m.res ? ',' + m.res + ' 塊領地因地形變動失效' : ''));
+  }
 }
 function wmapGoUiSave() { if (typeof wdUiSave === 'function') wdUiSave(); }
 function wmapGoUiInfo(gi) { return typeof wmapInfoOf === 'function' ? wmapInfoOf(gi) : null; }
@@ -101,7 +106,7 @@ function wmapGoUiSyncTrips() {
   att.layer.setTrips(list);
 }
 function wmapGoUiSyncOwn(c) {
-  var own = wmapGoOwnSet(c.W), key = Object.keys(own).sort().join(',');
+  var own = typeof wmapGoOwnSetAll === 'function' ? wmapGoOwnSetAll(c.W, ldNow()) : wmapGoOwnSet(c.W), key = Object.keys(own).sort().join(',');
   if (key === WMAPGO.lastOwn) return false;
   WMAPGO.lastOwn = key;
   WMAP.own = own;
@@ -117,7 +122,7 @@ function wmapGoUiRefresh() {   // 指令 / 出發後立刻更新(不等 1 秒計
   wmapGoUiMenuRender();
 }
 function wmapGoUiTick() {
-  var c = wmapGoUiCtx(), now, r, ck;
+  var c = wmapGoUiCtx(), now, r, ck, es;
   if (!c || !wmapGoUiOn()) return;
   now = ldNow();
   ck = wmapGoClock(c.W, now);
@@ -131,13 +136,49 @@ function wmapGoUiTick() {
   r = wdAdvance(c.W, c.cs, now);
   if (r.events.length) { wmapGoUiConsume(r.events, false); wmapGoUiSave(); }
   if (typeof wmapSettleUiTick === 'function') wmapSettleUiTick();
+  if (WMAPGO.cardEm >= 0 && WMAPGO.card && !WMAPGO.card.hidden && typeof wmapSettleEmptyStatus === 'function') {   // 空地小卡:占領倒數 / 完成
+    es = wmapSettleEmptyStatus(c.W, WMAPGO.cardEm, now);
+    if (es.working || (es.own ? 'own' : 'free') !== WMAPGO.cardEmSt) wmapGoUiCardEmpty(WMAPGO.cardEm, null);
+  }
   wmapGoUiSyncTrips();
   wmapGoUiSyncOwn(c);
   wmapGoUiMenuRender();
 }
 
 // ───────── 浮動資訊卡(地塊)─────────
-function wmapGoUiCardHide() { if (WMAPGO.card) WMAPGO.card.hidden = true; WMAPGO.cardGi = -1; }
+function wmapGoUiCardHide() { if (WMAPGO.card) WMAPGO.card.hidden = true; WMAPGO.cardGi = -1; WMAPGO.cardEm = -1; }
+function wmapGoUiMmss(ms) { var s = Math.max(0, Math.ceil(ms / 1000)), m = Math.floor(s / 60); s = s % 60; return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s; }
+// 空地小卡:作業中 = 「占領中 mm:ss」;已占 = 我的空地;可占 = 〔占領〕(不戰鬥、不占名額、等占領作業時間)
+function wmapGoUiCardEmpty(gi, tg) {
+  var c = wmapGoUiCtx(), card = WMAPGO.card, now = ldNow(), es, sub, btns = '', plan;
+  if (!card || !c) return;
+  es = wmapSettleEmptyStatus(c.W, gi, now);
+  card.innerHTML = '';
+  card.appendChild(wmapGoUiEl('div', 'wgc-t', wmapGoUiCoord(gi) + ' 空地'));
+  if (es.working) sub = '占領中 ' + wmapGoUiMmss(es.left);
+  else if (es.own) sub = '我的空地';
+  else {
+    plan = tg ? wmapGoPlan(c.W, WMAP.WG, tg, null, now, { fast: wmapGoFast() }) : null;
+    sub = '空地・可直接占領' + (plan ? '・去程約 ' + plan.goMins.toFixed(1) + ' 分' : '') + '・作業 ' + wmapGoUiMmss(wmapSettleOccMs(c.W, now));
+    btns = '<button type="button" class="wgc-b pri" data-wgo="occ">占領</button>';
+  }
+  card.appendChild(wmapGoUiEl('div', 'wgc-s', sub));
+  card.insertAdjacentHTML('beforeend', '<div class="wgc-r">' + btns + '<button type="button" class="wgc-b" data-wgo="x" aria-label="關閉">×</button></div>');
+  card.hidden = false;
+  WMAPGO.cardGi = gi; WMAPGO.cardEm = gi; WMAPGO.cardEmSt = es.working ? 'w' : (es.own ? 'own' : 'free');
+}
+var WMAPGO_EMERR = { terrain: '這裡不是空地', res: '這是資源格,要出征', owned: '這格已經是你的', adj: '要緊鄰己方領地 / 道路才能占領', mob: '有野怪在這格,先剿滅', enemy: '這格是他人領地' };
+function wmapGoUiOccupy(gi) {
+  var c = wmapGoUiCtx(), r;
+  if (!c || gi < 0) return false;
+  r = wmapSettleEmptyStart(c.W, WMAP.WG, gi, ldNow());
+  if (!r.ok) { wmapGoUiToast(WMAPGO_EMERR[r.err] || '不能占領這格'); return false; }
+  wmapGoUiSave();
+  wmapGoUiToast('開始占領 ' + wmapGoUiCoord(gi) + ':約 ' + wmapGoUiMmss(r.ms) + ' 後完成(不戰鬥、不占名額)');
+  wmapGoUiCardEmpty(gi, null);
+  wmapGoUiRefresh();
+  return true;
+}
 function wmapGoUiCardShow(tg) {
   var c = wmapGoUiCtx(), card = WMAPGO.card, now = ldNow(), pt, tit, sub, btns = '', plan, owned = false, busy = false, rd = WMAPGO.mode, pre, ex = null;
   if (!card || !c) return;
@@ -167,10 +208,16 @@ function wmapGoUiCardShow(tg) {
   WMAPGO.cardGi = tg.gi;
 }
 function wmapGoUiOnSelect(gi) {
-  var tg;
+  var tg, c;
   if (!WMAPGO.inited) return;
   if (WMAPGO.menuId && gi >= 0) wmapGoUiMenuClose();
   if (gi < 0) { wmapGoUiCardHide(); return; }
+  c = wmapGoUiCtx();
+  if (c && typeof wmapSettleEmptyStatus === 'function' && WMAP.WG.k[gi] === 0 && !wmapGoUiInfo(gi)) {   // 空地:作業中 / 已占 / 可占
+    if (wmapSettleEmptyStatus(c.W, gi, ldNow()).own || wmapSettleEmptyStatus(c.W, gi, ldNow()).working) { wmapGoUiCardEmpty(gi, null); return; }
+    tg = wmapGoTarget(WMAP.WG, gi, null, WMAP.own, c.W);
+    if (tg.ok && tg.kind === 'pave') { wmapGoUiCardEmpty(gi, tg); return; }
+  }
   tg = wmapGoTarget(WMAP.WG, gi, wmapGoUiInfo(gi));
   if (!tg.ok) { wmapGoUiCardHide(); return; }
   wmapGoUiCardShow(tg);
@@ -183,6 +230,7 @@ function wmapGoUiOnCardClick(ev) {
   if (a === 'x') { if (typeof wmapSelect === 'function') wmapSelect(-1); return; }
   if (a === 'cancel') { wmapGoUiModeSet(null); wmapGoUiCardHide(); return; }
   if (a === 'go') { if (gi >= 0 && typeof ldNavPush === 'function') ldNavPush('wmgo', { gi: gi }); return; }
+  if (a === 'occ') { wmapGoUiOccupy(gi); return; }
   if (a === 'redirect') wmapGoUiCmd('redirect', { gi: gi });
   if ((a === 'quit' || a === 'unquit') && gi >= 0 && typeof wmapSettleUiQuit === 'function') wmapSettleUiQuit(gi, a === 'unquit');
 }

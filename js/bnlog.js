@@ -15,7 +15,7 @@ var BNLOG = {
 };
 // 短碼:事件類型 → 1 字母(init / cd 不存:陣容另有快照,冷卻不影響數字與順序)
 var BNLOG_CODE = { round: 'R', act: 'A', skill: 'K', ult: 'U', dmg: 'D', evade: 'E', heal: 'H', shield: 'S', revive: 'V', status: 'T', unstatus: 'X', resist: 'Q', immune: 'I', ccimm: 'C',
-  roll: 'r', kill: 'Z', move: 'O', react: 'Y', bond: 'B', trigger: 'G', prep: 'P', skip: 'W', idle: 'L', chain: 'N', chaincap: 'J', end: 'F' };
+  roll: 'r', cb: 'c', kill: 'Z', move: 'O', react: 'Y', bond: 'B', trigger: 'G', prep: 'P', skip: 'W', idle: 'L', chain: 'N', chaincap: 'J', end: 'F' };
 var BNLOG_GR = ['白', '青', '藍', '紫', '金'];
 var BNLOG_WHY = {
   hit: '受擊', kill: '擊倒', skill: '戰法', allydown: '友軍倒下', act: '行動', idle: '待命', ult: '施放大招', aura: '光環', chain: '連鎖', bond: '羈絆', rx: '反應', down: '被削', steal: '被奪', killskill: '戰法擊倒', antidote: '解毒',
@@ -30,6 +30,13 @@ function bnLogLsSet(k, v) { try { localStorage.setItem(k, v); return true; } cat
 function bnLogToast(m) { if (typeof showToast === 'function') { try { showToast(m); } catch (e) { /* 略過 */ } } }
 function bnLogHash(s) { return typeof bnHash === 'function' ? bnHash(s) : s.length; }
 function bnLogSkName(id) { return (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[id] && BN_SKILLS[id].name) || String(id || ''); }
+// 反應(combos reactions)的中文名;查不到才退回 id
+function bnLogRxName(id) {
+  var nm = '';
+  if (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[id] && BN_SKILLS[id].name) return BN_SKILLS[id].name;
+  if (typeof BN_COMBOS !== 'undefined' && BN_COMBOS.reactions) BN_COMBOS.reactions.forEach(function (x) { if (x.id === id) nm = x.name; });
+  return nm || String(id || '');
+}
 function bnLogStName(id) {
   if (typeof BN_ST_NAME !== 'undefined' && BN_ST_NAME[id]) return BN_ST_NAME[id];
   if (typeof BNT_ST !== 'undefined' && BNT_ST[id]) return BNT_ST[id];
@@ -46,7 +53,7 @@ function bnLogEncOne(e, K) {
     case 'act': f = [e.u, e.x ? 1 : '']; break;
     case 'skill': f = [e.u, K(e.name || bnLogSkName(e.id)), K(e.cat || ''), n(e.rc), n(e.as)]; break;
     case 'ult': f = [e.u, K(bnLogSkName(e.id))]; break;
-    case 'dmg': f = [n(e.src), e.tgt, e.v | 0, e.abs ? e.abs | 0 : '', (e.crit ? 1 : 0) | (e.basic ? 2 : 0) | (e.ctr ? 4 : 0) | (e.pv > 0 ? 8 : 0) | (e.pv < 0 ? 16 : 0), e.hp | 0, K(e.ty || ''), n(e.via), e.dot ? K(e.dot) : '', e.rx ? K(e.rx) : '']; break;
+    case 'dmg': f = [n(e.src), e.tgt, e.v | 0, e.abs ? e.abs | 0 : '', (e.crit ? 1 : 0) | (e.basic ? 2 : 0) | (e.ctr ? 4 : 0) | (e.pv > 0 ? 8 : 0) | (e.pv < 0 ? 16 : 0), e.hp | 0, K(e.ty || ''), n(e.via), e.dot ? K(e.dot) : '', e.rx ? K(e.rx) : '', e.cb ? e.cb : '']; break;
     case 'evade': f = [n(e.src), e.tgt, e.miss ? 1 : (e.dr ? 2 : '')]; break;
     case 'heal': f = [n(e.src), e.tgt, e.v | 0, n(e.nom), e.hp | 0, e.blk ? 1 : '']; break;
     case 'shield': f = [n(e.src), e.tgt, e.v | 0]; break;
@@ -59,6 +66,7 @@ function bnLogEncOne(e, K) {
     case 'kill': f = [n(e.src), e.tgt]; break;
     case 'move': f = [e.u, e.row, e.col]; break;
     case 'react': f = [K(e.name || e.id), n(e.tgt)]; break;
+    case 'cb': f = [e.u, K(bnLogSkName(e.id)), K(e.st || ''), K(e.k || ''), n(e.tgt)]; break;   // 戰法條件加成觸發(params.cb)
     case 'bond': f = [K(e.name || e.id)]; break;
     case 'trigger': f = [e.u, K(bnLogSkName(e.id)), K(e.trig || '')]; break;
     case 'prep': f = [e.u, K(bnLogSkName(e.id))]; break;
@@ -201,9 +209,9 @@ function bnLogItems(rep) {
       case 'D':
         x = +f[4] || 0;
         push('dmg', nm(f[0]) + ' → ' + nm(f[1]) + ' ' + (x & 2 ? '普攻' : (BNLOG_TY[D(f[6])] || '')) + (x & 4 ? '反擊' : '') + (f[8] ? '(' + bnLogStName(D(f[8])) + ')' : '') + '傷害 ' + f[2] +
-          (f[3] ? '(護盾吸收 ' + f[3] + ')' : '') + (x & 1 ? ' 暴擊' : '') + (x & 8 ? ' 〔兵種克制,傷害提高〕' : (x & 16 ? ' 〔兵種被克,傷害降低〕' : '')) + (f[7] ? '(' + nm(f[7]) + ' 援護代受)' : '') + (f[9] ? '〔反應:' + D(f[9]) + '〕' : '') + ' · 剩兵力 ' + f[5]);
+          (f[3] ? '(護盾吸收 ' + f[3] + ')' : '') + (x & 1 ? ' 暴擊' : '') + (x & 8 ? ' 〔兵種克制,傷害提高〕' : (x & 16 ? ' 〔兵種被克,傷害降低〕' : '')) + (f[7] ? '(' + nm(f[7]) + ' 援護代受)' : '') + (f[9] ? '〔反應:' + D(f[9]) + '〕' : '') + (f[10] ? '〔條件加成〕' : '') + ' · 剩兵力 ' + f[5]);
         break;
-      case 'E': push('ef', f[2] === '1' ? nm(f[0]) + ' 命中下降,攻擊落空' : (f[2] === '2' ? nm(f[1]) + ' 機率閃避,閃開了 ' + nm(f[0]) + ' 的攻擊' : nm(f[1]) + ' 閃避了 ' + nm(f[0]) + ' 的攻擊')); break;
+      case 'E': push('ef', f[2] === '1' ? nm(f[0]) + ' 致盲,攻擊落空' : (f[2] === '2' ? nm(f[1]) + ' 機率閃避,閃開了 ' + nm(f[0]) + ' 的攻擊' : nm(f[1]) + ' 閃避了 ' + nm(f[0]) + ' 的攻擊')); break;
       case 'H': push('heal', nm(f[0]) + ' 治療 ' + nm(f[1]) + ' +' + f[2] + (f[3] && +f[3] !== +f[2] ? '(原 ' + f[3] + (f[5] ? ',禁療減少' : '') + ')' : '') + ' · 剩兵力 ' + f[4]); break;
       case 'S': push('heal', nm(f[0]) + ' 給 ' + nm(f[1]) + ' 護盾 +' + f[2]); break;
       case 'V': push('heal', nm(f[0]) + ' 復活,兵力 ' + f[1]); break;
@@ -221,6 +229,7 @@ function bnLogItems(rep) {
       case 'M': push('mo', nm(f[0]) + ' 士氣 ' + (+f[1] > 0 ? '+' : '') + f[1] + ' → ' + f[2] + '(' + W(D(f[3])) + ')'); break;   // 舊戰報(戰鬥改版前)
       case 'Z': push('kill', '✖ ' + nm(f[0]) + ' 擊倒 ' + nm(f[1])); break;
       case 'O': push('ef', nm(f[0]) + ' 移到' + ['前', '中', '後'][+f[1]] + '排第 ' + (+f[2] + 1) + ' 格'); break;
+      case 'c': push('sk', '【條件加成】' + nm(f[0]) + '「' + D(f[1]) + '」:' + (typeof bntCbEvText === 'function' ? bntCbEvText(D(f[2]), D(f[3])) : D(f[2]) + ' → ' + D(f[3])) + (f[4] ? '(' + nm(f[4]) + ')' : '')); break;
       case 'Y': push('ef', '反應「' + D(f[0]) + '」' + (f[1] && f[1] !== '-1' ? '→ ' + nm(f[1]) : '')); break;
       case 'B': push('ef', '羈絆「' + D(f[0]) + '」生效'); break;
       case 'G': push('sk', nm(f[0]) + ' 觸發「' + D(f[1]) + '」' + (D(f[2]) ? '(' + ((typeof BNT_TRIG !== 'undefined' && BNT_TRIG[D(f[2])]) || D(f[2])) + ')' : '')); break;
@@ -267,7 +276,7 @@ function bnLogStats(rep) {
       src = f[0] === '' ? -1 : +f[0]; tgt = +f[1]; fl = +f[4] || 0;
       if (all[tgt]) hp[tgt] = +f[5] || 0;
       if (src >= 0 && src !== tgt && all[src]) {
-        if (fl & 6) nm = '普攻'; else if (f[8]) nm = '持續傷害'; else if (f[9]) nm = D(f[9]); else nm = cur[src] || '其他';
+        if (fl & 6) nm = '普攻'; else if (f[10] && cur[src]) nm = cur[src]; else if (f[8]) nm = '持續傷害'; else if (f[9]) nm = bnLogRxName(D(f[9])); else nm = cur[src] || '其他';   // 條件加成(f[10])的追加傷害算回原戰法;反應顯示中文名
         row(src, nm).dmg += +f[2] || 0;
         if (fl & 2) row(src, '普攻', true).cnt++;
       }

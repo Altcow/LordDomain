@@ -1,4 +1,4 @@
-const VERSION = 'v71';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v72';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -33,6 +33,7 @@ const PRECACHE = [
   './css/wmap.css',
   './css/wmap_go.css',
   './css/wmap_home.css',
+  './css/wmap_search.css',
   './js/ui_assets.js',
   './js/features.js',
   './js/ld_clock.js',
@@ -236,6 +237,7 @@ const PRECACHE = [
   './js/wmap_settle_ui.js',
   './js/wmap_mob_ui.js',
   './js/wmap_panels.js',
+  './js/wmap_search.js',
   './js/wmap_home.js',
   './js/rsv_heal.js',
   './js/wd_core.js',
@@ -322,8 +324,21 @@ const PRECACHE = [
   './assets/wmap/army/army_ca_keep_2x.webp',
   './assets/wmap/army/army_en_keep_1x.webp',
   './assets/wmap/army/army_en_keep_2x.webp',
-  './assets/wmap/obj/obj_atlas.json',
-  './assets/wmap/obj/obj_atlas.webp'
+  './assets/wmap/obj/art_meta.json',
+  './assets/wmap/obj/mt_atlas.webp',
+  './assets/wmap/obj/city_county.webp',
+  './assets/wmap/obj/city_jun.webp',
+  './assets/wmap/obj/city_zhou.webp',
+  './assets/wmap/obj/city_pass0.webp',
+  './assets/wmap/obj/city_city.webp',
+  './assets/wmap/obj/deco_atlas.json',
+  './assets/wmap/obj/deco_atlas.webp',
+  './assets/wmap/obj/res_atlas.json',
+  './assets/wmap/obj/res_atlas.webp',
+  './assets/wmap/obj/misc_meta.json',
+  './assets/wmap/obj/bridge.webp',
+  './assets/wmap/tex/road_rut_256.webp',
+  './assets/wmap/tex/tex_sand_512.webp'
 ];
 
 // 封面背景與標題 logo:放進執行期圖片桶(IMG_CACHE),首次安裝後離線也能顯示封面;抓不到不擋安裝

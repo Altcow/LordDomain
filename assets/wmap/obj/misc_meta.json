@@ -1,0 +1,18 @@
+{
+ "sprites": {},
+ "bridge": {
+  "f": "bridge.webp",
+  "w": 216,
+  "h": 64,
+  "s": 0.75,
+  "lw": 288.0,
+  "lh": 85.3
+ },
+ "road": {
+  "f": "road_rut_256.webp",
+  "w": 256,
+  "h": 256,
+  "rutCx": 0.5,
+  "rutW": 0.4
+ }
+}
