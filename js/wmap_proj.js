@@ -13,7 +13,7 @@
 //   畫的順序:依格中心 y 由小到大(= c + r 由小到大),同 y 由左到右(c 小的先);物件依「占地中最前(c + r 最大)那格」的中心 y。
 //
 // ───────── 公開 API(軍隊層、面板、畫面層只靠這裡) ─────────
-//   WMAP_CFG                                   {zooms:[64, 96](格寬 W), zoomDef:1, dprCap:1.5, chunk:256, maxChunks:20, camMargin:1.5, padUp:3, tapPx:8}
+//   WMAP_CFG                                   {zooms:[36, 72](舊兩段索引 = 連續縮放的下 / 上限,2026-11-18 取消按鈕、最大一檔 96 拿掉), zMin / zMax / zDef = 連續縮放格寬範圍 36~72(預設 56), pinchSettleMs = 手勢停止後重烘等待, wheelK = 滾輪係數, zoomDef:1, dprCap:1.5, chunk:256, maxChunks:20, camMargin:1.5, padUp:3, tapPx:8}
 //   wmapGeom(W, size) → G                      G = {s, W, H, T, size, ox, oy, worldW, worldH};s = W(別名,讓舊的 wmapGeom(G.s, size) 往返不變);W 不在 WMAP_CFG.zooms 內也可
 //   wmapUV2World(G, u, v) → {x, y}             連續座標 → 世界座標
 //   wmapWorld2UV(G, x, y) → {u, v}             世界座標 → 連續座標(未取整)
@@ -36,7 +36,7 @@
 //   wmapTapOk(dx, dy, ms) → bool               點擊判定(位移 ≤ WMAP_CFG.tapPx 且 ms < 500)
 //   wmapCellsDist(c0, r0, c1, r1) → 數字       兩格中心的格距離(軍隊 / 去程估算用,地面等向座標歐氏;鄰格 = 1)
 
-var WMAP_CFG = { zooms: [64, 96], zoomDef: 1, dprCap: 1.5, chunk: 256, maxChunks: 20, camMargin: 1.5, padUp: 3, tapPx: 8 };   // zooms = 格寬 W;dprCap = 地圖 / 城池 / 行軍的 DPR 上限(低畫質另限 1)
+var WMAP_CFG = { zooms: [36, 72], zoomDef: 1, zMin: 36, zMax: 72, zDef: 56, pinchSettleMs: 140, wheelK: 0.0012, dprCap: 1.5, chunk: 256, maxChunks: 20, camMargin: 1.5, padUp: 3, tapPx: 8 };   // zooms = 格寬 W;dprCap = 地圖 / 城池 / 行軍的 DPR 上限(低畫質另限 1)
 
 function wmapGeom(W, size) {
   var H = W * 9 / 16, T = H / 4, oy = WMAP_CFG.padUp * H;

@@ -136,6 +136,7 @@ function ldoBossReady(now) {
 function ldoChipBar() {
   var sc = (typeof LDH !== 'undefined' && LDH) ? LDH.scene : null, list, key, h = '';
   if (!sc || !sc.appendChild) return false;
+  if (typeof wmapUiOn === 'function' && wmapUiOn()) { if (LDO.bar) LDO.bar.hidden = true; return false; }   // 2026-11-18:地圖主畫面不放晶片,新手七日 / 主線 / 活動改收進左上〔任務〕鈕的任務中心頁(js/wmap_home.js)
   if (!LDO.bar) { LDO.bar = ldoEl('div', 'ldo-chips'); LDO.bar.addEventListener('click', function (ev) { var t = ev && ev.target, b = t && t.closest ? t.closest('[data-act]') : null; if (b && typeof shellAct === 'function') shellAct(b.getAttribute('data-act')); }); sc.appendChild(LDO.bar); }
   list = ldoChips(Date.now());
   key = JSON.stringify(list);
@@ -194,9 +195,9 @@ function ldoSignHtml(A, now) {
   });
   return h + '</div><div class="ldo-sm">每天:抽數 ' + EV_CFG.signPulls + '、糧 ' + EV_CFG.signGrain + '、碎片 ' + EV_CFG.signShards + ';第 ' + EV_CFG.signBig.join(' / ') + ' 天大獎再加抽數 ' + EV_CFG.signBigPulls + '、礪石 3。</div></div>';
 }
-function ldoEventHtml(A, now) {
+function ldoEventHtml(A, now, skipNb) {
   var h = '<div class="ldo-ev"><div class="ldo-evg">', a = evActive(now), boss = evBossGet(), tr = a.filter(function (x) { return x.id === 'treasure'; })[0], nx;
-  if (evNbList().some(function (x) { return !x.got; })) h += '<button class="ldo-row" ' + A + '="ev_gonb">' + ldoArt('evi_book', 'ldo-ri') + '<span><b>新手七日</b><small>登入第 ' + Math.min(7, evRead().nb.days) + ' 天;領完 7 格後消失</small></span></button>';
+  if (!skipNb && evNbList().some(function (x) { return !x.got; })) h += '<button class="ldo-row" ' + A + '="ev_gonb">' + ldoArt('evi_book', 'ldo-ri') + '<span><b>新手七日</b><small>登入第 ' + Math.min(7, evRead().nb.days) + ' 天;領完 7 格後消失</small></span></button>';
   if (unlockIs('event')) {
     if (boss && !boss.fin && now < boss.t1) h += '<button class="ldo-row" ' + A + '="ev_goboss">' + ldoArt('evc_6', 'ldo-ri') + '<span><b>團結關:' + ldoEsc(EV_CFG.bossName) + '</b><small>剩 ' + ldoDur(boss.t1 - now) + '・打掉 ' + Math.round(boss.dmg * 100) + '%' + (ldoBossReady(now) ? '・本時段可出戰' : '') + '</small></span></button>';
     else { nx = evNextStart(now, 'boss'); h += '<div class="ldo-row off">' + ldoArt('evc_6', 'ldo-ri') + '<span><b>團結關</b><small>' + (boss && boss.fin ? '本次已結束・' : '') + (nx ? '下次 ' + ldoMD(nx.t0) + '(' + ldoDur(nx.t0 - now) + '後)' : '') + '</small></span></div>'; }
@@ -262,7 +263,7 @@ function ldoRun(a, el, ctx, redraw) {
     ldoToast(r.ok ? '領取:' + r.text + (r.pick ? '(請選 1 張紫名人)' : '') : '無法領取');
   } else if (a === 'ev_nbpick') {
     r = evNbPick(el.getAttribute('data-f'));
-    ldoToast(r.ok ? '獲得 ' + r.name : (r.reason === 'full' ? '名冊已滿,先熔鍊' : '無法選取'));
+    ldoToast(r.ok ? '獲得 ' + r.name : (r.reason === 'full' ? '名冊已滿,先分解' : '無法選取'));
   } else if (a === 'ev_signclaim') {
     r = evSignClaim(+el.getAttribute('data-d'), Date.now());
     ldoToast(r.ok ? '簽到:' + r.text : '無法簽到');

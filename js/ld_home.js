@@ -5,17 +5,17 @@
 var LDH_PLQ_W = 64, LDH_PLQ_H = 60, LDH_MIN_D = 48, LDH_COL_W = 200, LDH_COL_GAP = 8, LDH_DOCK_LAND_H = 60;
 // 9 塊建築:act 為 shellAct 字串;fn 為特殊動作;lock 有字 = 灰色 + 小字(點了只出 Toast)。P = 直式、L = 橫式;new 座標 = 2026-11-14 接圖後依 bg_home2_port / bg_home2_land 實際建築中心量的(橫式建築都在圖左 ~70%,右側草地留給隊伍欄)。
 var LD_BLD = [
-  { id: 'tavern', n: '招賢館', art: 'bld_zhao', act: 'cards:D', P: { old: [17, 26], 'new': [78, 41] }, L: { old: [25, 27], 'new': [37, 50] } },
-  { id: 'hall', n: '城主府', art: 'bld_fu', lock: '即將開放', P: { old: [50, 23], 'new': [50, 22] }, L: { old: [50, 24], 'new': [38, 24] } },
+  { id: 'tavern', n: '招賢館', art: 'bld_zhao', act: 'cards:D', wmHide: true, P: { old: [17, 26], 'new': [78, 41] }, L: { old: [25, 27], 'new': [37, 50] } },
+  { id: 'hall', n: '城主府', art: 'bld_fu', fn: 'hall', P: { old: [50, 23], 'new': [50, 22] }, L: { old: [50, 24], 'new': [38, 24] } },
   { id: 'acad', n: '書院', art: 'bld_shu', fn: 'study', P: { old: [82, 28], 'new': [10, 25] }, L: { old: [73, 28], 'new': [18, 36] } },
   { id: 'yard', n: '校場', art: 'bld_chang', fn: 'yard', P: { old: [17, 42], 'new': [20, 43] }, L: { old: [22, 47], 'new': [24, 47] } },
-  { id: 'camp', n: '軍營', art: 'bld_ying', fn: 'camp', P: { old: [48, 46], 'new': [82, 56] }, L: { old: [50, 51], 'new': [60, 50] } },
+  { id: 'camp', n: '軍營', art: 'bld_ying', fn: 'camp', wmHide: true, P: { old: [48, 46], 'new': [82, 56] }, L: { old: [50, 51], 'new': [60, 50] } },
   { id: 'forge', n: '鍛造坊', art: 'bld_fang', fn: 'forge', P: { old: [83, 44], 'new': [19, 62] }, L: { old: [80, 47], 'new': [15, 72] } },
   { id: 'arena', n: '擂台', art: 'bld_tai', act: 'tour', P: { old: [76, 57], 'new': [85, 64] }, L: { old: [80, 69], 'new': [61, 72] } },
   { id: 'gate', n: '城門', art: 'bld_men', fn: 'gate', P: { old: [50, 67], 'new': [50, 68] }, L: { old: [50, 80], 'new': [40, 73] } }
 ];
 // 目前有效的建築清單:建築帶 dorm 欄位且該旗標關閉時整塊排除(目前無建築使用;高塔已於 S0 刪除)
-function ldHomeBlds() { return LD_BLD.filter(function (b) { return !b.dorm || (typeof featureOn === 'function' && featureOn(b.dorm)); }); }   // @DORMANT tower
+function ldHomeBlds() { var wm = typeof wmapUiOn === 'function' && wmapUiOn(); return LD_BLD.filter(function (b) { return (!b.dorm || (typeof featureOn === 'function' && featureOn(b.dorm))) && !(wm && b.wmHide); }); }   // 2026-11-18:wmap 開時招賢館 / 軍營木牌不放(抽卡 = 右下〔抽卡〕鈕、編隊 = 最下緣隊伍格)   // @DORMANT tower
 var LDH = { scene: null, root: null, layer: null, team: null, band: null, rg: null, rb: null, plq: {}, dot: {}, tm: [], key: '', dkey: '', geo: null, dbg: false };
 
 // ───────── 純函式 ─────────
@@ -208,6 +208,7 @@ function ldHomeYard() {
 }
 function ldHomeBldDo(b) {
   if (b.lock) { ldHomeToast(b.n + ':' + b.lock); return false; }
+  if (b.fn === 'hall') return typeof ldNavPush === 'function' ? ldNavPush('hall') : false;   // 城主府:只看城池基本數據(js/wmap_home.js)
   if (b.fn === 'camp') return typeof ldNavPush === 'function' ? ldNavPush('team', { n: 1, mode: 'edit' }) : false;
   if (b.fn === 'yard') return ldHomeYard();
   if (b.fn === 'gate' && typeof wmapUiOn === 'function' && wmapUiOn()) return wmapUiAct('city-out');   // 旗標 wmap 開:城門 = 出城(js/wmap_ui.js)
@@ -269,7 +270,7 @@ function ldHomeInit(sceneEl) {
   rg.setAttribute('type', 'button'); rg.setAttribute('aria-label', '任務'); rg.setAttribute('data-rb', 'quest');
   rg.appendChild(ldArt('nav_quest', 'ldh-ric'));
   rg.addEventListener('click', function () { if (typeof ldNavPush === 'function') ldNavPush('quest'); });
-  // 右側綠色「招募」圓鈕已移除(開的是舊抽卡畫面):圖示 nav_recruit 改給底列「卡包」,紅點由 shell.js 底列 dock 的卡包紅點顯示
+  // 右側綠色「招募」圓鈕已移除(開的是舊抽卡畫面):圖示 nav_recruit 改給底列「武將」,紅點由 shell.js 底列 dock 的武將紅點顯示
   root.appendChild(rg);
   LDH.rg = rg;
   ldHomeRefresh();

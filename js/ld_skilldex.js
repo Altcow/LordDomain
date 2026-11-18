@@ -1,8 +1,8 @@
-// js/ld_skilldex.js — 戰法大全(頁 'skilldex')與戰法詳情(頁 'skill')(設計_傳承選擇與推薦戰法.md 第④節 R5)。前綴 ldSkd / LDSKD / skd。
+// js/ld_skilldex.js — 戰法圖鑑(頁 'skilldex')與戰法詳情(頁 'skill')(設計_傳承選擇與推薦戰法.md 第④節 R5)。前綴 ldSkd / LDSKD / skd。
 // 範圍:只列第一季可得的 72 個戰法(54 個名人傳承 + 18 本兵書;名單 = SKREC.skill 的 key),另有「其他戰法」摺疊段收已解鎖但不在 72 個內的。
 // ctx(skilldex):{ q 搜尋字, fn 功能, tier 階級, st 狀態('own'|'inh'|'none'), fopen 篩選面板, forEid 只看「推薦給此人」的 6 個, other 其他戰法展開 };ctx(skill):{ id, confirm(待確認的「從別人卸下並裝」的名人 id) }。
 // 資料:skill_rec.js(skrSource / skrSkillHeroes / skrCands / skrLegacyFig / skrWhyText)、bn_skcard.js(裝卸 / 持有人)、bn_text.js(bnSkillInfo)、bn_flavor.js(典故)。外部全域一律 typeof 守衛。
-// 入口:卡包頁頂列「戰法大全」鈕(cardsui_skills.js)、武將頁戰法書籤「看更多候選 ›」(ld_hero.js)。跳轉:武將頁「看戰法詳情 ›」→ skill;skill → hero(裝給他 / 去拆);隊伍頁推薦戰法 → skill。
+// 入口:武將頁頂列「戰法圖鑑」鈕(cardsui_skills.js)、武將頁戰法書籤「看更多候選 ›」(ld_hero.js)。跳轉:武將頁「看戰法詳情 ›」→ skill;skill → hero(裝給他 / 去拆);隊伍頁推薦戰法 → skill。
 // 純函式(skdPoolIds / skdFn / skdListIds / skdEquipPlan)與 DOM 分開,供 tools/test_ld_skilldex.js 測試。ES2017;不用 ?. ??。
 var LDSKD = {
   fns: ['物理輸出', '謀略輸出', '扛傷', '護隊', '治療', '增益', '擾敵'],
@@ -125,7 +125,7 @@ function skdGo(id, ctx) {   // 開頁(已在堆疊 = 退回那層;層數滿了 l
   return ldNavPush(id, ctx || {});
 }
 
-// ───────── 戰法大全(清單) ─────────
+// ───────── 戰法圖鑑(清單) ─────────
 function skdRowHtml(cs, id) {
   var src = skdSrc(cs, id), st = skdStKey(src), hs = skdHolders(cs, id), fig = skdLegacyFig(id), stTxt = st === 'own' ? '已解鎖' : st === 'inh' ? '可拆' : '未得';
   return '<button class="skd-row ' + st + '" data-act="open" data-v="' + skdEsc(id) + '">' +
@@ -169,7 +169,7 @@ function skdDexHtml(cs, ctx) {
 function skdDexRender(el, ctx) {
   var cs = skdCs(), sc = null, y = 0, s2;
   ctx.dexEl = el;
-  if (!cs) { el.innerHTML = '<p class="ldp-empty">尚無卡包資料</p>'; return false; }
+  if (!cs) { el.innerHTML = '<p class="ldp-empty">尚無武將資料</p>'; return false; }
   if (typeof el.querySelector === 'function') { sc = el.querySelector('.skd-scroll'); y = sc ? sc.scrollTop : 0; }
   el.innerHTML = skdDexHtml(cs, ctx);
   el.onclick = function (ev) { skdOnClick(ctx, ev); };
@@ -275,7 +275,7 @@ function skdSecGet(cs, id) {
   else h += '<p>這是通用戰法,不屬於任何一位名人。</p>';
   if (src.k === 'inh' || src.k === 'inhWait' || src.k === 'inhRoster') {
     if (e && e.id) h += '<div class="skd-acts"><button class="skd-btn" data-act="inhgo" data-v="' + skdEsc(e.id) + '">' + (src.k === 'inhRoster' ? '去看那位路人' : '去看' + skdEsc(skdFigName(fig)) + '的傳承') + ' ›</button></div>';
-  } else if (src.k === 'draw') h += '<p class="skd-mute">你的卡包目前沒有這位武將。</p>';
+  } else if (src.k === 'draw') h += '<p class="skd-mute">你的武將目前沒有這位武將。</p>';
   return h;
 }
 function skdSecBest(cs, id) {
@@ -285,7 +285,7 @@ function skdSecBest(cs, id) {
   return h + '<p class="skd-mute">同時最多 ' + mx + ' 人裝,目前 ' + used + ' 人裝</p>';
 }
 function skdHeroBtn(cs, id, x, ctx) {
-  var tag = x.home ? '本命' : (x.whyText || ''), st = x.state === 'roster' ? '在卡包' : x.state === 'owned' ? '不在卡包' : '未擁有', plan = null, eqTxt = '', btn = '', conf = false;
+  var tag = x.home ? '本命' : (x.whyText || ''), st = x.state === 'roster' ? '在名冊' : x.state === 'owned' ? '不在名冊' : '未擁有', plan = null, eqTxt = '', btn = '', conf = false;
   if (x.state === 'roster' && x.e) {
     plan = skdEquipPlan(cs, x.e, id);
     eqTxt = skdEqNames(x.e).join('、');
@@ -295,7 +295,7 @@ function skdHeroBtn(cs, id, x, ctx) {
     else if (plan.k === 'swap') btn = '<button class="skd-eq warn" data-act="eq" data-fig="' + skdEsc(x.fig) + '">' + (conf ? '確定從' + skdEsc(plan.holder.name) + '卸下?' : '從' + skdEsc(plan.holder.name) + '卸下並裝給他') + '</button>';
     else if (plan.k === 'pick') btn = '<button class="skd-eq" data-act="eq" data-fig="' + skdEsc(x.fig) + '">選槽裝備</button>';
     else btn = '<button class="skd-eq" disabled>' + skdEsc(!skdOwned(id) ? '尚未解鎖' : '無法裝備') + '</button>';
-  } else btn = '<button class="skd-eq" disabled>' + (x.state === 'owned' ? '不在卡包' : '未擁有') + '</button>';
+  } else btn = '<button class="skd-eq" disabled>' + (x.state === 'owned' ? '不在名冊' : '未擁有') + '</button>';
   return '<div class="skd-hr ' + x.state + (x.home ? ' home' : '') + '"><button class="skd-hb" data-act="herogo" data-fig="' + skdEsc(x.fig) + '">' + skdAvatar(x.fig, x.name) + '<span><b>' + skdEsc(x.name) + '</b><i>' + skdEsc(st) + (tag ? ' · ' + skdEsc(tag) : '') + '</i>' +
     (eqTxt ? '<em>現在裝:' + skdEsc(eqTxt) + '</em>' : '') + '</span></button>' + btn + '</div>';
 }
@@ -328,7 +328,7 @@ function skdDetailHtml(cs, ctx) {
 function skdDetailRender(el, ctx) {
   var cs = skdCs();
   ctx.detEl = el;
-  if (!cs) { el.innerHTML = '<p class="ldp-empty">尚無卡包資料</p>'; return false; }
+  if (!cs) { el.innerHTML = '<p class="ldp-empty">尚無武將資料</p>'; return false; }
   el.innerHTML = skdDetailHtml(cs, ctx);
   el.onclick = function (ev) { var b = skdFindAct(ctx.detEl, ev); if (b && !(b.hasAttribute && b.hasAttribute('disabled'))) skdDetAct(ctx, b.getAttribute('data-act'), b.getAttribute('data-v'), b); };
   if (ctx.titleEl && skdSk(ctx.id)) ctx.titleEl.textContent = skdName(ctx.id);
@@ -347,14 +347,14 @@ function skdDetAct(ctx, act, v, b) {
   if (act === 'herogo') {
     h = (typeof skrSkillHeroes === 'function' ? skrSkillHeroes(cs, ctx.id) : []).filter(function (x) { return x.fig === fig; })[0];
     if (!h || h.state === 'none') { skdToast('你還沒有 ' + skdFigName(fig) + (skdSk(ctx.id) ? ',抽到後就能裝這個戰法' : '')); return true; }
-    if (h.state === 'owned') { skdToast(skdFigName(fig) + ' 不在卡包,先收入卡包'); return true; }
+    if (h.state === 'owned') { skdToast(skdFigName(fig) + ' 不在名冊,先收入武將'); return true; }
     skdGo('hero', { id: h.e.id, list: [h.e.id], tab: 'attr' });
     return true;
   }
   if (act === 'eq') {
     h = (typeof skrSkillHeroes === 'function' ? skrSkillHeroes(cs, ctx.id) : []).filter(function (x) { return x.fig === fig; })[0];
     e = h && h.state === 'roster' ? h.e : null;
-    if (!e) { skdToast('這位武將不在卡包'); return true; }
+    if (!e) { skdToast('這位武將不在名冊'); return true; }
     r = skdEquip(cs, e, ctx.id, ctx.confirm === fig);
     if (r.need === 'swap') { ctx.confirm = fig; skdDetailRender(ctx.detEl, ctx); return true; }
     ctx.confirm = '';
@@ -368,7 +368,7 @@ function skdDetAct(ctx, act, v, b) {
 }
 
 ldNavRegister({
-  id: 'skilldex', title: '戰法大全',
+  id: 'skilldex', title: '戰法圖鑑',
   res: function () { var c = skdCount(); return [['已解鎖', c.own + '/' + c.total]]; },
   build: function (el, ctx) {
     if (typeof ctx.q !== 'string') ctx.q = '';

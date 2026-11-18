@@ -1,5 +1,5 @@
 // js/npcvisit.js — 在野名人路過:名冊空也會有名人 NPC(CARD_FIGS 金 / 紫階)從城門進城,沿道路逛一圈後離開;點他看人物小卡(頭像 + 專屬台詞 + 「在野」提示),
-// 每位來訪名人首次被點擊給小獎勵(CARD_VISIT.reward,每日有次數上限)。不可直接招募、不碰抽卡機率與卡包、不占居民額度(n.ext = true,與名冊 hero 同機制)。
+// 每位來訪名人首次被點擊給小獎勵(CARD_VISIT.reward,每日有次數上限)。不可直接招募、不碰抽卡機率與武將、不占居民額度(n.ext = true,與名冊 hero 同機制)。
 // 確定性:名單 = 以(世界編號 + 遊戲日)為種子的加權抽樣(CARD_FIG_WEIGHT);預定抵達時間窗過了就不補演(離線 / 讀檔不補演);
 // 當日已演出名額 / 名人 / 已領獎勵記在 localStorage 'lorddomain.visit.v1'(世界內進度鍵,SAVE_SLOT_KEYS;有值才寫)。
 // 掛點(citylife.js):lifeFrame → npcVisitTick(dt);lifeDrawDiag → npcVisitHidden / npcVisitHalo / npcVisitStar;lifeTap → npcVisitHidden;lifeCardShow / lifeCardHide → npcVisitCardShow / npcVisitCardHide。
@@ -98,7 +98,7 @@ function npcVisitPlan(day) {
   return NPCV.plan;
 }
 function nvOwned(cs, id) { return !!(cs && typeof cardsFindFig === 'function' && cardsFindFig(cs, id)); }
-// 第 k 個名額的名人:順序中「不在名冊 / 卡包,或今天已來過」者的第 k 個(來過的仍佔位,名額序號因此穩定);沒有 → null
+// 第 k 個名額的名人:順序中「不在名冊 / 武將,或今天已來過」者的第 k 個(來過的仍佔位,名額序號因此穩定);沒有 → null
 function nvFigFor(day, k, rec) {
   var ord = nvOrder(day), cs = (typeof npcCs === 'function') ? npcCs() : null, i, n = 0;
   for (i = 0; i < ord.length; i++) {

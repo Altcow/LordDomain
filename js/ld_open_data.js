@@ -34,7 +34,7 @@ var EV_CFG = {
   nbPulls: [0, 0, 0, 0, 0, 0, 0], nbPickDay: 7, legacyShards: 30,
   // 七日各天等值獎勵(取代原抽數 300/300/300/300/250/250 = 1700 抽 → 3400 碎片等值):第 2~5 天各 600、第 6~7 天各 500
   nbGive: [null, { shards: 406, mats: { m_iron3: 4, m_hide3: 4, m_whet: 8, m_iron4: 1, m_hide4: 1, m_soul: 2 } }, { shards: 406, mats: { m_iron3: 4, m_hide3: 4, m_whet: 8, m_iron4: 1, m_hide4: 1, m_soul: 2 } }, { shards: 406, mats: { m_iron3: 4, m_hide3: 4, m_whet: 8, m_iron4: 1, m_hide4: 1, m_soul: 2 } }, { shards: 406, mats: { m_iron3: 4, m_hide3: 4, m_whet: 8, m_iron4: 1, m_hide4: 1, m_soul: 2 } }, { shards: 331, mats: { m_iron3: 4, m_hide3: 4, m_whet: 8, m_iron4: 1, m_hide4: 1, m_soul: 1 } }, { shards: 331, mats: { m_iron3: 4, m_hide3: 4, m_whet: 8, m_iron4: 1, m_hide4: 1, m_soul: 1 } }],
-  // 等值換算表(碎片等值):白名人熔鍊期望約 5 碎/抽,保守取 2;材料價 礪石 5、百鍊鋼/虎皮 8、玄鐵/玄龜甲 20、精魄 25
+  // 等值換算表(碎片等值):白名人分解期望約 5 碎/抽,保守取 2;材料價 礪石 5、百鍊鋼/虎皮 8、玄鐵/玄龜甲 20、精魄 25
   valueRate: { pull: 2, shard: 1, m_whet: 5, m_iron3: 8, m_hide3: 8, m_iron4: 20, m_hide4: 20, m_soul: 25 },
   nbExtra: { 1: { grain: 1000 }, 2: { grain: 1000 }, 3: { grain: 1000 }, 4: { grain: 1000 }, 5: { grain: 1000 }, 6: { grain: 1000 }, 7: { grain: 1000 } },   // 占位:七日每天另送一點糧
   // 賽季簽到(4.2):每天 3 抽 + 糧 1000 + 碎片 5;第 7/14/21/28 天大獎再 +4 抽、礪石 3

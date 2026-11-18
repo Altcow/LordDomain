@@ -378,8 +378,8 @@ function wmapPnlOvRender(c, now, force) {
 }
 
 // ───────── 迷你地圖 ─────────
-function wmapPnlMiniBase() {
-  var WG = WMAP.WG, N = WG.size, px = WMAPPNL_CFG.miniPx, ph = wmapPnlMiniH(N, px), cv = document.createElement('canvas'), g, im, d, i, k, p, x, y, col;
+function wmapPnlMiniBase(px0) {
+  var WG = WMAP.WG, N = WG.size, px = px0 > 0 ? px0 : WMAPPNL_CFG.miniPx, ph = wmapPnlMiniH(N, px), cv = document.createElement('canvas'), g, im, d, i, k, p, x, y, col;
   cv.width = px; cv.height = ph;
   g = cv.getContext('2d');
   if (!g) return null;
@@ -485,7 +485,7 @@ function wmapPnlInit() {
   WMAP.root.appendChild(col);
   wmapPnlBuildPanel(col);
   wmapPnlBuildCd(col);
-  wmapPnlBuildMini(WMAP.root);
+  // 2026-11-18:右上小地圖拿掉(改左下〔地圖〕鈕開全螢幕地圖,js/wmap_home.js);wmapPnlBuildMini 保留不呼叫
   wmapPnlBuildCaps();
   wmapPnlOpenApply();
   WMAPPNL.inited = true;

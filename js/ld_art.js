@@ -10,7 +10,7 @@ var LD_ART = {
   bg_tower: { f: 'bg_tower.webp', w: 1024, h: 683, has: true, ph: '塔' },
   bg_team_port: { f: 'bg_team_port.webp', w: 720, h: 1279, has: true, ph: '' },
   bg_team_land: { f: 'bg_team_land.webp', w: 1024, h: 572, has: true, ph: '' },
-  // 第二層頁面共用背景(卡包 / 庫房 / 設定等;圖未產出前 has:false,css/ld_skin.css 改用木紋漸層;規格見 第二層美術 回報)
+  // 第二層頁面共用背景(武將 / 庫房 / 設定等;圖未產出前 has:false,css/ld_skin.css 改用木紋漸層;規格見 第二層美術 回報)
   bg_page_land: { f: 'bg_page_land.webp', w: 1672, h: 941, has: false, ph: '' },
   bg_page_port: { f: 'bg_page_port.webp', w: 941, h: 1672, has: false, ph: '' },
   // 底列方格鈕(預留;圖到後 has 改 true,CSS 改 border-image 九宮格 [28,28,36,28];沒圖維持 css/ld_dock.css 的 CSS 方格鈕)

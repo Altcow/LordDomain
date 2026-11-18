@@ -306,7 +306,7 @@ function bnTourTick() {
   s = bnTourStatus(BNT.store, now);
   if (bnTourSig(s) !== BNT.sig) { bnTourRender(); return; }   // 報名窗口開 / 關、已報名狀態變了:整頁重畫
   c = BNT.el.querySelector('#btCd');
-  if (c) c.textContent = bnTourFmt(s.left);
+  if (c) c.textContent = s.phase === 'open' ? '距開戰 ' + bnTourFmt(s.left) : '距報名 ' + bnTourFmt(s.toOpen);
   c = BNT.el.querySelector('#btSt');
   if (c) c.textContent = bnTourStText(BNT.store, s);
 }
@@ -367,6 +367,11 @@ function bnTourCss() {
     '#bnTour .bt-g button{padding:2px 6px;font-size:11px}' +
     '#bnTour .bt-g button.seen{opacity:.6}' +
     '#bnTour .bt-hist{font-size:12px;line-height:1.7}' +
+    '#bnTour .bt-top{display:flex;gap:6px;margin-bottom:8px}#bnTour .bt-top button{flex:1;min-height:44px}' +
+    '#bnTour .bt-evt{border:2px solid #c9952e;border-radius:10px;background:#2a2016;padding:8px 10px;margin:8px 0}#bnTour .bt-evt.s-past{border-color:#6b5230;filter:grayscale(.8);opacity:.75}#bnTour .bt-evt.reg{border-color:#6bc46b}' +
+    '#bnTour .bt-et{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}#bnTour .bt-et b{font-size:16px;color:#ffd25a}#bnTour .bt-tag{padding:2px 8px;border-radius:10px;background:#7a5418;font-size:12px}' +
+    '#bnTour .bt-er{display:flex;gap:8px;align-items:baseline;padding:2px 0;flex-wrap:wrap}#bnTour .bt-er>span{flex:0 0 56px;opacity:.7}#bnTour .bt-er em{font-style:normal;color:#ffd25a;font-size:12px}' +
+    '#bnTour .bt-ea{display:flex;gap:6px;margin-top:4px}#bnTour .bt-ea button{flex:1;min-height:44px}' +
     '#bnTour .bt-card{border:2px solid #6b5230;border-radius:10px;background:#2a2016;padding:8px 10px;margin:6px 0}' +
     '#bnTour .bt-big{font-size:18px;color:#ffd25a}' +
     '#bnTour .bt-warn{color:#ffb38a}' +
@@ -389,21 +394,12 @@ function bnTourRender() {
   var st = BNT.store || bnTourLoad(), now = Date.now(), s = bnTourStatus(st, now), h, r = null, nx, snap = bnTourRepSnap(), i, ent, mine = -1, rk, cols = '', hist = '', done = true, key, ids, ms, pend;
   if (!BNT.el) return;
   BNT.sig = bnTourSig(s);
-  h = '<div class="bt-h"><b>戰隊擂台</b><button data-tt="close">關閉</button></div>' +
-    '<p class="bt-sub">每天 ' + bnTourSlotsText() + ' 開賽,開賽前 ' + BN_TOURNEY.sched.winMin + ' 分鐘開放報名。16 隊單淘汰,比出第 1、2、3 名(季軍賽 = 兩名半決賽敗者);以報名當下的代表隊伍出賽,不足的隊伍由系統隊伍補滿。沒報名的該屆沒有成績。</p>' +
-    '<div class="bt-card"><p>下一屆開賽:<b class="bt-big">' + bnTourClock(s.slot.start) + '</b>　距開賽 <b id="btCd">' + bnTourFmt(s.left) + '</b></p>' +
-    '<p>報名狀態:<b id="btSt">' + bnTourStText(st, s) + '</b></p>';
-  if (snap) h += '<p class="bt-sub">代表隊伍:' + bnTourEsc(snap.name) + '(' + snap.specs.length + ' 人)。報名後以當下陣容出賽,之後再改隊伍不影響該屆。</p>';
-  else h += '<p class="bt-warn">尚未設定代表隊伍:請先到隊伍頁的「代表」分頁放好 1~3 人。</p><p><button class="pri" data-tt="gorep">前往設定代表隊伍</button></p>';
-  if (bnTourLocked()) h += '<p><button class="dim" data-tt="join">' + bnTourLockText() + '</button></p>';   // 名聲不足:灰色,點了給一行提示
-  else if (s.phase === 'open' && !s.reg && snap) h += '<p><button class="pri" data-tt="join">用代表隊伍報名</button></p>';
-  h += '<p><button data-tt="remind" class="' + (st.remind ? 'on' : '') + '">擂台提醒:' + (st.remind ? '開' : '關') + '</button><button data-tt="auto" class="' + (st.auto ? 'on' : '') + '">自動報名:' + (st.auto ? '開' : '關') + '</button></p>' +
-    '<p class="bt-sub">擂台提醒:報名開始時彈出公告。自動報名:開啟且已設定代表隊伍時,報名開始自動幫你報名(離線時不會報名)。</p></div>';
+  // 2026-11-18 節目表:頂部放全域設定(擂台提醒 / 自動報名),下面每個擂台時段一個卡框(活動名稱 / 報名時間 / 開戰時間 / 報名隊伍 3 位武將名稱;js/bn_tourney_team.js)
+  h = '<div class="bt-top"><button data-tt="remind" class="' + (st.remind ? 'on' : '') + '">擂台提醒:' + (st.remind ? '開' : '關') + '</button><button data-tt="auto" class="' + (st.auto ? 'on' : '') + '">自動報名:' + (st.auto ? '開' : '關') + '</button></div>' +
+    (typeof bnTtCardsHtml === 'function' ? bnTtCardsHtml(st, now) : '');
   if (st.last) r = bnTourEnsureRun();
   pend = !!(st.last && st.rw !== st.last.id);
-  if (!st.last) {
-    h += '<p class="bt-sub">還沒有參賽紀錄。報名並等開賽後,這裡會顯示對陣、回播與名次。</p>';
-  } else {
+  if (st.last) {
     h += '<h3 style="font-size:14px;margin:10px 0 4px">上一屆(' + bnTourClock(st.last.ts) + ' 開賽)' + (st.last.rk ? ' · 我方第 ' + st.last.rk + ' 名' : '') + '</h3>';
     if (!r) h += '<p>這屆是舊版規則(戰鬥規則已更新),無法重算回播。</p>' + (pend && st.last.rk ? '<p><button data-tt="reward">領取名次獎勵</button></p>' : '');
   }
@@ -429,7 +425,6 @@ function bnTourRender() {
       h += '<p>冠軍:<b>' + bnTourEsc(rk(1).name) + '</b>　亞軍:' + bnTourEsc(rk(2).name) + '　季軍:' + bnTourEsc(rk(3).name) +
         (mine >= 0 ? '　我方名次:第 ' + r.rank[mine] + ' 名' : '') + '</p>';
     }
-    h += '<p class="bt-sub">系統隊伍強度:補位 ' + r.stats.npcN + ' 支,平均 ' + Math.round(r.stats.npcAvg * 100) + '%P,超過 110%P 的 ' + r.stats.over + ' 支。</p>';
   }
   hist = (st.hist || []).map(function (x) {
     return bnTourClock(x.ts) + ' 場 · 冠軍 ' + bnTourEsc(x.champ) + (x.champOwn === 'me' ? '(我方)' : '') + ' · 亞 ' + bnTourEsc(x.runner) + ' · 季 ' + bnTourEsc(x.third) + (x.mineN ? ' · 我方第 ' + x.mine + ' 名' : '');
@@ -459,6 +454,7 @@ function bnTourJoin(toast) {
 // 前往隊伍頁「代表」分頁
 function bnTourGoRep() {
   bnTourPopClose();
+  if (typeof bnTtOpen === 'function') return bnTtOpen();   // 2026-11-18:擂台隊伍頁(候選只有第 1~5 隊上陣武將)
   if (typeof ldNavPush === 'function') return ldNavPush('team', { n: 0, mode: 'edit' });
   bnTourToast('請到隊伍頁的「代表」分頁設定');
   return false;

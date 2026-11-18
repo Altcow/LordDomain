@@ -1,5 +1,5 @@
 // js/ld_equip_ui.js — 裝備介面(設計_裝備與尋訪_定案.md 任務卡 6;前綴 eq / ldEquip)。只在旗標 ldui 開啟時有作用(頁面登錄在 ld_nav 堆疊;武將詳情的 4 格由 ld_hero.js 呼叫本檔掛鉤)。
-// 頁面:'equipPick' 換裝(從武將詳情開)、'equipEnh' 裝備詳情 / 強化 / 餵養 / 分解、'bag' 背包(只剩裝備;S0 已移除庫房與材料頁籤)。頁面層數 ≤ 5:首頁 → 卡包 → 武將詳情 → 換裝 → 強化(第 5 層不放往下的按鈕)。
+// 頁面:'equipPick' 換裝(從武將詳情開)、'equipEnh' 裝備詳情 / 強化 / 餵養 / 分解、'bag' 背包(只剩裝備;S0 已移除庫房與材料頁籤)。頁面層數 ≤ 5:首頁 → 武將 → 武將詳情 → 換裝 → 強化(第 5 層不放往下的按鈕)。
 // 素材走 ld_art.js(has:false = CSS 佔位 + 單一漢字);品質框 / 顏色用程式加,不必每品質各畫。ES2017;不用 ?. ??。
 // 全域:ldEquipSlotInner ldEquipInfoHtml ldEquipHeroAct ldEquipItemHtml eqEsc eqArt。
 // @DORMANT ldui:本檔所有入口都在 ldui 路徑(ld_hero.js / shell.js 的 ld 分支)才會被呼叫。
@@ -68,15 +68,15 @@ function ldEquipHeroAct(ctx, act, v) {
   var cs = eqCs(), f = cs ? cardsFind(cs, ctx.id) : null, slot, r;
   if (!f) return false;
   if (act === 'eqpick') {
-    if (f.list !== 'roster') { eqToast('非卡包人員不能裝備(先收入卡包)'); return true; }
+    if (f.list !== 'roster') { eqToast('非武將人員不能裝備(先收入武將)'); return true; }
     if (typeof gearLockOf === 'function' && gearLockOf(f.e)) { eqToast(EQ_LOCK_MSG); return true; }
-    if (ctx.last || typeof ldNavPush !== 'function') { eqToast('請從卡包進入更換'); return true; }
+    if (ctx.last || typeof ldNavPush !== 'function') { eqToast('請從武將進入更換'); return true; }
     slot = eqSlotKeyOf(+v);
     ldNavPush('equipPick', { eid: ctx.id, slot: slot });
     return true;
   }
   if (act === 'eqdet') {
-    if (ctx.last || typeof ldNavPush !== 'function') { eqToast('請從卡包進入'); return true; }
+    if (ctx.last || typeof ldNavPush !== 'function') { eqToast('請從武將進入'); return true; }
     ldNavPush('equipEnh', { gid: v });
     return true;
   }
@@ -92,9 +92,9 @@ function ldEquipHeroAct(ctx, act, v) {
 
 // ───────── 換裝頁 ─────────
 function eqReasonText(r) {
-  if (r.reason === 'star') return '星數不足:需 ' + r.need + ' 星(去熔爐升星)';
+  if (r.reason === 'star') return '星數不足:需 ' + r.need + ' 星(去分解升星)';
   if (r.reason === 'lock' || r.reason === 'lockfrom') return EQ_LOCK_MSG;
-  if (r.reason === 'nocard') return '此人不在卡包';
+  if (r.reason === 'nocard') return '此人不在名冊';
   return '無法穿上';
 }
 function eqSortItems(a, b) { return (b.q - a.q) || (b.lv - a.lv) || (a.id < b.id ? -1 : 1); }

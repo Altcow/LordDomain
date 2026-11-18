@@ -269,14 +269,14 @@ function nsSimpleCands(s, adv, mem) {
   return out;
 }
 
-// ───────── 卡包任務 / 提醒(2026-11-09 卡片為主體):有可抽次數、下一個頭目首通贈抽。排在建築建議之後 ─────────
+// ───────── 武將任務 / 提醒(2026-11-09 卡片為主體):有可抽次數、下一個頭目首通贈抽。排在建築建議之後 ─────────
 function nsCardCands(mem) {
   var out = [], cs, n, i, st;
   if (typeof cardsGet !== 'function' || typeof cardsPulls !== 'function') return out;
   cs = cardsGet();
   if (!cs) return out;
   n = cardsPulls(cs, 'T') + cardsPulls(cs, 'E');
-  if (n >= 10 && !mem.dismissed.card_pulls) out.push({ id: 'card_pulls', src: 'chain', tier: 'C', icon: '🃏', text: '卡片有 ' + n + ' 抽可用(S01卡池),不妨抽一輪。', why: '抽到的人直接進卡包;各池次數存滿 ' + CARD_DRAW.cap + ' 就不再累積。', go: { kind: 'cards', tab: 'T' } });
+  if (n >= 10 && !mem.dismissed.card_pulls) out.push({ id: 'card_pulls', src: 'chain', tier: 'C', icon: '🃏', text: '卡片有 ' + n + ' 抽可用(S01卡池),不妨抽一輪。', why: '抽到的人直接進武將;各池次數存滿 ' + CARD_DRAW.cap + ' 就不再累積。', go: { kind: 'cards', tab: 'T' } });
   if (typeof BN_STAGES !== 'undefined' && typeof CARD_BOSS !== 'undefined' && (featureOn('stages') || featureOn('shell'))) {   // @DORMANT stages:頭目首通送抽(副本獎勵)休眠(v60);@DORMANT shell:外殼開啟時放行
     for (i = 0; i < BN_STAGES.length; i++) {
       st = BN_STAGES[i];
@@ -350,7 +350,7 @@ function nsNext() { nsRt.rot++; }
 function nsGo(cand) {
   if (!cand || !cand.go) return false;
   if (cand.go.kind === 'tut') { if (typeof tutAct === 'function') tutAct(cand.go.id); nsRt.last = -1e15; return true; }
-  if (cand.go.kind === 'cards') { if (typeof cardsUiOpen === 'function') cardsUiOpen(cand.go.tab || 'O'); nsRt.last = -1e15; return true; }   // 卡包面板(側欄〈卡包〉同一個)
+  if (cand.go.kind === 'cards') { if (typeof cardsUiOpen === 'function') cardsUiOpen(cand.go.tab || 'O'); nsRt.last = -1e15; return true; }   // 武將面板(側欄〈武將〉同一個)
   if (cand.go.kind === 'bn') { if (typeof uiSideAct === 'function') uiSideAct('bn'); nsRt.last = -1e15; return true; }   // 側欄〈戰鬥〉(未開放時由其 toast 說明缺什麼)
   if (cand.src === 'tut' && cand.go.kind === 'build' && typeof tutGoBuild === 'function') { tutGoBuild(cand.go.type); nsRt.last = -1e15; return true; }   // 教學蓋建築:自動找位置 + 高亮
   if (cand.go.kind === 'bars') {

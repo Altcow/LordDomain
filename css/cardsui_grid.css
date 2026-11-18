@@ -7,6 +7,7 @@
 #cardsPanel .cugbar button.on { background: #f0b45a; color: #222; }
 #cardsPanel .cugbar button[disabled] { opacity: .4; }
 #cardsPanel .cugbar button.warn { background: #8a3a3a; color: #fff; }
+#cardsPanel .cugbar button.cugfurn { background: #f0b45a; color: #222; border-color: #b8821f; font-weight: bold; margin-left: auto; }
 #cardsPanel .cugchips { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 4px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
 #cardsPanel .cugchips::-webkit-scrollbar { display: none; }
 #cardsPanel .cugchip { flex: none; min-height: 26px; margin: 0; padding: 0 7px; border: 1px solid #f0b45a; border-radius: 13px; background: rgba(240, 180, 90, .15); color: #f5d9a8; font-size: 11px; white-space: nowrap; }

@@ -1,19 +1,19 @@
-// js/cardsui.js — 卡牌與酒館 第一階段介面(PLAN_CARDS §2.3 名帖、§3A.6 卡面、§4.13.8 職業條、§7A 名額與遣散):招募頁(酒館 / 縣試 / 指名)+ 卡包頁(cardsui_roster.js,列表 + 詳情)+ 熔爐頁(cardsui_furnace.js)+ 傳承 / 大全(cardsui_skills.js / cardsui_codex.js)。
-// 抽到就是自己的(2026-11-09:酒令與『任用』已移除):開批的卡直接加入卡包,卡包滿了先放卡包(cs.bag);手動開批時以 typeof 守衛呼叫 cardsRevealPlay(cards, onDone)(js/cardsreveal.js),onDone 後才入冊並刷新介面。
+// js/cardsui.js — 卡牌與酒館 第一階段介面(PLAN_CARDS §2.3 名帖、§3A.6 卡面、§4.13.8 職業條、§7A 名額與遣散):招募頁(酒館 / 縣試 / 指名)+ 武將頁(cardsui_roster.js,列表 + 詳情)+ 分解頁(cardsui_furnace.js)+ 傳承 / 圖鑑(cardsui_skills.js / cardsui_codex.js)。
+// 抽到就是自己的(2026-11-09:酒令與『任用』已移除):開批的卡直接加入武將,武將滿了先放武將(cs.bag);手動開批時以 typeof 守衛呼叫 cardsRevealPlay(cards, onDone)(js/cardsreveal.js),onDone 後才入冊並刷新介面。
 // 文字卡 v1:品階用「色(--gr0~--gr4)+ 品字 + 角飾數」三重表示;陣營字用墨色;頭像 = 中性人物剪影(依品階上色)+ 職業名;名人用 assets/portraits/<id>.webp,路人用 assets/portraits/generic/<職業id>_<變體a-c>.webp(不分品階;舊命名 <職業id>_<品階0-3>_<a-d>.webp 次選;缺圖回退剪影)。詞條 / 技能 / 職業 / 圖例可點,彈出說明浮層(面板內自管:panelmgr 規定 card 不能與大面板並開)。
-// 美術卡(js/cardart.js,assets/card/):邊框 / 背景載入成功時卡面改畫美術卡(cuArtCard),卡包 / 卡包列加縮圖(cuArtThumb);載入中或缺檔退回文字卡。
+// 美術卡(js/cardart.js,assets/card/):邊框 / 背景載入成功時卡面改畫美術卡(cuArtCard),武將 / 武將列加縮圖(cuArtThumb);載入中或缺檔退回文字卡。
 // 入口:右側欄〈卡片〉鈕(ui.js uiSideAct → cardsUiToggle);點酒館 / 考場 / 殿試台建築(ui.js tapObjectAt → cardsUiTap)仍相容;或 cardsUiOpen(tab)。面板走 panelmgr('cards');引擎在 cards.js,資料在 carddata.js。
 // 不發聲、不推播、不紅點。ES2017;不用 ?. ??。
 // 全域名稱:cuRosterLine cuDrawHtml cuPullsHtml cuPullBtns cuGateTxt cuDoPull cuPullRun cuJoinToast cardsUiOpen cardsUiClose cardsUiToggle cardsUiTap cardsUiRender cardsUiHtmlCard cardsUiCtx cardsUiFmtCd cardsUiInfo cardsUiInfoHtml cardsUiAvatarVar cuRevealThen cuDoOpen cuFinishBatch cuLastHtml cuPortraitImg cuArtOn cuArtThumb cuArtCard cuArtReady CU_SIL
-var CU_TAB_NAME = { O: '總覽', T: 'S01卡池', E: 'S01卡池', B: '卡片', R: '卡包' };   // 2026-11-11 v59:指名池 N 已刪除;舊代號 G / N 由 cuSetTab 轉到抽卡分頁
-var CU_TAB_NEW = { D: '抽卡', R: '卡包', F: '熔爐', S: '傳承', X: '大全' };   // 卡片面板 5 分頁:D 抽卡 / R 卡包(原卡包)/ F 熔爐 / S 傳承 / X 大全;舊代號由 cuSetTab 對映
+var CU_TAB_NAME = { O: '總覽', T: 'S01卡池', E: 'S01卡池', B: '卡片', R: '武將' };   // 2026-11-11 v59:指名池 N 已刪除;舊代號 G / N 由 cuSetTab 轉到抽卡分頁
+var CU_TAB_NEW = { D: '抽卡', R: '武將', F: '分解', S: '傳承', X: '圖鑑' };   // 卡片面板 5 分頁:D 抽卡 / R 武將(原武將)/ F 分解 / S 傳承 / X 圖鑑;舊代號由 cuSetTab 對映
 function cuTabIcon(t) { var k = { D: 'nav_recruit', R: 'nav_cards', F: 'ic_starup', S: 'hd_inh', X: 'ic_bond' }[t]; try { return (k && typeof ldArt === 'function') ? ldArt(k, 'cu-tabic').outerHTML : ''; } catch (e) { return ''; } }   // 第二層美術:分頁圓形圖示(ld_art 沒圖時顯示佔位漢字);放在文字與紅點之後,新介面由 css/ld_skin.css 用 order 排到最前、舊介面隱藏
 var CU_HELP_KEY = { R: 'roster', F: 'furnace', S: 'skills', X: 'codex' };   // 各分頁的『說明』按鈕 → CU_HELP(說明內容只在浮層,頁面不展開)
 var CU_HELP = {
-  roster: { t: '卡包說明', l: [['人數', '卡包格數固定(300),滿了停止抽卡;先到『熔爐』熔鍊,或在人物詳情遣散騰出空位。'], ['堆疊', '同一種卡會疊成一疊(名人同人、路人同兵種品階星階),右上 ×N 為張數;點疊開頂層卡,詳情內可切換本疊各張。'], ['篩選', '🔍 搜尋名字 / 職業 / 陣營 / 兵種;兵種、品階、排序在列上下拉,選後縮成標籤,點標籤或 ✕ 清除。'], ['同名副卡', '同名名人可有多張,多餘的可拿來傳承或熔鍊;預設會選副卡。']] },
-  furnace: { t: '熔爐說明', l: [['熔鍊', '勾選要熔的路人後按『熔鍊』,換成碎片;沒勾選時,熔鍊熔掉『熔爐設定』裡一鍵熔品階以下的路人。'], ['碎片用途', '卡包人物升星(強化)、請回流浪名人。'], ['不入熔爐', '名人不入(需到人物詳情手動熔,二次確認);派駐中與鎖定者不入。'], ['自動熔爐', '在熔爐設定裡設品階:卡包外新抽到的路人,品階不超過此值會直接熔成碎片。']] },
-  skills: { t: '傳承說明', l: [['解鎖', '拆名人卡(傳承)後,該名人的全部戰法永久解鎖;解鎖後可裝進任一選擇槽。'], ['持有', '左側已傳承(金字)在上、未傳承在下;灰字為可傳承(卡包有卡可拆),深灰為目前無卡。點戰法名看右側說明。'], ['上限', '每個戰法有同時裝備人數上限,說明中顯示『使用 n/上限』,已滿需先從對方卸下。'], ['研兵', '全卡包同兵種共享,討伐中兵力 / 攻擊 / 謀略 / 治療每級增加(敵人不吃)。']] },
-  codex: { t: '大全說明', l: [['內容', '人物、戰法、隊伍的完整介紹與收集進度;「配隊建議」分頁有各陣營推薦隊伍,可一鍵套用到布陣。'], ['搜尋', '可搜尋人物姓名、字、典故或戰法名稱;點項目看詳情。']] }
+  roster: { t: '武將說明', l: [['人數', '武將格數固定(300),滿了停止抽卡;先到『分解』分解,或在人物詳情遣散騰出空位。'], ['堆疊', '同一種卡會疊成一疊(名人同人、路人同兵種品階星階),右上 ×N 為張數;點疊開頂層卡,詳情內可切換本疊各張。'], ['篩選', '🔍 搜尋名字 / 職業 / 陣營 / 兵種;兵種、品階、排序在列上下拉,選後縮成標籤,點標籤或 ✕ 清除。'], ['同名副卡', '同名名人可有多張,多餘的可拿來傳承或分解;預設會選副卡。']] },
+  furnace: { t: '分解說明', l: [['分解', '勾選要熔的路人後按『分解』,換成碎片;沒勾選時,分解熔掉『分解設定』裡一鍵熔品階以下的路人。'], ['碎片用途', '武將人物升星(強化)、請回流浪名人。'], ['不入分解', '名人不入(需到人物詳情手動熔,二次確認);派駐中與鎖定者不入。'], ['自動分解', '在分解設定裡設品階:武將外新抽到的路人,品階不超過此值會直接熔成碎片。']] },
+  skills: { t: '傳承說明', l: [['解鎖', '拆名人卡(傳承)後,該名人的全部戰法永久解鎖;解鎖後可裝進任一選擇槽。'], ['持有', '左側已傳承(金字)在上、未傳承在下;灰字為可傳承(武將有卡可拆),深灰為目前無卡。點戰法名看右側說明。'], ['上限', '每個戰法有同時裝備人數上限,說明中顯示『使用 n/上限』,已滿需先從對方卸下。'], ['研兵', '全武將同兵種共享,討伐中兵力 / 攻擊 / 謀略 / 治療每級增加(敵人不吃)。']] },
+  codex: { t: '圖鑑說明', l: [['內容', '人物、戰法、隊伍的完整介紹與收集進度;「配隊建議」分頁有各陣營推薦隊伍,可一鍵套用到布陣。'], ['搜尋', '可搜尋人物姓名、字、典故或戰法名稱;點項目看詳情。']] }
 };
 var CU_TYPE_TAB = { tavern: 'E', kao_chang: 'E', dian_shi_tai: 'D' };   // 酒館建築另由 tavern_scene.js 優先進入室內;考場 / 殿試台只開本介面
 var CU_CLS = { war: '戰', cmd: '統', plan: '謀', econ: '經', life: '生', trait: '性', odd: '怪' };
@@ -22,8 +22,8 @@ var CU_LIVE_CITY = '城建類:資料已備,派駐於對口建築時計入;產出
 var CU_LIVE_WAR = '討伐戰鬥中生效';
 var cuMiss = {};
 var cu = { open: false, tab: 'D', sub: 'O', detail: null, confirm: null, el: null, timer: 0, msg: '', info: null, chain: false, revealing: false, skipAll: false, last: null,
-  bf: -1, br: '', bs: 'gr', bn: 1, bsel: {}, bid: null, ble: 0, bpend: null, omsg: '', fset: false, fx: null };   // bsel 熔爐分頁勾選、bpend 熔鍊待確認、fset 熔爐設定浮層開關、fx 熔爐分頁條件(一鍵熔 / 清單篩選,cuFxState 惰性建立)
-var CU_OPEN_MSG = { none: '沒有可抽次數', busy: '上一批還在開啟中', bagfull: '卡包已滿,請先熔鍊或遣散', closed: '尚未開放', bad: '請先選擇陣營或職業分類' };
+  bf: -1, br: '', bs: 'gr', bn: 1, bsel: {}, bid: null, ble: 0, bpend: null, omsg: '', fset: false, fx: null };   // bsel 分解分頁勾選、bpend 分解待確認、fset 分解設定浮層開關、fx 分解分頁條件(一鍵熔 / 清單篩選,cuFxState 惰性建立)
+var CU_OPEN_MSG = { none: '沒有可抽次數', busy: '上一批還在開啟中', bagfull: '武將已滿,請先分解或遣散', closed: '尚未開放', bad: '請先選擇陣營或職業分類' };
 
 function cuEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function cardsUiFmtCd(ms) {
@@ -59,12 +59,12 @@ function cuEnsure() {
   if (typeof document === 'undefined' || !document.body) return null;
   cardsUiCss();
   if (typeof cardArtPreload === 'function') cardArtPreload();   // 卡片美術(cardart.js):首次開面板時載入並快取
-  var el = document.createElement('div'), fr = (typeof pfFrame === 'function') ? pfFrame({ id: 'cards', layer: 2, scrollSel: '.cubd', title: '🃏 卡片 · 卡包', rootId: 'cardsFrame' }) : null;
+  var el = document.createElement('div'), fr = (typeof pfFrame === 'function') ? pfFrame({ id: 'cards', layer: 2, scrollSel: '.cubd', title: '武將', rootId: 'cardsFrame' }) : null;
   el.id = 'cardsPanel';
   el.hidden = true;
   el.addEventListener('click', cuClick);
-  el.addEventListener('input', function (ev) { if (typeof cuRosterInput === 'function') cuRosterInput(ev); });   // 卡包搜尋框(cardsui_roster.js)
-  if (document.addEventListener) document.addEventListener('keydown', function (e) { if (e && e.key === 'Escape' && cu.open && (cu.info || cu.fset)) { cu.info = null; cu.fset = false; cardsUiRender(); } });   // Esc 關閉說明 / 熔爐設定浮層
+  el.addEventListener('input', function (ev) { if (typeof cuRosterInput === 'function') cuRosterInput(ev); });   // 武將搜尋框(cardsui_roster.js)
+  if (document.addEventListener) document.addEventListener('keydown', function (e) { if (e && e.key === 'Escape' && cu.open && (cu.info || cu.fset)) { cu.info = null; cu.fset = false; cardsUiRender(); } });   // Esc 關閉說明 / 分解設定浮層
   if (fr) fr.bd.appendChild(el);   // 統一外框(panelui.js):標題 / 關閉 / 寬三檔在外框標題列,內容區為 #cardsPanel
   else {
     document.body.appendChild(el);
@@ -197,7 +197,7 @@ function cuArtOn(c) {
   if (typeof cardArtWant === 'function') cardArtWant(c, cuArtReady);
   return false;
 }
-// 列表縮圖(卡包 / 卡包列):只畫背景 + 頭像 + 邊框;美術未就緒回空字串(列表照舊)
+// 列表縮圖(武將 / 武將列):只畫背景 + 頭像 + 邊框;美術未就緒回空字串(列表照舊)
 function cuArtThumb(c) { return cuArtOn(c) ? '<span class="cathw">' + cardArtHtml(c, { thumb: true, portrait: cuSilPortrait(c, true) }) + '</span>' : ''; }
 function cuArtCard(c, opt) {
   var G = CARD_GRADE[c.gr], st = (opt && opt.stats) || c.st, mini = !!(opt && opt.mini), j = CARD_JOB_BY_ID[c.main], nm, pn, star = 0;
@@ -228,12 +228,12 @@ function cuGateTxt(v) {
   var V = CARD_VENUES[v], g = (typeof NL_FEATURE_GATE !== 'undefined') ? NL_FEATURE_GATE[V.gate] : null;
   return V.name + '尚未開放' + (g && g.need ? '(研發〈' + ((typeof cuTechName === 'function') ? cuTechName(g.need) : g.need) + '〉後開放)' : '');
 }
-// 開批後提示:已加入卡包 N 人 / 卡包滿了放卡包 / 自動熔爐
+// 開批後提示:已加入武將 N 人 / 武將滿了放武將 / 自動分解
 function cuJoinToast(res) {
   var p = [];
   if (!res) return '';
-  if (res.roster) p.push('已加入卡包 ' + res.roster + ' 人');
-  if (res.full | 0) p.push('卡包已滿,' + (res.full | 0) + ' 張轉成碎片');
+  if (res.roster) p.push('已加入武將 ' + res.roster + ' 人');
+  if (res.full | 0) p.push('武將已滿,' + (res.full | 0) + ' 張轉成碎片');
   if (res.dissolved) p.push(res.dissolved + ' 張白卡自動熔成碎片');
   if (res.dupN) p.push('同名名人入冊 ' + res.dupN + ' 張');
   if (p.length && typeof showToast === 'function') showToast(p.join(';'));
@@ -249,7 +249,7 @@ function cuRevealThen(cards, done, quick, opts) {
   cu.revealing = true;
   try { cardsRevealPlay(cards, once, opts); } catch (e) { once(); }
 }
-// 結果摘要累計:chain 時多批合併成一份。items 的 how:roster 入冊(dup = 同名副卡)auto 自動熔爐 full 名冊已滿轉碎片
+// 結果摘要累計:chain 時多批合併成一份。items 的 how:roster 入冊(dup = 同名副卡)auto 自動分解 full 名冊已滿轉碎片
 function cuLastAdd(label, tab, res, fresh) {
   var L = cu.last;
   if (fresh || !L) L = cu.last = { label: label, tab: tab, batches: 0, items: [], roster: 0, added: 0, overN: 0, full: 0, dissolved: 0, dupN: 0, shards: 0, tokens: 0, lost: 0 };
@@ -268,7 +268,7 @@ function cuFinishBatch(v, label, fresh, tab) {
   return res;
 }
 // 抽卡:n 次(數字或 'all')。每批最多 CARD_DRAW.maxOne 張,每批都完整播開卡特效(按『收下』或自然結束才進下一批);
-// 演出中按『全部跳過』:本批結束,剩餘批次 quick 直接入包(摘要合併);卡包 / 卡包 / 溢出區滿了就停
+// 演出中按『全部跳過』:本批結束,剩餘批次 quick 直接入包(摘要合併);武將 / 武將 / 溢出區滿了就停
 function cuDoPull(cs, v, n) {
   var total = (n === 'all') ? cardsPulls(cs, v) : (parseInt(n, 10) | 0);
   total = Math.max(1, Math.min(total, cardsPulls(cs, v)));
@@ -280,7 +280,7 @@ function cuPullRun(v, left, first) {
   var cs = cardsGet(), k, r;
   if (!cs) return;
   if (left < 1 || (!first && !cu.open)) { if (cu.open) cardsUiRender(); return; }
-  k = Math.max(1, Math.min(left, CARD_DRAW.maxOne, cardsPulls(cs, v), cardsRosterRoom(cs)));   // 卡包剩幾格就最多開幾張(卡包滿 → bagfull)
+  k = Math.max(1, Math.min(left, CARD_DRAW.maxOne, cardsPulls(cs, v), cardsRosterRoom(cs)));   // 武將剩幾格就最多開幾張(武將滿 → bagfull)
   r = cardsBagStage(cs, v, k);
   if (!r.ok) { cu.chain = false; cu.msg = CU_OPEN_MSG[r.reason] || '無法抽卡'; if (typeof showToast === 'function') showToast(cu.msg); cardsUiRender(); return; }
   k = r.cards.length;
@@ -291,14 +291,14 @@ function cuPullRun(v, left, first) {
     var res = cuFinishBatch(v, CARD_VENUES[v].name, first), L = cu.last;
     if (left - k > 0 && cardsPulls(cardsGet(), v) > 0) { cuPullRun(v, left - k, false); return; }
     cu.chain = false;
-    if (L && typeof cuJoinToast === 'function') cuJoinToast({ roster: L.roster, full: L.full, dissolved: L.dissolved, dupN: L.dupN });   // 已加入卡包 N 人
+    if (L && typeof cuJoinToast === 'function') cuJoinToast({ roster: L.roster, full: L.full, dissolved: L.dissolved, dupN: L.dupN });   // 已加入武將 N 人
     if (cu.open) cardsUiRender();
   }, cu.skipAll, { more: more, onSkipAll: function () { cu.skipAll = true; } });
 }
 function cuItemRow(it) {
   var c = it.c, G = CARD_GRADE[c.gr], j = CARD_JOB_BY_ID[c.main], corner = '', i, tag;
   for (i = 0; i < G.corner; i++) corner += '◆';
-  tag = { roster: '已加入卡包', full: '卡包已滿 → ' + (it.shards | 0) + ' 碎', auto: '自動熔爐 +' + (it.shards | 0) + ' 碎' }[it.how] || '';
+  tag = { roster: '已加入武將', full: '武將已滿 → ' + (it.shards | 0) + ' 碎', auto: '自動分解 +' + (it.shards | 0) + ' 碎' }[it.how] || '';
   if (it.how === 'roster' && it.dup) tag = '重複・第 ' + (it.n | 0) + ' 張';
   return '<div class="cur" style="border-left:5px solid var(--gr' + c.gr + ');padding-left:6px"><span><b>' + G.ch + corner + '</b> ' + cuEsc(c.name) + (c.fig ? ' <span class="cusub">名人</span>' : '') +
     '<span class="cusub"> ' + (j ? cuEsc(j.name) : '') + ' · ' + cuTroopTag(c) + '</span></span><span class="cusub">' + tag + '</span></div>';
@@ -309,22 +309,22 @@ function cuLastHtml(tab) {
   if (!L || (tab && L.tab !== tab)) return '';
   n = L.items.length;
   h = '<div class="cusec">' + cuEsc(L.label) + ' · 開 ' + L.batches + ' 批 ' + n + ' 張</div>';
-  h += '<div class="cusub">' + [L.roster ? '已加入卡包 ' + L.roster + ' 人' : '', L.full ? '卡包已滿,轉碎片 ' + L.full + ' 張' : '', L.dissolved ? '自動熔爐 ' + L.dissolved : '', L.dupN ? '同名入冊 ' + L.dupN + ' 張' : '',
+  h += '<div class="cusub">' + [L.roster ? '已加入武將 ' + L.roster + ' 人' : '', L.full ? '武將已滿,轉碎片 ' + L.full + ' 張' : '', L.dissolved ? '自動分解 ' + L.dissolved : '', L.dupN ? '同名入冊 ' + L.dupN + ' 張' : '',
     L.shards ? '碎片 +' + L.shards : ''].filter(function (x) { return x; }).join(' · ') + '</div>';
   show = n <= 7 ? L.items : L.items.filter(function (it) { return it.c.gr >= 3 || it.c.fig; }).slice(0, 24);
   show.forEach(function (it) { h += cuItemRow(it); });
-  if (show.length < n) h += '<div class="cusub">(其餘 ' + (n - show.length) + ' 張為青藍以下,已加入卡包或自動熔爐)</div>';
+  if (show.length < n) h += '<div class="cusub">(其餘 ' + (n - show.length) + ' 張為青藍以下,已加入武將或自動分解)</div>';
   return h;
 }
 
-// ---------- 卡包頁 ----------
+// ---------- 武將頁 ----------
 function cuRosterHtml(cs) {
   var cap = cardsCap(), h = '', list = cs.roster.slice().sort(function (a, b) { return b.gr - a.gr || b.tai - a.tai || a.no - b.no; });
   if (cu.detail) { var f = cardsFind(cs, cu.detail); if (f) return cuDetailHtml(cs, f); cu.detail = null; }
   h += '<div class="cur"><span>名額 <b>' + cs.roster.length + '/' + cap + '</b></span><span class="cusub">待定席 ' + cs.wait.length + '/' + CARD_CFG.waitSeats + '</span></div>';
-  if (cs.roster.length >= cap) h += '<div class="cuwarn">卡包已滿(' + cap + '),停止抽卡;請先熔鍊或遣散</div>';
+  if (cs.roster.length >= cap) h += '<div class="cuwarn">武將已滿(' + cap + '),停止抽卡;請先分解或遣散</div>';
   if (cs.lastRel) h += '<button class="cub" data-a="undo">復原最近遣散</button>';
-  if (!list.length) h += '<div class="cusub">卡包空空如也。到' + CARD_VENUES.E.name + '抽卡,抽到的人會直接加入卡包。</div>';
+  if (!list.length) h += '<div class="cusub">武將空空如也。到' + CARD_VENUES.E.name + '抽卡,抽到的人會直接加入武將。</div>';
   list.forEach(function (e) { h += cuRowHtml(e, false); });
   if (cs.wait.length) { h += '<div class="cusec">待定席</div>'; cs.wait.forEach(function (e) { h += cuRowHtml(e, true); }); }
   if (cs.wander.length) { h += '<div class="cusec">故人(流浪)</div>'; cs.wander.forEach(function (e) { h += cuRowHtml(e, false, true); }); }
@@ -337,7 +337,7 @@ function cuRowHtml(e, wait, wander) {
     '<span class="cusub"> ' + (j ? j.name : '') + (e.at ? ' · 派駐' : '') + '</span></span><span class="cusub">' + cuTroopTag(e) + (wait ? ' · 待定' : '') + (wander ? ' · 流浪' : '') + '</span></div>';
 }
 function cuDetailHtml(cs, f) {
-  var e = f.e, h = '<button class="cub" data-a="back">‹ 返回卡包</button>', k;
+  var e = f.e, h = '<button class="cub" data-a="back">‹ 返回武將</button>', k;
   h += (typeof cuPersonCardHtml === 'function') ? cuPersonCardHtml(cs, f) : cardsUiHtmlCard(e, { full: true, stats: cardsStats(e) });   // 人物卡(cardsui_card.js,K5)
   h += '<div class="cusub cuink">出身:' + (e.org.k === 'pin' ? 'S01卡池 ' + (CARD_PIN[e.org.v] || '') : 'S01卡池') + ' · 招募序 ' + e.no + '</div>';
   if (e.fig && typeof ethnicOfFig === 'function' && typeof ETHNIC_LOOK !== 'undefined') { var eo = ethnicOfFig(e.fig); if (eo && ETHNIC_LOOK[eo.eth]) h += '<div class="cusub cuink">族別:' + cuEsc(ETHNIC_LOOK[eo.eth].name) + '(服飾與髮式參考)</div>'; } // 缺資料不顯示
@@ -346,12 +346,12 @@ function cuDetailHtml(cs, f) {
     var j = CARD_JOB_BY_ID[k], t = e.ja[k];
     h += '<div class="cusub" style="opacity:1;cursor:pointer" data-a="info" data-k="job" data-key="' + k + ':' + t + '">' + cuEsc(j.name) + '<br>對口 ' + cuEsc(j.post) + ' · 加成 +' + CARD_JOB_TIERPCT[t] + ' %(' + cuEsc(j.eff) + ')' + '</div>';
   }
-  if (typeof cuStarHtml === 'function' && f.list !== 'wander') h += cuStarHtml(cs, e);   // 強化(升星,卡片熔爐碎片;cardsui_bag.js)
+  if (typeof cuStarHtml === 'function' && f.list !== 'wander') h += cuStarHtml(cs, e);   // 強化(升星,卡片分解碎片;cardsui_bag.js)
   if (typeof cuNpcDetailHtml === 'function') h += cuNpcDetailHtml(cs, e, f);   // 親近 / 所在 / 請託 / 升階(npcui.js)
-  if (f.list === 'roster' && typeof cuRosterMeltHtml === 'function') h += '<div class="cusec">熔鍊</div>' + cuRosterMeltHtml(cs, e);   // 卡包人員熔鍊(cardsui_roster.js;名人二次確認)
+  if (f.list === 'roster' && typeof cuRosterMeltHtml === 'function') h += '<div class="cusec">分解</div>' + cuRosterMeltHtml(cs, e);   // 武將人員分解(cardsui_roster.js;名人二次確認)
   h += '<div class="cusec">管理</div>';
-  if (f.list === 'wait') h += '<button class="cub" data-a="accept" data-id="' + e.id + '"' + (cs.roster.length >= cardsCap() ? ' disabled' : '') + '>收入卡包</button>';
-  if (f.list === 'wander') h += '<button class="cub" data-a="recall" data-id="' + e.id + '"' + (cs.shards >= CARD_RECALL_COST && cs.roster.length < cardsCap() ? '' : ' disabled') + '>請回(' + CARD_RECALL_COST + ' 碎片 + 1 名額)</button><div class="cusub">碎片 ' + (cs.shards | 0) + ' · 卡包 ' + cs.roster.length + '/' + cardsCap() + '</div>';
+  if (f.list === 'wait') h += '<button class="cub" data-a="accept" data-id="' + e.id + '"' + (cs.roster.length >= cardsCap() ? ' disabled' : '') + '>收入武將</button>';
+  if (f.list === 'wander') h += '<button class="cub" data-a="recall" data-id="' + e.id + '"' + (cs.shards >= CARD_RECALL_COST && cs.roster.length < cardsCap() ? '' : ' disabled') + '>請回(' + CARD_RECALL_COST + ' 碎片 + 1 名額)</button><div class="cusub">碎片 ' + (cs.shards | 0) + ' · 武將 ' + cs.roster.length + '/' + cardsCap() + '</div>';
   if (f.list !== 'wander') h += '<button class="cub" data-a="star" data-id="' + e.id + '">' + (e.star ? '🔒 已鎖定(點此解除)' : '鎖定(防止誤遣散)') + '</button>';
   if (f.list !== 'wander' && cu.confirm !== e.id) h += '<div class="cusub" style="opacity:1">' + (e.fig ? '遣散後轉為流浪,可花 ' + CARD_RECALL_COST + ' 碎片請回;名人遣散不給碎片。' : '遣散後轉換成碎片(' + cardsRelShards(e) + ' 碎),路人遣散後不能招回,要重新招募。') + '</div><button class="cub warn" data-a="rel" data-id="' + e.id + '">遣散(換取碎片)</button> <button class="cub" data-a="info" data-k="release" data-key="">遣散與卸任的差別</button>';
   if (cu.confirm === e.id) {
@@ -441,18 +441,18 @@ function cardsUiInfo(kind, key) {
     o.lines.push(['兵種', '圖示 + 字(槍 / 騎 / 盾 / 弓 / 器械),與人物卡的兵種相同']);
     o.lines.push(['專屬', '名人專屬詞條,只有該名人才有']);
     o.lines.push(['戰法', '討伐戰鬥用的戰法(指揮 / 主動 / 追擊 / 被動 / 大招),點戰法列可展開白話說明;路人依品階有 1~3 個,名人固定']);
-        o.lines.push(['🔒', '卡包鎖定,鎖定中無法遣散']);
-    o.lines.push(['★', '強化星數(0~' + CARD_FURNACE.starMax + '),用卡片熔爐的碎片在卡包詳情升星;每星攻 / 防 / HP +' + Math.round(CARD_FURNACE.starBonus.atk * 100) + ' %,' + CARD_FURNACE.starBonus.skillStar + ' 星起技能強化、' + CARD_FURNACE.starBonus.markStar + ' 星專屬標記;與 🔒 無關']);
+        o.lines.push(['🔒', '武將鎖定,鎖定中無法遣散']);
+    o.lines.push(['★', '強化星數(0~' + CARD_FURNACE.starMax + '),用卡片分解的碎片在武將詳情升星;每星攻 / 防 / HP +' + Math.round(CARD_FURNACE.starBonus.atk * 100) + ' %,' + CARD_FURNACE.starBonus.skillStar + ' 星起技能強化、' + CARD_FURNACE.starBonus.markStar + ' 星專屬標記;與 🔒 無關']);
     o.lines.push(['卡面圖示', '邊框與頂端寶石顏色 = 品階;人物視窗左上為陣營徽章、右上為戰鬥類型(槍 / 騎 / 盾 / 弓 / 器械;槍克騎、騎克盾、盾克弓、弓克槍,四兵種又克器械),下緣為強化星數與鎖定;名牌卷軸寫姓名(字),下方面板為五維與主職']);
     o.lines.push(['點擊', '詞條、技能、職業、才字都可以點開看說明']);
     return o;
   }
   if (kind === 'release') {
     o.title = '遣散與卸任';
-    o.tags.push('卡包', '派駐');
-    o.lines.push(['卸任', '人仍留在卡包,只離開目前派駐的職務(建築 / 職司空出),名額不變、不給碎片。到派工頁按「卸任」即可,之後可再派駐。']);
-    o.lines.push(['遣散', '人離開卡包、名額空出。路人遣散後轉換成碎片,不能招回,要重新招募;名人遣散後轉為流浪,可花 ' + CARD_RECALL_COST + ' 碎片請回,不給碎片。']);
-    o.lines.push(['差別', '卸任只是離開職務、人還在卡包;遣散會讓人離開卡包。遣散時若人正在派駐,會一併卸任。']);
+    o.tags.push('武將', '派駐');
+    o.lines.push(['卸任', '人仍留在武將,只離開目前派駐的職務(建築 / 職司空出),名額不變、不給碎片。到派工頁按「卸任」即可,之後可再派駐。']);
+    o.lines.push(['遣散', '人離開武將、名額空出。路人遣散後轉換成碎片,不能招回,要重新招募;名人遣散後轉為流浪,可花 ' + CARD_RECALL_COST + ' 碎片請回,不給碎片。']);
+    o.lines.push(['差別', '卸任只是離開職務、人還在武將;遣散會讓人離開武將。遣散時若人正在派駐,會一併卸任。']);
     o.lines.push(['限制', '🔒 鎖定與鎖定的人不能遣散。']);
     o.lines.push(['復原', '遣散後可按「復原最近遣散」撤回一次(人與碎片收回)。']);
     return o;
@@ -469,7 +469,7 @@ function cardsUiInfoHtml(kind, key) {
 }
 
 // ---------- 面板 ----------
-// 分頁對映(規格 §5 / §7):舊代號 O T E N G → D 抽卡(T / E / N 為 D 內的子頁,O 為總覽子頁);B → R 卡包內的卡包子頁。R 卡包 / D 抽卡 / S 傳承 / X 大全 以外的代號一律忽略
+// 分頁對映(規格 §5 / §7):舊代號 O T E N G → D 抽卡(T / E / N 為 D 內的子頁,O 為總覽子頁);B → R 武將內的武將子頁。R 武將 / D 抽卡 / S 傳承 / X 圖鑑 以外的代號一律忽略
 function cuSetTab(t) {
   if (t === 'G' || t === 'N') t = 'D';   // 指名池已刪除
   if (t === 'T') t = 'E';   // S01卡池已休眠,併入 S01卡池
@@ -479,12 +479,12 @@ function cuSetTab(t) {
   if (t === 'D') { if (cu.tab !== 'D') cu.sub = 'O'; cu.tab = 'D'; return; }
   if (t === 'S' || t === 'X' || t === 'F') cu.tab = t;
 }
-// 卡包分頁(R):卡包頁主頁(cardsui_roster.js);卡包子頁已移除(2026-11-10)
+// 武將分頁(R):武將頁主頁(cardsui_roster.js);武將子頁已移除(2026-11-10)
 function cuRosterTabHtml(cs) {
   if (typeof cuRosterPageHtml === 'function') return cuRosterPageHtml(cs);
   return cuRosterHtml(cs);
 }
-// 尚未建置的分頁(傳承 S / 大全 X 的內容檔缺席時)
+// 尚未建置的分頁(傳承 S / 圖鑑 X 的內容檔缺席時)
 function cuBuildingHtml() { return '<div class="cusub" style="padding:12px 4px;opacity:1">建置中</div>'; }
 // ---------- 面板 ----------
 // 捲動保存:重畫前記下 .cubd 與 [data-keep] 容器的 scrollTop;分頁不同或面板剛開(cardsUiOpen 已清 data-tab)→ 不保存,從頂端開始
@@ -514,22 +514,29 @@ function cuScrollRestore(el, sv) {
   for (i = 0; i < nodes.length; i++) { k = nodes[i].getAttribute('data-keep'); nodes[i].scrollTop = sv.keep[k] || 0; }
 }
 // 說明按鈕(R / F / S / X 分頁共用):一顆小按鈕,點了開浮層,不在頁面展開
-function cuHelpBtn(t) { return '<div style="text-align:right;margin:0 0 4px"><button class="cub" data-a="info" data-k="help" data-key="' + (CU_HELP_KEY[t] || '') + '" style="min-height:36px;margin:0;padding:2px 10px;font-size:12px">說明</button></div>'; }
+function cuHelpBtn(t) { return '<div style="display:flex;justify-content:space-between;align-items:center;margin:0 0 4px">' + (t === 'R' ? '<button class="cub" data-a="gopull" style="min-height:36px;margin:0;padding:2px 14px;font-size:13px;background:#c39a2e;color:#222">抽卡</button>' : '<span></span>') + '<button class="cub" data-a="info" data-k="help" data-key="' + (CU_HELP_KEY[t] || '') + '" style="min-height:36px;margin:0;padding:2px 10px;font-size:12px">說明</button></div>'; }
+function cuTitleOf() { return cu.tab === 'D' ? '抽卡' : (cu.tab === 'F' ? '分解' : '武將'); }
+// 抽卡 / 分解 是獨立畫面:cu.from = 進來前的分頁(從武將頁進來 = 'R');‹ 返回先回那一頁,沒有 from(例如右下〔抽卡〕直接進入)才退出整頁
+function cuSubBack() {
+  if ((cu.tab === 'D' || cu.tab === 'F') && cu.from) { cuSetTab(cu.from); cu.from = ''; cu.fset = false; cu.info = null; cu.bpend = null; cardsUiRender(); return true; }
+  return false;
+}
 function cardsUiRender() {
-  var el = cuEnsure(), cs, h, tabs = ['D', 'R', 'F', 'S', 'X'], sv;
+  var el = cuEnsure(), cs, h, tabs = ['D', 'R', 'F', 'S', 'X'], shownTabs = ['R', 'S', 'X'], sv, sub = (cu.tab === 'D' || cu.tab === 'F');
   if (!el) return;
   cs = cuCs();
   if (!cs) { el.innerHTML = '<div class="cubd">尚無城邦資料</div>'; return; }
   if (tabs.indexOf(cu.tab) < 0) cuSetTab(cu.tab);   // 舊代號(例如 'O')先對映
   sv = cuScrollSave(el);
-  if (typeof pfSetTitle === 'function' && cu.frame) pfSetTitle('cards', '🃏 卡片 · 卡包 ' + cs.roster.length + '/' + cardsCap());   // 標題與關閉在外框標題列(panelui.js)
-  h = '<div class="cuhd"><div class="cutabs">' + tabs.map(function (t) { return '<button class="cutab' + (cu.tab === t ? ' on' : '') + '" data-a="tab" data-t="' + t + '">' + CU_TAB_NEW[t] + (t === 'R' && typeof itemsDotHtml === 'function' ? itemsDotHtml() : '') + cuTabIcon(t) + '</button>'; }).join('') + '</div><button class="cuq" data-a="info" data-k="legend" data-key="all" aria-label="圖例說明">?</button></div><div class="cubd">';
+  if (typeof pfSetTitle === 'function' && cu.frame) pfSetTitle('cards', '武將 ' + cs.roster.length + '/' + cardsCap());   // 標題與關閉在外框標題列(panelui.js)
+  if (typeof LDNAV !== 'undefined' && LDNAV && LDNAV.barTitle && cu.open) LDNAV.barTitle.textContent = cuTitleOf();   // 舊頁頂列標題:武將 / 抽卡 / 分解(2026-11-18)
+  h = sub ? '<div class="cubd">' : '<div class="cuhd"><div class="cutabs">' + shownTabs.map(function (t) { return '<button class="cutab' + (cu.tab === t ? ' on' : '') + '" data-a="tab" data-t="' + t + '">' + CU_TAB_NEW[t] + (t === 'R' && typeof itemsDotHtml === 'function' ? itemsDotHtml() : '') + cuTabIcon(t) + '</button>'; }).join('') + '</div><button class="cuq" data-a="info" data-k="legend" data-key="all" aria-label="圖例說明">?</button></div><div class="cubd">';
   if (cu.tab !== 'D') h += cuHelpBtn(cu.tab);
   if (cu.tab === 'R') h += cuRosterTabHtml(cs);
-  else if (cu.tab === 'F') h += cuFurnaceTabHtml(cs);   // 熔爐分頁(cardsui_furnace.js)
+  else if (cu.tab === 'F') h += cuFurnaceTabHtml(cs);   // 分解分頁(cardsui_furnace.js)
   else if (cu.tab === 'D') h += (typeof cuDrawTabHtml === 'function') ? cuDrawTabHtml(cs) : cuBuildingHtml();
   else if (cu.tab === 'S') h += (typeof cuSkillsHtml === 'function') ? cuSkillsHtml(cs) : cuBuildingHtml();   // 傳承分頁(cardsui_skills.js,K6)
-  else h += (typeof cuCodexHtml === 'function') ? cuCodexHtml(cs) : cuBuildingHtml();   // 大全(cardsui_codex.js,K7)
+  else h += (typeof cuCodexHtml === 'function') ? cuCodexHtml(cs) : cuBuildingHtml();   // 圖鑑(cardsui_codex.js,K7)
   el.innerHTML = h + '</div>' + (cu.info ? cardsUiInfoHtml(cu.info.k, cu.info.key) : (cu.fset ? cuFurnaceSetPop(cs) : ((typeof cuDrawPop === 'function') ? cuDrawPop(cs) : '')));   // 抽卡說明 pop(cardsui_draw.js)
   el.setAttribute('data-tab', cu.tab);
   cuScrollRestore(el, sv);
@@ -564,18 +571,19 @@ function cuClick(ev) {
   if (cu.revealing) return;   // 抽卡特效播放中:不處理面板操作(特效結束 / 略過後才入包)
   if (a === 'info') { cu.info = { k: b.getAttribute('data-k'), key: b.getAttribute('data-key') }; cardsUiRender(); return; }
   if (a === 'infox') { cu.info = null; cardsUiRender(); return; }
-  if (a === 'fset') { cu.fset = true; cardsUiRender(); return; }   // 熔爐設定浮層(cardsui_furnace.js)
+  if (a === 'fset') { cu.fset = true; cardsUiRender(); return; }   // 分解設定浮層(cardsui_furnace.js)
   if (a === 'fsetx') { cu.fset = false; cardsUiRender(); return; }
   cu.info = null;
-  if (a === 'tab') { cuSetTab(b.getAttribute('data-t')); cu.fset = false; cu.omsg = ''; cu.detail = null; cu.confirm = null; cu.chain = false; cu.bid = null; cu.bpend = null; if (typeof panelCloseAbove === 'function') panelCloseAbove(2); }   // 切分頁:第 3 層以上全部關閉
+  if (a === 'gopull' || a === 'gofurn') { cu.from = 'R'; cuSetTab(a === 'gopull' ? 'D' : 'F'); cu.fset = false; cu.omsg = ''; cu.detail = null; cu.confirm = null; cu.bpend = null; if (typeof panelCloseAbove === 'function') panelCloseAbove(2); }
+  else if (a === 'tab') { cu.from = ''; cuSetTab(b.getAttribute('data-t')); cu.fset = false; cu.omsg = ''; cu.detail = null; cu.confirm = null; cu.chain = false; cu.bid = null; cu.bpend = null; if (typeof panelCloseAbove === 'function') panelCloseAbove(2); }   // 切分頁:第 3 層以上全部關閉
   else if (a === 'sub') { cu.sub = b.getAttribute('data-s'); cu.detail = null; cu.confirm = null; cu.bid = null; cu.bpend = null; if (typeof panelCloseAbove === 'function') panelCloseAbove(2); }
   else if (a === 'pull') { cuDoPull(cs, v, b.getAttribute('data-n')); }
   else if (typeof cuCardClick === 'function' && cuCardClick(a, b, cs)) { /* 人物卡與底部浮層(cardsui_card.js) */ }
   else if (typeof cuDrawClick === 'function' && cuDrawClick(a, b, cs)) { /* 抽卡分頁:指名池選擇收合(cardsui_draw.js) */ }
-  else if (typeof cuFurnaceClick === 'function' && cuFurnaceClick(a, b, cs)) { /* 熔爐分頁:勾選 / 熔鍊 / 熔爐設定(cardsui_furnace.js) */ }
+  else if (typeof cuFurnaceClick === 'function' && cuFurnaceClick(a, b, cs)) { /* 分解分頁:勾選 / 分解 / 分解設定(cardsui_furnace.js) */ }
   else if (typeof cuBagClick === 'function' && cuBagClick(a, b, cs)) { /* 升星 / 兌換指名券(cardsui_bag.js) */ }
-  else if (typeof cuRosterClick === 'function' && cuRosterClick(a, b, cs)) { /* 卡包頁:搜尋 / 篩選 / 排序 / 詳情熔鍊(cardsui_roster.js) */ }
-  else if (typeof cuNpcClick === 'function' && cuNpcClick(a, b, cs)) { /* 卡包詳情:前往 / 請託 / 升階(npcui.js) */ }
+  else if (typeof cuRosterClick === 'function' && cuRosterClick(a, b, cs)) { /* 武將頁:搜尋 / 篩選 / 排序 / 詳情分解(cardsui_roster.js) */ }
+  else if (typeof cuNpcClick === 'function' && cuNpcClick(a, b, cs)) { /* 武將詳情:前往 / 請託 / 升階(npcui.js) */ }
   else if (a === 'detail') { cu.detail = id; cu.confirm = null; if (typeof tutSeen === 'function') tutSeen('detail'); }   // 教學 C3:看過卡詳情
   else if (a === 'back') { cu.detail = null; cu.confirm = null; }
   else if (a === 'star') { var f = cardsFind(cs, id); if (f) f.e.star = f.e.star ? 0 : 1; cuSave(); }
@@ -598,6 +606,7 @@ function cardsUiOpen(tab) {
   cu.revealing = false;   // 重新打開面板:不可卡在舊的特效狀態(殘留的待入包批次由 cuCs 直接入包)
   cs = cuCs();
   if (!cs) return;
+  cu.from = '';
   if (tab) cuSetTab(tab);
   cu.open = true; cu.dpop = null; cu.omsg = ''; cu.detail = null; cu.confirm = null; cu.msg = ''; cu.info = null; cu.chain = false; cu.bid = null; cu.bpend = null;
   if (typeof pfOpen === 'function' && cu.frame) { try { pfOpen({ id: 'cards', layer: 2, onClose: cuFrameClose }); } catch (e) { /* 略過 */ } }

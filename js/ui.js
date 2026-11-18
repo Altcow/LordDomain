@@ -208,7 +208,7 @@ const UI_SIDE_ITEMS = [
   { key: 'sandbox', icon: '⚔', label: '沙盤', title: '沙盤推演', top: true, scope: 'camp', target: 'btnSandbox', dorm: 'cityedit' },
   { key: 'shop', icon: '🏪', label: '商店', title: '商店', scope: 'estate', target: 'btnShop', gate: 'shop', dorm: 'citysim' },
   { key: 'tech', icon: '📜', label: '科技', title: '科技樹與研發序列', scope: 'estate', special: 'tech', dorm: 'citysim' },
-  { key: 'cards', icon: '🃏', label: '卡片', title: '卡片:抽卡、卡包、熔爐與傳承(次數隨時間累積)', scope: 'estate', special: 'cards' },
+  { key: 'cards', icon: '🃏', label: '卡片', title: '卡片:抽卡、武將、分解與傳承(次數隨時間累積)', scope: 'estate', special: 'cards' },
   { key: 'caravan', icon: '🛻', label: '走鏢', title: '走鏢(鏢師、馬車與高階貨品)', scope: 'estate', target: 'btnCaravan', gate: 'caravan', dorm: 'caravan' },
   { key: 'bn', icon: '⚔', label: '戰鬥', title: '戰鬥(3v3 回合制練習戰)', scope: 'estate', special: 'bn', gate: 'battleA', showLocked: true },
   { key: 'season', icon: '🌤', label: '季節', title: '季節與時段', scope: 'estate', target: 'seasonBtn', dorm: 'citysim' },
@@ -301,7 +301,7 @@ function initSideUI() {
 
 // 戰鬥鈕未達條件時的說明(v58-C:只看名冊人數 ≥ BNUI.minRoster)
 function uiBattleLockToast() {
-  if (typeof showToast === 'function') showToast('卡包至少 ' + BNUI.minRoster + ' 人才能出戰(目前 ' + bnUiRosterList().length + ' 人)');
+  if (typeof showToast === 'function') showToast('武將至少 ' + BNUI.minRoster + ' 人才能出戰(目前 ' + bnUiRosterList().length + ' 人)');
 }
 function uiSideAct(key) {
   const it = UI_SIDE_ITEMS.find(x => x.key === key);
@@ -361,7 +361,7 @@ function syncSideBar() {
     b.querySelector('.ic').textContent = icon;
     b.querySelector('.lb').textContent = label;
   });
-  // 正常模式第一層最多 UI_SIDE_NORMAL_MAX 顆:放不下時(超量)才把拍照收進展開列,仍超量再依序捨棄 季節 → 精簡 → 搜尋(收進展開列;版面、戰鬥鈕、卡包鈕不捨棄,未達條件時灰掉);精簡模式的展開列都還在;頂列項目與另一畫面的項目不算
+  // 正常模式第一層最多 UI_SIDE_NORMAL_MAX 顆:放不下時(超量)才把拍照收進展開列,仍超量再依序捨棄 季節 → 精簡 → 搜尋(收進展開列;版面、戰鬥鈕、武將鈕不捨棄,未達條件時灰掉);精簡模式的展開列都還在;頂列項目與另一畫面的項目不算
   if (!uiIsCompact()) {
     const camp = game.mode === 'battleDesign';
     const vis = key => {
@@ -1867,7 +1867,7 @@ function tapObjectAt(sx, sy) {
   if (typeof interiorPack2Tap === 'function' && interiorPack2Tap(o)) return;   // 室內第二批:學宮 / 倉廩 / 醫署藥肆 / 市集 / 驛站 / 觀星臺(不可用時退回下面原行為)
   if (typeof lordhallTap === 'function' && lordhallTap(o)) return;
   if (typeof cardsUiTap === 'function' && cardsUiTap(o)) return;
-  if (typeof furnaceUiTap === 'function' && furnaceUiTap(o)) return;   // 卡片熔爐建築(furnaceui.js)
+  if (typeof furnaceUiTap === 'function' && furnaceUiTap(o)) return;   // 卡片分解建築(furnaceui.js)
   if (o.type === LAB_TYPE) {
     toggleTechPanel(true);
     return;

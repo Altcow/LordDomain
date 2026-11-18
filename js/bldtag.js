@@ -1,7 +1,7 @@
 // js/bldtag.js — 點建築的「名稱標籤」與「可進入標記」。
 // 標籤 #bldTag:瀏覽模式輕點建築 → 建築頭上顯示名稱(魔幻世界用 fxObjName);有室內空間者加「🚪 可進入」與〔進入〕鈕,點鈕才進室內(避免誤入)。
 //   同一時間只顯示一個;再點同一棟 / 點別棟 / 點空地或居民 / 開大面板(body.panel-cover)/ 進入放置(body.ui-placing)/ 離開經營板 → 消失。
-//   沒有室內的建築:仍走 ui.js tapObjectAt 原行為(人事提示、高亮;城主府 / 考場 / 熔爐 / 研究院等開面板者不顯示標籤、照舊開面板)。
+//   沒有室內的建築:仍走 ui.js tapObjectAt 原行為(人事提示、高亮;城主府 / 考場 / 分解 / 研究院等開面板者不顯示標籤、照舊開面板)。
 // 可進入標記:偏好 lorddomain.ui.doorMarks('0' = 關,預設開);縮放 ≥ BT.minZoom、非省電、非放置、非拍照、無大面板時,可進入建築頭上畫小門 🚪(彼此不重疊)。
 // 可進入清單不手寫:由室內掛點的對照表即時取得 —— interiors_pack1_data.js IP_BLD、interiors_pack2_data.js IP2_BLD(需場景定義成功)、酒館 tavern(tavern_scene.js tavernSceneEnter)。
 // 掛點:ui.js tapObjectAt 呼叫 bldTagTake / bldTagTap;ui.js draftFloatSync(每幀)呼叫 bldTagSync;render.js 每幀呼叫 bldDoorDraw。外部全域一律 typeof 守衛。ES2017;不用 ?. ??。
@@ -36,7 +36,7 @@ function bldName(type) {
   if (v) return v;
   return (typeof OBJECTS !== 'undefined' && OBJECTS[type]) ? OBJECTS[type].name : String(type);
 }
-// 點了會開自己面板的建築(城主府 / 考場 / 殿試台 / 熔爐 / 研究院):不顯示標籤,照舊開面板
+// 點了會開自己面板的建築(城主府 / 考場 / 殿試台 / 分解 / 研究院):不顯示標籤,照舊開面板
 function bldTagPass(type) {
   if (typeof LH_TYPE !== 'undefined' && type === LH_TYPE) return true;
   if (typeof CU_TYPE_TAB !== 'undefined' && CU_TYPE_TAB[type]) return true;

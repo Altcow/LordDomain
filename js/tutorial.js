@@ -7,7 +7,7 @@
 // ES2017;不用 ?. ??。
 
 var TUT_GRANT_KEYS = ['xue1', 'md', 'skip', 'grad', 't9'];
-var TUT_SEEN_KEYS = ['cards', 'detail', 'team'];   // 卡包教學步驟的『看過』旗標:C1 打開過卡片面板、C3 看過卡詳情、C4 先記著(戰鬥未開放時)
+var TUT_SEEN_KEYS = ['cards', 'detail', 'team'];   // 武將教學步驟的『看過』旗標:C1 打開過卡片面板、C3 看過卡詳情、C4 先記著(戰鬥未開放時)
 var TUT_HOLD_MS = 5000;         // T8 三根長條綠色需維持的時間
 var TUT_IDLE_MS = 90000;        // 同一步閒置超過此時間,卡片加註「幫你選好位置」
 var TUT_T9_GUARANTEE_MS = 900000; // T9 起算 15 分鐘仍未排入,補到學識 10(保底)
@@ -21,7 +21,7 @@ function tutActive() { if (!featureOn('tutorial')) return false; /* @DORMANT tut
 function tutHas() { var c = tutCity(); return !!(c && c.tut); }
 function tutGraduated() { var c = tutCity(); return !!(c && c.tut && c.tut.step === 'END'); }
 function tutProgress(step) { var i = TUT_IDS.indexOf(step); return i < 0 ? '' : i + '/' + TUT_TOTAL; }
-// 卡包教學的『看過』旗標(cardsui.js 點開卡詳情時呼叫 tutSeen('detail');C4 的『先記著』鈕 tutAct('teamok'))
+// 武將教學的『看過』旗標(cardsui.js 點開卡詳情時呼叫 tutSeen('detail');C4 的『先記著』鈕 tutAct('teamok'))
 function tutSeen(k) { var c = tutCity(); if (!c || !c.tut || TUT_SEEN_KEYS.indexOf(k) < 0) return false; if (!c.tut.seen) c.tut.seen = {}; c.tut.seen[k] = 1; return true; }
 function tutHasSeen(k) { var c = tutCity(); return !!(c && c.tut && c.tut.seen && c.tut.seen[k]); }
 function tutToast(m) { if (typeof showToast === 'function') showToast(m); }
@@ -143,7 +143,7 @@ function tutFillGo(go) {
   return o;
 }
 
-// 卡包開場步驟(C1~C4,兩種模式共用)的完成條件:C1 打開過卡片面板(cardsui.js cardsUiOpen 寫入 tutSeen('cards');新手禮包為道具,開局自動發放、不需領取)、C2 抽過卡、C3 看過卡詳情、C4 組了隊(討伐陣容有人)或按了『先記著』
+// 武將開場步驟(C1~C4,兩種模式共用)的完成條件:C1 打開過卡片面板(cardsui.js cardsUiOpen 寫入 tutSeen('cards');新手禮包為道具,開局自動發放、不需領取)、C2 抽過卡、C3 看過卡詳情、C4 組了隊(討伐陣容有人)或按了『先記著』
 function tutTeamFormed() {
   var d = null, i;
   if (typeof bnUiLoad !== 'function') return false;

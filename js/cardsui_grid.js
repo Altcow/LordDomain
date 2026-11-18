@@ -1,12 +1,12 @@
-// js/cardsui_grid.js — 卡包頁『卡片網格』(2026-11-12):名冊改成小卡網格(取代文字清單);極細篩選列(🔍 / 兵種▾ / 品階▾ / 排序▾ / 選)、點開為疊在上層的小清單(不推開版面)、選後縮成標籤、計數 N/300 同列。
+// js/cardsui_grid.js — 武將頁『卡片網格』(2026-11-12):名冊改成小卡網格(取代文字清單);極細篩選列(🔍 / 兵種▾ / 品階▾ / 排序▾ / 選)、點開為疊在上層的小清單(不推開版面)、選後縮成標籤、計數 N/300 同列。
 // 效能實測(無頭 Chrome 157、375×812、121→105 堆、CDP;2026-11-12):
 //   網格→詳情(開卡)100 次:平均 3.7 ms、p95 約 6 ms、最大 < 15 ms,皆 < 30 ms;詳情→網格(關閉)100 次:平均 0.1 ms;詳情『下一位 / 上一位』100 次:平均 2.0 ms。
 //   long task(> 50 ms)0 次;DOM 節點 1499 → 1499(200 次切換不增加);JS heap 約 +0.4 MB(< 2 MB)。
 //   目前實作:網格 DOM 常駐(開詳情不重建網格,僅 partial 同步);詳情面板 body 每次 innerHTML 重寫(未做『只換欄位』);相鄰頭像預載 3 張;單一委派 click(#cardsPanel 一個)+ 面板 bd 一個 click。
 //   版面:橫向且寬 ≥ CUG_SPLIT_MIN(560)= 詳情並排於右半(P1 第 3 層);其餘(直立或窄橫向)= 詳情滿版(body.cu-detail-full)。切換由 cuGridSyncMode 於開 / 關詳情與 resize / orientationchange 更新。
 // 堆疊(2026-11-12 追加):同一種卡疊成一疊(疊牌偏移 3px、右上角 ×N 徽章,≥2 張才顯示;陣中成員顯示『陣』小點)。堆疊鍵:名人 = 同名人 id;路人 = 同兵種 + 同品階 + 同星階。頂層 = 星階最高者(名人)/ 序號最小者(路人)。
-//   篩選 / 搜尋對堆疊內任一張命中即顯示該堆疊;排序以頂層為準;N/300 仍計實際張數。點堆疊 → 人物卡詳情(頂層),詳情上方『本疊 N 張』可切換成員;拆傳承 / 熔爐預設對象為 cardsLegacyPick(副卡優先)。
-// 多選(『選』鈕或長按):點堆疊 = 整疊可熔成員切換(名人不入熔鍊)。
+//   篩選 / 搜尋對堆疊內任一張命中即顯示該堆疊;排序以頂層為準;N/300 仍計實際張數。點堆疊 → 人物卡詳情(頂層),詳情上方『本疊 N 張』可切換成員;拆傳承 / 分解預設對象為 cardsLegacyPick(副卡優先)。
+// 多選(『選』鈕或長按):點堆疊 = 整疊可熔成員切換(名人不入分解)。
 // 掛點:cardsui_roster.js 的 cuRosterPageHtml(畫頁)/ cuRosterInput(搜尋框)/ cuRosterClick(動作,先呼叫 cuGridClick)。
 // 本檔覆寫全域 cardsUiRender:CUG.partial 為真時只重畫網格與篩選列(不重建整頁圖片),否則走原 cardsUiRender 後再同步詳情面板。
 // 欄數由 CSS auto-fill 依寬度決定(css/cardsui_grid.css,最小卡寬 84px);cuGridCols 為同一規則的純函式(測試用)。
@@ -195,7 +195,7 @@ function cuGridBarInner(cs, R) {
   if (R.sel) {
     sel = cuRosterSelIds(cs);
     h = '<div class="cugbar"><button data-a="gsel">退出</button><span class="cugcnt cugsel">已選 ' + sel.length + '</span>' +
-      '<button class="warn" data-a="gmelt"' + (sel.length ? '' : ' disabled') + '>熔鍊</button></div>';
+      '<button class="warn" data-a="gmelt"' + (sel.length ? '' : ' disabled') + '>分解</button></div>';
   } else if (R.srch) {
     h = '<div class="cugbar"><button class="on" data-a="gsrch" aria-label="關閉搜尋">🔍</button>' + cuGridSearchInput(R, true) +
       '<span class="cugcnt">' + n + '/' + cap + '</span></div>';
@@ -207,6 +207,7 @@ function cuGridBarInner(cs, R) {
       '<button class="' + on('sort') + '" data-a="gdrop" data-v="sort">排序▾</button>' +
       '<button data-a="gsel" aria-label="多選">選</button>' +
       '<div class="cugchips">' + cuGridChipsHtml(R) + '</div>' +
+      '<button class="cugfurn" data-a="gofurn">分解</button>' +
       '<span class="cugcnt">' + (shown !== cuGridGroups(cs).length ? '符合 ' + shown + ' 堆 · ' : '') + n + '/' + cap + '</span></div>';
   }
   if (R.open && !R.srch && !R.sel) h += cuGridPopHtml(R);
@@ -216,10 +217,10 @@ function cuGridBarInner(cs, R) {
 function cuGridSearchInput(R, show) {
   return '<input id="curq" class="cugq" type="search" placeholder="名字 / 職業 / 陣營 / 兵種" value="' + cuEsc(R.q) + '"' + (show ? '' : ' style="display:none"') + '>';
 }
-// 網格區:熔鍊確認(多選時)+ 堆疊小卡;空卡包 / 無符合條件各有一行提示
+// 網格區:分解確認(多選時)+ 堆疊小卡;空武將 / 無符合條件各有一行提示
 function cuGridGridHtml(cs, R) {
   var list, h = '', i, sel = cu.bsel || {};
-  if (cu.bpend && !cu.bpend.single) h += '<div class="cuwarn">' + cuEsc(cu.bpend.text) + '</div><button class="cub" data-a="rcfno">否</button><button class="cub warn" data-a="rcfyes">是,熔鍊</button>';
+  if (cu.bpend && !cu.bpend.single) h += '<div class="cuwarn">' + cuEsc(cu.bpend.text) + '</div><button class="cub" data-a="rcfno">否</button><button class="cub warn" data-a="rcfyes">是,分解</button>';
   if (!cs.roster.length) return h + '<div class="cugempty">抽卡後卡片會出現在這裡。<br><button class="cub" data-a="tab" data-t="D">去抽卡</button></div>';
   list = cuGridList(cs, R);
   if (!list.length) return h + '<div class="cugempty">沒有符合條件的卡。<br><button class="cub" data-a="gclr">清除篩選</button></div>';
@@ -239,7 +240,7 @@ function cuGridPaintGrid() {
   cuKeepScroll(function () { el.innerHTML = cuGridGridHtml(cs, cuRoState()); });
 }
 function cuGridRepaint() { cuGridPaintBar(); cuGridPaintGrid(); }
-// 詳情面板內容:本疊切換列(堆疊 ≥ 2 張)+ 人物卡(cuDetailHtml);拆傳承 / 熔爐預設對象標註為 cardsLegacyPick
+// 詳情面板內容:本疊切換列(堆疊 ≥ 2 張)+ 人物卡(cuDetailHtml);拆傳承 / 分解預設對象標註為 cardsLegacyPick
 function cuGridSheetHtml(cs, id) {
   var f = cardsFind(cs, id), g, list = '', legacy = null;
   if (!f) return '';
@@ -248,7 +249,7 @@ function cuGridSheetHtml(cs, id) {
     if (typeof cardsLegacyPick === 'function' && g.members[0].fig) { legacy = cardsLegacyPick(cs, g.members[0].fig); legacy = legacy && legacy.id ? legacy.id : null; }
     list = '<div class="cusec">本疊 ' + g.n + ' 張</div>' + g.members.map(function (m) {
       return '<button class="cub' + (m.id === id ? ' on' : '') + '" data-a="gmem" data-id="' + cuEsc(m.id) + '">' + (m === g.top ? '主' : '副') + ' ★' + cardsStarLv(m) +
-        (m.at ? ' · 上陣' : '') + (m.star ? ' · 🔒' : '') + (m.id === legacy ? ' · 拆傳承/熔爐預設' : '') + '</button>';
+        (m.at ? ' · 上陣' : '') + (m.star ? ' · 🔒' : '') + (m.id === legacy ? ' · 拆傳承/分解預設' : '') + '</button>';
     }).join('');
   }
   return '<div class="cubd">' + cuGridNavHtml(cs, id) + list + cuDetailHtml(cs, f) + '</div>';
@@ -364,14 +365,14 @@ function cuGridClick(a, b, cs) {
     return true;
   }
   if (a === 'gmelt') {
-    if (!cuRosterSelIds(cs).length) cu.msg = '沒有可熔鍊的卡';
+    if (!cuRosterSelIds(cs).length) cu.msg = '沒有可分解的卡';
     else cuRosterAsk(cs, cuRosterSelIds(cs), false);
     cuGridRepaint();
     return true;
   }
   return true;
 }
-// 多選:整疊切換(堆內可熔成員全選 / 全取消;名人不入熔鍊)
+// 多選:整疊切換(堆內可熔成員全選 / 全取消;名人不入分解)
 function cuGridToggleStack(id, csArg) {
   var cs = csArg || cardsGet(), g = cuGridItemOf(cs, id), sel;
   if (!g) return;

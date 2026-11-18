@@ -87,7 +87,7 @@ function bnStIconPath(ic, k) {
   return 'assets/bnfx/' + (typeof ic === 'string' && ic.indexOf('stc_') === 0 ? ic : 'st_' + (ic === 1 ? k : ic)) + '.webp';
 }
 var BN_TROOP_ICON = { '槍': 'troop_spear', '騎': 'troop_cav', '盾': 'troop_shield', '弓': 'troop_bow', '謀': 'troop_strat', '械': 'troop_siege' };
-var BN_SKILLCAT_IDS = ['phys', 'strat', 'bow', 'pursuit', 'buff', 'control', 'heal', 'def', 'debuff'];   // assets/skillcat/cat_<id>.webp(512px,戰法大全用)
+var BN_SKILLCAT_IDS = ['phys', 'strat', 'bow', 'pursuit', 'buff', 'control', 'heal', 'def', 'debuff'];   // assets/skillcat/cat_<id>.webp(512px,戰法圖鑑用)
 var BN_LEGION_IDS = ['spear', 'cav', 'shield', 'bow', 'cover'];                                          // assets/legion/legion_<id>.webp(512px,兵種卡用)
 var BN_STATUS_ICON_IDS = ['sleep', 'paralyze', 'evade', 'freeze', 'burn', 'poison'];                    // assets/statusicon/stn_<id>.webp(128px)
 function bnTroopIconPath(t) { return BN_TROOP_ICON[t] ? 'assets/troopicon/' + BN_TROOP_ICON[t] + '.webp' : ''; }

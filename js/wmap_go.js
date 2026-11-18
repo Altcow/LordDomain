@@ -12,7 +12,8 @@
 //   wmapGoSpd(slots) → 係數                   全隊最慢兵種係數(WMG_CFG.spd:騎 0.85 弓 1 槍 1 械 1.25 盾 1.10;預設 1)
 //   wmapGoPtId(gi) → 'w'+gi
 //   wmapGoRoute(WG, src, goal) → {cells, cost}|null   Dijkstra(六邊形 6 向、每步 1、道路 / 鋪路層 ×0.5、淺灘 ×1.5;無斜步、無切牆角);goal = gi(可為縣 / 關單格)或 'home'(任一主城格)
-//   wmapGoTarget(WG, gi, info) → {ok, reason, kind:'res'|'county'|'jun'|'pass', gi, cost, cells, path, ty, lv, node}   info = {ty:'farm'..., lv}(資源格;wmapInfoOf(gi))
+//   wmapGoTarget(WG, gi, info, own?) → {ok, reason, kind:'res'|'county'|'jun'|'pass', gi, cost, cells, path, ty, lv, node}   info = {ty:'farm'..., lv}(資源格;wmapInfoOf(gi))
+//        own = {gi:1} 己方領地(wmapGoOwnSet;沒傳則讀 WMAP.own):資源格超出 WG.d 可達上限(Infinity)時,緊鄰己方領地(6 鄰)才另算路徑可打,不相鄰仍 reason 'unreach'。
 //        城池(gv 3):點城內任何格 / 關門道都算打這座;gi = node.gi(主城門格)。縣 / 郡:cells = 主城 → node.adj(主城門前格)的路徑 + node.gi(最後一步進門),cost = node.d + 1;
 //        關:規格 1.5,走到朝主城端的門外格 node.adj 開打、不進門道:cells 止於 adj,cost = node.d。tg.end = cells 最後一格(改目標 / 繞路重算用)
 //   wmapGoNeedMigrate(W, WG) → bool           存檔世界版本 g2.gv(沒記 = 2)≠ WG.gv
@@ -80,8 +81,17 @@ function wmapGoRoute(WG, src, goal) {
 }
 
 // ───────── 目標 ─────────
-function wmapGoTarget(WG, gi, info) {
-  var N, k, nd, cells, base, cost, pass;
+// 己方領地鄰格(六邊形 6 鄰,含放棄倒數中):own = {gi:1}(wmapGoOwnSet);沒傳且 WMAP.WG 是同一張圖時讀 WMAP.own(UI 每秒同步)
+function wmapGoAdjOwn(WG, gi, own) {
+  var nb, i;
+  if (!own && typeof WMAP !== 'undefined' && WMAP && WMAP.WG === WG) own = WMAP.own;
+  if (!own) return false;
+  nb = wmHexNbs(gi, WG.size);
+  for (i = 0; i < nb.length; i++) if (own[nb[i]]) return true;
+  return false;
+}
+function wmapGoTarget(WG, gi, info, own) {
+  var N, k, nd, cells, base, cost, pass, rt;
   if (!WG || !(gi >= 0 && gi < WG.k.length)) return { ok: false, reason: 'target' };
   N = WG.size; k = WG.k[gi];
   nd = wmNodeAt(WG, gi);
@@ -98,7 +108,12 @@ function wmapGoTarget(WG, gi, info) {
   }
   if (k === 0) {
     if (!info) return { ok: false, reason: 'empty' };
-    if (!isFinite(WG.d[gi])) return { ok: false, reason: 'unreach' };
+    if (!isFinite(WG.d[gi])) {   // 超出 WG.d 可達上限(24):緊鄰己方領地的資源格仍可打(長途出兵不設距離上限,11/17),另算整條路;不相鄰的維持 unreach
+      if (!wmapGoAdjOwn(WG, gi, own)) return { ok: false, reason: 'unreach' };
+      rt = wmapGoRoute(WG, WG.c0, gi);
+      if (!rt) return { ok: false, reason: 'unreach' };
+      return { ok: true, reason: '', kind: 'res', gi: gi, WG: WG, node: null, cost: rt.cost, cells: rt.cells, end: gi, path: wmMarchTurns(rt.cells, N), ty: WMAPGO_TY[info.ty] || String(info.ty || '農田'), lv: info.lv | 0 };
+    }
     cells = wmPathCells(WG, gi);
     if (!cells) return { ok: false, reason: 'unreach' };
     return { ok: true, reason: '', kind: 'res', gi: gi, WG: WG, node: null, cost: WG.d[gi], cells: cells, end: gi, path: wmMarchTurns(cells, N), ty: WMAPGO_TY[info.ty] || String(info.ty || '農田'), lv: info.lv | 0 };
@@ -146,7 +161,7 @@ function wmapGoDispatch(W, cs, team, gi, now, o) {
   o = o || {};
   var WG = o.WG, r = wdRun(W, cs, now), tg, pt0, chk, pt, plan, trip;
   if (r.frozen) return { ok: false, reason: 'frozen', events: r.events };
-  tg = wmapGoTarget(WG, gi, o.info);
+  tg = wmapGoTarget(WG, gi, o.info, wmapGoOwnSet(W));
   if (!tg.ok) return { ok: false, reason: tg.reason, events: r.events };
   gi = tg.gi;
   pt0 = wdPt(W, wmapGoPtId(gi));
@@ -211,7 +226,7 @@ function wmapGoPlanRedirect(W, WG, trip, gi, info, now, o) {
   o = o || {};
   var size = WG.size, lg = wmapGoLegOf(trip, size), tg, pt0, s, seg, cut, rt, route, sp, extra = 0, cost, spd, goMins, goMs, backMs;
   if (!lg) return { ok: false, err: 'nopath' };
-  tg = wmapGoTarget(WG, gi, info);
+  tg = wmapGoTarget(WG, gi, info, wmapGoOwnSet(W));
   if (!tg.ok) return { ok: false, err: 'target', reason: tg.reason };
   gi = tg.gi;
   pt0 = wdPt(W, wmapGoPtId(gi));

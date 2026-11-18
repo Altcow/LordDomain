@@ -144,7 +144,7 @@ function bnTeamPresetApply(n) {
   bnu.sel = null;
   if (typeof bnUiCurSave === 'function') bnUiCurSave();
   if (bnu.open && bnu.phase === 'form' && typeof bnUiRenderForm === 'function') bnUiRenderForm();
-  bnTeamToast((miss.length ? '已套用「' + p.name + '」;' + miss.join('、') + ' 已不在卡包,該位置留空' : '已套用「' + p.name + '」') + (nf.samefig ? ';同名副卡不可同隊,已略過 ' + nf.samefig + ' 人' : '') + (bz.busy.length ? ';' + bz.busy.join('、') + ' 占用中,已略過' : ''));
+  bnTeamToast((miss.length ? '已套用「' + p.name + '」;' + miss.join('、') + ' 已不在名冊,該位置留空' : '已套用「' + p.name + '」') + (nf.samefig ? ';同名副卡不可同隊,已略過 ' + nf.samefig + ' 人' : '') + (bz.busy.length ? ';' + bz.busy.join('、') + ' 占用中,已略過' : ''));
   return { ok: true, placed: keep.length, missing: miss, busy: bz.busy };
 }
 function bnTeamPresetRename(n, name) {
@@ -341,7 +341,7 @@ function bnTeamPagerInner() {
 function bnTeamRosterHtml() {
   var fac = BNTEAM.fac, gr = BNTEAM.gr, FAC = (typeof CARD_FAC !== 'undefined') ? CARD_FAC : [];
   bnTeamCss(); bnTeamBindForm(bnu.formEl);
-  return '<div class="bntm-tool"><input type="search" class="bntm-q" data-in="bq" maxlength="' + BNTEAM.qMax + '" placeholder="搜尋姓名或戰法" aria-label="搜尋卡包" value="' + bnTeamEsc(BNTEAM.q) + '">' +
+  return '<div class="bntm-tool"><input type="search" class="bntm-q" data-in="bq" maxlength="' + BNTEAM.qMax + '" placeholder="搜尋姓名或戰法" aria-label="搜尋武將" value="' + bnTeamEsc(BNTEAM.q) + '">' +
     BNTEAM_SORT.map(function (s) { return '<button class="' + (BNTEAM.sort === s[0] ? 'on' : '') + '" data-a="bsort" data-t="' + s[0] + '">' + s[1] + '</button>'; }).join('') + '</div>' +
     '<div class="bntm-tool"><select class="bntm-sel" data-in="bfac" aria-label="陣營篩選"><option value="">全部陣營</option>' + FAC.map(function (n, k) { return '<option value="' + k + '"' + (fac === String(k) ? ' selected' : '') + '>' + bnTeamEsc(n) + '</option>'; }).join('') + '</select>' +
     '<select class="bntm-sel" data-in="bgr" aria-label="品階篩選"><option value="">全品階</option>' + BNTEAM_GR.map(function (n, k) { return '<option value="' + k + '"' + (gr === String(k) ? ' selected' : '') + '>' + n + '階</option>'; }).join('') + '</select></div>' +

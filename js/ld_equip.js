@@ -215,7 +215,7 @@ function gearUnequip(gid) {
   gearWrite(st);
   return { ok: true };
 }
-// 卡離開名冊(熔鍊 / 傳承拆解 / 遣散):身上裝備全部退回背包(庫存允許暫時超過 200)。回退回件數
+// 卡離開名冊(分解 / 傳承拆解 / 遣散):身上裝備全部退回背包(庫存允許暫時超過 200)。回退回件數
 function gearOnCardLeave(entryId) {
   var st, i, n = 0;
   if (!entryId) return 0;

@@ -59,7 +59,7 @@ function ldNavEl(tag, cls, txt) {
 }
 function ldNavReduced() { try { return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
 // ───────── 舊頁共用頂列(2026-11-15 橫版首頁外殼 / WP-5) ─────────
-// 舊頁(卡包 / 設定 / 擂台 / 對戰 / 戰報 / 地圖)在堆疊頂端時,顯示一條固定在最上面的頂列(樣式同新頁 .ldp-top):左上 ‹ 返回、頁名、右上 ✕ 回首頁;
+// 舊頁(武將 / 設定 / 擂台 / 對戰 / 戰報 / 地圖)在堆疊頂端時,顯示一條固定在最上面的頂列(樣式同新頁 .ldp-top):左上 ‹ 返回、頁名、右上 ✕ 回首頁;
 //   body 同時加 ld-leg 與 ld-leg-<id>,css/ld_page.css 據此把各舊頁內容讓到頂列之下、藏起各頁自己的返回 / 關閉鈕。副本(stage)是戰鬥畫面,不套。
 // ‹ 先問舊頁有沒有「頁內返回」(def.legacy.back():例 地圖子頁、戰報檢視 → 回上一個畫面,回 true = 已處理),沒有才退一層。
 var LDNAV_LEG = { cards: 1, goods: 1, settings: 1, log: 1, tour: 1, share: 1, map: 1 };
@@ -213,7 +213,7 @@ function ldNavPush(id, ctx) {
   if (plan.op === 'rewind') {
     while (LDNAV.stack.length > plan.to + 1) { old = LDNAV.stack.pop(); ldNavDropAny(old, false); }
     e = LDNAV.stack[plan.to];
-    if (e.legacy) {   // 舊頁已在堆疊:退回到它,並以新參數重開(例:卡包換頁籤)
+    if (e.legacy) {   // 舊頁已在堆疊:退回到它,並以新參數重開(例:武將換頁籤)
       c.lvl = plan.to + 1; c.last = c.lvl === LDNAV.max;
       e.ctx = Object.assign(e.ctx, c);
       try { if (d.legacy && typeof d.legacy.open === 'function') d.legacy.open(e.ctx); } catch (er2) { if (typeof console !== 'undefined' && console.error) console.error('ldNav legacy reopen ' + id, er2); }
@@ -255,9 +255,11 @@ function ldNavDropAny(e, anim) {
 }
 // 退一層;回 false = 堆疊已空
 function ldNavBack() {
-  var e, t;
+  var e, t, gd;
   ldNavPrune();
   if (!LDNAV.stack.length) return false;
+  e = LDNAV.stack[LDNAV.stack.length - 1]; gd = LDNAV.reg[e.id];
+  if (gd && typeof gd.guard === 'function') { try { if (gd.guard(e.body, e.ctx)) return true; } catch (er) { /* 守衛出錯 = 不擋 */ } }   // def.guard:頁面可擋下返回(例:擂台隊伍頁未儲存確認)
   e = LDNAV.stack.pop();
   ldNavDropAny(e, true);
   ldNavPrune();
@@ -402,11 +404,12 @@ function ldNavBnOpen(fn) {
   return true;
 }
 function ldNavRegLegacy() {
-  ldNavRegister({ id: 'cards', title: '卡包', legacy: {
+  ldNavRegister({ id: 'cards', title: '武將', legacy: {
     open: function (c) { if (typeof cardsUiOpen === 'function') cardsUiOpen(c && c.tab); },
-    // ‹ 先收卡包內的上層浮層(大全詳情 / 說明 / 熔爐設定 / 道具選單),都收完才退一層
+    // ‹ 先收武將內的上層浮層(圖鑑詳情 / 說明 / 分解設定 / 道具選單),都收完才退一層
     back: function () {
       try {
+        if (typeof cuSubBack === 'function' && cuSubBack()) return true;   // 抽卡 / 分解畫面 ‹ → 回武將頁(2026-11-18)
         if (typeof CUX !== 'undefined' && CUX && CUX.pop) { CUX.pop = CUX.stack.pop() || null; if (typeof cuCodexSheetSync === 'function') cuCodexSheetSync(); return true; }
         if (typeof cu !== 'undefined' && cu && (cu.info || cu.fset)) { cu.info = null; cu.fset = false; if (typeof cardsUiRender === 'function') cardsUiRender(); return true; }
         if (typeof IU !== 'undefined' && IU && IU.pick) { IU.pick = null; IU.det = false; if (typeof cardsUiRender === 'function') cardsUiRender(); return true; }
@@ -415,7 +418,7 @@ function ldNavRegLegacy() {
     },
     close: function () { if (typeof cardsUiClose === 'function') cardsUiClose(); },
     isOpen: function () { return typeof cu !== 'undefined' && !!cu && !!cu.open && (typeof panelIsOpen !== 'function' || panelIsOpen('cards') || !!(cu.el && !cu.el.hidden)); } } });
-  // 配隊建議已併入卡包「大全」分頁(cardsui_codex.js 的 rec 子分頁),不再是獨立的第二層頁
+  // 配隊建議已併入武將「圖鑑」分頁(cardsui_codex.js 的 rec 子分頁),不再是獨立的第二層頁
   ldNavRegister({ id: 'settings', title: '設定', legacy: {
     open: function () { if (typeof stOpenPanel === 'function') stOpenPanel(); },
     close: function () { if (typeof stClosePanel === 'function') stClosePanel(); },

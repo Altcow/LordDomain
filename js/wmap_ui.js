@@ -44,9 +44,8 @@ function wmapUiCamLoad() {
   if (!s || typeof WMAP === 'undefined' || !WMAP.on) return false;
   try { o = JSON.parse(s); } catch (e2) { return false; }
   if (!o || typeof o.u !== 'number' || typeof o.v !== 'number' || !isFinite(o.u) || !isFinite(o.v)) return false;
-  zi = typeof WMAP_CFG !== 'undefined' ? WMAP_CFG.zooms.indexOf(o.s) : -1;
-  if (zi < 0 && typeof o.s === 'number' && o.s > WMAP_CFG.zooms[WMAP_CFG.zooms.length - 1]) zi = WMAP_CFG.zooms.length - 1;   // 舊存檔記著近景 104 → 夾回最大可用段(中景 64)
-  if (zi >= 0) wmapSetZoom(zi);
+  zi = typeof o.s === 'number' && isFinite(o.s) && o.s > 0 ? o.s : -1;
+  if (zi > 0 && typeof wmapSetZoomW === 'function') wmapSetZoomW(zi);   // 連續縮放:存的是格寬,舊存檔的 96 / 104 由 wmapSetZoomW 夾回上限
   wmapSetCam(o.u, o.v);
   return true;
 }
@@ -211,8 +210,8 @@ function wmapUiInit() {
   WMAP.onSelect = wmapUiOnSelect;
   wmapUiReflow();
   wmapUiCamLoad();
-  wmapUiMoreBuild();
-  rr = wmapUiEl('button', 'ldh-rb ldh-rr');   // 右綠圓鈕 = 招募(開卡包的抽卡分頁)
+  // 2026-11-18:〔更多〕第二排拿掉(鍛造 / 擂台 / 活動 / 戰報 / 校場 / 練兵 / 圖鑑 / 設定 / 說明 入口改為右下選單或移除),不再建 wmapUiMoreBuild
+  rr = wmapUiEl('button', 'ldh-rb ldh-rr');   // 右綠圓鈕 = 招募(開武將的抽卡分頁)
   rr.setAttribute('type', 'button'); rr.setAttribute('aria-label', '招募'); rr.setAttribute('data-rb', 'recruit');
   rr.appendChild(ldArt('nav_recruit', 'ldh-ric'));
   WMAPUI.rrDot = wmapUiEl('i', 'ldh-dot'); WMAPUI.rrDot.hidden = true;
@@ -222,8 +221,8 @@ function wmapUiInit() {
   WMAPUI.rr = rr;
   if (typeof LDH !== 'undefined' && LDH.plq && LDH.plq.gate) {   // 城門木牌 = 出城
     nm = LDH.plq.gate.querySelector ? LDH.plq.gate.querySelector('.ldh-nm') : null;
-    if (nm) nm.textContent = '出城';
-    LDH.plq.gate.setAttribute('aria-label', '出城');
+    if (nm) nm.textContent = '大地圖';
+    LDH.plq.gate.setAttribute('aria-label', '大地圖');
   }
   bld = WMAP.vp;
   if (bld) wmapUiAdd(bld, 'pointerdown', function () { if (WMAPUI.more) wmapUiMoreSet(false); });   // 點地圖任何處收起〔更多〕
@@ -235,7 +234,8 @@ function wmapUiInit() {
   if (typeof setInterval === 'function') WMAPUI.tid = setInterval(wmapUiTick, 1000);
   wmapUiTick();
   if (typeof wmapGoUiInit === 'function') wmapGoUiInit();   // W3 派兵 / 行軍指令 / 行軍層(js/wmap_go_ui.js)
-  if (typeof wmapPnlInit === 'function') wmapPnlInit();   // W6 部隊面板 / 倒數浮條 / 勢力名聲膠囊 / 迷你地圖(js/wmap_panels.js)
+  if (typeof wmapPnlInit === 'function') wmapPnlInit();
+  if (typeof wmhomeInit === 'function') wmhomeInit();   // 2026-11-18 隊伍列 / 右下選單 / 左下鈕 / 任務中心(js/wmap_home.js)   // W6 部隊面板 / 倒數浮條 / 勢力名聲膠囊 / 迷你地圖(js/wmap_panels.js)
   return true;
 }
 

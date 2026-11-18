@@ -526,7 +526,7 @@ function bnUiRenderForm() {
       } else top += '<button class="bnf-cell em" data-a="cell" data-drop="cell" data-r="' + r + '" data-c="' + c + '" aria-label="空格,可放入人物"><small>＋ 放這裡</small></button>';
     }
   }
-  top += '</div><div class="bnf-hint">拖卡包人物進空格上陣 · 拖格內人物可移位 / 交換 · 拖到兩側 🗑 下陣 · 點人物看詳情</div></div>';
+  top += '</div><div class="bnf-hint">拖武將人物進空格上陣 · 拖格內人物可移位 / 交換 · 拖到兩側 🗑 下陣 · 點人物看詳情</div></div>';
   h = top + '<div class="c1"><div class="bnf-foe">' + (foes.kind === 'practice' ? '敵將:山賊(練兵)' : '敵將:' + bnUiEsc(foes.label)) + ' · 建議戰力 <b>' + foes.power + '</b> · 我方 <b>' + mineP + '</b><br>' +
     foes.specs.map(function (x) { return '<i>' + (x.title ? bnUiEsc(x.title) + ' ' : '') + bnUiEsc(x.name) + ' ' + bnUiTI(x.troop) + bnUiEsc(x.troop) + '</i>'; }).join('') + '</div>';
   h += '<div class="bnf-bonds">羈絆:' + (bonds.on.length ? bonds.on.map(function (x) { return '<i>' + bnUiEsc(x) + '</i>'; }).join('') : '<u>尚未成立</u>') + bonds.hint.map(function (x) { return '<u>' + bnUiEsc(x) + '</u>'; }).join('') + '</div>';
@@ -538,7 +538,7 @@ function bnUiRenderForm() {
       '戰法:' + (typeof bnTeamSkillLinksHtml === 'function' ? bnTeamSkillLinksHtml(selE, tr) : sc.skills.concat(sc.ult ? [sc.ult] : []).map(function (id) { return BN_SKILLS[id] ? bnUiEsc(BN_SKILLS[id].name) : ''; }).filter(Boolean).join('、')) + '<div class="bnf-chips">' +
       BN_DATA.troopList.map(function (t) { var a = bnUiAptTxt(selE, t); return '<button class="' + (t === tr ? 'on' : '') + (a === 'C' ? ' bad' : '') + '" data-a="troop" data-id="' + bnUiEsc(selE.id) + '" data-t="' + t + '">' + bnUiTI(t) + t + ' ' + a + '</button>'; }).join('') +
       (bnUiSlotOf(selE.id) ? '<button data-a="remove" data-id="' + bnUiEsc(selE.id) + '">撤下</button>' : '') + '</div></div>';
-  } else h += '<div class="bnf-sel">拖卡包人物到上方空格上陣(最多 ' + BNUI.maxUnits + ' 人);也可先點卡包人物,再點空格。點上陣人物看詳情與裝備。</div>';
+  } else h += '<div class="bnf-sel">拖武將人物到上方空格上陣(最多 ' + BNUI.maxUnits + ' 人);也可先點武將人物,再點空格。點上陣人物看詳情與裝備。</div>';
   h += '<div class="bnf-chips">' + [['', '全部']].concat(BN_DATA.troopList.map(function (t) { return [t, bnUiTI(t) + t]; })).map(function (f) { return '<button class="' + (bnu.filter === f[0] ? 'on' : '') + '" data-a="filter" data-t="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>';
   if (typeof bnTeamRosterHtml === 'function') h += bnTeamRosterHtml();   // 名冊:搜尋 / 排序 / 陣營 / 品階 / 分頁 / 可拖曳縮圖(js/bnteam.js)
   else {
@@ -722,7 +722,7 @@ function bnUiDo(a, id, r, c, t, i) {
       if (o && s && s === o) { bnu.sel = null; bnUiRenderForm(); }
       else bnUiAct('place', bnu.sel, r, c);
     } else if (s) bnUiPopOpen(s.id);   // 點上陣人物 = 詳細介紹
-    else bnUiToast('先點卡包人物再點空格,或直接拖曳上陣');
+    else bnUiToast('先點武將人物再點空格,或直接拖曳上陣');
   }
   else if (a === 'troop') bnUiAct('troop', id, t);
   else if (a === 'remove') bnUiAct('remove', id);
@@ -1006,7 +1006,7 @@ function bnUiRenderEntry() {
   d = bnu.data || bnUiLoad();
   if (typeof bnMapStageStats === 'function' && typeof BN_STAGES !== 'undefined') { done = bnMapStageStats(d).cleared; tot = BN_STAGES.length; }
   stgOn = featureOn('stages') || featureOn('shell');   // @DORMANT stages:副本休眠(v60)時入口不列副本鈕,摘要也不顯示討伐進度;@DORMANT shell:外殼開啟時放行(戰役分頁)
-  el.innerHTML = '<div class="bnen"><p class="bnen-sum">卡包 ' + bnUiRosterList().length + ' 人' + (stgOn ? ' · 討伐進度 ' + done + '/' + tot : '') + '</p>' +
+  el.innerHTML = '<div class="bnen"><p class="bnen-sum">武將 ' + bnUiRosterList().length + ' 人' + (stgOn ? ' · 討伐進度 ' + done + '/' + tot : '') + '</p>' +
     (stgOn ? '<button class="bnen-b" data-a="ent" data-t="stage"><b>副本</b><small>討伐地圖:選章節與關卡,首通有獎勵,可重複通關</small></button>' : '') +
     '<button class="bnen-b" data-a="ent" data-t="share"><b>對戰</b><small>對戰碼與擂台(不計進度、不給獎勵)</small></button>' +
     '<button class="bnen-b" data-a="ent" data-t="log"><b>戰報</b><small>最近的戰報,可查看與儲存</small></button>' +
@@ -1143,7 +1143,7 @@ function bnUiBind(on) {
 }
 function bnUiOpen() {
   var t0 = (typeof performance !== 'undefined') ? performance.now() : 0, d;
-  if (!bnUnlocked()) { bnUiToast('卡包至少 ' + BNUI.minRoster + ' 人才能出戰(目前 ' + bnUiRosterList().length + ' 人)'); return false; }
+  if (!bnUnlocked()) { bnUiToast('武將至少 ' + BNUI.minRoster + ' 人才能出戰(目前 ' + bnUiRosterList().length + ' 人)'); return false; }
   if (!bnUiCanEnter()) return false;
   bnu.snap = bnUiSnap();
   try { if (typeof pend !== 'undefined' && pend) { pend.sel = null; pend.moving = null; } } catch (e) { /* 略過 */ }

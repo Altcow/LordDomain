@@ -1,4 +1,4 @@
-// js/items.js — 道具系統 v0(純邏輯,無 DOM;介面在 js/items_ui.js,卡包分頁的『道具』子頁)。
+// js/items.js — 道具系統 v0(純邏輯,無 DOM;介面在 js/items_ui.js,武將分頁的『道具』子頁)。
 // 道具與貨幣分開:文 / 抽數 / 碎片是貨幣(頂列與抽卡頁),道具是要點開『使用』才生效的東西(新手禮包、任務令、活動券…)。
 // 存檔:localStorage 'lorddomain.items.v1'(世界內進度鍵,SAVE_SLOT_KEYS;切換世界 / 回溯點時整組取代)= {v:1, n:{道具id:數量}, seen:{道具id:1 已查看}, notice:0|1 待顯示的新禮包提示(進遊戲 toast 一次), gv:已發放的新手禮包版本(itemGiftGrant 與禮包同一次寫入)}。
 // 未知道具 id 讀入時保留(不刪),但不顯示、不計紅點。壞值 = 空背包。
@@ -68,7 +68,7 @@ function itemAdd(id, n) {
   itemsWrite(st);
   return add;
 }
-// 使用道具:回 {ok, effect, msg}。成功才扣數量;效果在這裡執行(新手禮包 → 大池抽數,並把自動熔爐的『關』恢復預設)
+// 使用道具:回 {ok, effect, msg}。成功才扣數量;效果在這裡執行(新手禮包 → 大池抽數,並把自動分解的『關』恢復預設)
 function itemUse(id) {
   var d = itemDef(id), st, cs = null, msg, gpn = 0;
   if (!d) return { ok: false, effect: '', msg: '未知的道具' };
@@ -79,7 +79,7 @@ function itemUse(id) {
     if (!cs) return { ok: false, effect: d.effect, msg: '尚無城邦資料' };
     gpn = itemGiftPulls();   // 新存檔 gp = CARD_GIFT.pullsNew(2000),舊存檔沒有 gp = CARD_GIFT.pulls(2000)
     cardsPullGrant(cs, gpn, CARD_GIFT.pool);
-    if (cs.bagAuto === -1) delete cs.bagAuto;   // 自動熔爐若為關(-1)改回預設(開,藍以下);使用者仍可在熔爐設定再關
+    if (cs.bagAuto === -1) delete cs.bagAuto;   // 自動分解若為關(-1)改回預設(開,藍以下);使用者仍可在分解設定再關
     msg = '使用『' + d.name + '』,S01卡池 +' + gpn + ' 抽';
   } else if (d.effect === 'toast') {
     msg = '使用『' + d.name + '』(占位,效果尚未接上)';

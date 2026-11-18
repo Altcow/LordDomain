@@ -38,7 +38,7 @@ function skrCopies(cs, fig) {
 // 名冊中此卡現在能不能拆(在名冊、未鎖、未派駐 / 外勤、品階夠)
 function skrCanInherit(cs, e) {
   var r = skrEntry(cs, e), chk, ub;
-  if (!r) return { ok: false, reason: '待定或流浪中的人不能傳承,請先收入卡包' };
+  if (!r) return { ok: false, reason: '待定或流浪中的人不能傳承,請先收入武將' };
   if (r.at) return { ok: false, reason: '派駐中,請先卸任再傳承' };
   if (typeof cardsUseBlock === 'function') { ub = cardsUseBlock(r, 'release'); if (!ub.ok) return { ok: false, reason: ub.reason + ',先讓他回來再傳承' }; }
   chk = bnSkcInheritCheck(cs, r);
@@ -339,7 +339,7 @@ function skrInhAdvice(cs, e) {
     nums = { frag: 0, recall: (typeof CARD_RECALL_COST !== 'undefined') ? CARD_RECALL_COST : 0, furnace: 0, net: 0 };
     if (!cs || !e) return { k: 'gray', code: 'none', title: '現在不能拆', text: '找不到這張卡', btn: '', spare: null, nums: nums };
     r = skrEntry(cs, e);
-    if (!r) return { k: 'gray', code: 'blocked', title: '現在不能拆', text: '待定或流浪中的人不能傳承,請先收入卡包', btn: '', spare: null, nums: nums };
+    if (!r) return { k: 'gray', code: 'blocked', title: '現在不能拆', text: '待定或流浪中的人不能傳承,請先收入武將', btn: '', spare: null, nums: nums };
     fig = r.fig || '';
     nums.frag = bnSkcFrag(r);
     nums.furnace = (fig && typeof CARD_FURNACE !== 'undefined' && CARD_FURNACE.fig) ? (CARD_FURNACE.fig[r.gr | 0] || 0) : 0;
@@ -348,7 +348,7 @@ function skrInhAdvice(cs, e) {
     if (!ci.ok && ci.code !== 'owned') return { k: 'gray', code: 'blocked', title: '現在不能拆', text: ci.reason, btn: '', spare: null, nums: nums };
     list = bnSkcInheritList(r); id = list.length ? list[0].id : ''; nm = skrSkName(id); who = skrFigName(fig) || r.name || '';
     if (!ci.ok) {   // owned
-      return { k: 'gray', code: 'owned', title: '不用拆', text: fig ? (nm + '你已經有了,再拆不會多給。多的' + who + '建議放熔爐,可換 ' + nums.furnace + ' 碎片升星。') : ('這位路人的卡面戰法你都有了,再拆不會多給。'), btn: fig ? '去熔爐' : '', spare: null, nums: nums };
+      return { k: 'gray', code: 'owned', title: '不用拆', text: fig ? (nm + '你已經有了,再拆不會多給。多的' + who + '建議放分解,可換 ' + nums.furnace + ' 碎片升星。') : ('這位路人的卡面戰法你都有了,再拆不會多給。'), btn: fig ? '去分解' : '', spare: null, nums: nums };
     }
     if (!fig) return { k: 'yellow', code: 'roster', title: '先想一下', text: '拆了這位路人就消失(不能請回),得碎片 ' + nums.frag + ',解鎖卡面戰法「' + nm + '」。', btn: '仍要拆這張', spare: null, nums: nums };
     cp = skrCopies(cs, fig);
@@ -361,7 +361,7 @@ function skrInhAdvice(cs, e) {
 function starOf(e) { return (typeof cardsStarLv === 'function') ? cardsStarLv(e) : ((e && e.starLv) | 0); }
 
 // ───────── skrSkillHeroes:戰法的推薦武將 ─────────
-// 回 [{fig, name, score, why, whyText, state:'roster'|'owned'|'none', e, home}];排序:卡包中 > 已擁有但不在卡包 > 未擁有,同組維持資料順序
+// 回 [{fig, name, score, why, whyText, state:'roster'|'owned'|'none', e, home}];排序:武將中 > 已擁有但不在名冊 > 未擁有,同組維持資料順序
 function skrSkillHeroes(cs, id) {
   var R = skrRec(), a, out = [];
   try {

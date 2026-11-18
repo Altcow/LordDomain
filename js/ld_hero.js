@@ -3,7 +3,7 @@
 // 2026-11-16:點適性 / 數值 / 裝備 / 自帶戰法 → 開 heroInfo 滿版詳情頁(全文可捲動);點選擇槽 → 開 heroSkills 推薦戰法頁(上方戰法格 + 下方整區可捲動說明;格子標「推薦」徽章與 可拆 / 未得 狀態)。三頁都只有左上返回、沒有右上 ×(noClose)。
 // 版面:橫式(基準 844x390)左立繪 34% + 右面板 + 右側書籤直排;直式立繪在上、書籤一排、面板可捲動(CSS 以 orientation 切換,見 css/ld_hero.css)。
 // 資料來源:cardsFind / cardsStats / bnPower(bnUnitSpec) / bnAptOf / CARD_FAC / cardsStarLv;戰法 bnSkillInfo / cuCSkillRows;裝卸 bnSkcCanEquip / bnSkcEquip / bnSkcUnequip;傳承 cuInhState / bnSkcInherit。
-// e.star 是「鎖定防誤遣散」旗標(不是星等,星等 e.starLv):青銅六角 = 鎖定切換(同 cardsui.js 的 a === 'star')。升星入口不在武將介面(由熔爐頁自己處理)。
+// e.star 是「鎖定防誤遣散」旗標(不是星等,星等 e.starLv):青銅六角 = 鎖定切換(同 cardsui.js 的 a === 'star')。升星入口不在武將介面(由分解頁自己處理)。
 // 素材走 ld_art.js 佔位(has:false = CSS 徽章 + 單一漢字)。純函式與 DOM 分開,供 tools/test_ld_hero.js 測試。ES2017,不用 ?. ??。
 var LDHERO_TABS = [['attr', '屬性'], ['inh', '傳承'], ['bio', '傳記']];
 var LDHERO_EQ = [['eq_weapon', '武器'], ['eq_armor', '防具'], ['eq_horse', '馬'], ['eq_treasure', '寶具']];
@@ -15,8 +15,8 @@ var LDHERO_ST_INFO = [
   '政務:提高治療、減益抵抗與護盾。',
   '魅力:人望與號召相關,目前戰鬥數值公式沒有直接使用。'
 ];
-var LDHERO_REASON = { none: '此人不在卡包,不能裝備', own: '此戰法尚未解鎖', slot: '此槽位目前未開放', dup: '同一人兩槽不可裝同一戰法', legion: '兵種卡每人 1 張,且限同兵種', troop: '此戰法限特定兵種裝備', full: '已達同時裝備上限,需先卸下他人' };
-var LDHERO_INH_REASON = { none: '沒有可傳承的戰法', grade: '品階未達紫,不可傳承', locked: '已鎖定,先解除鎖定才能傳承', owned: '此人的傳承戰法已擁有,可改用熔爐' };
+var LDHERO_REASON = { none: '此人不在名冊,不能裝備', own: '此戰法尚未解鎖', slot: '此槽位目前未開放', dup: '同一人兩槽不可裝同一戰法', legion: '兵種卡每人 1 張,且限同兵種', troop: '此戰法限特定兵種裝備', full: '已達同時裝備上限,需先卸下他人' };
+var LDHERO_INH_REASON = { none: '沒有可傳承的戰法', grade: '品階未達紫,不可傳承', locked: '已鎖定,先解除鎖定才能傳承', owned: '此人的傳承戰法已擁有,可改用分解' };
 var LDHERO_TIER_ORD = ['S', 'A', 'B', 'C'];
 var LDHERO_DEF_INFO = '點上方任一格,這裡會顯示說明。';
 
@@ -32,7 +32,7 @@ function ldHeroArt(key, cls) {
   return '<span class="ld-ph ' + (cls || '') + '" data-art="' + ldHeroEsc(key) + '">' + ldHeroEsc(a ? a.ph : '') + '</span>';
 }
 function ldHeroSave() { if (typeof saveWorld === 'function') { try { saveWorld(); } catch (e) { /* 略過 */ } } }
-// 變更後同步:存檔 + 底下的卡包網格重畫(卡包面板開著才需要)
+// 變更後同步:存檔 + 底下的武將網格重畫(武將面板開著才需要)
 function ldHeroSync() {
   ldHeroSave();
   try { if (typeof cu !== 'undefined' && cu && cu.open && typeof cardsUiRender === 'function') cardsUiRender(); } catch (e) { /* 略過 */ }
@@ -111,7 +111,7 @@ function ldHeroInfoHtml(cs, f, ctx) {
   if (k === 'sl') {
     i = +v; sl = ldHeroSlots(cs, f)[i + 1];
     if (!sl || sl.kind === 'lock') return ldHeroInfoLines('選擇槽 ' + (i + 1), ['品階提升到青以上才開放第 2 個選擇槽。']);
-    return ldHeroInfoLines('選擇槽 ' + (i + 1), [f.list === 'roster' ? '尚未裝備戰法。點選擇槽進入推薦戰法頁選擇。' : '非卡包人員不能裝備戰法(先收入卡包)。']);
+    return ldHeroInfoLines('選擇槽 ' + (i + 1), [f.list === 'roster' ? '尚未裝備戰法。點選擇槽進入推薦戰法頁選擇。' : '非武將人員不能裝備戰法(先收入武將)。']);
   }
   return '<span>' + LDHERO_DEF_INFO + '</span>';
 }
@@ -239,13 +239,13 @@ function ldHeroSkApplyHtml(cs, f, ctx) {
 function ldHeroSkDescHtml(cs, f, ctx, cells) {
   var c = cells.filter(function (x) { return x.key === ctx.skSel; })[0], inR = f.list === 'roster', h = '', acts = '', p = ldHeroRecPlan(cs, f), t, src;
   if (!c) {
-    h = '<b>選擇槽</b><p>點上方任一列,這裡會顯示說明與狀態。標「推薦」的是依武將特性推薦的戰法。</p>' + (inR ? '' : '<p>非卡包人員不能裝備戰法(先收入卡包)。</p>');
+    h = '<b>選擇槽</b><p>點上方任一列,這裡會顯示說明與狀態。標「推薦」的是依武將特性推薦的戰法。</p>' + (inR ? '' : '<p>非武將人員不能裝備戰法(先收入武將)。</p>');
     if (p) p.busy.forEach(function (b) { if (p.rec.indexOf(b.id) < 0) h += '<p class="ldh-mute">『' + ldHeroEsc(ldHeroSkName(b.id)) + '』目前在 ' + ldHeroEsc(b.holderName || '別人') + '(' + ldHeroEsc(b.why || '使用中') + ')身上,先不拿。</p>'; });
     return h + ldHeroSkApplyHtml(cs, f, ctx) + '<div class="ldh-acts"><button class="ldh-mini" data-act="skdex">看更多候選 ›</button></div>';
   }
   if (c.kind === 'lock') return '<b>選擇槽 ' + (c.slot + 1) + '(未開放)</b><p>品階提升到青以上才有第 2 個選擇槽。</p>';
   if (c.kind === 'empty') {
-    h = '<b>空槽(選擇槽 ' + (c.slot + 1) + ')</b><p>' + (ctx.last ? '請從卡包進入更換。' : '尚未裝備戰法。') + '</p>';
+    h = '<b>空槽(選擇槽 ' + (c.slot + 1) + ')</b><p>' + (ctx.last ? '請從武將進入更換。' : '尚未裝備戰法。') + '</p>';
     if (inR && !ctx.last) h += '<div class="ldh-acts"><button class="ldh-mini" data-act="pick" data-v="' + c.slot + '">選擇戰法</button></div>';
     return h;
   }
@@ -254,7 +254,7 @@ function ldHeroSkDescHtml(cs, f, ctx, cells) {
   if (c.st === '可傳承') {
     src = ldHeroSkSrcCard(c.m);
     h += '<p class="ldh-stl cut">狀態:可傳承 — 還沒解鎖,拆「' + ldHeroEsc(src ? src.name : '') + '」的傳承即可取得。</p>' + ldHeroSkCutInfo(cs, c);
-    acts = src ? '<button class="ldh-mini warn" data-act="skinh" data-v="' + ldHeroEsc(src.id) + '">傳承</button>' : '<p class="ldh-mute">這個戰法的來源卡目前不在,先到卡包確認。</p>';
+    acts = src ? '<button class="ldh-mini warn" data-act="skinh" data-v="' + ldHeroEsc(src.id) + '">傳承</button>' : '<p class="ldh-mute">這個戰法的來源卡目前不在,先到武將確認。</p>';
   } else if (c.st === '未得') {
     h += '<p class="ldh-stl no">狀態:未得 — ' + ldHeroEsc((c.m && c.m.src && c.m.src.text) || '目前無法取得') + '</p>';
   } else if (c.st === '已裝') {
@@ -277,7 +277,7 @@ function ldHeroKit() { return (typeof BN_KIT_CFG !== 'undefined' && BN_KIT_CFG) 
 function ldHeroPct(x) { return Math.round((+x || 0) * 100); }
 function ldHeroFigName(fig) { return (typeof skrFigName === 'function') ? skrFigName(fig) : String(fig || ''); }
 function ldHeroAdvice(cs, e) { return (typeof skrInhAdvice === 'function') ? skrInhAdvice(cs, e) : { k: 'gray', code: 'none', title: '現在不能拆', text: '無法判斷', btn: '', spare: null, nums: { frag: 0, recall: 0, furnace: 0, net: 0 } }; }
-// 這位名人在我這裡的狀態:roster(在卡包,優先主力)/ owned(只在待定或流浪)/ none
+// 這位名人在我這裡的狀態:roster(在武將,優先主力)/ owned(只在待定或流浪)/ none
 function ldHeroFigState(cs, fig) {
   var cp = (typeof skrCopies === 'function') ? skrCopies(cs, fig) : { main: null, spares: [] }, k = (cs.roster || []).filter(function (z) { return z.fig === fig; }), mf;
   if (k.length) { mf = cp.main ? cardsFind(cs, cp.main.id) : null; return { state: 'roster', e: (mf && mf.list === 'roster') ? mf.e : k[0] }; }
@@ -296,7 +296,7 @@ function ldHeroInhHeroes(cs, sid, fig, n) {
   return out.slice(0, n || 3);
 }
 function ldHeroHeroBtn(h, act, val) {
-  var tag = h.home ? '本命' : (h.state === 'roster' ? '在卡包' : h.state === 'owned' ? '不在卡包' : '未擁有');
+  var tag = h.home ? '本命' : (h.state === 'roster' ? '在名冊' : h.state === 'owned' ? '不在名冊' : '未擁有');
   return '<button class="ldh-hero ' + h.state + (h.home ? ' home' : '') + '" data-act="' + act + '" data-v="' + ldHeroEsc(val) + '">' + ldHeroAvatar(h.fig, h.name) + '<b>' + ldHeroEsc(h.name) + '</b><i>' + tag + '</i>' + (h.home || !h.whyText ? '' : '<em>' + ldHeroEsc(h.whyText) + '</em>') + '</button>';
 }
 function ldHeroSec(cls, title, body) { return '<div class="ldh-sec ' + cls + '"><h4>' + ldHeroEsc(title) + '</h4>' + body + '</div>'; }
@@ -315,8 +315,8 @@ function ldHeroInhEffect(cs, f, list, adv, T) {
   else h += '<li class="ok">永久解鎖' + ldHeroEsc(names) + ',可裝在任何武將身上' + (fig ? '(同時只能 ' + maxU + ' 人裝)' : '') + '</li>';
   h += '<li class="ok">得到碎片 ' + frag + '</li>';
   if (fig) {
-    h += '<li class="no">這張卡離開卡包,轉為流浪(星等保留)</li><li class="no">要再用他,得花 ' + nums.recall + ' 碎片請回(卡包要有空位)</li><li class="no">他身上的武器、防具退回背包,戰法卸下</li>';
-    if (adv.code !== 'hasSpare' && adv.code !== 'isSpare' && adv.code !== 'owned') h += '<li class="tip">只有一張就拆再請回:拆得 ' + frag + '、請回花 ' + nums.recall + ',實際花 ' + (nums.recall - frag) + ' 碎片換到戰法。同名副卡改放熔爐可換 ' + nums.furnace + ' 碎片。</li>';
+    h += '<li class="no">這張卡離開武將,轉為流浪(星等保留)</li><li class="no">要再用他,得花 ' + nums.recall + ' 碎片請回(武將要有空位)</li><li class="no">他身上的武器、防具退回背包,戰法卸下</li>';
+    if (adv.code !== 'hasSpare' && adv.code !== 'isSpare' && adv.code !== 'owned') h += '<li class="tip">只有一張就拆再請回:拆得 ' + frag + '、請回花 ' + nums.recall + ',實際花 ' + (nums.recall - frag) + ' 碎片換到戰法。同名副卡改放分解可換 ' + nums.furnace + ' 碎片。</li>';
   } else h += '<li class="no">這位路人會消失,不能請回</li>';
   return h + '</ul>';
 }
@@ -328,14 +328,14 @@ function ldHeroInhBest(cs, sid, fig) {
   h += ldHeroInhTeam(sid) + '<p class="lbl">推薦給(點頭像直接裝上)</p><div class="ldh-heroes">' + hs.map(function (x) { return ldHeroHeroBtn(x, 'inhhero', x.fig); }).join('') + '</div><div class="ldh-acts">' + ldHeroSkBtn(sid) + '<button class="ldh-mini" data-act="skdex">看更多候選 ›</button></div>';
   return h;
 }
-// 拆完的接續動作:要現在裝上嗎?(只列卡包中、有空槽或能裝的人)
+// 拆完的接續動作:要現在裝上嗎?(只列武將中、有空槽或能裝的人)
 function ldHeroInhDoneHtml(cs, d) {
   var hs = ldHeroInhHeroes(cs, d.sid, d.fig, 6).filter(function (x) { return x.state === 'roster' && x.e && bnSkcSlots(x.e) > 0; }).slice(0, 3), seen = {}, more = [];
   hs.forEach(function (x) { seen[x.e.id] = 1; });
   if (hs.length < 3 && typeof bnSkcRecommend === 'function') { try { more = bnSkcRecommend(d.sid, 3, cs); } catch (er) { more = []; } }
   more.forEach(function (r) { if (hs.length < 3 && !seen[r.id]) { seen[r.id] = 1; hs.push({ fig: r.fig || '', name: r.name, state: 'roster', e: r, home: false, whyText: '' }); } });
   return ldHeroSec('done', '已取得『' + ldHeroSkName(d.sid) + '』!要現在裝上嗎?',
-    (hs.length ? '<p>點頭像,直接裝到他的第一個空槽。</p><div class="ldh-heroes">' + hs.map(function (x) { return ldHeroHeroBtn(x, 'inhequip', x.e.id); }).join('') + '</div>' : '<p>目前卡包裡沒有能裝的人,之後到武將頁的「戰法」書籤再裝。</p>') +
+    (hs.length ? '<p>點頭像,直接裝到他的第一個空槽。</p><div class="ldh-heroes">' + hs.map(function (x) { return ldHeroHeroBtn(x, 'inhequip', x.e.id); }).join('') + '</div>' : '<p>目前武將裡沒有能裝的人,之後到武將頁的「戰法」書籤再裝。</p>') +
     '<div class="ldh-acts"><button class="ldh-mini" data-act="inhdone">先不裝</button></div>');
 }
 // 傳承確認視窗(浮層,不是 ldNav 頁;兩個入口共用:推薦戰法頁列尾〔傳承〕/ 武將傳承頁〔傳承〕):來源卡、得到、失去、建議、淨損益;可捲動,〔取消〕/ 點視窗外 = 關閉,〔確定傳承〕才執行(沿用 bnSkcInherit)
@@ -349,9 +349,9 @@ function ldHeroModalHtml(cs, ctx) {
   cp = (fig && typeof skrCopies === 'function') ? skrCopies(cs, tg.fig) : null;
   h = '<p><em>來源</em>' + ldHeroEsc(tg.name) + ' ★' + cardsStarLv(tg) + (T.spare ? '(副卡)' : '') + ' 這張卡(傳承 = 拆卡)</p>';
   h += '<p><em>得到</em>永久解鎖' + ldHeroEsc(fresh.map(function (x) { return '『' + ldHeroSkName(x.id) + '』'; }).join('、')) + ';碎片 ' + frag + '</p>';
-  h += '<p><em>失去</em>' + (fig ? '這張' + ldHeroEsc(who) + '轉為流浪(星等保留),之後請回要花 ' + n.recall + ' 碎片,且卡包要有空位;他身上的武器、防具退回背包,戰法卸下' : '這位路人會消失,不能請回') + '</p>';
+  h += '<p><em>失去</em>' + (fig ? '這張' + ldHeroEsc(who) + '轉為流浪(星等保留),之後請回要花 ' + n.recall + ' 碎片,且武將要有空位;他身上的武器、防具退回背包,戰法卸下' : '這位路人會消失,不能請回') + '</p>';
   if (T.spare && cp && cp.main) h += '<p class="ldh-mute">主力' + ldHeroEsc(who) + ' ★' + cardsStarLv(cp.main) + ' 不受影響。</p>';
-  else if (fig) h += '<p class="ldh-mute">拆完後卡包裡就沒有' + ldHeroEsc(who) + '了。</p>';
+  else if (fig) h += '<p class="ldh-mute">拆完後武將裡就沒有' + ldHeroEsc(who) + '了。</p>';
   h += '<p class="ldh-adv ' + adv.k + '"><em>建議</em>' + ldHeroEsc(adv.title) + '。' + ldHeroEsc(adv.text) + '</p>';
   h += '<p class="ldh-net"><em>淨損益</em>' + (fig ? '拆得 ' + frag + ' 碎片、請回花 ' + n.recall + ' 碎片,' + (T.spare ? '副卡本來就是多的,不用請回' : '實際 ' + (n.recall - frag) + ' 碎片換到戰法') : '拆得 ' + frag + ' 碎片,路人不能請回') + '</p>';
   return '<div class="ldh-modal" data-act="mdno"><div class="ldh-mbox" role="dialog" aria-modal="true"><h4>傳承:' + ldHeroEsc(ldHeroSkName(sid)) + '</h4><div class="ldh-mbody">' + h + '</div>' +
@@ -507,7 +507,7 @@ function ldHeroAct(ctx, act, v) {
     ldHeroToast(f.e.star ? '已鎖定,不會被誤遣散' : '已解除鎖定');
   }
   else if (act === 'pick') {
-    if (ctx.last || typeof ldNavPush !== 'function') { ldHeroToast('請從卡包進入更換'); return true; }
+    if (ctx.last || typeof ldNavPush !== 'function') { ldHeroToast('請從武將進入更換'); return true; }
     ldNavPush('heroSkillPick', { eid: f.e.id, slot: +v });
     return true;
   }
@@ -546,7 +546,7 @@ function ldHeroAct(ctx, act, v) {
     if (act === 'inhhero') {
       T = ldHeroFigState(cs, v);
       if (!sid || !bnSkcOwned(sid)) { ldHeroToast('先拆卡取得『' + ldHeroSkName(sid) + '』,才能裝給他'); return true; }
-      if (T.state !== 'roster') { ldHeroToast(ldHeroFigName(v) + (T.state === 'owned' ? ' 不在卡包,先收入卡包' : ' 你還沒有,抽到後才能裝')); return true; }
+      if (T.state !== 'roster') { ldHeroToast(ldHeroFigName(v) + (T.state === 'owned' ? ' 不在名冊,先收入武將' : ' 你還沒有,抽到後才能裝')); return true; }
       i = T.e;
     } else {
       sid = ctx.inhDone ? ctx.inhDone.sid : sid; g = cardsFind(cs, v); i = (g && g.list === 'roster') ? g.e : null;
@@ -555,7 +555,7 @@ function ldHeroAct(ctx, act, v) {
     ldHeroEquipTo(ctx, cs, i, sid);
   }
   else if (act === 'skgo') {
-    if (ctx.last || typeof ldNavPush !== 'function') { ldHeroToast('請返回卡包後,從卡包進入那張卡的「傳承」書籤'); return true; }
+    if (ctx.last || typeof ldNavPush !== 'function') { ldHeroToast('請返回武將後,從武將進入那張卡的「傳承」書籤'); return true; }
     ldNavPush('hero', { id: v, list: [v], tab: 'inh' });
     return true;
   }
@@ -566,7 +566,7 @@ function ldHeroAct(ctx, act, v) {
   }
   else if (act === 'skdex') {
     if (typeof ldNavPush !== 'function') { ldHeroToast('即將開放'); return true; }
-    ldNavPush('skilldex', { forEid: f.list === 'roster' ? f.e.id : '' });   // 戰法大全,篩成推薦給此人
+    ldNavPush('skilldex', { forEid: f.list === 'roster' ? f.e.id : '' });   // 戰法圖鑑,篩成推薦給此人
     return true;
   }
   else if (act === 'skpick') { ctx.skSel = (ctx.skSel === v) ? '' : (v || ''); }
@@ -658,7 +658,7 @@ function ldHeroSubRender(el, ctx) {
 // ───────── 戰法選擇頁(id heroSkillPick;只在 hero 不是第 5 層時開) ─────────
 function ldHeroPickHtml(cs, f, slot, msg) {
   var e = f.e, own, h = '', holders, cands = (typeof skrCands === 'function') ? skrCands(e) : [], rank = {}, ownSet = {}, miss = [];
-  if (f.list !== 'roster') return '<div class="ldh-warn">非卡包人員不能裝備戰法(先收入卡包)</div>';
+  if (f.list !== 'roster') return '<div class="ldh-warn">非武將人員不能裝備戰法(先收入武將)</div>';
   if (slot < 0 || slot >= bnSkcSlots(e)) return '<div class="ldh-warn">此槽位目前未開放</div>';
   cands.forEach(function (c, i) { if (!(c[0] in rank)) rank[c[0]] = { i: i, why: c[2] }; });
   own = Object.keys(bnSkcLoad().own).filter(function (id) { return !!bnSkcTier(id); });

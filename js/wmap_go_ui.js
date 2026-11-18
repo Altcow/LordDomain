@@ -21,7 +21,7 @@ var WMAPGO_ERR = {
   frozen: '時鐘異常,暫不能下令', notrip: '這支軍隊已不在外', back: '回程中不能下令', nopath: '這支軍隊沒有行軍路線', notmoving: '現在不能這樣做', notidle: '這支軍隊不是閒置中', cooldown: '指令太頻繁,請稍候幾秒',
   expired: '閒置已到期', route: '找不到路', target: '這裡不能當目標', owned: '這個點已經占領了', busy: '已經有隊伍前往這個點', needback: '無法計算回程', bad: '無法執行',
   army: '這隊不在城裡', terrain: '這裡不能出征', unreach: '超出行軍範圍', empty: '這格沒有可出征的目標', size: '隊伍人數不對', dup: '同一張卡不能上兩隊', missing: '有人已不在名冊',
-  samefig: '同名名人不可同隊', hurt: '有人重傷中', field: '有人外勤中', appoint: '有人委任中,先解除委任', garrison: '有人駐派中,先撤回駐派', lowtrp: '兵力不足,請到校場補兵'
+  samefig: '同名名人不可同隊', hurt: '有人重傷中', field: '有人外勤中', appoint: '有人委任中,先解除委任', garrison: '有人駐派中,先撤回駐派', lowtrp: '兵力不足,請到隊伍頁補兵'
 };
 
 // ───────── 小工具 ─────────

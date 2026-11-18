@@ -144,3 +144,12 @@ body.ldt-dragging { cursor: grabbing; user-select: none; -webkit-user-select: no
 @media (max-height: 400px) and (orientation: landscape) { .ldt-skr { padding: 4px 8px; gap: 2px; } .ldt-skr-m { font-size: 11px; } }
 .ldt-tab.rep { flex: 0 0 auto; min-width: 56px; border-style: dashed; }
 .ldt-rn { margin: 0 0 3px; font-size: 12px; line-height: 1.3; color: #f3dfae; text-shadow: 0 1px 2px #000; }
+/* 補兵:卡片下方的兵力數字 + 拉條(js/ld_team.js ldTeamHealHtml);觸控好拖:拉條高 32 */
+.ldt-heal { flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; margin-top: 3px; }
+.ldt-hn { width: 100%; box-sizing: border-box; height: 28px; padding: 0 4px; text-align: center; border: var(--line2); border-radius: 8px; background: #fff3cf; color: var(--ink); font: 900 14px/1 var(--ld-font); }
+.ldt-hr { width: 100%; box-sizing: border-box; height: 32px; margin: 0; touch-action: pan-y; accent-color: #d98a33; }
+.ldt-heal.lk { opacity: .45; }
+.ldt-hb { flex: 40 1 0; min-width: 44px; height: 60px; border: var(--line2); border-radius: 12px; background: linear-gradient(#fff3cf, #f0d28a); color: var(--ink); font: 900 15px/1.1 var(--ld-font); }
+.ldt-hb.ok { background: linear-gradient(#9fe0a8, #4fae5d); }
+.ldt-hb:active { transform: translateY(3px); }
+@media (max-height: 400px) and (orientation: landscape) { .ldt-hb { height: 52px; font-size: 14px; } .ldt-hn { height: 24px; } .ldt-hr { height: 28px; } }

@@ -207,7 +207,7 @@ function bnTourRewardPlan(rank) {
 // last = {id, seed, ts, dv, pl:[{name, specs}], lid:{'場次:局': 戰報 id}};hist = [{id, ts, champ, champOwn, runner, third, mine, mineN}]
 // 整屆由 seed + pl 確定性重算,不存對陣結果以外的快照
 function bnTourNorm(o) {
-  var d = { v: 2, seq: 0, cd: 0, last: null, hist: [], rw: 0, reg: null, shown: 0, done: 0, mute: 0, remind: true, auto: false }, l, g;
+  var d = { v: 2, seq: 0, cd: 0, last: null, hist: [], rw: 0, reg: null, shown: 0, done: 0, mute: 0, remind: true, auto: false, tt: null }, l, g;
   if (!o || typeof o !== 'object') return d;
   d.shown = bnTourInt(o.shown, 0, 1e12, 0);
   d.done = bnTourInt(o.done, 0, 1e12, 0);
@@ -217,6 +217,9 @@ function bnTourNorm(o) {
   g = o.reg;
   if (g && typeof g === 'object' && Array.isArray(g.specs) && g.specs.length >= 1 && g.specs.length <= 3 && g.specs.every(function (s) { return s && typeof s === 'object'; }) && bnTourInt(g.id, 0, 1e12, 0) > 0) {
     d.reg = { id: bnTourInt(g.id, 0, 1e12, 0), start: bnTourInt(g.start, 0, 1e15, 0), ts: bnTourInt(g.ts, 0, 1e15, 0), name: String(g.name || '').slice(0, 12), specs: g.specs };
+  }
+  if (o.tt && typeof o.tt === 'object' && Array.isArray(o.tt.slots)) {   // 擂台隊伍儲存當下的快照(來源隊號 / 兵種;js/bn_tourney_team.js 用來標「與出征隊伍不同步」)
+    d.tt = { ts: bnTourInt(o.tt.ts, 0, 1e15, 0), slots: o.tt.slots.filter(function (x) { return x && typeof x.id === 'string'; }).slice(0, 3).map(function (x) { return { id: String(x.id).slice(0, 40), n: bnTourInt(x.n, 0, 5, 0), troop: String(x.troop || '').slice(0, 2) }; }) };
   }
   d.seq = bnTourInt(o.seq, 0, 1e9, 0);
   d.cd = bnTourInt(o.cd, 0, 1e15, 0);

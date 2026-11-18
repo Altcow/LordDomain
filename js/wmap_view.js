@@ -263,6 +263,8 @@ function wmapBakeChunk(ix, iy) {
   wmapBakeRoads(g, G, cells);
   // 3 資源地面層(斑塊 / 田塊 / 田埂,世界錨定)
   wmapBakeResGround(g, G, x0, y0, x1, y1);
+  // 3b 裝飾散布(wmap_obj.js:烘焙進地面層,在物件層之前)
+  if (typeof wmapObjBakeDecor === 'function') wmapObjBakeDecor(g, G, x0, y0, x1, y1);
   // 4 物件層(山 / 大石 / 城池 / 邊界裝飾 + 散布物件,合併深度排序)
   wmapBakeObjects(g, G, x0, y0, x1, y1, objs);
   // 5 邊界帶霧(離地圖越遠越濃;六邊形頂面)
@@ -402,7 +404,8 @@ function wmapBakeObjects(g, G, x0, y0, x1, y1, objs) {
   var F = WMAP.F, k = G.W / 256, W = G.W, cfg = WMAP_RES_CFG, zi = WMAP.zi, items = [], sc = [], i, j, o, bx, b, pts, p, a, q, rg, ms, m, n, key, pos, f, it, ssz, rx;
   function hit(fx, fy, an) { return fx - an.ax * k < x1 && fx + (an.cw - an.ax) * k > x0 && fy - an.ay * k < y1 && fy + (an.ch - an.ay) * k > y0; }
   for (i = 0; i < objs.length; i++) { o = objs[i]; items.push({ dep: o.dep, tie: o.c0 - o.r0, id: 0, ty: 0, o: o }); }
-  if (F && WMAP.resList.length) {
+  if (typeof wmapObjResItems === 'function') { ms = wmapObjResItems(G, x0, y0, x1, y1); for (i = 0; i < ms.length; i++) items.push(ms[i]); }   // 資源地物件 + 等級旗標(wmap_obj.js)
+  if (F && WMAP.resList.length && !(typeof wmapObjReplacesScatter === 'function' && wmapObjReplacesScatter())) {
     b = wmapResUV(G, x0 - 0.6 * W, y0 - 0.15 * W, x1 + 0.6 * W, y1 + 1.4 * W);
     pts = wmapResPoints(F, WMAP.seed, b.u0, b.v0, b.u1, b.v1, zi);
     for (i = 0; i < pts.length; i++) {
@@ -425,6 +428,7 @@ function wmapBakeObjects(g, G, x0, y0, x1, y1, objs) {
       if (o.al < 1) g.globalAlpha = 1;
       continue;
     }
+    if (it.ty === 2) { wmapObjDrawItem(g, G, it); continue; }
     wmapDrawArt(g, it.key, it.fx - it.a.ax * k, it.fy - it.a.ay * k, it.a.cw, it.a.ch);
   }
 }
@@ -741,19 +745,60 @@ function wmapZoomUi() {   // 縮放標籤 + 放大鈕在最大段時停用
   b = WMAP.root ? WMAP.root.querySelector('.wmap-btn[data-z="1"]') : null;
   if (b) { b.disabled = WMAP.zi >= WMAP_CFG.zooms.length - 1; b.style.opacity = b.disabled ? '0.35' : ''; }
 }
+// 連續縮放(2026-11-18):格寬 W 夾在 [zMin, zMax];(ax, ay) = 視窗內錨點(保持該點對到同一個連續座標),(dx, dy) = 錨點之後再平移的螢幕位移(雙指中心移動)
+function wmapZoomClamp(W) { return Math.max(WMAP_CFG.zMin, Math.min(WMAP_CFG.zMax, W)); }
 function wmapSetZoom(idx, ax, ay) {
-  var i = Math.max(0, Math.min(WMAP_CFG.zooms.length - 1, idx | 0)), G0 = WMAP.G, G1;
-  if (i === WMAP.zi) return;
+  var i = Math.max(0, Math.min(WMAP_CFG.zooms.length - 1, idx | 0));
+  wmapSetZoomW(WMAP_CFG.zooms[i], ax, ay);
+}
+function wmapSetZoomW(W, ax, ay, dx, dy) {
+  var G0 = WMAP.G, G1, p, cam, i, best = 0, bd = 1e9;
+  W = Math.round(wmapZoomClamp(W));
+  if (W === G0.W && !dx && !dy) return;
   if (ax === undefined) { ax = WMAP.vw / 2; ay = WMAP.vh / 2; }
-  G1 = wmapGeom(WMAP_CFG.zooms[i], WMAP.N);
-  WMAP.cam = wmapCamClamp(G1, wmapAnchorZoom(G0, G1, WMAP.cam, WMAP.vw, WMAP.vh, ax, ay), { border: WMAP.B });
-  WMAP.zi = i; WMAP.G = G1; WMAP.sc = {}; WMAP.tmp = null; WMAP.bsig = ''; WMAP.pat = {}; WMAP.tile = {}; WMAP.mask = {};
+  G1 = wmapGeom(W, WMAP.N);
+  cam = wmapAnchorZoom(G0, G1, WMAP.cam, WMAP.vw, WMAP.vh, ax, ay);
+  if (dx || dy) { p = wmapCamPx(G1, cam, WMAP.vw, WMAP.vh); cam = wmapCamFromPx(G1, p.px - (dx || 0), p.py - (dy || 0), WMAP.vw, WMAP.vh); }
+  WMAP.cam = wmapCamClamp(G1, cam, { border: WMAP.B });
+  for (i = 0; i < WMAP_CFG.zooms.length; i++) if (Math.abs(WMAP_CFG.zooms[i] - W) < bd) { bd = Math.abs(WMAP_CFG.zooms[i] - W); best = i; }
+  WMAP.zi = best; WMAP.G = G1; WMAP.sc = {}; WMAP.tmp = null; WMAP.bsig = ''; WMAP.pat = {}; WMAP.tile = {}; WMAP.mask = {};
   wmapClearChunks(); wmapPlaceSel();
   var p = wmapCamPxNow();
   WMAP.world.style.transform = 'translate3d(' + (-p.px) + 'px,' + (-p.py) + 'px,0)';
   wmapEnsureChunks(p.px, p.py, 99);   // 縮放後可見塊同步烘好,不閃
   wmapSchedule();
   wmapZoomUi();
+  if (typeof WMAP.onZoom === 'function') WMAP.onZoom();
+}
+// 手勢預覽:縮放過程用 CSS scale / translate 套在 vp 的每個子層(地圖、行軍層、野怪層…),跟手、不重烘;停手(pinchSettleMs)、放開、或預覽倍率離基準太遠(< 0.75 或 > 1.33)才以整數格寬重烘一次
+function wmapPvLayers() { return WMAP.vp ? WMAP.vp.children : []; }
+function wmapPvApply() {
+  var pv = WMAP.pv, L = wmapPvLayers(), i, e;
+  for (i = 0; i < L.length; i++) {
+    e = L[i];
+    if (!pv) { e.style.scale = ''; e.style.translate = ''; e.style.transformOrigin = ''; continue; }
+    e.style.transformOrigin = pv.ox + 'px ' + pv.oy + 'px';
+    e.style.scale = String(pv.k);
+    e.style.translate = (pv.cx - pv.ox) + 'px ' + (pv.cy - pv.oy) + 'px';
+  }
+}
+function wmapPvTo(W, cx, cy, ox, oy) {   // 預覽到格寬 W、錨點 (ox, oy) 對到螢幕 (cx, cy);第一次呼叫以 (ox, oy) 建基準
+  var pv = WMAP.pv;
+  if (!pv) pv = WMAP.pv = { W0: WMAP.G.W, ox: ox, oy: oy, cx: cx, cy: cy, k: 1 };
+  pv.k = wmapZoomClamp(W) / pv.W0; pv.cx = cx; pv.cy = cy;
+  if (WMAP.pvT) clearTimeout(WMAP.pvT);
+  WMAP.pvT = setTimeout(wmapPvCommit, WMAP_CFG.pinchSettleMs);
+  wmapPvApply();
+  return pv.k;
+}
+function wmapPvCommit() {
+  var pv = WMAP.pv;
+  if (WMAP.pvT) { clearTimeout(WMAP.pvT); WMAP.pvT = 0; }
+  if (!pv) return false;
+  WMAP.pv = null;
+  wmapPvApply();   // 先清掉預覽 transform,再以新幾何重烘(同一個同步流程內,不閃)
+  wmapSetZoomW(pv.W0 * pv.k, pv.ox, pv.oy, pv.cx - pv.ox, pv.cy - pv.oy);
+  return true;
 }
 function wmapInvalidate() { wmapClearChunks(); WMAP.bsig = ''; WMAP.sc = {}; WMAP.pat = {}; WMAP.tile = {}; WMAP.mask = {}; wmapBuildData(); wmapSchedule(); }
 
@@ -839,27 +884,48 @@ function wmapTap(x, y) {   // x, y = 視窗內像素
 
 // ───────── 輸入 ─────────
 function wmapAdd(el, ev, fn, opt) { el.addEventListener(ev, fn, opt || false); WMAP.listeners.push([el, ev, fn, opt || false]); }
+// 滾輪 / 觸控板:每次只累加目標格寬(單次最多 ±19%),用 rAF 緩動追上(每幀走 30% 差距),停手後才重烘
+function wmapWheelZoom(dy, ax, ay) {
+  var f = Math.exp(-Math.max(-0.12, Math.min(0.12, dy * WMAP_CFG.wheelK * 1.6))), w = WMAP.wz;
+  if (!w) w = WMAP.wz = { cur: WMAP.pv ? WMAP.pv.W0 * WMAP.pv.k : WMAP.G.W, tgt: 0, ax: ax, ay: ay, raf: 0 };
+  w.tgt = wmapZoomClamp((w.tgt || w.cur) * f); w.ax = ax; w.ay = ay;
+  if (!w.raf) w.raf = requestAnimationFrame(wmapWheelStep);
+}
+function wmapWheelStep() {
+  var w = WMAP.wz;
+  if (!w) return;
+  w.raf = 0;
+  w.cur += (w.tgt - w.cur) * 0.3;
+  if (Math.abs(w.tgt - w.cur) < 0.05) w.cur = w.tgt;
+  if (WMAP.pv && (WMAP.pv.ox !== w.ax || WMAP.pv.oy !== w.ay)) wmapPvCommit();
+  wmapPvTo(w.cur, w.ax, w.ay, w.ax, w.ay);
+  if (w.cur !== w.tgt) w.raf = requestAnimationFrame(wmapWheelStep); else WMAP.wz = null;
+}
 function wmapPtrDist() { var ks = Object.keys(WMAP.ptrs), a = WMAP.ptrs[ks[0]], b = WMAP.ptrs[ks[1]]; return Math.hypot(a.x - b.x, a.y - b.y); }
 function wmapBindInput() {
   var vp = WMAP.vp;
   wmapAdd(vp, 'pointerdown', function (e) {
     var rc = vp.getBoundingClientRect(), n;
     if (e.target.closest && e.target.closest('.wmap-btn')) return;
+    if (WMAP.pv) wmapPvCommit();
+    WMAP.wz = null;
     WMAP.ptrs[e.pointerId] = { x: e.clientX - rc.left, y: e.clientY - rc.top };
     try { vp.setPointerCapture(e.pointerId); } catch (er) { /* 略過 */ }
     n = Object.keys(WMAP.ptrs).length;
     if (n === 1) { var p = wmapCamPxNow(); WMAP.drag = { x0: e.clientX, y0: e.clientY, t0: performance.now(), px: p.px, py: p.py, moved: false }; }
-    else if (n === 2) { WMAP.drag = null; WMAP.pinch = { d0: wmapPtrDist() }; }
+    else if (n === 2) { WMAP.drag = null; WMAP.pinch = { d0: wmapPtrDist(), W0: WMAP.G.W }; }
     e.preventDefault();
   });
   wmapAdd(vp, 'pointermove', function (e) {
-    var rc = vp.getBoundingClientRect(), d = WMAP.drag, n, dx, dy, mx, my, ks, a, b, r;
+    var rc = vp.getBoundingClientRect(), d = WMAP.drag, n, dx, dy, mx, my, ks, a, b, r, k;
     if (!WMAP.ptrs[e.pointerId]) return;
     WMAP.ptrs[e.pointerId] = { x: e.clientX - rc.left, y: e.clientY - rc.top };
     n = Object.keys(WMAP.ptrs).length;
     if (n >= 2 && WMAP.pinch) {
       r = wmapPtrDist() / WMAP.pinch.d0; ks = Object.keys(WMAP.ptrs); a = WMAP.ptrs[ks[0]]; b = WMAP.ptrs[ks[1]];
-      if (r > 1.3 || r < 0.77) { wmapSetZoom(WMAP.zi + (r > 1 ? 1 : -1), (a.x + b.x) / 2, (a.y + b.y) / 2); WMAP.pinch.d0 = wmapPtrDist(); }
+      if (!WMAP.pinch.o) WMAP.pinch.o = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      k = wmapPvTo(WMAP.pinch.W0 * r, (a.x + b.x) / 2, (a.y + b.y) / 2, WMAP.pinch.o.x, WMAP.pinch.o.y);
+      if (k < 0.75 || k > 1.33) { wmapPvCommit(); WMAP.pinch = { d0: wmapPtrDist(), W0: WMAP.G.W, o: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }; }
       return;
     }
     if (!d) return;
@@ -874,17 +940,19 @@ function wmapBindInput() {
     if (!WMAP.ptrs[e.pointerId]) return;
     delete WMAP.ptrs[e.pointerId];
     try { vp.releasePointerCapture(e.pointerId); } catch (er) { /* 略過 */ }
-    if (Object.keys(WMAP.ptrs).length < 2) WMAP.pinch = null;
-    if (d && e.type === 'pointerup' && wmapTapOk(e.clientX - d.x0, e.clientY - d.y0, performance.now() - d.t0)) wmapTap(e.clientX - rc.left, e.clientY - rc.top);
+    if (Object.keys(WMAP.ptrs).length < 2 && WMAP.pinch) {   // 雙指結束:立刻定案縮放;剩下的一指接著拖曳(不當成點選)
+      WMAP.pinch = null; wmapPvCommit();
+      var rest = Object.keys(WMAP.ptrs)[0], pp = rest !== undefined ? WMAP.ptrs[rest] : null, p0;
+      if (pp) { p0 = wmapCamPxNow(); WMAP.drag = { x0: pp.x + rc.left, y0: pp.y + rc.top, t0: 0, px: p0.px, py: p0.py, moved: true, noTap: true }; return; }
+    }
+    if (d && !d.noTap && e.type === 'pointerup' && wmapTapOk(e.clientX - d.x0, e.clientY - d.y0, performance.now() - d.t0)) wmapTap(e.clientX - rc.left, e.clientY - rc.top);
     WMAP.drag = null;
   }
   wmapAdd(vp, 'pointerup', up); wmapAdd(vp, 'pointercancel', up);
   wmapAdd(vp, 'wheel', function (e) {
     var rc = vp.getBoundingClientRect(), t = performance.now();
     e.preventDefault();
-    if (t - WMAP.wheelT < 160) return;
-    WMAP.wheelT = t;
-    wmapSetZoom(wmapZoomIdx(WMAP.zi, e.deltaY < 0 ? 1 : -1), e.clientX - rc.left, e.clientY - rc.top);
+    wmapWheelZoom(e.deltaY * (e.deltaMode === 1 ? 16 : 1) * (e.ctrlKey ? 4 : 1), e.clientX - rc.left, e.clientY - rc.top);
   }, { passive: false });
   wmapAdd(window, 'resize', wmapResize);
   wmapAdd(window, 'orientationchange', wmapResize);
@@ -898,25 +966,19 @@ function wmapMount(o) {
   WG = wmGen(o.seed !== undefined ? o.seed : 20261116, o.size);
   WMAP.WG = WG; WMAP.N = WG.size; WMAP.B = WG.border; WMAP.seed = WG.seed;
   WMAP.dpr = (typeof wmapArtLowQ === 'function' && wmapArtLowQ()) ? 1 : Math.min(WMAP_CFG.dprCap, window.devicePixelRatio || 1);
-  WMAP.zi = (typeof window !== 'undefined' && window.innerWidth && window.innerHeight && window.innerWidth < window.innerHeight) ? 0 : WMAP_CFG.zoomDef;   // 直向預設格寬 64(規格 7 風險 4),橫向 96
-  WMAP.G = wmapGeom(WMAP_CFG.zooms[WMAP.zi], WG.size);
+  WMAP.zi = 0; WMAP.pv = null; WMAP.wz = null;
+  WMAP.G = wmapGeom(WMAP_CFG.zDef, WG.size);   // 2026-11-18:連續縮放,預設格寬 56(範圍 36~72)
   WMAP.dbg = /[?&]wmapdbg=1(&|$)/.test(String(window.location.search || ''));
   WMAP.chunks = {}; WMAP.nChunks = 0; WMAP.sc = {}; WMAP.pat = {}; WMAP.tile = {}; WMAP.mask = {}; WMAP.lv = null; WMAP.tmp = null; WMAP.fpool = []; WMAP.bsig = ''; WMAP.bakes = 0; WMAP.bakeMs = 0; WMAP.ptrs = {}; WMAP.drag = null; WMAP.pinch = null; WMAP.sel = -1; WMAP.listeners = [];
   wmapBuildData();
   wmapTexKickLoad();
+  if (typeof wmapObjKickLoad === 'function') wmapObjKickLoad();
   parent = o.parent || document.body;
-  html = '<div id="wmapVp"><div id="wmapWorld"></div></div><div class="wmap-ctl"><button type="button" class="wmap-btn" data-z="1" aria-label="放大">+</button><span class="wmap-zl"></span><button type="button" class="wmap-btn" data-z="-1" aria-label="縮小">−</button>'
-    + '<button type="button" class="wmap-btn wmap-home" data-z="0" aria-label="回主城">城</button></div><div class="wmap-card" style="display:none"></div>' + (WMAP.dbg ? '<div class="wmap-hud"></div>' : '');
+  html = '<div id="wmapVp"><div id="wmapWorld"></div></div><div class="wmap-card" style="display:none"></div>' + (WMAP.dbg ? '<div class="wmap-hud"></div>' : '');
   WMAP.root = document.createElement('div'); WMAP.root.id = 'wmapRoot'; WMAP.root.innerHTML = html; parent.appendChild(WMAP.root);
   WMAP.vp = WMAP.root.querySelector('#wmapVp'); WMAP.world = WMAP.root.querySelector('#wmapWorld'); WMAP.card = WMAP.root.querySelector('.wmap-card'); WMAP.hud = WMAP.root.querySelector('.wmap-hud'); WMAP.zoomEl = WMAP.root.querySelector('.wmap-zl');
   wmapZoomUi();
   WMAP.selEls = [];
-  WMAP.root.querySelector('.wmap-ctl').addEventListener('click', function (e) {
-    var b = e.target.closest ? e.target.closest('.wmap-btn') : null, z;
-    if (!b) return;
-    z = parseInt(b.getAttribute('data-z'), 10);
-    if (z === 0) wmapSetCam(WG.cx + 0.5, WG.cy + 0.5); else wmapSetZoom(wmapZoomIdx(WMAP.zi, z));
-  });
   WMAP.on = true;
   WMAP.vw = WMAP.vp.clientWidth || window.innerWidth; WMAP.vh = WMAP.vp.clientHeight || window.innerHeight;
   WMAP.cam = wmapCamClamp(WMAP.G, { u: WG.cx + 0.5, v: WG.cy + 0.5 }, { border: WMAP.B });

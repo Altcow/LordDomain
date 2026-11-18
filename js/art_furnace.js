@@ -1,6 +1,6 @@
-// art_furnace.js — 卡片熔爐建築 furnace_card(3×3,限 1 座)與 5 件周邊小擺設(風箱 / 鐵砧 / 碎片堆 / 淬火槽 2×1 / 燃料堆)。
+// art_furnace.js — 卡片分解建築 furnace_card(3×3,限 1 座)與 5 件周邊小擺設(風箱 / 鐵砧 / 碎片堆 / 淬火槽 2×1 / 燃料堆)。
 // 外部圖(assets/buildings/<id>_L.webp,ext_sprites)缺圖時用本檔程式繪製備援;物件登記沿用 art_card.js 做法(併入 NL_NEW_OBJECTS 與 OBJECTS / BUILD_GROUPS)。
-// 解鎖:NL_NEW_OBJECTS[id].tech = e_tieguan(鐵官,第 2 時代冶鐵節點;熔爐與周邊同節點,熔爐功能本身在卡包頁恆可用,建築只是另一個入口,不會死鎖)。
+// 解鎖:NL_NEW_OBJECTS[id].tech = e_tieguan(鐵官,第 2 時代冶鐵節點;分解與周邊同節點,分解功能本身在武將頁恆可用,建築只是另一個入口,不會死鎖)。
 // 載入順序:art.js、art_objects.js、objcat.js、ui.js、nl_objects.js 之後。點擊接線:furnaceui.js 的 furnaceUiTap(o)(ui.js tapObjectAt 呼叫)。不發聲。ES2017;不用 ?. ??。
 (function (A) {
   if (!A || typeof A.def !== 'function') return;
@@ -8,9 +8,9 @@
   var TILE_DK = '#4d5c64', BRICK = '#8a5a44', BRICK_DK = '#5e3a2c', IRON = '#3c3f46', EMBER = '#ff8a3a';
 
   var FURNACE_OBJECTS = {
-    furnace_card:    { name: '卡片熔爐',   icon: '🔥', w: 3, h: 3, group: 'ind', tech: 'e_tieguan', cost: { coin: 300 }, max: 1, cat: 'eco' },
-    furnace_bellows: { name: '熔爐風箱',   icon: '💨', w: 1, h: 1, group: 'ind', tech: 'e_tieguan', cost: { coin: 20 }, cat: 'deco' },
-    furnace_anvil:   { name: '熔爐鐵砧',   icon: '⚒️', w: 1, h: 1, group: 'ind', tech: 'e_tieguan', cost: { coin: 20 }, cat: 'deco' },
+    furnace_card:    { name: '卡片分解',   icon: '🔥', w: 3, h: 3, group: 'ind', tech: 'e_tieguan', cost: { coin: 300 }, max: 1, cat: 'eco' },
+    furnace_bellows: { name: '分解風箱',   icon: '💨', w: 1, h: 1, group: 'ind', tech: 'e_tieguan', cost: { coin: 20 }, cat: 'deco' },
+    furnace_anvil:   { name: '分解鐵砧',   icon: '⚒️', w: 1, h: 1, group: 'ind', tech: 'e_tieguan', cost: { coin: 20 }, cat: 'deco' },
     furnace_shards:  { name: '碎片堆',     icon: '💠', w: 1, h: 1, group: 'ind', tech: 'e_tieguan', cost: { coin: 15 }, cat: 'deco' },
     furnace_quench:  { name: '淬火槽',     icon: '🪣', w: 2, h: 1, group: 'ind', tech: 'e_tieguan', cost: { coin: 30 }, cat: 'deco' },
     furnace_fuel:    { name: '燃料堆',     icon: '🪵', w: 1, h: 1, group: 'ind', tech: 'e_tieguan', cost: { coin: 15 }, cat: 'deco' }

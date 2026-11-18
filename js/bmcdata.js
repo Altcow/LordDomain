@@ -35,7 +35,7 @@ var BMC_COST = {   // id → { 貨品id: 數量 };木 / 石用 GOODS 的 res 貨
   fish_market: { wood: 5 },   // 魚市攤 B2
   fish_rack: { wood: 5 },   // 曬魚架 B1
   fishery: { wood: 15, stone: 10, g_muban: 1 },   // 魚場(漁棚) B1
-  furnace_card: { wood: 30, stone: 20, mat_tieding: 2 },   // 卡片熔爐 B2
+  furnace_card: { wood: 30, stone: 20, mat_tieding: 2 },   // 卡片分解 B2
   gate: { wood: 15, stone: 10, g_muban: 1 },   // 城門 B1
   gate_courtyard: { wood: 5 },   // 院門 B2
   gong_men: { wood: 15, stone: 10, mat_tieding: 1 },   // 宮門 B4

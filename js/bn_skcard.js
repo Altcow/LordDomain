@@ -17,7 +17,7 @@ function bnSkcSkill(id) { return (typeof BN_SKILLS !== 'undefined' && BN_SKILLS[
 function bnSkcIsLegion(id) { return !!(typeof BN_LEGION !== 'undefined' && BN_LEGION.cards && BN_LEGION.cards[id]); }
 function bnSkcFigGr(fig) { var f = (typeof CARD_FIG_BY_ID !== 'undefined' && fig) ? CARD_FIG_BY_ID[fig] : null; return f ? (f.gr | 0) : 0; }
 function bnSkcCs(cs) { return cs || (typeof cardsGet === 'function' ? cardsGet() : null); }
-// 名冊內找人(只認 roster;派駐 / 流浪 / 卡包的卡不計)
+// 名冊內找人(只認 roster;派駐 / 流浪 / 武將的卡不計)
 function bnSkcEntry(cs, id) {
   var c = bnSkcCs(cs), r = c && Array.isArray(c.roster) ? c.roster : [], i;
   if (!id) return null;
@@ -174,7 +174,7 @@ function bnSkcUnequip(entryId, slot) {
 function bnSkcOnLeave(entryId) {
   var d = bnSkcLoad();
   if (d.eq[entryId]) { delete d.eq[entryId]; bnSkcSave(d); }
-  if (typeof gearOnCardLeave === 'function') { try { gearOnCardLeave(entryId); } catch (e) { /* 略過 */ } }   // 離開名冊:身上裝備退回背包(js/ld_equip.js;熔鍊 / 遣散 / 傳承拆解都經這裡)
+  if (typeof gearOnCardLeave === 'function') { try { gearOnCardLeave(entryId); } catch (e) { /* 略過 */ } }   // 離開名冊:身上裝備退回背包(js/ld_equip.js;分解 / 遣散 / 傳承拆解都經這裡)
   return true;
 }
 // 路人的卡面戰法(固定大招與被動除外;不含學習欄裝備,避免裝備內容反過來變成可傳承)

@@ -164,7 +164,8 @@ function stAdd(nodes, label, control, hint) {
 // 分頁:id、名稱、一句話說明
 const ST_TABS = [
   { id: 'sound', name: '畫質與聲音' },
-  { id: 'more', name: '進階' }
+  { id: 'more', name: '進階' },
+  { id: 'help', name: '說明' }   // 2026-11-18:主畫面〔說明〕入口移除,功能說明併入設定的說明 tab
 ];
 const ST_TAB_KEY = 'lorddomain.ui.settingsTab';
 // 外部登記的列(settingsAddRow)白話說明
@@ -500,6 +501,29 @@ function stHelpSec() {
   return stSec('圖鑑', nodes, 'more');
 }
 
+// 說明 tab:列出功能說明主題(步驟文字),並提供重置 / 關閉引導;資料來自 guide.js 的 GUIDE_TOPICS
+function stGuideSec() {
+  const nodes = [];
+  if (typeof GUIDE_TOPICS === 'undefined' || !GUIDE_TOPICS) return null;
+  GUIDE_TOPICS.forEach(function (t) {
+    if (typeof gdCityHidden === 'function' && gdCityHidden(t)) return;
+    if (typeof gdDormantHidden === 'function' && gdDormantHidden(t)) return;
+    const card = stEl('div', 'st-guide');
+    card.appendChild(stEl('b', 'st-guide-t', t.title));
+    const ol = stEl('ol', 'st-hint');
+    (t.steps || []).forEach(function (s) { ol.appendChild(stEl('li', '', typeof gdStepText === 'function' ? gdStepText(s) : String(s))); });
+    card.appendChild(ol);
+    nodes.push(card);
+  });
+  if (typeof guideReset === 'function') {
+    const b = stEl('button', 'st-btn', '重置引導(下次重新介紹)');
+    b.style.minHeight = '44px';
+    b.addEventListener('click', function () { guideReset(); if (typeof showToast === 'function') showToast('已重置,新功能開放時會再介紹一次'); });
+    nodes.push(b);
+  }
+  return nodes.length ? stSec('功能說明', nodes, 'help') : null;
+}
+
 function stAboutSec() {
   const ver = stEl('p', 'st-ver', '版本 ' + (stVerText || '讀取中…'));
   stVerEl = ver;
@@ -556,6 +580,7 @@ function stRender() {
   } else {
     add(stTourSec());
     add(stHelpSec());
+    add(stGuideSec());
     add(stCacheSec());
     add(stAboutSec());
     add(stDangerSec());

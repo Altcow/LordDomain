@@ -1,4 +1,4 @@
-const VERSION = 'v70';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
+const VERSION = 'v71';               // 每次發佈新版都要遞增：v1 → v2 → v3 …
 const CACHE_PREFIX = 'lorddomain-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const IMG_CACHE = CACHE_PREFIX + 'img-' + VERSION;   // 執行期圖片快取桶(assets/buildings、assets/portraits、assets/ui、assets/terrain):第一次載入後存起來,離線可用;版本遞增換新桶
@@ -32,6 +32,7 @@ const PRECACHE = [
   './css/ld_skin.css',
   './css/wmap.css',
   './css/wmap_go.css',
+  './css/wmap_home.css',
   './js/ui_assets.js',
   './js/features.js',
   './js/ld_clock.js',
@@ -223,6 +224,7 @@ const PRECACHE = [
   './js/wmap_proj.js',
   './js/wmap_art.js',
   './js/wmap_res.js',
+  './js/wmap_obj.js',
   './js/wmap_view.js',
   './js/wmap_army_art.js',
   './js/wmap_army.js',
@@ -234,6 +236,8 @@ const PRECACHE = [
   './js/wmap_settle_ui.js',
   './js/wmap_mob_ui.js',
   './js/wmap_panels.js',
+  './js/wmap_home.js',
+  './js/rsv_heal.js',
   './js/wd_core.js',
   './js/wd_ui.js',
   './js/ld_open_data.js',
@@ -264,6 +268,7 @@ const PRECACHE = [
   './js/bnteam.js',
   './js/bn_tourney.js',
   './js/bn_tourney_ui.js',
+  './js/bn_tourney_team.js',
   './js/codex_teams_data.js',
   './js/codex.js',
   './js/minimap.js',
@@ -316,7 +321,9 @@ const PRECACHE = [
   './assets/wmap/army/army_ca_keep_1x.webp',
   './assets/wmap/army/army_ca_keep_2x.webp',
   './assets/wmap/army/army_en_keep_1x.webp',
-  './assets/wmap/army/army_en_keep_2x.webp'
+  './assets/wmap/army/army_en_keep_2x.webp',
+  './assets/wmap/obj/obj_atlas.json',
+  './assets/wmap/obj/obj_atlas.webp'
 ];
 
 // 封面背景與標題 logo:放進執行期圖片桶(IMG_CACHE),首次安裝後離線也能顯示封面;抓不到不擋安裝

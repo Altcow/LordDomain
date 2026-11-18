@@ -51,7 +51,7 @@ var EXT_SPRITES_TUNE = {
   s8_loom_bower: { base: 0.88 },
   s9_rock_house: { base: 0.88 },
   s9_clan_yard: { base: 0.88 },
-  // 卡片熔爐周邊:淬火槽(2×1)自動估 base 偏窄(0.647,槽口外擴 / 底面收尖)而放大過頭,改手調
+  // 卡片分解周邊:淬火槽(2×1)自動估 base 偏窄(0.647,槽口外擴 / 底面收尖)而放大過頭,改手調
   furnace_quench: { base: 0.92 }
 };
 var EXT_SPRITES = {};

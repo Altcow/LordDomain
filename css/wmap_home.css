@@ -1,0 +1,76 @@
+/* css/wmap_home.css — 地圖主畫面外殼 UI 調整(js/wmap_home.js;設計_主畫面UI調整_需求.md):頂列關閉、最下緣 5 格隊伍列、右下小選單、左下兩顆圖示鈕、左上任務鈕、右上數據群組、任務中心 / 城主府 / 全螢幕地圖頁。
+   只有 body.wm-on(旗標 wmap + 外殼 ld)下生效;--wmst = 隊伍列總高(含上緣線與安全區)。 */
+body.wm-on #shellRoot .sh-top, body.wm-on #shellRoot #shDock, body.wm-on #shellRoot .ldh-team, body.wm-on #shellRoot .wmap-more { display: none !important; }
+body.wm-on #shellRoot { --wmst: calc(62px + env(safe-area-inset-bottom, 0px)); }
+/* 最下緣隊伍列:一排 5 格佔滿 */
+#shellRoot .wmh-strip { position: absolute; z-index: 7; left: 0; right: 0; bottom: 0; height: var(--wmst); box-sizing: border-box; display: flex; gap: 4px; padding: 4px calc(4px + env(safe-area-inset-right, 0px)) calc(4px + env(safe-area-inset-bottom, 0px)) calc(4px + env(safe-area-inset-left, 0px)); background: linear-gradient(#7a4f2a, #4a2d18); border-top: 3px solid #2a170a; }
+#shellRoot .wmh-cell { position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 2px 2px 7px; overflow: hidden; border: 2px solid #2a170a; border-radius: 8px; background: linear-gradient(#fff3cf, #f0d28a); color: #3b2410; font: 900 11px/1.15 var(--ld-font, system-ui, sans-serif); cursor: pointer; touch-action: manipulation; box-shadow: 0 2px 0 #0006; }
+#shellRoot .wmh-cell:active { transform: translateY(2px); box-shadow: none; }
+#shellRoot .wmh-nm { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+#shellRoot .wmh-st { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+#shellRoot .wmh-tm { min-height: 12px; font: 700 10px/12px var(--ld-font, system-ui, sans-serif); font-variant-numeric: tabular-nums; color: #6a5036; }
+#shellRoot .wmh-bar { position: absolute; left: 5px; right: 5px; bottom: 3px; height: 4px; border-radius: 2px; background: #0003; overflow: hidden; }
+#shellRoot .wmh-bar i { display: block; height: 100%; background: #4a9a3c; }
+#shellRoot .wmh-face { display: none; }
+#shellRoot .wmh-cell.s-go { border-color: #2f7a2a; }
+#shellRoot .wmh-cell.s-fight { border-color: #b3321b; }
+#shellRoot .wmh-cell.s-idle { border-color: #b88a12; }
+#shellRoot .wmh-cell.s-back { border-color: #3d6f98; }
+#shellRoot .wmh-cell.s-hurt { border-color: #8a3a3a; }
+#shellRoot .wmh-cell.k-empty { background: linear-gradient(#e8dcc0, #d2c29a); border-style: dashed; color: #6a5036; }
+#shellRoot .wmh-cell.k-lock { background: linear-gradient(#cfc8b8, #b0a893); color: #6a6354; }
+@media (min-width: 600px) {
+  #shellRoot .wmh-cell { flex-direction: row; justify-content: flex-start; gap: 6px; padding: 2px 6px 7px 40px; flex-wrap: wrap; align-content: center; }
+  #shellRoot .wmh-face { display: block; position: absolute; left: 5px; top: 50%; width: 30px; height: 30px; margin-top: -17px; border-radius: 50%; border: 2px solid #2a170a; background: #8a6a3a center 15% / cover no-repeat; }
+  #shellRoot .wmh-nm, #shellRoot .wmh-st { max-width: none; }
+}
+/* 〔抽卡〕(右綠圓鈕)與左上〔任務〕鈕:避開隊伍列 */
+body.wm-on #shellRoot.sh-ld .ldh-rr { bottom: calc(var(--wmst) + 8px); }
+body.wm-on #shellRoot.sh-ld .ldh-rg { bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 8px); left: calc(env(safe-area-inset-left, 0px) + 8px); width: 54px; height: 54px; z-index: 6; }
+/* 右下小選單:〔抽卡〕左邊 */
+#shellRoot .wmh-mbtn { position: absolute; z-index: 8; right: calc(env(safe-area-inset-right, 0px) + 80px); bottom: calc(var(--wmst) + 15px); width: 46px; height: 46px; padding: 0; display: flex; align-items: center; justify-content: center; border: 3px solid #2a170a; border-radius: 50%; background: linear-gradient(#fff3cf, #f0d28a); box-shadow: 0 2px 0 #0006; cursor: pointer; touch-action: manipulation; }
+#shellRoot .wmh-mbtn.on { background: linear-gradient(#ffe08a, #f0b45a); }
+#shellRoot.sh-l .wmh-mbtn { right: calc(env(safe-area-inset-right, 0px) + 74px); bottom: calc(var(--wmst) + 13px); }
+#shellRoot .wmh-menu { position: absolute; z-index: 9; right: calc(env(safe-area-inset-right, 0px) + 60px); bottom: calc(var(--wmst) + 68px); width: 128px; max-width: calc(100% - 16px); padding: 6px; display: flex; flex-direction: column; gap: 4px; box-sizing: border-box; border: 3px solid #2a170a; border-radius: 12px; background: linear-gradient(#7a4f2a, #4a2d18); box-shadow: 0 3px 0 #0006; }
+#shellRoot .wmh-menu[hidden] { display: none; }
+#shellRoot .wmh-mi { min-height: 44px; border: 2px solid #2a170a; border-radius: 8px; background: linear-gradient(#fff3cf, #f0d28a); color: #3b2410; font: 900 15px/1 var(--ld-font, system-ui, sans-serif); cursor: pointer; touch-action: manipulation; }
+#shellRoot .wmh-mi:active { transform: translateY(2px); }
+/* 左下:〔地圖〕〔回歸城池〕 */
+#wmapRoot .wmh-pair { position: absolute; z-index: 6; left: calc(env(safe-area-inset-left, 0px) + 8px); bottom: calc(62px + env(safe-area-inset-bottom, 0px) + 8px); display: flex; gap: 6px; }
+#wmapRoot .wmh-pb { width: 54px; height: 54px; padding: 2px 0 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; border: 3px solid #2a170a; border-radius: 12px; background: linear-gradient(#fff3cf, #f0d28a); color: #3b2410; font: 900 10px/1.1 var(--ld-font, system-ui, sans-serif); box-shadow: 0 2px 0 #0006; cursor: pointer; touch-action: manipulation; box-sizing: border-box; }
+#wmapRoot .wmh-pb:active { transform: translateY(2px); box-shadow: none; }
+#wmapRoot .wmh-pb svg { width: 26px; height: 26px; }
+/* 右側:倒數浮條在數據群組下方(部隊面板由最下緣隊伍列取代) */
+#wmapRoot .wp-panel { display: none; }
+#wmapRoot .wp-col { left: auto; right: calc(env(safe-area-inset-right, 0px) + 6px); top: var(--wp-top, 56px); }
+body.shell-land #wmapRoot .wp-cd { left: auto; right: calc(env(safe-area-inset-right, 0px) + 6px); top: var(--wp-top, 56px); transform: none; flex-direction: column; flex-wrap: nowrap; max-width: 150px; gap: 4px; }
+/* 右上數據群組 */
+#shellRoot .wmh-tr { pointer-events: auto; display: flex; align-items: center; gap: 6px; }
+#shellRoot .wmh-tr .wp-caps { width: 64px; }
+#shellRoot .sh-stat { top: calc(env(safe-area-inset-top, 0px) + 6px); }
+#shellRoot .wmh-tr .sh-lstat { margin: 0; }
+/* 任務中心頁:tab */
+.wmh-tab { position: relative; min-height: 40px; padding: 0 16px; margin-right: 6px; border: 2px solid #2a170a; border-radius: 10px; background: linear-gradient(#fff3cf, #f0d28a); color: #3b2410; font: 900 14px/1 var(--ld-font, system-ui, sans-serif); cursor: pointer; }
+.wmh-tab.on { background: linear-gradient(#ffd86b, #e8a93a); box-shadow: inset 0 0 0 2px #fff3cf; }
+.wmh-tab .ldh-dot { top: -4px; right: -4px; }
+.wmh-evsec { margin: 0 0 12px; }
+.wmh-evt { margin: 0 0 6px; padding: 2px 8px; font: 900 15px/1.4 var(--ld-font, system-ui, sans-serif); color: #3b2410; border-left: 5px solid #d03a22; }
+/* 城主府頁 */
+.wmh-hall { max-width: 420px; margin: 12px auto; padding: 8px; box-sizing: border-box; }
+.wmh-hallt { margin: 0 0 8px; text-align: center; font: 900 17px/1.4 var(--ld-font, system-ui, sans-serif); color: #3b2410; }
+.wmh-hr { display: flex; justify-content: space-between; align-items: center; min-height: 40px; padding: 0 14px; margin-bottom: 6px; border: 2px solid #2a170a; border-radius: 10px; background: linear-gradient(#fff3cf, #f0d28a); color: #3b2410; font: 700 14px/1 var(--ld-font, system-ui, sans-serif); }
+.wmh-hr b { font-variant-numeric: tabular-nums; }
+/* 全螢幕地圖頁 */
+.wmh-full { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: auto; -webkit-overflow-scrolling: touch; background: radial-gradient(ellipse at 50% 40%, #e4eef0 0%, #c5d8de 100%); }
+.wmh-fst { position: relative; width: max(100%, 760px); margin: 0 auto; }
+.wmh-fcv { display: block; width: 100%; height: auto; cursor: pointer; }
+.wmh-bub { position: absolute; z-index: 3; max-width: 240px; padding: 8px 10px; box-sizing: border-box; border: 2px solid #2a170a; border-radius: 10px; background: #fff3cf; color: #3b2410; box-shadow: 0 3px 0 #0006; font: 700 13px/1.4 var(--ld-font, system-ui, sans-serif); }
+.wmh-bub[hidden] { display: none; }
+.wmh-bgo { display: block; margin-top: 6px; min-height: 40px; width: 100%; border: 2px solid #2a170a; border-radius: 8px; background: linear-gradient(#ffd86b, #e8a93a); color: #3b2410; font: 900 15px/1 var(--ld-font, system-ui, sans-serif); cursor: pointer; }
+body.wm-on #shellRoot.sh-ld .sh-stat, body.wm-on #shellRoot.sh-ld.sh-l .sh-stat { top: calc(env(safe-area-inset-top, 0px) + 6px); right: calc(env(safe-area-inset-right, 0px) + 8px); left: auto; }
+#shellRoot .wmh-cell.k-empty .wmh-face, #shellRoot .wmh-cell.k-lock .wmh-face { display: none; }
+.wmh-full { display: flex; }
+.wmh-fst { flex: none; margin: auto; }
+/* 2026-11-18:地圖主畫面下,舊頁(武將 / 設定 / 戰報…)頂列不放右上 ✕,只留左上返回 */
+body.wm-on #ldLegBar .ldp-x { display: none; }
+body.wm-on .ldp .ldp-x { display: none; }

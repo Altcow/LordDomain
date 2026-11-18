@@ -60,7 +60,7 @@ function cuDrawTabHtml(cs) {
   h += '<div class="cusub">' + cuEsc(CU_DRAW_LABEL[v]) + ' 持有 ' + n + ' 抽;' + (nx === null ? '已滿 · 有空位自動補 10 抽' : '每 ' + cardsDrawTier(v).h + ' 小時 +' + cardsDrawTier(v).n + ' 抽') + '</div>';
   if (!open) h += '<div class="cusub">' + cuEsc(cuDrawGate(v)) + '</div>';
   h += cuDrawBtns(cs, v);
-  if (full) h += '<div class="cuwarn">卡包已滿,暫停抽卡(不扣次數)。<button class="cub" data-a="tab" data-t="R" style="margin:0">去卡包熔鍊</button></div>';
+  if (full) h += '<div class="cuwarn">武將已滿,暫停抽卡(不扣次數)。<button class="cub" data-a="tab" data-t="R" style="margin:0">去武將分解</button></div>';
   if (!n) h += '<div class="cusub">' + cuEsc(CU_DRAW_LABEL[v]) + '沒有可抽次數了;等下次補充' + (v === 'E' ? ',或通關頭目關卡領贈抽' : '') + '。</div>';
   if (cu.msg) h += '<div class="cuwarn">' + cuEsc(cu.msg) + '</div>';
   h += cuLastHtml();
@@ -100,10 +100,10 @@ function cuDrawInfoPop(cs) {
   nx = cardsNextIn(cs, v, cuNow());
   if (nx !== null) h += '<div class="cusub">' + cuEsc(CU_DRAW_LABEL[v]) + '下次 +' + T.n + ' 抽:<span data-cd="' + v + '">' + cardsUiFmtCd(nx) + '</span> 後</div>';
   h += '<div class="cusec">贈抽與補償</div>';
-  h += '<div class="cuil"><b>新手禮包</b> 新手禮包(道具)內含 ' + G.pulls + ' 抽,到卡包的道具頁籤使用(入S01卡池,可超過上限 ' + D.cap + ')。' + (typeof itemCount === 'function' && itemCount('gift_newbie') > 0 ? '目前尚未使用。' : '') + '</div>';
+  h += '<div class="cuil"><b>新手禮包</b> 新手禮包(道具)內含 ' + G.pulls + ' 抽,到武將的道具頁籤使用(入S01卡池,可超過上限 ' + D.cap + ')。' + (typeof itemCount === 'function' && itemCount('gift_newbie') > 0 ? '目前尚未使用。' : '') + '</div>';
   h += '<div class="cuil"><b>頭目贈抽</b> 每章頭目首次通關 +' + CARD_BOSS.pulls + ' 抽(S01卡池)。</div>';
   h += cuBossHtml(cs, true);
-  h += '<div class="cusec">卡包</div><div class="cuil">卡包滿了就停止抽卡(次數保留、不扣),遣散或熔鍊騰出空位後才能再抽。</div>';
+  h += '<div class="cusec">武將</div><div class="cuil">武將滿了就停止抽卡(次數保留、不扣),遣散或分解騰出空位後才能再抽。</div>';
   h += '<button class="cub" data-a="info" data-k="draw" data-key="" style="margin:0">補充節奏與升級</button> ';
   h += '<button class="cub" data-a="dpop" data-k="" style="margin:0">關閉</button></div>';
   return h;

@@ -126,7 +126,7 @@ var CARD_DRAW = {
 // 首次通關各章頭目關(bn_stages.js 第 6 關)送抽卡次數(寫進任務清單;cs.boss 記錄防重領)
 // 頭目首通贈抽送『大池』抽卡次數(cards.js cardsBossGive)
 var CARD_BOSS = { pulls: 10 };
-// 新手禮包(2026-11-11 使用者決議 v59;v60 起為道具『新手禮包』,數值皆 PLACEHOLDER):不需領取、不跳彈窗。發放由 items.js itemGiftGrant 以道具鍵的 gv 記版本;cs.gift200 為同步旗標。發出後到卡包道具頁籤點『使用』才入大池 pulls 抽(E 次數錢包,可超過上限)。
+// 新手禮包(2026-11-11 使用者決議 v59;v60 起為道具『新手禮包』,數值皆 PLACEHOLDER):不需領取、不跳彈窗。發放由 items.js itemGiftGrant 以道具鍵的 gv 記版本;cs.gift200 為同步旗標。發出後到武將道具頁籤點『使用』才入大池 pulls 抽(E 次數錢包,可超過上限)。
 //   第一次進入、被重啟(新建角色 / 重設存檔)、已在玩的帳號一律補;之後改版時改 ver 即會再補一次(重玩 / 重啟同樣會補)。
 var CARD_GIFT = { ver: 'v59', pulls: 2000, pool: 'E', pullsNew: 2000 };   // 2026-11-11 使用者決議:補償改 2000 抽(一次性、可超過上限;旗標 cs.gift200 = 已發)
 // 新手期(開局 / 重啟後的前 nbCards 張小池 / 大池卡;數值皆 PLACEHOLDER)。cards_starter.js cardsGiftCheck 發放禮包時重新開始計數(重玩 / 重啟才會重開新手期;已在玩的老帳號只保留既有計數)。
@@ -135,8 +135,8 @@ var CARD_STARTER = {
   nbCards: 100, nbGr: { T: [50, 30, 12, 8, 0], E: [26, 38, 26, 8, 2] }, nbPurple: 8, nbGold: 30
 };
 var CARD_CFG = {
-  cap: 300,                // 名冊固定格數(2026-11-10 決議,不隨官階);滿了停止抽卡,先熔鍊或遣散。卡包 / 溢出區已移除
-  waitSeats: 5,            // 待定席(卡包上線後任用不再進待定席;只保留舊存檔既有的待定席人物)
+  cap: 300,                // 名冊固定格數(2026-11-10 決議,不隨官階);滿了停止抽卡,先分解或遣散。武將 / 溢出區已移除
+  waitSeats: 5,            // 待定席(武將上線後任用不再進待定席;只保留舊存檔既有的待定席人物)
   paceMin: 10,             // 時鐘回撥容忍(分鐘)
   fameAfter: 20, fameStep: 0.2, goldMax: 8,   // 殿試名人緣(百分點);goldMax = 金階機率上限(基礎 6 + 最多再加 2,原 2 + 2 = 4 同幅度)
   pityBatches: 9,          // 連續 9 批無上等 → 第 10 批保底
@@ -408,22 +408,22 @@ var CARD_FIG_WEIGHT = {
   // 2026-11-15 第一季換人(張紘 金 10 / 程昱、李儒 紫 6;caiyong 由金改紫,權重 3 → 6 比照紫階)
   zhanghong: 10, chengyu: 6, liru: 6
 };
-// 在野名人路過(js/npcvisit.js;使用者決議,數值皆 PLACEHOLDER)。名人來源 CARD_FIGS(金 / 紫階),依上面 CARD_FIG_WEIGHT 加權(缺項 金 10 / 紫 6),已在名冊 / 卡包的不來。
+// 在野名人路過(js/npcvisit.js;使用者決議,數值皆 PLACEHOLDER)。名人來源 CARD_FIGS(金 / 紫階),依上面 CARD_FIG_WEIGHT 加權(缺項 金 10 / 紫 6),已在名冊 / 武將的不來。
 //   countW = 每日 0 / 1 / 2 位的權重;startMin~endMin = 一天中可抵達的時段(分鐘,本機時間,白天);windowMin = 預定抵達後多久內才演(過了不補演);
 //   stops = 逛的停點數範圍;standSec = 每站停留秒數範圍;maxLifeSec = 單次停留上限(超過就離城);cap / capLow = 同時最多幾位(一般 / 省電或低階機);
-//   rewardDayMax = 每日小獎勵次數上限;reward = 依品階(3 紫 / 4 金)首次點擊的小獎勵(shards 碎片;原酒令 1 已換成碎片 5;不碰抽卡機率與卡包);aura = 光環 / 小星顏色
+//   rewardDayMax = 每日小獎勵次數上限;reward = 依品階(3 紫 / 4 金)首次點擊的小獎勵(shards 碎片;原酒令 1 已換成碎片 5;不碰抽卡機率與武將);aura = 光環 / 小星顏色
 var CARD_VISIT = {
   on: true, countW: [30, 45, 25], startMin: 420, endMin: 1110, windowMin: 45, stops: [3, 6], standSec: [6, 10], maxLifeSec: 300,
   cap: 2, capLow: 1, rewardDayMax: 2, reward: { 3: { shards: 5 }, 4: { shards: 8 } }, aura: { 3: '#b48cf0', 4: '#f0c850' }
 };
-// 名冊熔鍊 / 自動熔爐 / 名人重複(2026-11-10:卡包與溢出區已移除,抽到的卡直接進名冊;名冊滿了停止抽卡)。
+// 名冊分解 / 自動分解 / 名人重複(2026-11-10:武將與溢出區已移除,抽到的卡直接進名冊;名冊滿了停止抽卡)。
 var CARD_BAG = {
   batchNeed: 7,                // 一批連抽需要的名冊空位上限(抽卡時取 min(所需張數, 空位))
-  autoDefault: 2,              // 自動熔爐預設:開,門檻藍以下(2);-1 = 關;白青藍路人直接熔成碎片,名人不熔
-  autoMax: 2                   // 自動熔爐最高可設到藍(紫以上不提供自動)
+  autoDefault: 2,              // 自動分解預設:開,門檻藍以下(2);-1 = 關;白青藍路人直接熔成碎片,名人不熔
+  autoMax: 2                   // 自動分解最高可設到藍(紫以上不提供自動)
 };
-// 卡片熔爐(使用者決議;卡包的『分解』整合改名『卡片熔爐』,碎片可 (1)強化武將升星 (2)兌換指名券)。數字皆 PLACEHOLDER。
-//   shard[品階 0~3] = 路人熔鍊碎片(白青藍紫);zongBonus = 宗師型(learn 3)額外;starHalf = 帶星的卡額外 +星數 × 品階基礎 × 此值;fig[品階] = 手動熔名人(二次確認,不入一鍵 / 自動)
+// 卡片分解(使用者決議;武將的『分解』整合改名『卡片分解』,碎片可 (1)強化武將升星 (2)兌換指名券)。數字皆 PLACEHOLDER。
+//   shard[品階 0~3] = 路人分解碎片(白青藍紫);zongBonus = 宗師型(learn 3)額外;starHalf = 帶星的卡額外 +星數 × 品階基礎 × 此值;fig[品階] = 手動熔名人(二次確認,不入一鍵 / 自動)
 //   starCost[品階][星 0→1 … 4→5] = 升星碎片(純碎片;信物已取消 2026-11-11);figMul = 名人 ×
 //   starBonus = 每星攻 / 防 / HP 加成(乘算係數),skillStar 星起解鎖技能強化旗標,markStar 星 = 專屬標記;starMax 星上限
 //   exchange = 碎片換指名券:shards 碎 = 1 張,weekMax 張 / 週(週界線同既有 7 日週:cards.js cardsWeekNo)

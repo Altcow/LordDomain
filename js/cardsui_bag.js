@@ -1,8 +1,8 @@
-// js/cardsui_bag.js — 卡包人物的升星(cuStarHtml)。2026-11-11:碎片兌換指名券已移除(指名券刪除);碎片換抽數預留下一批。卡包列表在 cardsui_roster.js,熔鍊在熔爐分頁(cardsui_furnace.js)。
-// 碎片用途:(1)卡包詳情『強化(升星)』(cuStarHtml,動作 starup)(2)請回流浪名人。
+// js/cardsui_bag.js — 武將人物的升星(cuStarHtml)。2026-11-11:碎片兌換指名券已移除(指名券刪除);碎片換抽數預留下一批。武將列表在 cardsui_roster.js,分解在分解分頁(cardsui_furnace.js)。
+// 碎片用途:(1)武將詳情『強化(升星)』(cuStarHtml,動作 starup)(2)請回流浪名人。
 // 掛在 cardsui.js(cuStarHtml 由 typeof 守衛呼叫;cuBagClick 由 cuClick 呼叫)。引擎在 cards.js(cardsStar*)。不發聲、不推播。ES2017;不用 ?. ??。
 // 全域名稱:cuStarHtml cuBagClick CU_BAG_MSG
-var CU_BAG_MSG = { fig: '名人需在詳情頁手動熔鍊(二次確認)', locked: '派駐中或已鎖定的人員不能熔鍊,請先卸任或解除鎖定', none: '此人已不在卡包', full: '卡包已滿,先遣散一人' };
+var CU_BAG_MSG = { fig: '名人需在詳情頁手動分解(二次確認)', locked: '派駐中或已鎖定的人員不能分解,請先卸任或解除鎖定', none: '此人已不在名冊', full: '武將已滿,先遣散一人' };
 
 // 名冊詳情『強化(升星)』區塊:星 0~5,花碎片;名人成本 ×2;每星攻 / 防 / HP 加成、3 星技能強化、5 星專屬標記
 function cuStarHtml(cs, e) {

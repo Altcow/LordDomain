@@ -10,8 +10,8 @@ var CUC_TIER_ORD = ['S', 'A', 'B', 'C'];
 var CUC_APT_PT = { S: 3, A: 2, B: 1, C: 0 };
 var CUC_CAT = { ult: '大', passive: '被', active: '主', pursuit: '追', command: '指', legion: '兵' };
 var CUC_ROLE = { ult: '固定', native: '固定', passive: '被動', bond: '聯動' };
-var CUC_REASON = { none: '此人不在卡包,不能裝備', own: '此戰法尚未解鎖', slot: '此槽位目前未開放', dup: '同一人兩槽不可裝同一戰法', legion: '兵種卡每人 1 張,且限同兵種', troop: '此戰法限特定兵種裝備', full: '已達同時裝備上限,需先卸下他人' };
-var CUC_INH_REASON = { none: '沒有可傳承的戰法', grade: '品階未達紫,不可傳承', locked: '已鎖定(🔒),先解除鎖定才能傳承', owned: '此人的傳承戰法已擁有,可改用熔爐' };
+var CUC_REASON = { none: '此人不在名冊,不能裝備', own: '此戰法尚未解鎖', slot: '此槽位目前未開放', dup: '同一人兩槽不可裝同一戰法', legion: '兵種卡每人 1 張,且限同兵種', troop: '此戰法限特定兵種裝備', full: '已達同時裝備上限,需先卸下他人' };
+var CUC_INH_REASON = { none: '沒有可傳承的戰法', grade: '品階未達紫,不可傳承', locked: '已鎖定(🔒),先解除鎖定才能傳承', owned: '此人的傳承戰法已擁有,可改用分解' };
 
 function cuCardCss() {
   var st;
@@ -110,7 +110,7 @@ function cuCOtherTxt(o) {
 // 回 {ok, n(未擁有可傳承數), reason};派駐中 / 非名冊 / 鎖定 / 品階 / 全部擁有 皆不可傳承
 function cuInhState(cs, f) {
   var e = f.e, chk;
-  if (f.list !== 'roster') return { ok: false, n: 0, reason: '待定或流浪中的人不能傳承,請先收入卡包' };
+  if (f.list !== 'roster') return { ok: false, n: 0, reason: '待定或流浪中的人不能傳承,請先收入武將' };
   if (e.at) return { ok: false, n: 0, reason: '派駐中,請先卸任再傳承' };
   chk = bnSkcInheritCheck(cs, e);
   if (!chk.ok) return { ok: false, n: 0, reason: CUC_INH_REASON[chk.reason] || '不可傳承' };
@@ -260,7 +260,7 @@ function cuPopSkill(cs, f, p) {
 // 選擇槽裝備清單:只列已解鎖的戰法;可裝 → [裝備];S/A 被他人持有 → 顯示持有者與 [從 X 卸下](不自動搶)
 function cuPopPick(cs, f, p) {
   var e = f ? f.e : null, slot = p.slot, owned, h = '';
-  if (!e || f.list !== 'roster') return { title: '裝備戰法', html: '<div class="cpwarn">非卡包人員不能裝備戰法(先收入卡包)</div>' };
+  if (!e || f.list !== 'roster') return { title: '裝備戰法', html: '<div class="cpwarn">非武將人員不能裝備戰法(先收入武將)</div>' };
   if (slot < 0 || slot >= bnSkcSlots(e)) return { title: '裝備戰法', html: '<div class="cpwarn">此槽位目前未開放</div>' };
   owned = Object.keys(bnSkcLoad().own).filter(function (id) { return !!bnSkcTier(id); });
   owned.sort(function (a, b) { return CUC_TIER_ORD.indexOf(bnSkcTier(a)) - CUC_TIER_ORD.indexOf(bnSkcTier(b)); });
@@ -303,7 +303,7 @@ function cuInhSpare(cs, e) {
 }
 function cuPopInherit(cs, f, p) {
   var e = f.e, fig = !!e.fig, spf = cuInhSpare(cs, e), st = cuInhState(cs, spf || f), list = bnSkcInheritList(e), tiers = {}, fresh, frag, sum, h = '';
-  h += '<div class="cpl">傳承後此卡離開卡包(' + (fig ? '名人轉流浪,可花 ' + CARD_RECALL_COST + ' 碎片請回' : '路人消失') + '),' + (fig ? '此人的傳承戰法永久解鎖' : '以下戰法永久解鎖') + '。同一戰法有同時裝備人數上限(見傳承頁『使用 n/上限』)。</div>';
+  h += '<div class="cpl">傳承後此卡離開武將(' + (fig ? '名人轉流浪,可花 ' + CARD_RECALL_COST + ' 碎片請回' : '路人消失') + '),' + (fig ? '此人的傳承戰法永久解鎖' : '以下戰法永久解鎖') + '。同一戰法有同時裝備人數上限(見傳承頁『使用 n/上限』)。</div>';
   list.forEach(function (x) {
     var recs = cuRecommend(cs, x.id, e, 3), rh = '';
     recs.forEach(function (r) {

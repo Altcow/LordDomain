@@ -1,6 +1,6 @@
 // js/ld_team.js — 新介面骨架:整隊頁(設計_介面骨架實作計畫.md §3-6、任務卡 3)。前綴 ldTeam / LDTEAM。登錄頁 id 'team'。
 // ctx = { n:隊伍序號(1~), mode:'edit'|'battle', stg:戰鬥設定(battle 時帶入 bnUiStartWith), title }。mode:'battle' 金鈕「開始戰鬥」,'edit' 金鈕「訓練場」(stg = 練兵)。
-// 站位:前鋒 row 0、中衛 row 1、主將 row 2(主將);每次變更立即存回第 n 隊預設(bnTeamPresetSet)。卡片來源 = 卡包名冊(bnUiRosterList)。
+// 站位:前鋒 row 0、中衛 row 1、主將 row 2(主將);每次變更立即存回第 n 隊預設(bnTeamPresetSet)。卡片來源 = 武將名冊(bnUiRosterList)。
 // 開戰:存檔 → bnUiStartWith(slots, stg)。bnui 的 stg.onEnd 在「開打當下」就會呼叫(引擎先算到底再播戲台),所以本頁自己輪詢:結算畫面按「離開」(bnui 進入副本地圖 / 入口 / 布陣畫面)
 // 就立刻關掉戰鬥層(bnUiLeave),回到本頁並重畫。戰鬥層開著時 ld_nav 不搶 Esc / 返回鍵。
 // 依賴:ld_nav.js ld_art.js bnui.js bnteam.js bn_units.js codex.js(cxRecommend);cards.js(cardsUseBlock)、fame.js、bn_text.js 可缺。ES2017;不用 ?. ??。
@@ -148,6 +148,58 @@ function ldTeamPortrait(e) {
   return '<span class="ldt-pt">' + (h || '<b>' + ldTeamEsc(Array.from(String(e.name))[0] || '?') + '</b>') + '</span>';
 }
 function ldTeamAptOf(e, tr) { try { return bnAptOf(e).apt[tr] || 'C'; } catch (er) { return 'C'; } }
+// ───────── 補兵(2026-11-18):每位武將一條兵力拉條 + 可輸入的數字,按〔確認〕才扣預備兵;〔一鍵補兵〕補到滿(規則見 js/rsv_heal.js) ─────────
+function ldTeamHealCtx(st) {
+  var c = null, rows, reserve;
+  if (st.n < 1 || st.mode !== 'edit' || typeof rsvHealRow !== 'function' || typeof rsvGet !== 'function') return null;
+  try { c = typeof wmapGoUiCtx === 'function' ? wmapGoUiCtx() : ((typeof WDUI !== 'undefined' && WDUI.W && WDUI.cs) ? { W: WDUI.W, cs: WDUI.cs } : null); } catch (e) { c = null; }
+  if (!c || !c.W || !c.cs) return null;
+  rows = st.slots.slice().sort(function (a, b) { return b.row - a.row; }).map(function (s) { return rsvHealRow(c.W, c.cs, s.id); });
+  try { if (typeof rsvSettle === 'function') rsvSettle(Date.now()); reserve = rsvGet().n; } catch (e2) { reserve = 0; }
+  return { W: c.W, cs: c.cs, rows: rows, reserve: reserve };
+}
+function ldTeamHealRowOf(st, id) { var i, r = st.hc ? st.hc.rows : []; for (i = 0; i < r.length; i++) if (r[i].id === id) return r[i]; return null; }
+function ldTeamHealHtml(st, id) {
+  var row = ldTeamHealRowOf(st, id), v;
+  if (!row) return '';
+  v = st.heal && st.heal[id] !== undefined ? st.heal[id] : row.cur;
+  return '<div class="ldt-heal' + (row.locked ? ' lk' : '') + '"><input type="number" class="ldt-hn" inputmode="numeric" data-heal-n="' + ldTeamEsc(id) + '" min="' + row.cur + '" max="' + row.full + '" value="' + v + '" aria-label="兵力"' + (row.locked ? ' disabled' : '') + '>' +
+    '<input type="range" class="ldt-hr" data-heal-r="' + ldTeamEsc(id) + '" min="' + row.cur + '" max="' + row.full + '" step="10" value="' + v + '" aria-label="兵力拉條"' + (row.locked ? ' disabled' : '') + '></div>';
+}
+function ldTeamHealSync(st) {
+  var el = st.el, left;
+  if (!el || !el.querySelectorAll || !st.hc) return;
+  (st.hc.rows || []).forEach(function (r) {
+    var v = st.heal && st.heal[r.id] !== undefined ? st.heal[r.id] : r.cur, a = el.querySelector('[data-heal-n="' + r.id + '"]'), b = el.querySelector('[data-heal-r="' + r.id + '"]');
+    if (a && String(a.value) !== String(v)) a.value = v;
+    if (b && String(b.value) !== String(v)) b.value = v;
+  });
+  ldTeamFillRes(st);
+}
+function ldTeamHealInput(ev) {
+  var st = LDTEAM.st, t = ev && ev.target, id, c;
+  if (!st || !st.hc || !t || !t.getAttribute) return;
+  id = t.getAttribute('data-heal-n') || t.getAttribute('data-heal-r');
+  if (!id) return;
+  if (ev.type === 'input' && t.getAttribute('data-heal-n')) return;   // 數字框打字中不動,離開 / 按 Enter(change)才夾
+  st.heal = st.heal || {};
+  c = rsvHealClamp(st.hc.rows, st.hc.reserve, st.heal, id, t.value);
+  st.heal[id] = c.v;
+  if (c.capped) ldTeamToast('預備兵不足,這位最多再補 ' + (c.v - ldTeamHealRowOf(st, id).cur));
+  ldTeamHealSync(st);
+}
+function ldTeamHealDo(st, all) {
+  var plan, r, now = Date.now(), adds;
+  if (!st.hc) return false;
+  if (all) { plan = rsvHealAllPlan(st.hc.rows, st.hc.reserve); adds = plan.adds; }
+  else { adds = []; st.hc.rows.forEach(function (x) { var t = st.heal && st.heal[x.id] !== undefined ? st.heal[x.id] : x.cur; if (t > x.cur) adds.push({ id: x.id, add: t - x.cur }); }); }
+  if (!adds.length) { ldTeamToast(all ? (st.hc.reserve <= 0 ? '預備兵是 0' : '已經滿兵') : '沒有要補的兵'); return false; }
+  r = rsvHealApply(st.hc.W, st.hc.cs, adds, now);
+  st.heal = {};
+  ldTeamToast(r.n ? '補兵 ' + r.used + '(預備兵剩 ' + rsvGet().n + ')' : '補兵失敗');
+  ldTeamRender(st.el, st);
+  return r.n > 0;
+}
 function ldTeamSlotHtml(st, row, last) {
   var s = null, e = null, tr = '', i, h, sel = st.sel === row, blk = '';
   for (i = 0; i < st.slots.length; i++) if (st.slots[i].row === row) s = st.slots[i];
@@ -160,6 +212,7 @@ function ldTeamSlotHtml(st, row, last) {
       '<span class="ldt-gr">' + (LDTEAM.grTxt[e.gr | 0] || '') + '</span><span class="ldt-tr' + (ldTeamAptOf(e, tr) === 'C' ? ' bad' : '') + '">' + ldTeamEsc(tr) + ldTeamAptOf(e, tr) + '</span>' +
       (blk ? '<span class="ldt-busy">' + ldTeamEsc(blk) + '</span>' : '') +
       '<span class="ldt-nm">' + ldTeamEsc(e.name) + '</span><span class="ldt-pw">戰力 ' + ldTeamPower(st, e, tr, row) + '</span></button>';
+    if (st.hc) h += ldTeamHealHtml(st, s.id);
     if (sel) h += '<div class="ldt-sact">' + (last ? '' : '<button data-ldt="detail" data-id="' + ldTeamEsc(e.id) + '">詳情</button>') + '<button data-ldt="move" data-r="' + row + '">' + (st.carry ? '取消' : '移動') + '</button><button data-ldt="drop" data-id="' + ldTeamEsc(e.id) + '">下陣</button></div>';
   } else {
     h += '<button class="ldt-cell em" data-ldt="cell" data-r="' + row + '" aria-label="' + ldTeamEsc(LDTEAM.rowTxt[row]) + ' 空位"><span class="ldt-add">＋</span><span class="ldt-emt">空位</span></button>';
@@ -211,10 +264,12 @@ function ldTeamTipsHtml() {
 function ldTeamHtml(st) {
   var list = ldTeamRoster(st), last = !!st.ctx.last, sx = ldTeamStats(st), h, i, carryE = st.carry ? ldTeamEntry(st.carry.id) : null, goTxt = st.mode === 'battle' ? '開始戰鬥' : '訓練場', um = ldTeamUsedMap(st, st.n), adv = ldTeamAdvice(st), cost = ldTeamCostSum(st.slots), cap = ldTeamCap();
   st.total = sx.total;
+  st.hc = ldTeamHealCtx(st);
+  if (st.hc && st.heal) { var hid = {}; st.hc.rows.forEach(function (x) { hid[x.id] = 1; }); Object.keys(st.heal).forEach(function (k) { if (!hid[k]) delete st.heal[k]; }); }
   h = '<div class="ldt ldt-' + st.mode + '">' + ldTeamTabsHtml(st) + '<div class="ldt-slots">' + [0, 1, 2].map(function (r) { return ldTeamSlotHtml(st, r, last); }).join('') + '</div>' +
     '<div class="ldt-tools"><button data-ldt="sort">' + LDTEAM.sortTxt[st.sort] + ' ▾</button><button data-ldt="troop">兵種 ' + (st.troop || '全') + '</button><button data-ldt="fac">陣營 ' + (st.fac === '' ? '全' : ldTeamEsc(ldTeamFacName(+st.fac))) + '</button>' + (typeof LDTIPS_PAGE !== 'undefined' ? '<button data-ldt="tips">布陣要訣</button>' : '') + '</div>' +
     '<div class="ldt-cards" data-drop="cards">' + (list.length ? list.map(function (x) { return ldTeamCardHtml(st, x, um); }).join('') : '<p class="ldt-none">沒有符合的武將</p>') + '</div>' +
-    '<div class="ldt-acts"><button class="ldt-rec" data-ldt="rec">推薦戰隊</button><button class="ldt-go" data-ldt="go">' + goTxt + '</button></div>' +
+    '<div class="ldt-acts"><button class="ldt-rec" data-ldt="rec">推薦戰隊</button>' + (st.hc ? '<button class="ldt-hb" data-ldt="heal-all">一鍵補兵</button><button class="ldt-hb ok" data-ldt="heal-ok">確認</button>' : '') + '<button class="ldt-go" data-ldt="go">' + goTxt + '</button></div>' +
     '<div class="ldt-ib">' + (st.n === 0 ? '<div class="ldt-rn">代表隊伍:擂台與活動用(可與其他隊重複用同一武將)</div>' : '') + (adv ? '<div class="ldt-tip ' + adv.color + '" data-code="' + adv.code + '">' + ldTeamEsc(adv.text) + '</div>' : '') + '<div class="ldt-info">' + (carryE ? '移動「' + ldTeamEsc(carryE.name) + '」:點目標位置(可先切到別隊)' : '戰力 <b>' + sx.total + '</b><i>·</i>羈絆 <b>' + sx.bonds + '</b><i>·</i>相剋 ' + (sx.prey ? '<em class="u">▲' + sx.up + '</em> <em class="d">▼' + sx.down + '</em>' : '<em>—</em>') + (cap ? '<i>·</i>統御 <b class="' + (cost > cap ? 'over' : '') + '">' + cost + '</b>/' + cap : '')) + '</div></div>' + (st.skr ? ldTeamSkrHtml(st) : '') + (st.tipsOpen ? ldTeamTipsHtml() : '') + '</div>';
   st.flash = null;
   return h;
@@ -238,6 +293,10 @@ function ldTeamFillRes(st) {   // 右上資源(戰力)隨變動更新(不重畫�
   if (typeof document === 'undefined') return;
   p = document.createElement('span'); p.className = 'ld-pill gold ldp-pill'; p.textContent = '戰力 ' + st.total;
   r.appendChild(p);
+  if (st.hc) {   // 補兵:預備兵剩餘(扣掉目前拉條已選的量)
+    p = document.createElement('span'); p.className = 'ld-pill gold ldp-pill'; p.textContent = '預備兵 ' + Math.max(0, st.hc.reserve - rsvHealUsed(st.hc.rows, st.heal || {}));
+    r.appendChild(p);
+  }
 }
 
 // ───────── 操作 ─────────
@@ -248,7 +307,7 @@ function ldTeamRecommend(st) {
   if (typeof cxRecommend !== 'function') { ldTeamToast('推薦功能尚未載入'); return false; }
   um = ldTeamUsedMap(st, st.n);
   r = cxRecommend({ skip: function (e) { return !!um[ldTeamKeyOf(e.id)]; }, cap: ldTeamCap() > 0 ? ldTeamCap() : undefined, withSkills: true });   // 已在其他隊的武將不推薦;統御不超過上限
-  if (!r || !r.slots || !r.slots.length) { ldTeamToast((r && r.reasons && r.reasons[0]) || '卡包還沒有可上陣的人'); return false; }
+  if (!r || !r.slots || !r.slots.length) { ldTeamToast((r && r.reasons && r.reasons[0]) || '武將還沒有可上陣的人'); return false; }
   bz = (typeof bnUiTeamBusy === 'function') ? bnUiTeamBusy(r.slots) : { keep: r.slots, busy: [] };
   keep = bz.keep;
   if (!keep.length) { ldTeamToast('推薦的武將都在使用中'); return false; }
@@ -318,7 +377,7 @@ function ldTeamCheckStart(st) {
   if (!st.slots.length) return '請先放入至少 1 人';
   for (i = 0; i < st.slots.length; i++) {
     e = ldTeamEntry(st.slots[i].id);
-    if (!e) return '有武將已不在卡包,請重新整隊';
+    if (!e) return '有武將已不在名冊,請重新整隊';
     why = ldTeamBlockOf(e.id);
     if (why) return e.name + '(' + why + '),請先下陣';
   }
@@ -497,6 +556,7 @@ function ldTeamDoDrop(st, src, dst) {
 }
 // 切到第 n 隊(同一頁內換隊;保留排序 / 篩選 / 移動中的人)。回新狀態
 function ldTeamSwitch(n) {
+  if (LDTEAM.st) LDTEAM.st.heal = {};
   var st = LDTEAM.st, ctx, el, nst, cap;
   if (!st) return null;
   n = n | 0; cap = (typeof bnTeamN === 'function') ? bnTeamN() : 1;
@@ -711,6 +771,8 @@ function ldTeamOnClick(ev) {
   else if (a === 'skapply') ldTeamSkrApply(st);
   else if (a === 'skno') { st.skr = null; ldTeamRender(st.el, st); }
   else if (a === 'skgo') { if (typeof ldNavPush === 'function') ldNavPush('skill', { id: id }); }
+  else if (a === 'heal-all') ldTeamHealDo(st, true);
+  else if (a === 'heal-ok') ldTeamHealDo(st, false);
   else if (a === 'go') ldTeamGo(st);
 }
 
@@ -730,6 +792,7 @@ ldNavRegister({
     st.el = el;
     if (!el.__ldtBound) {
       el.__ldtBound = 1; el.addEventListener('click', ldTeamOnClick);
+      el.addEventListener('input', ldTeamHealInput); el.addEventListener('change', ldTeamHealInput);
       el.addEventListener('pointerdown', ldTeamPDown);
       el.addEventListener('contextmenu', function (ev) { if (ev.target && ev.target.closest && ev.target.closest('.ldt-cell, .ldt-card') && ev.preventDefault) ev.preventDefault(); });   // 觸控長按不要跳選單
       el.addEventListener('dragstart', function (ev) { if (ev.preventDefault) ev.preventDefault(); });   // 擋掉瀏覽器內建的圖片拖放(改用 Pointer Events)

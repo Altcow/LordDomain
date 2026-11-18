@@ -1,5 +1,5 @@
 // js/cards_starter.js — 補償與新手期(純資料邏輯,不寫 DOM;數值在 carddata.js CARD_GIFT / CARD_STARTER)。介面在 js/cardsui_starter.js、js/cardsui_draw.js。
-// 2026-11-11(v59):新手禮包『領取』流程與禮包批次(cur.G、三批開批)已刪除。v60 起禮包為道具『新手禮包』(items.js),需到卡包的道具頁籤點『使用』才入大池(CARD_GIFT.pulls 抽,E 池,不受上限截斷)。
+// 2026-11-11(v59):新手禮包『領取』流程與禮包批次(cur.G、三批開批)已刪除。v60 起禮包為道具『新手禮包』(items.js),需到武將的道具頁籤點『使用』才入大池(CARD_GIFT.pulls 抽,E 池,不受上限截斷)。
 //   抽到的卡與抽卡一樣入冊(cardsBagCommit);禮包使用只加次數,不動保底計數。
 // 存檔:cs.gift200 = 禮包版本字串(與道具鍵的 gv 同步,發放以道具鍵為準,見 items.js itemGiftGrant);cs.starter = { done 0/1, at 開局時間, nb {n 新手期已抽張數, p 距上次紫以上張數, g 距上次金張數} }。
 //   已停用欄位:gift200Msg(舊版待顯示的補償 toast,已無寫入端;讀入仍保留,不影響功能)。
@@ -13,7 +13,7 @@ function cardsStarterNorm(v) {
   return o;
 }
 // 新手禮包(道具化,v60):cs.gift200 ≠ CARD_GIFT.ver → itemGiftGrant(ver)(js/items.js)在道具鍵同一次寫入內發『新手禮包』、記發放版本 gv、設進遊戲提示;再同步 cs.gift200 與新手期。
-// 發放以道具鍵的 gv 為準:道具已寫入但卡片存檔未落盤(重開)時不會重發,只補同步 cs 旗標。不直接加抽數;玩家在卡包的道具頁籤點『使用』才入大池(items.js itemUse 讀 CARD_GIFT.pulls)。道具系統未載入時不發、不設旗標。
+// 發放以道具鍵的 gv 為準:道具已寫入但卡片存檔未落盤(重開)時不會重發,只補同步 cs 旗標。不直接加抽數;玩家在武將的道具頁籤點『使用』才入大池(items.js itemUse 讀 CARD_GIFT.pulls)。道具系統未載入時不發、不設旗標。
 // 新開世界 / 重啟(沒有卡、沒有開過卡)才重開新手期計數;已在玩的帳號保留既有新手期計數。回 1 = 本次發了禮包,0 = 已發過 / 未發。
 function cardsGiftCheck(cs) {
   var G = CARD_GIFT, fresh, got;

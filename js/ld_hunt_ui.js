@@ -100,7 +100,7 @@ function huntClick(ctx, ev) {
   }
   if (a === 'ex') {
     r = studyExchange(ctx.fac || 'wei', v, cs, Date.now());
-    if (!r.ok) eqToast(r.reason === 'full' ? '名冊已滿,請先熔鍊或遣散' : (r.reason === 'used' ? '這位名人本季已兌換過' : (r.reason === 'clue' ? '線索不足(需 ' + r.need + ')' : '無法兌換')));
+    if (!r.ok) eqToast(r.reason === 'full' ? '名冊已滿,請先分解或遣散' : (r.reason === 'used' ? '這位名人本季已兌換過' : (r.reason === 'clue' ? '線索不足(需 ' + r.need + ')' : '無法兌換')));
     else eqToast('兌換成功:' + (r.card && r.card.c ? r.card.c.name : '') + ' 加入名冊');
     huntRender(ctx.hEl, ctx);
     return true;

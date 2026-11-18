@@ -1,5 +1,5 @@
-// js/items_ui.js — 道具頁籤(卡包分頁 R 頂部『卡片 | 道具』的『道具』子頁;最小版,沿用現有卡包分頁,不做新外殼)。
-// 格子 6 欄、最少 24 格(空格虛線);有紅點的格子(禮包持有中一律紅點,直到使用;其他未查看)、『道具』子頁鈕、卡包分頁標題右上紅點;點格子彈出置中小選單(道具名 / 說明 / 『使用』『詳情』『取消』),點『使用』才執行 itemUse,結果 toast。
+// js/items_ui.js — 道具頁籤(武將分頁 R 頂部『卡片 | 道具』的『道具』子頁;最小版,沿用現有武將分頁,不做新外殼)。
+// 格子 6 欄、最少 24 格(空格虛線);有紅點的格子(禮包持有中一律紅點,直到使用;其他未查看)、『道具』子頁鈕、武將分頁標題右上紅點;點格子彈出置中小選單(道具名 / 說明 / 『使用』『詳情』『取消』),點『使用』才執行 itemUse,結果 toast。
 // 側欄『卡片』鈕紅點與進遊戲一次性的新禮包提示 toast:itemsSyncDots()(ui.js syncSideBar 每次同步呼叫)。
 // 狀態 IU:sub 'card' / 'item'、pick 選單中的道具 id、det 選單是否顯示詳情。cardsui_roster.js 的 cuRosterPageHtml / cuRosterClick 掛點;點擊動作 cuItemsClick(由 cuRosterClick 先呼叫)。
 // 紅點一律用行內樣式(不依賴 CSS 注入時機)。ES2017;不用 ?. ??。
@@ -66,7 +66,7 @@ function itemsPopHtml() {
   return '<div class="iuov" data-a="iclose"><div class="iubox" data-a="inone"><h4 style="color:' + cuEsc(d.color) + '">' + cuEsc(d.name) + '</h4>' + body +
     '<div class="iubtns">' + use + '<button class="cub" data-a="idet" data-id="' + cuEsc(d.id) + '">' + (IU.det ? '說明' : '詳情') + '</button><button class="cub" data-a="iclose">取消</button></div></div></div>';
 }
-// 卡包頁的道具動作(cuRosterClick 先呼叫;不認得回 false)
+// 武將頁的道具動作(cuRosterClick 先呼叫;不認得回 false)
 function cuItemsClick(a, b, cs) {
   var id = b.getAttribute('data-id'), r;
   if (a === 'isub') { IU.sub = b.getAttribute('data-v') === 'item' ? 'item' : 'card'; IU.pick = null; IU.det = false; return true; }
@@ -91,7 +91,7 @@ function cuItemsClick(a, b, cs) {
 function itemsSyncDots() {
   var side, btn;
   if (typeof document === 'undefined' || !document.getElementById) return;
-  if (itemsNoticeTake() && typeof showToast === 'function') showToast('已收到新手禮包,到卡包的道具頁籤使用');
+  if (itemsNoticeTake() && typeof showToast === 'function') showToast('已收到新手禮包,到武將的道具頁籤使用');
   side = document.getElementById('sideBar');
   btn = (side && side.querySelector) ? side.querySelector('.side-btn[data-px="cards"]') : null;
   if (btn) iuMarkDot(btn, itemHasNew());

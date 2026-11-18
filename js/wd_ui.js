@@ -14,7 +14,7 @@ var WDUI_REASON = {
   frozen: '時鐘異常,暫不出發', nopt: '這個點已經不在了', cat: '這個點不能這樣用', owned: '這個點已經占領了', cleared: '山寨已討平', busy: '已經有隊伍前往這個點', army: '這隊不在城裡',
   size: '隊伍人數不對', dup: '同一張卡不能上兩隊', missing: '有人已不在名冊', samefig: '同名名人不可同隊', hurt: '有人重傷中', field: '有人外勤中', appoint: '有人委任中(內政官),先解除委任',
   garrison: '有人駐派中,先撤回駐派', rallymax: '集結最多 10 隊', notowned: '這個點還不是你的', guarded: '這個點已經有人駐守', cap: '駐守名額已滿',
-  lowtrp: '兵力不足,請到校場補兵'
+  lowtrp: '兵力不足,請到隊伍頁補兵'
 };
 var WDUI_SUBS = [['全部', ''], ['野怪', 'beast'], ['山寨', 'camp'], ['縣郡', 'county'], ['關口', 'pass']];
 
@@ -523,7 +523,7 @@ function wdUiOnClick(e) {
   if (a === 'auto') { wdUiAutoOpen(); return; }
   if (a === 'autogo') { wdUiAutoGo(); return; }
   if (a === 'rlist') { wdUiPush({ v: 'rlist' }); return; }
-  if (a === 'rsv') { if (typeof rsvSettle === 'function') rsvSettle(Date.now()); wdUiPush({ v: 'rsv' }); return; }
+  if (a === 'rsv') { if (typeof rsvSettle === 'function') rsvSettle(Date.now()); if (typeof RSVUI !== 'undefined') { RSVUI.n = 0; RSVUI.tab = 'rec'; } wdUiPush({ v: 'rsv' }); return; }
   if (a === 'fame') { wdUiPush({ v: 'fame' }); return; }
   if (a === 'rpt') { wdUiPush({ v: 'rpt', id: id }); return; }
   if (a === 'replay') { wdUiReplay(+b.getAttribute('data-i')); return; }
