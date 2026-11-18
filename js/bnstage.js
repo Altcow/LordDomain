@@ -821,6 +821,40 @@ function bnstUltCut(S, u, an, name, id) {
   });
   return st[hit - 1];
 }
+// 無畫格近戰衝刺 / 回跑的程式動感(集中常數,日後調這裡):bob = 上下彈跳 px、per = 一次彈跳週期 ms(1× 基準)、lean = 前傾度數、sq = 壓扁拉長幅度(0.06 = ±6%)、
+//   dust = 腳下灰塵每次落地一團(0 = 關)、lines = 速度線(true / false)。walk = 步行(槍 / 盾 / 刀),ride = 騎乘(troop 騎)略大且顛簸。3× 簡化模式(BNST.simple)全部不套。
+var BNST_RUSH = { walk: { bob: 5, per: 110, lean: 4, sq: 0.06, dust: 1, lines: true }, ride: { bob: 7, per: 130, lean: 3, sq: 0.08, dust: 1, lines: true } };
+// 逐格跑步格預留:BNST_RUN = { <fig>: { n: 6 } } 登記後(檔 assets/fullbody/anim/<fig>_r1..r6.webp)應優先播逐格並略過程式動感;目前沒有登記、尚未實作逐格播放,登記者暫退回程式動感
+var BNST_RUN = {};
+function bnstRunOf(fig) { return fig && Object.prototype.hasOwnProperty.call(BNST_RUN, fig) ? BNST_RUN[fig] : null; }
+// 套 / 卸程式動感:goRight = 這段是否往右移動(決定前傾方向與速度線在哪一側)
+function bnstRushOn(S, u, goRight) {
+  var c = BNST_RUSH[u.troop === '騎' ? 'ride' : 'walk'], el = S.el;
+  el.style.setProperty('--rb', c.bob + 'px'); el.style.setProperty('--rt', bnstDur(c.per) + 'ms');
+  el.style.setProperty('--rl', (goRight ? c.lean : -c.lean) + 'deg'); el.style.setProperty('--rs', String(c.sq));
+  el.classList.toggle('rl', !goRight); el.classList.toggle('nolines', !c.lines);
+  el.classList.add('rush');
+}
+function bnstRushOff(S) { S.el.classList.remove('rush', 'rl', 'nolines'); }
+// 腳下灰塵:沿 (x0,y0)→(x1,y1) 在 ms 時間內每個彈跳週期落一團
+function bnstRushDust(S, u, x0, y0, x1, y1, ms, goRight) {
+  var c = BNST_RUSH[u.troop === '騎' ? 'ride' : 'walk'], n, i;
+  if (!(c.dust > 0)) return;
+  n = Math.max(1, Math.round(ms / c.per));
+  for (i = 0; i < n; i++) {
+    (function (k) {
+      bnstLater(k * c.per, function () {
+        var d = document.createElement('div'), p = (k + 0.5) / n;
+        d.className = 'bst-dust';
+        d.style.left = (x0 + (x1 - x0) * p) + 'px'; d.style.top = (y0 + (y1 - y0) * p) + 'px';
+        d.style.setProperty('--dd', (goRight ? -14 : 14) + 'px');
+        d.style.animationDuration = bnstDur(400) + 'ms';
+        bnstCam().appendChild(d);
+        bnstTimer(function () { if (d.parentNode) d.parentNode.removeChild(d); }, bnstDur(400) + 50);
+      });
+    })(i);
+  }
+}
 function bnstUlt(u, id, frames) {
   var S = BNST.U[u.id], an, name, t0 = 450, impact, fr, scr, pause = 0;
   if (!S) return 0;
@@ -853,13 +887,41 @@ function bnstUlt(u, id, frames) {
   }
   // 無畫格:有 fig 先播完整版演出幕(3× 非首次略過),再接 原地放大 1.3 倍 + 身後品質色光 + 戰法名牌 + 共用特效;沒 fig(一般兵)維持原樣
   scr = u.fig ? bnstScrPlanFor(u.fig, BNST.spd() || 1, !BNST.scrSeen[u.id]) : null;
-  if (scr && scr.play && bnstScrShow(S, u, id, name, scr)) { BNST.scrSeen[u.id] = 1; pause = scr.pause1x; }
+  // 無畫格近戰(非弓 / 械 / 謀略):先衝到敵方前鋒面前(重用 bnstBasic 的彈跳衝撞;騎兵較快)→ 停住凍結 → 演出幕 → 原地放大招 → 轉身跑回 → 翻回正面
+  var dash = 0, T = null, B, bid, best = 1e9, dx = 0, dy = 0, ds = 1, rush = false, cav = u.troop === '騎', hop = cav ? 90 : 120, run = cav ? 130 : 160;
+  if (!bnstIsRanged(u)) {
+    for (bid in BNST.U) { B = BNST.U[bid]; if (B.isMine !== S.isMine && !B.dead && Math.abs(B.x - S.x) < best) { best = Math.abs(B.x - S.x); T = B; } }
+    if (T) { dx = bnstDashDx(S, T); dy = bnstDashDy(S, T); ds = bnstDashSc(S, T); dash = hop + run; }
+  }
+  rush = dash > 0 && !BNST.simple;   // 程式動感:3× 簡化關閉;已登記逐格跑步格者之後走逐格(預留,見 BNST_RUN)
   function big() {
     S.el.classList.add('ult-big');
     bnstSkillPlate(S, name);
     if (!BNST.simple) bnstFx(S.x, 150, BNST_FX_RING, 140);
     bnstLater(500, function () { S.el.classList.remove('ult-big'); });
   }
+  if (dash > 0) {
+    S.actN++; bnstZUpd(S);
+    if (!BNST.simple) bnstSpot(S.x, true, S.y);
+    bnstMove(S, dx * 0.15, dy * 0.15 - 14, hop);
+    bnstLater(hop, function () { bnstMove(S, dx, dy, run, ds); });
+    if (rush) { bnstRushOn(S, u, S.isMine); bnstRushDust(S, u, S.x, S.y, S.x + dx, S.y + dy, dash, S.isMine); bnstLater(dash, function () { bnstRushOff(S); }); }
+    // 到位(dash)才播演出幕:快照拍的是已停在敵前的接觸姿勢
+    bnstLater(dash, function () {
+      if (scr && scr.play && bnstScrShow(S, u, id, name, scr)) { BNST.scrSeen[u.id] = 1; pause = scr.pause1x; }
+      if (pause > 0) bnstLater(pause, big); else big();
+      bnstLater(pause + 500, function () {   // 放完:轉身(水平翻轉)跑回原位,到位後翻回正面
+        S.el.classList.add('turn'); S.act.style.transitionTimingFunction = 'ease-out'; bnstMove(S, 0, 0, 320);
+        if (rush) { bnstRushOn(S, u, !S.isMine); bnstRushDust(S, u, S.x + dx, S.y + dy, S.x, S.y, 320, !S.isMine); }
+      });
+      bnstLater(pause + 500 + 320 + 40, function () {
+        S.el.classList.remove('turn'); bnstRushOff(S); S.act.style.transitionTimingFunction = '';
+        bnstSpot(S.x, false); S.actN = Math.max(0, S.actN - 1); bnstZUpd(S);
+      });
+    });
+    return dash + (scr && scr.play ? scr.pause1x : 0) + 500;
+  }
+  if (scr && scr.play && bnstScrShow(S, u, id, name, scr)) { BNST.scrSeen[u.id] = 1; pause = scr.pause1x; }
   if (pause > 0) bnstLater(pause, big); else big();
   return pause + 500;
 }
@@ -902,7 +964,7 @@ function bnstSetState(hp, dead, rows) {
     if (h === undefined) h = R.mx;
     bnstSetBar(R, Math.max(0, Math.round(h || 0)));
     R.el.classList.toggle('dead', d);
-    R.dead = d; R.actN = 0; R.hitN = 0;
+    R.dead = d; R.actN = 0; R.hitN = 0; R.el.classList.remove('turn', 'rush', 'rl', 'nolines');
     if (rows && rows[id] !== undefined && (rows[id] | 0) !== R.row) bnstPlace(R, rows[id], 0); else bnstZUpd(R);
   }
 }

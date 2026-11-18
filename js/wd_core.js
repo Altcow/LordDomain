@@ -8,6 +8,7 @@
 //             foeHp:[[3 個單位 hpR]…], foeT(城池傷勢回血基準時刻;0 = 不回血), cl(山寨已討平), rs(山寨補新時刻)},
 //   trips[]  行程 {id, team, name, pt, t0, tArrive, tHome, st:'go'|'back', rally, slots:[{id,row,col,troop}], auto, mins}
 //   rallies[] 集結(行進中) {id, pt, order:[隊號…], t0, tArrive}
+//   chains[] 領地連戰(逐場推進;抵達後一場一場打,場間 WD_LANDFOE.gapMs;見 wdChainStart / wdChainStep / wdChainRetreat) {id, pt, rid(集結 id), t0, next(下一場時刻), q:[隊號…](第 1 個 = 目前上陣隊), k(已打場數), ties, tie:null|{k, until, a, a2, d}, rows[], dmgBy{}, lastTeam, anyWipe};cc = 連戰序號
 //   hurt{卡id:到期ms}、trp{卡id:{r:兵力比例 0~1, t:基準時刻}}、harv{糧,生鐵,獸皮,木炭,礪石}(駐守產出,已結算未收成;舊存檔的 木 / 鐵 / 石 鍵讀入時丟棄)、rp[](戰報,新→舊,最多 rpMax)、rc[]({i:recIdx, rec},最多 rcMax)、nw(未讀回城 / 到期數)。
 // 時間一律絕對 ms;wdAdvance(W, cs, now) 依時間順序處理事件;now < W.now(時鐘倒退)→ 凍結不動(仿 wmAdvance)。
 // 卡片占用:出發 cardsUseSet(e,'field','wd:'+tripId)、駐守 cardsUseSet(e,'garrison','wd:'+ptId);回城 / 到期解除。
@@ -62,6 +63,7 @@ function wdGenPt(W, cat, o) {
   else { fl = WD_CFG.fixedLv[cat]; lv = fl[0] + Math.floor(r1 * (fl[1] - fl[0] + 1)); ty = WD_NAMES[cat][(o.idx | 0) % WD_NAMES[cat].length]; nf = WD_CFG.fixedTeams[cat]; }
   if (o.lv) lv = o.lv;
   if (o.ty) ty = o.ty;
+  if (cat === 'res' && !o.nf && typeof WD_LANDFOE !== 'undefined') nf = wdLandTeams(lv);   // 領地守軍隊數:Lv1~6 = 1、Lv7~9 = 2、Lv10 = 3
   if (o.nf) nf = o.nf;
   return {
     id: WD_PFX[cat] + n, cat: cat, ty: ty, lv: lv, mins: wdMinsOf(lv, rng()), nf: nf, fs: Math.floor(rng() * 1e9), act: !!o.act,
@@ -69,7 +71,7 @@ function wdGenPt(W, cat, o) {
   };
 }
 function wdNew(seed, now) {
-  var W = { v: 2, seed: seed >>> 0, now: now, sd: 0, rn: 0, pc: 0, tc: 0, kc: 0, nr: wdNextRefresh(now), nb: now + WD_CFG.beastEvery, pts: [], trips: [], rallies: [], hurt: {}, trp: {}, harv: wdHarvZero(), rp: [], rc: [], nw: 0, rsv: [], rsvLog: [], hs: 0 }, i;   // rsv / rsvLog / hs:預約、預約結果、寶地碎片(js/ld_open_wd.js)
+  var W = { v: 2, seed: seed >>> 0, now: now, sd: 0, rn: 0, pc: 0, tc: 0, kc: 0, nr: wdNextRefresh(now), nb: now + WD_CFG.beastEvery, pts: [], trips: [], rallies: [], hurt: {}, trp: {}, harv: wdHarvZero(), rp: [], rc: [], nw: 0, rsv: [], rsvLog: [], hs: 0, chains: [], cc: 0 }, i;   // rsv / rsvLog / hs:預約、預約結果、寶地碎片(js/ld_open_wd.js)
   for (i = 0; i < WD_CFG.resCount; i++) W.pts.push(wdGenPt(W, 'res'));
   W.pts.push(wdGenPt(W, 'beast'));
   for (i = 0; i < WD_CFG.campCount; i++) W.pts.push(wdGenPt(W, 'camp'));
@@ -204,24 +206,116 @@ function wdFameAdd(kind, lv) {
 
 // ───────── 守軍(確定性:同 seed + 點 id 得同守軍)─────────
 function wdFoeTeam(W, pt, j) {
-  var key = W.seed + '|' + pt.id + '|' + pt.cat + '|' + pt.fs + '|' + pt.lv + '|' + j, m, ch, pool, rng, ents = [], k, st, v, team, mul, hit = WD_FOE_CACHE[key];
+  var key = W.seed + '|' + pt.id + '|' + pt.cat + '|' + pt.fs + '|' + pt.lv + '|' + j + '|L2', m, ch, pool, rng, ents = [], k, st, v, team, mul, sp, lfs, hit = WD_FOE_CACHE[key];   // 'L2' = 領地守軍 / 野怪新編制版本字(快取換版)
   if (hit) return hit;
   m = WD_CFG.lvMap[Math.max(1, Math.min(WD_CFG.lvMap.length - 1, pt.lv))];
   ch = bnStgChapter(m[0]);
-  pool = ch.roster.filter(function (x) { return !(x && x.fig); });
-  rng = bnRng(bnHash('wdf', W.seed, pt.id, pt.fs, j));
-  for (k = 0; k < 3 && pool.length; k++) ents.push(pool[Math.floor(rng() * pool.length)]);
-  st = { id: 'WD:' + pt.id + ':' + j, order: m[1], boss: !!WD_CFG.strong[pt.cat], idx: WD_CFG.strong[pt.cat] ? BN_STG.extraFrom : 0 };
-  v = bnStgV(st) * (WD_CFG.foeMul[pt.cat] || 1) * (pt.tr && typeof EV_CFG !== 'undefined' ? EV_CFG.treasureFoeMul : 1) * (pt.tut && typeof EV_CFG !== 'undefined' ? EV_CFG.tutFoeMul : 1);   // 寶地守軍 × 1.2、新手寨 × 0.3(js/ld_open_data.js)
-  team = bnStgBuildTeam(ents, v, ch, st, st.id);
+  if (pt.cat === 'res' && typeof WD_LANDFOE !== 'undefined') hit = wdLandFoeTeam(W, pt, j);   // 資源領地:多隊 + 戰法成長 + 名將
+  else {
+    if (pt.cat === 'yg' && typeof wmapMobFoeSpec === 'function') sp = wmapMobFoeSpec(pt);   // 野怪四類(wmap_mob.js):固定編制 + 固定戰法
+    if (sp) {
+      st = { id: 'WD:' + pt.id + ':' + j, order: m[1], boss: false, idx: 0 };
+      team = bnStgBuildTeam(sp.ents, sp.v, sp.ch, st, st.id, sp.lfs);
+    } else {
+      pool = ch.roster.filter(function (x) { return !(x && x.fig); });
+      rng = bnRng(bnHash('wdf', W.seed, pt.id, pt.fs, j));
+      for (k = 0; k < 3 && pool.length; k++) ents.push(pool[Math.floor(rng() * pool.length)]);
+      st = { id: 'WD:' + pt.id + ':' + j, order: m[1], boss: !!WD_CFG.strong[pt.cat], idx: WD_CFG.strong[pt.cat] ? BN_STG.extraFrom : 0 };
+      v = bnStgV(st) * (WD_CFG.foeMul[pt.cat] || 1) * (pt.tr && typeof EV_CFG !== 'undefined' ? EV_CFG.treasureFoeMul : 1) * (pt.tut && typeof EV_CFG !== 'undefined' ? EV_CFG.tutFoeMul : 1);   // 寶地守軍 × 1.2、新手寨 × 0.3(js/ld_open_data.js)
+      team = bnStgBuildTeam(ents, v, ch, st, st.id);
+    }
+  }
   if (pt.cat === 'beast') {   // 野怪厚血:守軍單位 HP × 倍率
     mul = WD_CFG.beastHpMul[Math.max(1, Math.min(WD_CFG.beastHpMul.length - 1, pt.lv))] || 1;
     team.units.forEach(function (u) { u.stats.hp = Math.round(u.stats.hp * mul); });
   }
   if (WD_FOE_N > 400) { WD_FOE_CACHE = {}; WD_FOE_N = 0; }
-  WD_FOE_CACHE[key] = { units: team.units, power: team.power };
+  WD_FOE_CACHE[key] = hit || { units: team.units, power: team.power };
   WD_FOE_N++;
   return WD_FOE_CACHE[key];
+}
+
+// ───────── 領地守軍編制(資源領地;設計_領地守軍多隊與戰法成長_規格 1~2 節;資料表 WD_LANDFOE)─────────
+function wdLandTeams(lv) { var T = WD_LANDFOE.teams; return T[Math.max(1, Math.min(T.length - 1, lv | 0))] || 1; }
+function wdLandMul(lv) { var a = (typeof BN_SKLV !== 'undefined' && BN_SKLV && BN_SKLV.mul) ? BN_SKLV.mul : WD_LANDFOE.slMul; return (a && a[lv]) || 1; }
+function wdLandV(lv, st) {   // 基準 v:vSrc 'grid' = GRID_CFG.foeV[lv-1](沒有 wd_grid_data.js 退回舊口徑 bnStgV)
+  var g = typeof GRID_CFG !== 'undefined' && GRID_CFG && GRID_CFG.foeV;
+  if (WD_LANDFOE.vSrc === 'grid' && g) return g[Math.max(1, Math.min(g.length, lv)) - 1];
+  return bnStgV(st);
+}
+function wdLandSlot(lv, pos, j) {   // pos 0 主將 / 1 中衛 / 2 前鋒;回 {ult:'g'|'A'|'S', picks:['S'|'A'|'B'…]}
+  var row = WD_LANDFOE.sk[lv] || WD_LANDFOE.sk[1], txt = pos === 2 ? row[0] : (pos === 1 ? row[1] : (j === 0 || !row[3] ? row[2] : row[3])), a = String(txt).split('/');
+  return { ult: a[0] || 'g', picks: (a[1] || 'B').split('+') };
+}
+// 一塊領地全部守軍的編制(確定性;快取):{teams:[{ents, lfs}], famed:[fig…], gaps:[{j, pos, need}]}
+function wdLandPlan(W, pt) {
+  var key = W.seed + '|LP|' + pt.id + '|' + pt.fs + '|' + pt.lv + '|' + pt.nf, hit = WD_FOE_CACHE[key], lv, m, ch, base, usedEnt = {}, usedFig = {}, mainTr = [], plan, jj, pos, slot, rng, rg2, ent, fame, cand, i, arch, troop, key2, pick, kf, own, lf, ents, lfs, L = WD_LANDFOE, fk, troops;
+  if (hit) return hit;
+  lv = Math.max(1, Math.min(WD_CFG.lvMap.length - 1, pt.lv | 0));
+  m = WD_CFG.lvMap[lv]; ch = bnStgChapter(m[0]);
+  base = ch.roster.filter(function (x) { return !(x && x.fig); });
+  plan = { teams: [], famed: [], gaps: [] };
+  function archOf(e) { return BN_STG_ARCH[e[0]]; }
+  function pickBase(pos2, jj2, rng3) {
+    var filters = [], c, r;
+    function ok(e, idx) { return !usedEnt[idx]; }
+    if (pos2 === 2) filters.push(function (e) { var a = archOf(e); return a.troop === '盾' || a.troop === '槍'; });
+    else if (pos2 === 1) filters.push(function (e) { var a = archOf(e); return a.troop === '槍' || a.troop === '騎' || a.troop === '弓'; });
+    else {
+      if (lv >= 7) filters.push(function (e) { return !!archOf(e).elite; });
+      if (jj2 > 0) filters.push(function (e) { return mainTr.indexOf(archOf(e).troop) < 0; });
+    }
+    for (r = filters.length; r >= 0; r--) {   // 條件逐一放寬:全部條件 → 少一個條件 … → 任意
+      c = [];
+      base.forEach(function (e, idx) { if (ok(e, idx) && filters.slice(0, r).every(function (fn) { return fn(e); })) c.push(idx); });
+      if (pos2 === 2 && r === 1) { var hp = c.filter(function (idx) { return archOf(base[idx]).hpK; }); if (hp.length) c = hp; }   // 前鋒:有 hpK 者優先
+      if (c.length) return c[Math.floor(rng3() * c.length)];
+    }
+    usedEnt = {};   // 名冊用盡 → 重新開始(不重複只在名冊夠時成立)
+    return Math.floor(rng3() * base.length);
+  }
+  for (jj = 0; jj < pt.nf; jj++) {
+    ents = []; lfs = [];
+    for (pos = 0; pos < 3; pos++) {
+      slot = wdLandSlot(lv, pos, jj);
+      rng = bnRng(bnHash('wdlf', W.seed, pt.id, pt.fs, jj, pos));
+      ent = null; fame = null;
+      if (slot.ult !== 'g') {
+        troops = pos === 0 ? null : (pos === 1 ? ['槍', '騎', '弓'] : ['盾', '槍']);
+        if (pos === 0 && jj > 0) { troops = ['槍', '騎', '盾', '弓'].filter(function (x) { return mainTr.indexOf(x) < 0; }); if (!troops.length) troops = null; }   // 多隊時主將兵種互不相同(名將主將也一樣;找不到才允許重複)
+        fame = bnStgLandFame(troops, slot.ult, usedFig, rng, { soft: L.softUlt, softW: L.softW, noStrat: pos === 2 });
+        if (!fame && pos === 0 && jj > 0 && troops) fame = bnStgLandFame(null, slot.ult, usedFig, rng, { soft: L.softUlt, softW: L.softW });
+        if (fame) { usedFig[fame.fig] = 1; plan.famed.push(fame.fig); ent = { fig: fame.fig, title: L.fameTitle }; }
+        else plan.gaps.push({ j: jj, pos: pos, need: slot.ult });   // 名將不足 → 退回無名 NPC + 通用大招
+      }
+      rg2 = bnRng(bnHash('wdls', W.seed, pt.id, pt.fs, jj, pos));
+      if (ent) {
+        fk = BN_FIG_SKILLS[ent.fig]; kf = BN_KIT_BY && BN_KIT_BY.figs && BN_KIT_BY.figs[ent.fig];
+        troop = fk.troop; key2 = fk.dt === 'strat' ? '謀' : troop;
+        own = kf && kf.pool ? kf.pool.filter(function (id) { return BN_SKILLS[id] && BN_SKILLS[id].cat !== 'passive' && BN_SKILLS[id].cat !== 'ult' && id !== kf.fixed; }) : [];
+        pick = bnStgLandSkills(key2, null, ch, slot.picks, rg2, own);
+        lf = { skills: pick, ult: fk.ult, mul: wdLandMul(lv), lv: lv };
+      } else {
+        i = pickBase(pos, jj, rng); usedEnt[i] = 1; ent = base[i];
+        arch = archOf(ent); troop = arch.troop; key2 = arch.dt === 'strat' ? '謀' : troop;
+        pick = bnStgLandSkills(key2, arch, ch, slot.picks, rg2, null);
+        lf = { skills: pick, ult: arch.ult, mul: wdLandMul(lv), lv: lv };
+        if (pos === 0) mainTr.push(troop);
+      }
+      if (pos === 0 && ent.fig) mainTr.push(troop);
+      ents.push(ent); lfs.push(lf);
+    }
+    plan.teams.push({ ents: ents, lfs: lfs });
+  }
+  WD_FOE_CACHE[key] = plan;
+  return plan;
+}
+function wdLandFoeTeam(W, pt, j) {
+  var plan = wdLandPlan(W, pt), t = plan.teams[Math.min(j, plan.teams.length - 1)], lv = Math.max(1, Math.min(WD_CFG.lvMap.length - 1, pt.lv | 0)), m = WD_CFG.lvMap[lv], ch = bnStgChapter(m[0]), st, v, team;
+  st = { id: 'WD:' + pt.id + ':' + j, order: m[1], boss: false, idx: 0 };
+  v = wdLandV(lv, st) * (WD_CFG.foeMul[pt.cat] || 1) * (WD_LANDFOE.teamVK[j] || 1) * (pt.tr && typeof EV_CFG !== 'undefined' ? EV_CFG.treasureFoeMul : 1) * (pt.tut && typeof EV_CFG !== 'undefined' ? EV_CFG.tutFoeMul : 1);
+  team = bnStgBuildTeam(t.ents, v, ch, st, st.id, t.lfs);
+  return { units: team.units, power: team.power, famed: plan.famed.slice(), gaps: plan.gaps.slice() };
 }
 function wdFoeMax(foe) { return foe.units.map(function (u) { return Math.round(u.stats.hp); }); }
 function wdFoeTotalMax(W, pt) {
@@ -232,6 +326,7 @@ function wdFoeTotalMax(W, pt) {
 // 目前(隨時間回血後)的守軍血量:城池 / 關口從 foeT 起 24 小時內線性回滿;野怪 / 山寨 / 資源點不回血(失敗時已另行回滿)
 function wdFoeCur(pt, t) {
   var f = 1, rows;
+  if (pt.hk && t >= pt.hk) return wdNewFoeHp(pt.nf);   // 領地多隊失敗後的傷勢保留(hk 到期時刻)到期:回滿
   if (!pt.foeT) return pt.foeHp.map(function (r) { return r.slice(); });
   f = Math.max(0, Math.min(1, (t - pt.foeT) / WD_CFG.foeRegenMs));
   rows = pt.foeHp.map(function (r) { return r.map(function (x) { return wdR4(x + (1 - x) * f); }); });
@@ -348,11 +443,11 @@ function wdRally(W, cs, teams, ptId, now) {
   if (r.frozen) return { ok: false, reason: 'frozen', events: r.events };
   pt = wdPt(W, ptId);
   if (!pt) return { ok: false, reason: 'nopt', events: r.events };
-  if (pt.cat === 'res' || pt.cat === 'camp') return { ok: false, reason: 'cat', events: r.events };
+  if (pt.cat === 'camp' || (pt.cat === 'res' && typeof WD_LANDFOE === 'undefined')) return { ok: false, reason: 'cat', events: r.events };   // 資源領地可集結(連戰,WD_LANDFOE.rallyMax 隊)
   if (pt.owner) return { ok: false, reason: 'owned', events: r.events };
   if (wdPtBusy(W, pt.id)) return { ok: false, reason: 'busy', events: r.events };
   if (!teams || !teams.length) return { ok: false, reason: 'size', events: r.events };
-  if (teams.length > WD_CFG.rallyMax) return { ok: false, reason: 'rallymax', events: r.events };
+  if (teams.length > (pt.cat === 'res' ? WD_LANDFOE.rallyMax : WD_CFG.rallyMax)) return { ok: false, reason: 'rallymax', events: r.events };
   for (k = 0; k < teams.length; k++) {
     if (wdTeamTrip(W, teams[k].n) || teams.some(function (x, i) { return i !== k && x.n === teams[k].n; })) return { ok: false, reason: 'army', events: r.events };
     chk = wdCheckSlots(W, cs, teams[k].slots, now, used);
@@ -387,7 +482,7 @@ function wdRunFight(mine, foe, row, seed) {
   for (k = 0; k < newRow.length; k++) dmg += (row[k] - newRow[k]) * mx[k];   // 淨傷害(守軍的治療已抵銷),各場加總才會等於總血量減剩餘
   dmg = Math.max(0, dmg);
   wiped = S.result.deadA >= mine.units.length && S.result.winner !== 'A';
-  return { win: S.result.winner === 'A', wiped: wiped, rounds: S.result.rounds, newRow: newRow, dmgAbs: dmg, rec: rec };
+  return { win: S.result.winner === 'A', draw: S.result.winner === 'draw', wiped: wiped, rounds: S.result.rounds, newRow: newRow, dmgAbs: dmg, rec: rec };
 }
 function wdRecAdd(W, rec) {
   W.sd++;
@@ -498,14 +593,20 @@ function wdAssault(W, cs, pt, trips, mode, t, events) {
     if (!nfight) rows.push({ team: trip.team, name: trip.name, foe: -1, dmg: 0, rounds: 0, wiped: false, win: false, loss: 0, last: false, recIdx: 0, killed: false, skipped: true });
   });
   win = !pt.foeHp.some(wdFoeAlive);
+  return wdAssaultEnd(W, pt, trips, rows, { kind: kind, win: win, lastTeam: lastTeam, dmgBy: dmgBy, anyWipe: anyWipe }, t, events);
+}
+// 收尾(單次結算與連戰共用):o = {kind, win, lastTeam, dmgBy, anyWipe, retreat};依種類處理點的狀態 / 獎勵,寫戰報與事件
+function wdAssaultEnd(W, pt, trips, rows, o, t, events) {
+  var win = o.win, kind = o.kind, lastTeam = o.lastTeam, dmgBy = o.dmgBy, anyWipe = o.anyWipe, loot = null, fm = null, rp, j, down;
   rows.forEach(function (r) { r.dmg = wdR4(r.dmg); });
   if (win && lastTeam) rows.forEach(function (r) { r.last = false; });
   if (win && lastTeam) {
     for (j = rows.length - 1; j >= 0; j--) if (rows[j].team === lastTeam && rows[j].killed) { rows[j].last = true; break; }
   }
+  down = pt.foeHp.filter(function (r) { return !wdFoeAlive(r); }).length;   // 擊潰的守軍隊數(失敗時戰報顯示「守軍 x/N 隊擊潰」)
   // 收尾:依種類處理點的狀態 / 獎勵
   if (win) {
-    if (pt.cat === 'res') { pt.owner = 'me'; pt.foeHp = wdNewFoeHp(pt.nf); }
+    if (pt.cat === 'res') { pt.owner = 'me'; pt.foeHp = wdNewFoeHp(pt.nf); pt.hk = 0; }
     else if (pt.cat === 'camp') { pt.cl = true; pt.rs = t + WD_CFG.campRespawn; pt.foeHp = wdNewFoeHp(pt.nf); loot = wdCampLoot(W, pt); }
     else if (pt.cat === 'beast') {
       loot = wdBeastLoot(W, pt, Object.keys(dmgBy).map(function (k) { return { team: +k, dmg: dmgBy[k] }; }).sort(function (a, b) { return trips.findIndex(function (x) { return x.team === a.team; }) - trips.findIndex(function (x) { return x.team === b.team; }); }), lastTeam, t);
@@ -514,8 +615,11 @@ function wdAssault(W, cs, pt, trips, mode, t, events) {
     fm = wdFameAdd(pt.cat, pt.lv);   // 打贏加名聲:資源點 / 山寨 / 野怪 / 縣 / 郡 / 關口(數量查 fameFor)
   } else if (pt.cat === 'county' || pt.cat === 'jun' || pt.cat === 'pass') pt.foeT = t;   // 傷勢保留,24 小時內線性回滿
   else if (pt.cat === 'beast' && pt.act) pt.foeT = 0;                                        // 活動野怪:血量保留、不回血
+  else if (pt.cat === 'res' && pt.nf > 1) pt.hk = t + WD_LANDFOE.holdMs;                     // 領地多隊失敗:守軍傷勢保留 holdMs(30 分),到期回滿(wdFoeCur);Lv1~6 單隊照舊失敗回滿
   else pt.foeHp = wdNewFoeHp(pt.nf);                                                          // 一般野怪 / 山寨 / 資源點:失敗回滿
-  rp = { id: 'p' + (++W.rn), t: t, kind: kind, pt: pt.id, ptName: pt.ty, cat: pt.cat, lv: pt.lv, win: win, rows: rows, loot: loot, wipe: anyWipe, fame: fm ? fm.n : 0 };
+  rp = { id: 'p' + (++W.rn), t: t, kind: kind, pt: pt.id, ptName: pt.ty, cat: pt.cat, lv: pt.lv, win: win, rows: rows, loot: loot, wipe: anyWipe, fame: fm ? fm.n : 0, nf: pt.nf, down: win ? pt.nf : down };
+  if (o.retreat) rp.retreat = true;
+  if (!win && pt.hk > t) rp.hold = pt.hk;
   W.rp.unshift(rp);
   if (W.rp.length > WD_CFG.rpMax) W.rp.length = WD_CFG.rpMax;
   if (typeof ldOpenNote === 'function') ldOpenNote('assault', { cat: pt.cat, lv: pt.lv, win: win, tut: !!pt.tut, rally: kind === 'rally', auto: !!(trips[0] && trips[0].auto), W: W, t: t });   // 開場解鎖 / 主線計數(ldui)
@@ -631,6 +735,122 @@ function wdArriveSingle(W, cs, trip, t, events) {
   }
   wdTripTurn(W, cs, trip, t, events);
 }
+// ───────── 領地連戰(逐場推進;設計_領地守軍多隊與戰法成長_規格 3.2)─────────
+// 集結組抵達資源領地後一場一場打:每場 = 目前上陣隊(c.q[0])對守軍第一支還活著的隊;贏了留場、下一場打下一支守軍;輸 / 全滅該隊離場回程(全滅 = 瞬間回城 + 重傷)、下一隊接手打殘血守軍;
+// 場與場之間隔 WD_LANDFOE.gapMs,期間開團者可 wdChainRetreat〔退〕:全部上陣 / 未上陣的隊立刻回程,守軍傷勢照失敗規則保留(nf > 1 保留 holdMs)。
+// 平手(戰鬥逾時雙方都沒贏):該場卡「戰鬥中」tieMs(10 分);期間雙方後隊撞進來 —— 防守方優先(守軍下一隊先、攻方下一隊後,記在該列 row.join);到期雙方脫離(該場不分勝負),
+//   然後『加入者與倖存者合成新一場重算』= 攻方後隊(沒有後隊 = 原隊重打)對守軍倖存隊重新打一場(同一份戰報多一列)。同一連戰連續平手超過 tieMax 次 → 雙方都脫離結束(視為失敗,保留傷勢)。
+// 全部事件由 wdRun 依時間推進(離線補算與逐分推進結果相同)。
+function wdChainOf(W, id) {
+  var i;
+  for (i = 0; i < (W.chains || []).length; i++) if (W.chains[i].id === id) return W.chains[i];
+  return null;
+}
+function wdChainOfPt(W, ptId) {
+  var i;
+  for (i = 0; i < (W.chains || []).length; i++) if (W.chains[i].pt === ptId) return W.chains[i];
+  return null;
+}
+function wdChainTrip(W, c, n) {
+  var i;
+  for (i = 0; i < W.trips.length; i++) if (W.trips[i].rally === c.rid && W.trips[i].team === n && W.trips[i].st === 'go') return W.trips[i];
+  return null;
+}
+function wdFoeFirst(pt, not) {
+  var j;
+  for (j = 0; j < pt.nf; j++) if (j !== not && wdFoeAlive(pt.foeHp[j])) return j;
+  return -1;
+}
+function wdChainStart(W, cs, rl, trips, pt, t, events) {
+  var c = { id: 'c' + (++W.cc), pt: pt.id, rid: rl.id, t0: t, next: t, q: trips.map(function (tr) { return tr.team; }), k: 0, ties: 0, tie: null, rows: [], dmgBy: {}, lastTeam: 0, anyWipe: false };
+  W.chains.push(c);
+  pt.foeHp = wdFoeCur(pt, t);
+  if (pt.hk && t >= pt.hk) pt.hk = 0;
+  wdChainStep(W, cs, c, t, events);
+  return c;
+}
+function wdChainEnd(W, cs, c, pt, t, events, why) {
+  var left = c.q.map(function (n) { return wdChainTrip(W, c, n); }).filter(Boolean), win, rp;
+  W.chains = W.chains.filter(function (x) { return x !== c; });
+  if (!pt || pt.owner) {
+    left.forEach(function (tr) { tr.st = 'back'; tr.tHome = t + wdBackMs(tr); });
+    events.push({ t: t, k: 'miss', team: 0, pt: c.pt });
+    return null;
+  }
+  win = !pt.foeHp.some(wdFoeAlive);
+  rp = wdAssaultEnd(W, pt, left, c.rows, { kind: 'rally', win: win, lastTeam: c.lastTeam, dmgBy: c.dmgBy, anyWipe: c.anyWipe, retreat: why === 'retreat' }, t, events);
+  if (typeof ldOpenNote === 'function') ldOpenNote('rally', { t: t });
+  left.forEach(function (tr) { wdTripTurn(W, cs, tr, t, events); });
+  return rp;
+}
+// 在時刻 t 推進連戰一步(c.next 到點時由 wdRun 呼叫);每次呼叫要嘛結束連戰、要嘛把 c.next 往後推
+function wdChainStep(W, cs, c, t, events) {
+  var pt = wdPt(W, c.pt), L = WD_LANDFOE, tie = c.tie, trip = null, mine = null, fj, res, idx, rng, loss, row, dead, wiped, isTie, a2, nd, total;
+  if (!pt || pt.owner) return wdChainEnd(W, cs, c, pt, t, events, 'miss');
+  if (tie) {
+    if (t < tie.until) { c.next = tie.until; return null; }
+    c.tie = null;   // 平手到期:雙方脫離;攻方後隊(若有)與倖存守軍合成新一場
+    if (tie.a2 && c.q.indexOf(tie.a2) > 0) c.q = [tie.a2].concat(c.q.filter(function (n) { return n !== tie.a2; }));
+  }
+  fj = wdFoeFirst(pt);
+  if (fj < 0) return wdChainEnd(W, cs, c, pt, t, events, 'win');
+  while (c.q.length) {
+    trip = wdChainTrip(W, c, c.q[0]);
+    if (trip) { mine = wdBuildMine(W, cs, trip.slots, t); if (mine.ids.length) break; wdTripTurn(W, cs, trip, t, events); }   // 名冊找不到人:直接回程
+    c.q.shift(); trip = null;
+  }
+  if (!trip) return wdChainEnd(W, cs, c, pt, t, events, 'lose');
+  total = wdFoeTotalMax(W, pt);
+  c.k++;
+  res = wdRunFight(mine, wdFoeTeam(W, pt, fj), pt.foeHp[fj], bnHash('wdb', W.seed, pt.id, W.sd + 1));
+  idx = wdRecAdd(W, res.rec);
+  pt.foeHp[fj] = res.newRow;
+  rng = bnRng(bnHash('wdc', W.seed, pt.id, idx));
+  loss = wdCasualty(W, cs, trip.slots.map(function (x) { return x.id; }), res.win, rng, t);
+  dead = !wdFoeAlive(res.newRow);
+  isTie = !!res.draw && !dead;   // 逾時平手才卡戰鬥中;雙方同歸於盡的 draw 視為攻方全滅、守軍該隊倒下
+  wiped = !!res.wiped && !isTie;
+  row = { team: trip.team, name: trip.name, foe: fj, dmg: total ? res.dmgAbs / total : 0, rounds: res.rounds, wiped: wiped, win: !!res.win, loss: loss, last: false, recIdx: idx, killed: dead, k: c.k, t: t };
+  if (isTie) row.tie = true;
+  c.rows.push(row);
+  c.dmgBy[trip.team] = (c.dmgBy[trip.team] || 0) + row.dmg;
+  if (!pt.foeHp.some(wdFoeAlive)) c.lastTeam = trip.team;
+  if (isTie) {
+    c.ties++;
+    nd = wdFoeFirst(pt, fj);
+    a2 = c.q.length > 1 ? c.q[1] : 0;
+    row.join = [];
+    if (nd >= 0) row.join.push({ side: 'D', foe: nd });          // 防守方優先:守軍下一隊先撞進
+    if (a2) row.join.push({ side: 'A', team: a2 });              // 攻方下一隊後撞進
+    if (c.ties > L.tieMax) return wdChainEnd(W, cs, c, pt, t, events, 'tie');
+    c.tie = { k: c.k, until: t + L.tieMs, a: c.q[0], a2: a2, d: nd };
+    c.next = c.tie.until;
+    return null;
+  }
+  if (res.win) {
+    if (!pt.foeHp.some(wdFoeAlive)) return wdChainEnd(W, cs, c, pt, t, events, 'win');
+    c.next = t + L.gapMs;
+    return null;
+  }
+  c.q.shift();
+  if (wiped) c.anyWipe = true;
+  trip.wiped = wiped;
+  wdTripTurn(W, cs, trip, t, events);
+  if (!pt.foeHp.some(wdFoeAlive)) return wdChainEnd(W, cs, c, pt, t, events, 'win');
+  if (!c.q.length) return wdChainEnd(W, cs, c, pt, t, events, 'lose');
+  c.next = t + L.gapMs;
+  return null;
+}
+// 〔退〕:開團者在場與場之間按(平手「戰鬥中」不能退)。回 {ok, reason, rp, events}
+function wdChainRetreat(W, cs, cid, now) {
+  var r = wdRun(W, cs, now), c = wdChainOf(W, cid), pt, rp;
+  if (r.frozen) return { ok: false, reason: 'frozen', events: r.events };
+  if (!c) return { ok: false, reason: 'nochain', events: r.events };
+  if (c.tie) return { ok: false, reason: 'tie', events: r.events };
+  pt = wdPt(W, c.pt);
+  rp = wdChainEnd(W, cs, c, pt, now, r.events, 'retreat');
+  return { ok: true, reason: '', rp: rp, events: r.events };
+}
 function wdArriveRally(W, cs, rl, t, events) {
   var pt = wdPt(W, rl.pt), trips = [], rp;
   rl.order.forEach(function (n) {
@@ -641,6 +861,7 @@ function wdArriveRally(W, cs, rl, t, events) {
   if (!trips.length) return;
   events.push({ t: t, k: 'arrive', team: 0, pt: rl.pt, rally: rl.id });
   if (!pt || pt.owner) { trips.forEach(function (tr) { tr.st = 'back'; tr.tHome = t + wdBackMs(tr); }); events.push({ t: t, k: 'miss', team: 0, pt: rl.pt }); return; }
+  if (pt.cat === 'res' && typeof WD_LANDFOE !== 'undefined') { wdChainStart(W, cs, rl, trips, pt, t, events); return; }   // 資源領地:逐場連戰(之後由 'chain' 事件推進)
   rp = wdAssault(W, cs, pt, trips, 'rally', t, events);
   if (typeof ldOpenNote === 'function') ldOpenNote('rally', { t: t });
   trips.forEach(function (tr) { wdTripTurn(W, cs, tr, t, events); });
@@ -670,6 +891,7 @@ function wdNextEvent(W, now) {
     }
   }
   for (i = 0; i < W.rallies.length; i++) cand(W.rallies[i].tArrive, 2, 1000 + i, 'rally', W.rallies[i]);
+  for (i = 0; i < (W.chains || []).length; i++) cand(W.chains[i].next, 2.5, 3000 + i, 'chain', W.chains[i]);
   for (i = 0; i < W.pts.length; i++) {
     if (W.pts[i].guard) cand(W.pts[i].guard.t1, 3, i, 'gend', W.pts[i]);
     if (W.pts[i].cat === 'camp' && W.pts[i].cl) cand(W.pts[i].rs, 5, i, 'camp', W.pts[i]);
@@ -689,6 +911,7 @@ function wdHandle(W, cs, ev, events) {
     events.push({ t: ev.t, k: 'idleend', team: ev.ref.team, pt: ev.ref.pt });
   }
   else if (ev.k === 'rally') wdArriveRally(W, cs, ev.ref, ev.t, events);
+  else if (ev.k === 'chain') wdChainStep(W, cs, ev.ref, ev.t, events);
   else if (ev.k === 'gend') wdGuardEnd(W, cs, ev.ref, ev.t, events);
   else if (ev.k === 'rsvgo') { if (typeof wdRsvGo === 'function') wdRsvGo(W, cs, ev.ref, ev.t, events); else W.rsv = W.rsv.filter(function (x) { return x !== ev.ref; }); }
   else if (ev.k === 'beast') {
@@ -765,7 +988,7 @@ function wdAutoPlan(W, cs, now, teams) {
     free.push({ team: t, power: wdTeamPowerR(W, cs, t.slots, now) });   // 戰力 × 兵力比例
   });
   free.sort(function (a, b) { return a.power - b.power || a.team.n - b.team.n; });
-  targets = W.pts.filter(function (p) { return p.cat === 'res' && !p.owner && !wdPtBusy(W, p.id); }).sort(function (a, b) { return (b.tr | 0) - (a.tr | 0) || b.lv - a.lv || (a.id < b.id ? -1 : 1); });   // 寶地先排
+  targets = W.pts.filter(function (p) { return p.cat === 'res' && !p.owner && !wdPtBusy(W, p.id) && p.nf === 1; }).sort(function (a, b) { return (b.tr | 0) - (a.tr | 0) || b.lv - a.lv || (a.id < b.id ? -1 : 1); });   // 寶地先排
   slots = wdGuardCap(W) - wdGuardUsed(W) - wdOwnedWaiting(W);
   targets.forEach(function (pt) {
     var fp, i, f, hit;
@@ -840,8 +1063,9 @@ function wdNormPt(r) {
   var g, nf, o;
   if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !WD_PFX[r.cat]) return null;
   nf = wdInt(r.nf, 1, 5, 1);
-  o = { id: r.id, cat: r.cat, ty: String(r.ty || ''), lv: wdInt(r.lv, 1, 9, 1), mins: r.tut ? wdNum(r.mins, 0.5, WD_CFG.minsMax, 0.5) : wdInt(r.mins, WD_CFG.minsMin, WD_CFG.minsMax, WD_CFG.minsMin), nf: nf, fs: wdInt(r.fs, 0, 4294967295, 0), act: !!r.act,
+  o = { id: r.id, cat: r.cat, ty: String(r.ty || ''), lv: wdInt(r.lv, 1, WD_CFG.lvMap.length - 1, 1), mins: r.tut ? wdNum(r.mins, 0.5, WD_CFG.minsMax, 0.5) : wdInt(r.mins, WD_CFG.minsMin, WD_CFG.minsMax, WD_CFG.minsMin), nf: nf, fs: wdInt(r.fs, 0, 4294967295, 0), act: !!r.act,
     owner: r.owner === 'me' ? 'me' : null, guard: null, foeHp: wdNormFoeHp(r.foeHp, nf), foeT: wdInt(r.foeT, 0, 1e15, 0), cl: !!r.cl, rs: wdInt(r.rs, 0, 1e15, 0) };
+  if (r.hk) o.hk = wdInt(r.hk, 0, 1e15, 0);   // 領地多隊失敗後守軍傷勢保留到期時刻(0 / 沒有 = 無)
   if (r.guard && typeof r.guard === 'object' && typeof r.guard.card === 'string' && o.cat === 'res') {
     g = r.guard;
     o.guard = { card: g.card, t0: wdInt(g.t0, 0, 1e15, 0), t1: wdInt(g.t1, 0, 1e15, 0), ac: wdInt(g.ac, 0, 1e15, 0), perH: wdNum(g.perH, 0, 1e9, 0), hb: wdInt(g.hb, 0, 1e6, 0) };
@@ -851,6 +1075,13 @@ function wdNormPt(r) {
   if (r.tut) o.tut = 1;     // 新手寨
   if (o.cat === 'camp' && o.cl && !o.rs) o.rs = 1;
   return o;
+}
+function wdNormChain(c) {
+  var tie = null, rows;
+  if (!c || typeof c !== 'object' || typeof c.id !== 'string' || typeof c.pt !== 'string' || typeof c.rid !== 'string' || !Array.isArray(c.q)) return null;
+  if (c.tie && typeof c.tie === 'object') tie = { k: wdInt(c.tie.k, 0, 1e6, 0), until: wdInt(c.tie.until, 0, 1e15, 0), a: wdInt(c.tie.a, 0, 99, 0), a2: wdInt(c.tie.a2, 0, 99, 0), d: wdInt(c.tie.d, -1, 99, -1) };
+  rows = (Array.isArray(c.rows) ? c.rows : []).filter(function (r) { return r && typeof r === 'object'; }).slice(0, 60);
+  return { id: c.id, pt: c.pt, rid: c.rid, t0: wdInt(c.t0, 0, 1e15, 0), next: wdInt(c.next, 0, 1e15, 0), q: c.q.map(function (n) { return wdInt(n, 1, 99, 1); }).slice(0, 10), k: wdInt(c.k, 0, 1e6, 0), ties: wdInt(c.ties, 0, 1e6, 0), tie: tie, rows: rows, dmgBy: (c.dmgBy && typeof c.dmgBy === 'object') ? c.dmgBy : {}, lastTeam: wdInt(c.lastTeam, 0, 99, 0), anyWipe: !!c.anyWipe };
 }
 // 存檔正規化:壞檔 / 版本不符 → 全新(不丟例外);數值夾住;缺的點補齊;名冊占用狀態與行程對齊
 function wdNorm(raw, now, seed, cs) {
@@ -879,11 +1110,13 @@ function wdNorm(raw, now, seed, cs) {
       if (lg) { o.lg = lg; o.gi = wdInt(t.gi, 0, 1e7, lg.g); o.cost = wdNum(t.cost, 0, 1e4, 0); o.spd = wdNum(t.spd, 0.1, 10, 1); o.g2 = 1; if (t.path) { o.path = wdNormPath(t.path) || lg.p; o.goMs = wdInt(t.goMs, 0, 1e12, 0); o.backMs = wdInt(t.backMs, 0, 1e12, 0); } }
       return o;
     }).filter(Boolean);
+    W.cc = wdInt(raw.cc, 0, 1e9, 0);
+    W.chains = (Array.isArray(raw.chains) ? raw.chains : []).map(wdNormChain).filter(function (c) { return c && W.trips.some(function (t) { return t.rally === c.rid && t.st === 'go'; }); });
     W.rallies = (Array.isArray(raw.rallies) ? raw.rallies : []).map(function (r) {
       if (!r || typeof r !== 'object' || typeof r.id !== 'string' || typeof r.pt !== 'string' || !Array.isArray(r.order)) return null;
       return { id: r.id, pt: r.pt, order: r.order.map(function (n) { return wdInt(n, 1, 99, 1); }).slice(0, WD_CFG.rallyMax), t0: wdInt(r.t0, 0, 1e15, now), tArrive: wdInt(r.tArrive, 0, 1e15, now) };
     }).filter(function (r) { return r && W.trips.some(function (t) { return t.rally === r.id && t.st === 'go'; }); });
-    W.trips = W.trips.filter(function (t) { return !t.rally || t.st === 'back' || W.rallies.some(function (r) { return r.id === t.rally; }); });
+    W.trips = W.trips.filter(function (t) { return !t.rally || t.st === 'back' || W.rallies.some(function (r) { return r.id === t.rally; }) || W.chains.some(function (c) { return c.rid === t.rally; }); });
     W.rp = (Array.isArray(raw.rp) ? raw.rp : []).filter(function (r) { return r && typeof r.id === 'string' && Array.isArray(r.rows); }).slice(0, WD_CFG.rpMax);
     W.rc = (Array.isArray(raw.rc) ? raw.rc : []).filter(function (r) { return r && typeof r.i === 'number' && r.rec && typeof r.rec === 'object'; }).slice(0, WD_CFG.rcMax);
     W.hs = wdInt(raw.hs, 0, 1e9, 0);

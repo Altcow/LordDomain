@@ -37,10 +37,35 @@ var WD_CFG = {
   // 戰報
   rpMax: 50, rcMax: 20,
   // 守軍強度:點等級 lv → [章節, 逐關 order(BN_STG.v / rk 的索引 0~35)]
-  lvMap: [null, [1, 0], [1, 3], [2, 7], [2, 10], [3, 13], [4, 19], [5, 26], [5, 30], [6, 34]],
+  lvMap: [null, [1, 0], [1, 3], [2, 7], [2, 10], [3, 13], [4, 19], [5, 26], [5, 30], [6, 34], [6, 35]],   // Lv10 = 第 6 章最後一關(領地守軍規格 1.3;Lv1~9 不變)
   foeMul: { res: 1, camp: 1.05, beast: 1, county: 1.1, jun: 1.2, pass: 1.15 },   // 守軍基準 v 的倍率
   strong: { county: true, jun: true, pass: true },                              // 縣郡關口:隊長用頭目技能組(強、技能多)
   // 打贏加名聲:數量查 fameFor(kind, lv)(fame.js FAME_CFG.src,數值只放一處);fame.js 不存在就不加
+};
+
+// ───────── 領地守軍(資源領地;設計_領地守軍多隊與戰法成長_規格.md 第 1~3 節;所有數字 PLACEHOLDER,平衡最後做)─────────
+// teams:index = 領地 Lv 的守軍隊數(Lv1~6 = 1、Lv7~9 = 2、Lv10 = 3);玩家出戰最多 rallyMax 隊。
+// sk:index = 領地 Lv,[前鋒, 中衛, 主將(第 1 隊), 主將(其他隊)];格式 '大招/選擇槽':大招 g = 兵種通用大招(無名 NPC)、A / S = 由第一季名將擔任並用本命大招(品階 >= 該值);選擇槽以 + 分隔,逐個品階(S / A / B,B 含 C);'' = 該位置不存在。
+// slMul:戰法等級倍率(同 設計_戰法養成_戰法點_規格 的 BN_SKLV.mul;BN_SKLV 存在時改讀它);Lv1 不寫 kitInst。
+// vSrc:'grid' = GRID_CFG.foeV[lv-1](wd_grid_data.js 不存在時退回 bnStgV);'stg' = 舊口徑 bnStgV(lvMap)。teamVK:各隊的 v 倍率(占位 1)。
+// holdMs:失敗時守軍傷勢保留;gapMs:連戰每場間隔;tieMs:平手卡「戰鬥中」時間;tieMax:同一連戰最多連續平手次數;softUlt:本命大招依賴隊友 / 陣營的名將,在候選池中權重 softW。
+var WD_LANDFOE = {
+  teams: [0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 3],
+  sk: [null,
+    ['g/B', 'g/B', 'g/B', ''],
+    ['g/B', 'g/B', 'g/B+B', ''],
+    ['g/B', 'g/B+B', 'g/A+B', ''],
+    ['g/B+B', 'g/A+B', 'g/A+B', ''],
+    ['g/A+B', 'g/A+B', 'g/A+A', ''],
+    ['g/A+B', 'g/A+A', 'A/S+A', ''],
+    ['g/A+B', 'g/A+A', 'A/S+A', 'g/A+A'],
+    ['g/A+A', 'A/A+A', 'A/S+A', 'A/S+A'],
+    ['A/A+A', 'A/S+A', 'S/S+A', 'A/S+A'],
+    ['A/S+A', 'A/S+A', 'S/S+A', 'S/S+A']],
+  slMul: [1, 1, 1.02, 1.04, 1.06, 1.08, 1.10, 1.12, 1.14, 1.17, 1.20],
+  vSrc: 'grid', teamVK: [1, 1, 1], rallyMax: 5,
+  holdMs: 30 * 60000, gapMs: 30000, tieMs: 10 * 60000, tieMax: 3,
+  softUlt: ['u_liubei', 'u_sunquan'], softW: 0.3, fameTitle: '守將'
 };
 
 // 資源點種類 → 收成種類(harv 的 key)

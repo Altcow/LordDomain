@@ -163,7 +163,7 @@ function bnUseful(S, u, inst) {
   }
   return true;
 }
-var BN_BUFFS = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'dodge_rate', 'counter', 'ward', 'amp_atk', 'critdmg_up'];
+var BN_BUFFS = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'dodge_rate', 'counter', 'ward', 'amp_atk', 'critdmg_up', 'dblhit', 'hit_heal'];
 function bnHasBuff(x) { for (var i = 0; i < BN_BUFFS.length; i++) if (x.st[BN_BUFFS[i]] && !(x.st[BN_BUFFS[i]].left >= 900 && BN_BUFFS[i] !== 'ward')) return true; return !!x.st.shield; }
 function bnHasNeg(x) { var k; for (k in x.st) if (BN_NEG[k]) return true; return false; }
 
@@ -211,7 +211,7 @@ function bnCast(S, u, inst, o) {
   res.main = mt;
   S.stats.skillUse[d.id] = (S.stats.skillUse[d.id] || 0) + 1;
   bnEv(S, 'skill', { u: u.id, id: d.id, name: d.name, kind: d.kind, cat: d.cat, rc: o.recastN || undefined, as: o.assistBy, th: d.theme || undefined });
-  if (P.list) res.skillEv = S.log ? S.events[S.events.length - 1] : null;   // S0 debuff_multi:事後補寫 mx(命中數)
+  if (P.list || d.kind === 'fate_dice') res.skillEv = S.log ? S.events[S.events.length - 1] : null;   // S0 debuff_multi:事後補寫 mx(命中數)
   if (P.hpCost && d.kind !== 'self_sacrifice') {
     loss = Math.min(u.hp - 1, Math.round(u.maxHp * P.hpCost));
     if (loss > 0) { u.hp -= loss; bnEv(S, 'dmg', { src: u.id, tgt: u.id, v: loss, abs: 0, ty: 'self', hp: u.hp }); }
@@ -546,6 +546,7 @@ function bnApplyEffect2(S, u, eff, res, o) {
       if (res.skillEv) res.skillEv.mx = hitN;
       break;
     }
+    case 'fate_dice': bnFateDice(S, u, eff, res, o); break;
     case 'reflect':   // 荊棘(S0):受到傷害時反彈(狀態 thorns,bnApplyDmg 結算)
       for (i = 0; i < targets.length; i++) bnStatusApply(S, u, targets[i], 'thorns', { val: bnPct(kind, eff, sc), ty: P.ty || 'any', left: bnDurOf(eff, o) }, {});
       break;
@@ -565,6 +566,56 @@ function bnApplyEffect2(S, u, eff, res, o) {
     default:
       S.warn.push('未知 kind ' + kind);
   }
+}
+// 命運骰子(2026-11-17「禍福無門」):對我方存活全體 + 敵方存活全體(先我方、後敵方,各依 units 順序)各自擲骰。
+// params:p{allyPos,allyNeg,foePos,foeNeg} / pos[狀態 id] / neg[狀態 id 或 {ctl:[..],w:[..]} 控制組(只擲 1 次,中了依權重 w 四選一)] / cap{pos,neg} / pw 檔位 / selfSafe(施法者本人不擲負面)。
+// 負面:敵方 src = 施法者,我方 src = null(不計入施法方輸出);一律經過免疫 / 抗控 / 抵禦 / RES。事件 skill.dx = [我方正面, 我方負面, 敵方正面, 敵方負面](實際命中數)。
+var BN_FATE_POS = { lifesteal: 1, dblhit: 1, counter: 1, shield: 1, heal_hot: 1, hit_heal: 1 };
+function bnFateApply(S, u, t, id, fpw, src, dur) {
+  switch (id) {
+    case 'lifesteal': return bnStatusApply(S, u, t, 'lifesteal', { val: bnKT('lifesteal_pct', fpw), left: dur }, {});
+    case 'dblhit': return bnStatusApply(S, u, t, 'dblhit', { val: bnKT('dblhit', fpw), left: dur }, {});
+    case 'counter': return bnStatusApply(S, u, t, 'counter', { val: bnKT('counter', fpw), left: dur }, {});
+    case 'shield': return bnShield(S, u, t, u.base.sh * bnKT('shield_single', fpw), {}) > 0;
+    case 'heal_hot': return bnStatusApply(S, u, t, 'heal_hot', { val: u.base.heal * bnKT('heal_hot', fpw), left: dur, noRes: true }, {});
+    case 'hit_heal': return bnStatusApply(S, u, t, 'hit_heal', { val: bnKT('hit_heal', fpw), left: dur }, {});
+    case 'burn': return bnStatusApply(S, src, t, 'burn', { val: bnMag(S, u) * bnKT('dot_burn', fpw) * (u.mods.burnOut || 1), n: BN_DATA.dotRounds, act: true }, {});
+    case 'mark': return bnStatusApply(S, src, t, 'mark', { val: bnKT('mark', fpw), left: dur, noRes: false }, {});
+    case 'stun': return bnStatusApply(S, src, t, 'stun', { act: true, left: undefined }, {});
+    case 'paralyze': return bnStatusApply(S, src, t, 'paralyze', { left: bnKT('paralyze', fpw), val: BN_DATA.paralyze.spd }, {});
+    case 'timid': return bnStatusApply(S, src, t, 'timid', { left: bnKT('timid', fpw) }, {});
+    case 'silence': return bnStatusApply(S, src, t, 'silence', { left: bnKT('silence', fpw) }, {});
+  }
+  return false;
+}
+function bnFateDice(S, u, eff, res, o) {
+  var P = eff.params || {}, FP = P.p || {}, posL = P.pos || [], negL = P.neg || [], cap = P.cap || {}, fpw = P.pw || 'S', dx = [0, 0, 0, 0],
+    list = bnAlive(S, u.side).concat(bnAlive(S, bnOpp(u.side))), dur = typeof P.dur === 'number' ? P.dur : BN_DATA.buffRounds, i, j, k, t, ally, pP, pN, pos, neg, it, w, sum, r, x, id;
+  for (i = 0; i < list.length && !S.over; i++) {
+    t = list[i];
+    if (!t.alive) continue;
+    ally = t.side === u.side;
+    pP = ally ? FP.allyPos : FP.foePos; pN = ally ? FP.allyNeg : FP.foeNeg;
+    pos = []; neg = [];
+    for (j = 0; j < posL.length; j++) if (S.rng() < (pP || 0)) pos.push(posL[j]);
+    if (!(ally && t === u && P.selfSafe)) {
+      for (j = 0; j < negL.length; j++) {
+        it = negL[j];
+        if (S.rng() >= (pN || 0) * (1 - (t.base.res || 0))) continue;
+        if (typeof it === 'string') { neg.push(it); continue; }
+        w = it.w || []; sum = 0;
+        for (k = 0; k < it.ctl.length; k++) sum += w[k] === undefined ? 1 : w[k];
+        r = S.rng() * sum;
+        for (k = 0; k < it.ctl.length; k++) { r -= w[k] === undefined ? 1 : w[k]; if (r < 0) break; }
+        neg.push(it.ctl[Math.min(k, it.ctl.length - 1)]);
+      }
+    }
+    while (typeof cap.pos === 'number' && pos.length > cap.pos) pos.splice(Math.floor(S.rng() * pos.length), 1);
+    while (typeof cap.neg === 'number' && neg.length > cap.neg) neg.splice(Math.floor(S.rng() * neg.length), 1);
+    for (j = 0; j < pos.length && t.alive; j++) if (bnFateApply(S, u, t, pos[j], fpw, u, dur)) dx[ally ? 0 : 2]++;
+    for (j = 0; j < neg.length && t.alive; j++) if (bnFateApply(S, u, t, neg[j], fpw, ally ? null : u, dur)) dx[ally ? 1 : 3]++;
+  }
+  if (res.skillEv) res.skillEv.dx = dx;
 }
 function bnChance(S, P, t, u) {
   var vc = t && u ? bnVsChanceTo(S, u, t) : 0, c;
@@ -602,7 +653,7 @@ function bnCleanse(S, t, n, src) {
   return c;
 }
 function bnDispel(S, u, t, n, prefer, stripShield) {
-  var buffs = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'dodge_rate', 'counter', 'ward', 'taunt', 'amp_atk', 'critdmg_up'], i, c = 0, id;
+  var buffs = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'dodge_rate', 'counter', 'ward', 'taunt', 'amp_atk', 'critdmg_up', 'dblhit', 'hit_heal'], i, c = 0, id;
   if (prefer === 'buff_atk' && t.st.atk_up && c < n) { bnStatusRemove(S, t, 'atk_up', 'dispel'); c++; }
   for (i = 0; i < buffs.length && c < n; i++) {
     id = buffs[i];
@@ -838,6 +889,11 @@ function bnOnHit(S, a, t, h, hpLost) {
     bnHit(S, t, a, { ty: 'phys', mul: cm, counter: true, kind: 'counter', sk: null });
   }
   if (!t.alive) return;
+  // 受擊回氣(命運骰子 hit_heal):實際掉血時 p 機率回復最大兵力 val;每回合最多 perRound 次(沒有此狀態不抽亂數)
+  if (t.st.hit_heal && hpLost > 0 && (t.hhCnt | 0) < BN_DATA.hitHeal.perRound) {
+    t.hhCnt = (t.hhCnt | 0) + 1;
+    if (S.rng() < BN_DATA.hitHeal.p) bnHeal(S, null, t, t.maxHp * t.st.hit_heal.val, {});
+  }
   // 蓄力層數(受擊)
   if (t.stackCfg) bnStackGain(S, t, 'on_hit');
   bnFire(S, 'on_hit', { u: a, t: t });

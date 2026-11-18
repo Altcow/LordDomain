@@ -440,7 +440,7 @@ var CARD_FIG_BY_ID = {};
 // (2026-11-13 後續:原本 CARD_FIGS 查無的第一季人物 21 位已補入 CARD_FIGS 與下表;既有 11 位的品質(gr)尚未依第一季戰法搭配調整,見 第一季戰法補寫與五隊測試報告_v2.md)
 var CARD_S01_ONLY = true;
 var CARD_S01_FIGS = [
-  'caocao', 'xiahoudun', 'xiahouyuan', 'caoren', 'dianwei', 'xunyu', 'chengyu',   // 魏
+  'caocao', 'xiahoudun', 'xiahouyuan', 'caoren', 'dianwei', 'xunyu', 'chengyu', 'jiaxu',   // 魏(賈詡 2026-11-17 加入:命運骰子大招持有人;資料 fac 0)
   'liubei', 'guanyu', 'zhangfei', 'zhaoyun', 'mizhu', 'zhoucang',   // 蜀
   'sunjian', 'sunce', 'chengpu', 'huanggai', 'zhanghong',   // 吳
   'zhangjiao', 'zhangbao', 'zhangyan', 'lvbu', 'dongzhuo', 'huangfusong', 'huaxiong', 'xurong', 'boca', 'zhangmancheng',   // 群

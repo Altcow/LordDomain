@@ -31,9 +31,10 @@ var BN_ST_ICON = { atk_up: 1, atk_down: 1, def_up: 1, def_down: 1, spd_up: 1, st
 var BN_ST_NAME = {
   stun: '暈眩', fear: '威懾', confuse: '擾亂', timid: '怯戰', silence: '計窮', ult_lock: '封大', atk_down: '攻↓', def_down: '防↓', spd_down: '速↓', mark: '標記',
   critdmg_up: '暴傷↑', thorns: '荊棘', fuse: '引信', lag: '遲滯', burn: '燃燒', poison: '中毒', bleed: '流血', heal_reduce: '禁療', atk_up: '攻↑', def_up: '防↑', spd_up: '速↑', crit_up: '暴↑', taunt: '嘲諷', guard: '援護', evade: '規避',
-  ward: '抵禦', ccimm: '抗控', shield: '護盾', heal_hot: '回春', rate_up: '率↑', rate_down: '率↓', debuff_hit: '盲', wx_mark: '五行印', stealth: '隱匿', undying: '不倒', sleep: '睡眠', paralyze: '麻痺', dodge_rate: '閃避'
+  ward: '抵禦', ccimm: '抗控', shield: '護盾', heal_hot: '回春', rate_up: '率↑', rate_down: '率↓', debuff_hit: '盲', wx_mark: '五行印', stealth: '隱匿', undying: '不倒', sleep: '睡眠', paralyze: '麻痺', dodge_rate: '閃避',
+  lifesteal: '吸血', counter: '反擊', dblhit: '連擊', hit_heal: '回氣'   // 2026-11-17 命運骰子:吸血 / 反擊上身時畫面補名稱;連擊 / 受擊回氣為新狀態
 };
-var BN_ST_GOOD = { atk_up: 1, def_up: 1, spd_up: 1, crit_up: 1, taunt: 1, guard: 1, evade: 1, dodge_rate: 1, ward: 1, ccimm: 1, shield: 1, heal_hot: 1, amp_atk: 1, rate_up: 1, stealth: 1, undying: 1, critdmg_up: 1, thorns: 1 };
+var BN_ST_GOOD = { atk_up: 1, def_up: 1, spd_up: 1, crit_up: 1, taunt: 1, guard: 1, evade: 1, dodge_rate: 1, ward: 1, ccimm: 1, shield: 1, heal_hot: 1, amp_atk: 1, rate_up: 1, stealth: 1, undying: 1, critdmg_up: 1, thorns: 1, lifesteal: 1, counter: 1, dblhit: 1, hit_heal: 1 };
 // 文化主題特效(new_heroes_draft §六):cast = 施放者身上、hit = 每個目標、area = 多目標時在目標群中央。缺圖時 alt = 原 fx_* 特效
 var BN_FX_THEME = {
   herb: { cast: 'fxc_herb_mortar', hit: 'fxc_herb_leaves', area: 'fxc_herb_smoke', alt: 'heal_motes' },
@@ -1096,7 +1097,7 @@ var BN_ST_VIS = {
   timid: { fx: 'rope', col: '#c8b890' },                        // 怯戰 / 定身(bind 別名):腳下束縛圈
 };
 (function () {   // 增益 / 減益圈(金色上升 / 紫色下落)
-  var g = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'ward', 'guard', 'taunt', 'heal_hot', 'undying', 'stealth', 'amp_atk', 'critdmg_up'], b = ['atk_down', 'def_down', 'spd_down', 'rate_down', 'debuff_hit', 'mark', 'wx_mark', 'heal_reduce'], i;
+  var g = ['atk_up', 'def_up', 'spd_up', 'crit_up', 'rate_up', 'evade', 'ward', 'guard', 'taunt', 'heal_hot', 'undying', 'stealth', 'amp_atk', 'critdmg_up', 'lifesteal', 'counter', 'dblhit', 'hit_heal'], b = ['atk_down', 'def_down', 'spd_down', 'rate_down', 'debuff_hit', 'mark', 'wx_mark', 'heal_reduce'], i;
   for (i = 0; i < g.length; i++) BN_ST_VIS[g[i]] = { fx: 'buff', col: '#ffd75a' };
   for (i = 0; i < b.length; i++) BN_ST_VIS[b[i]] = { fx: 'debuff', col: '#c890ff' };
 })();

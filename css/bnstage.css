@@ -88,6 +88,21 @@
 #bnCB .bst-show{position:absolute;left:422px;top:360px;width:0;height:0;z-index:22;display:none}
 #bnCB .bst-show.foe img{transform:scaleX(-1) scale(1.6)}
 #bnCB .bst-show img{position:absolute;bottom:0;left:-170px;width:340px;height:277px;object-fit:contain;object-position:bottom;transform-origin:50% 100%;transform:scale(1.6)}
+#bnCB .bst-u.turn .bst-body{transform:translateX(-50%) scaleX(-1)}
+#bnCB .bst-u.foe.turn .bst-body{transform:translateX(-50%)}
+/* 無畫格近戰衝刺 / 回跑程式動感(參數由 js BNST_RUSH 以 --rb 彈跳 / --rt 週期 / --rl 前傾 / --rs 壓扁 帶入) */
+#bnCB .bst-u{--f:1}
+#bnCB .bst-u.foe{--f:-1}
+#bnCB .bst-u.turn{--f:-1}
+#bnCB .bst-u.foe.turn{--f:1}
+#bnCB .bst-u.rush .bst-body{transform-origin:50% 100%;animation:bstRunBob var(--rt,110ms) linear infinite}
+#bnCB .bst-u.rush .bst-shd{animation:bstRunShd var(--rt,110ms) linear infinite}
+#bnCB .bst-u.rush:not(.nolines) .bst-act:after{content:"";position:absolute;top:-80px;left:-120px;width:70px;height:70px;background:repeating-linear-gradient(to bottom,rgba(255,255,255,.75) 0 2px,transparent 2px 14px);-webkit-mask-image:linear-gradient(to right,transparent,#000);mask-image:linear-gradient(to right,transparent,#000);opacity:.55;pointer-events:none}
+#bnCB .bst-u.rush.rl:not(.nolines) .bst-act:after{left:50px;-webkit-mask-image:linear-gradient(to left,transparent,#000);mask-image:linear-gradient(to left,transparent,#000)}
+#bnCB .bst-dust{position:absolute;z-index:20;width:16px;height:10px;border-radius:50%;background:rgba(205,190,160,.75);pointer-events:none;transform:translate(-50%,-50%);animation:bstDust .4s ease-out forwards}
+@keyframes bstRunBob{0%,100%{transform:translateX(-50%) rotate(var(--rl,0deg)) scaleX(var(--f,1)) scale(calc(1 + var(--rs,0)),calc(1 - var(--rs,0)))}50%{transform:translateX(-50%) translateY(calc(var(--rb,0px)*-1)) rotate(var(--rl,0deg)) scaleX(var(--f,1)) scale(calc(1 - var(--rs,0)),calc(1 + var(--rs,0)))}}
+@keyframes bstRunShd{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.78);opacity:.6}}
+@keyframes bstDust{to{transform:translate(calc(-50% + var(--dd,-10px)),-130%) scale(2.2);opacity:0}}
 #bnCB .bst-u.ult-back .bst-anim{transform:translateX(-50%) scaleX(-1)}
 #bnCB .bst-u.foe.ult-back .bst-anim{transform:translateX(-50%)}
 /* 戰法演出幕 .bst-scr(設計_戰法演出幕.md):在 .bst-world 內、鏡頭層 .bst-cam 外(不吃推近與震動);z 22,頂列 / 倍速鈕 z 70 浮在上面。

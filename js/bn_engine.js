@@ -475,7 +475,7 @@ function bnHit(S, a, t, h) {
     if (h.basic && mo.atkMelee && BN_DATA.troops[a.troop].R <= 2) outM *= 1 + mo.atkMelee;
     if (a.st.amp && h.sk) { for (i = 0; i < a.st.amp.list.length; i++) { cdm = a.st.amp.list[i]; if (cdm.exp && S.round > cdm.exp) continue; if ((cdm.skill && cdm.skill === h.sk.id) || (cdm.tag && h.sk.tags && h.sk.tags.indexOf(cdm.tag) >= 0)) outM *= cdm.mult; } }
     if (S.chain && S.chain.hits > 0 && S.chain.hits < 99 && S.chain.dv > 0) outM *= 1 + Math.min(BN_DATA.chain.comboHitCap, S.chain.hits * BN_DATA.chain.comboHitBonus);
-    if (a.troop === '騎' && h.basic && !a.chargeUsed) { outM *= bnLgSet(S, a, 'chargeMul') || BN_DATA.cavCharge; a.chargeUsed = true; }
+    if (a.troop === '騎' && h.basic && !h.noCharge && !a.chargeUsed) { outM *= bnLgSet(S, a, 'chargeMul') || BN_DATA.cavCharge; a.chargeUsed = true; }
     if (h.rx && h.rx.dmgMult) outM *= h.rx.dmgMult;
     var vx = typeof bnVsHit === 'function' ? bnVsHit(S, a, t, h) : null;   // 對象條件(vs)與五行
     if (vx) outM *= vx.out;
@@ -725,7 +725,7 @@ function bnStartRound(S) {
   S.stats.roundKills = 0;
   S.units.forEach(function (x) {
     if (x.alive && x.hp >= x.maxHp) S.stats.fullHpUnitRounds++;
-    x.acted = false; x.healCnt = 0; x.healRound = 0; x.dmgRound = 0; x.hpAtRoundStart = x.hp; x.counterHit = {}; x.targetedRound = false;
+    x.acted = false; x.healCnt = 0; x.healRound = 0; x.dmgRound = 0; x.hpAtRoundStart = x.hp; x.counterHit = {}; x.targetedRound = false; x.hhCnt = 0;
     if (x.reorderNext) { x.reorder = true; x.reorderNext = false; } else x.reorder = false;
     x.pendingHeal = x.pendingHeal || 0;
   });
@@ -900,7 +900,10 @@ function bnAct(S, u, o) {
   if (!u.st.timid && !S.over && u.alive) {
     var nrm = bnNormal(S, u);
     if (nrm === 'idle') bnEv(S, 'idle', { u: u.id });
-    else if (nrm && !S.over && u.alive) { bnLgExtra(S, u); casts += bnTryPursuit(S, u, nrm); }
+    else if (nrm && !S.over && u.alive) {
+      if (u.st.dblhit) bnNormal(S, u, { mul: u.st.dblhit.val, noCharge: true });   // 命運骰子 連擊:普攻後再普攻一次(倍率 val;不觸發追擊 / 騎兵首衝)
+      if (!S.over && u.alive) { bnLgExtra(S, u); casts += bnTryPursuit(S, u, nrm); }
+    }
   }
   S.stats.castsPerAct.push(casts);
   bnActEnd(S, u);
@@ -957,7 +960,7 @@ function bnTickDots(S, u) {
 }
 
 // 普攻:回傳 'idle' / 目標單位(命中) / null
-function bnNormal(S, u) {
+function bnNormal(S, u, opt) {
   var t, rk = bnReach(S, u), isMage = u.dt === 'strat', h, res, en;
   if (u.st.confuse) {
     var cf = u.st.confuse, want = cf.ft && u.fig ? cf.ft[u.fig] : '';   // 連環計:被擾亂者優先攻擊指定對象
@@ -976,8 +979,9 @@ function bnNormal(S, u) {
   t = bnPickEnemy(S, u, 'rand', 'basic');
   if (!t) return 'idle';
   h = { ty: isMage ? 'strat' : 'phys', mul: isMage ? BN_DATA.normalMag : 1, basic: true };
+  if (opt) { h.mul *= opt.mul; h.noCharge = !!opt.noCharge; }   // 連擊第二下:倍率 × dblhit.val、不吃騎兵首衝、不觸發 on_attack
   res = bnHitWithRx(S, u, t, h);
-  bnOnAttack(S, u, t, res);
+  if (!opt) bnOnAttack(S, u, t, res);
   return t;
 }
 

@@ -184,7 +184,7 @@ function wmapSettleSync(W, cs, now, o) {
   tmp = [];
   for (i = 0; i < W.pts.length; i++) {   // 沒人要去、無主的地圖資源格(例如戰敗後留下的):不存檔
     p = W.pts[i];
-    if (wmapSettleIsPtId(p.id) && p.cat === 'res' && !p.owner && !p.guard && !tripPts[p.id]) { out.changed = true; continue; }
+    if (wmapSettleIsPtId(p.id) && p.cat === 'res' && !p.owner && !p.guard && !tripPts[p.id] && !(p.hk > now)) { out.changed = true; continue; }   // 領地多隊失敗後守軍傷勢保留中(p.hk > now)的格不清,可以派第二波;到期才清(再派時守軍回滿)
     tmp.push(p);
   }
   W.pts = tmp;
@@ -248,7 +248,8 @@ function wmapSettleBrief(W, rp, o) {
       if (rp.noocc) { head = '勝・占領已滿 ' + rp.noocc.used + '/' + rp.noocc.cap + ',未占領'; tone = 'mid'; }
       else { head = '勝・已占領'; tone = 'win'; }
     } else { head = '勝・攻下'; tone = 'win'; }
-  } else { head = '敗' + (rp.wipe ? '・全滅,重傷 15 分' : '・撤回'); tone = 'lose'; }
+  } else { head = '敗' + (rp.wipe ? '・全滅,重傷 15 分' : (rp.retreat ? '・已撤退' : '・撤回')); tone = 'lose'; }
+  if (!rp.win && kind === 'res' && rp.nf > 1) lines.push('守軍 ' + (rp.down | 0) + '/' + rp.nf + ' 隊擊潰' + (rp.hold > rp.t ? ',傷勢保留 ' + Math.max(1, Math.round((rp.hold - rp.t) / 60000)) + ' 分' : ''));   // 領地多隊:失敗時顯示擊潰隊數與傷勢保留時間
   occ = rp.occ && wmapSettleHasAny(rp.occ) ? wmapSettleText(rp.occ) : '';
   if (occ) lines.push('占領獎勵 ' + occ);
   lt = wmapSettleLootTxt(rp.loot);

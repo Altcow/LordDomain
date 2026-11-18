@@ -54,7 +54,12 @@ var BN_STG_ARCH = {
   hu_rider: { look: 'hu_rider', troop: '騎', prof: [0.95, 1.15, 0.8, 0.8, 0.95], skills: ['g_chongfeng'], ult: 'u_cav' },
   hu_archer: { look: 'hu_archer', troop: '弓', prof: [0.9, 1.1, 0.9, 0.8, 0.9], skills: ['g_chuanyun'], ult: 'u_arc' },
   hu_shaman: { look: 'hu_shaman', troop: '弓', dt: 'strat', prof: [0.8, 0.7, 1.15, 1, 0.95], skills: ['g_leifa'], ult: 'u_str' },
-  rb_captain: { look: 'clan_retainer', troop: '槍', prof: [1.1, 1.1, 0.85, 0.9, 1], hpK: 1.15, elite: 1, skills: ['g_poqiang'], ult: 'u_inf' }
+  rb_captain: { look: 'clan_retainer', troop: '槍', prof: [1.1, 1.1, 0.85, 0.9, 1], hpK: 1.15, elite: 1, skills: ['g_poqiang'], ult: 'u_inf' },
+  // 山蠻(設計_野怪四類_規格 2.1;只給野怪 wmap_mob.js 用,不放進任何章節 roster,不影響討伐 36 關;暫用外觀 = 借圖,新圖到後改 look)
+  sm_shield: { look: 'bandit_blade', troop: '盾', prof: [1.15, 1, 0.7, 0.8, 0.9], skills: ['g_tiebi'], ult: 'u_shield' },
+  sm_hunter: { look: 'bandit_hunter', troop: '弓', prof: [0.9, 1.1, 0.9, 0.8, 0.9], skills: ['g_lianshe'], ult: 'u_arc' },
+  sm_chief: { look: 'bandit_chief', troop: '盾', prof: [1.15, 1.1, 0.8, 0.85, 1], hpK: 1.2, skills: ['g_gushou'], ult: 'u_shield' },
+  sm_shaman: { look: 'hu_shaman', troop: '弓', dt: 'strat', prof: [0.8, 0.7, 1.15, 1, 0.95], skills: ['g_leifa'], ult: 'u_str' }
 };
 
 // 章資料:roster 項目 = [類型, 名字, 稱號] 或 {fig, title, skills?}(名人敵將,用名人戰法;skills = 手動覆寫);extra = 該章敵將戰法抽取池的章節特色戰法;mats = 材料(主, 副);books = 兵書(戰法 id)
@@ -190,7 +195,53 @@ function bnStgFoeSkills(sk, pos, kind, troop, arch, ch, more) {
   }
   return out;
 }
-function bnStgMakeFoe(ent, v, ch, pos, st, sk) {
+// ───────── 領地守軍抽取(設計_領地守軍多隊與戰法成長_規格 2.2;確定性,不新增戰法 id)─────────
+// 品階:S / A 照 BN_SKILL_TIER,其餘(B、C、無值)一律 'B'
+function bnStgTier(id) { var t = typeof BN_SKILL_TIER !== 'undefined' ? BN_SKILL_TIER[id] : ''; return t === 'S' || t === 'A' ? t : 'B'; }
+function bnStgTierRank(t) { return t === 'S' ? 3 : (t === 'A' ? 2 : 1); }
+// 從 ids 中依品階 want 抽一個(rng);該品階抽光 → 降一階(S → A → B)→ 再沒有就從剩下的任意抽;回 id 或 ''
+function bnStgPickTier(ids, want, rng) {
+  var tiers = want === 'S' ? ['S', 'A', 'B'] : (want === 'A' ? ['A', 'B'] : ['B']), i, c;
+  for (i = 0; i < tiers.length; i++) {
+    c = ids.filter(function (id) { return bnStgTier(id) === tiers[i]; });
+    if (c.length) return c[Math.floor(rng() * c.length)];
+  }
+  return ids.length ? ids[Math.floor(rng() * ids.length)] : '';
+}
+// 選擇槽:need = ['S', 'A', 'B'] 之類(每個槽一個品階);池 = bnStgSkPools 的 normal ∪ strong(兵種相符;排除被動 / 大招);extraPool = 先試的優先池(名人本命池);回 id 陣列(不重複)
+function bnStgLandSkills(troopKey, arch, ch, need, rng, extraPool) {
+  var P = bnStgSkPools(troopKey, arch, ch), all = P.strong.concat(P.normal).filter(function (id) { return BN_SKILLS[id].cat !== 'ult'; }), out = [];
+  need.forEach(function (t) {
+    var own = (extraPool || []).filter(function (id) { return out.indexOf(id) < 0 && bnStgTier(id) === t; }), id;
+    if (own.length) { out.push(own[Math.floor(rng() * own.length)]); return; }
+    id = bnStgPickTier(all.filter(function (x) { return out.indexOf(x) < 0; }), t, rng);
+    if (id) out.push(id);
+  });
+  return out;
+}
+// 名將位置:從第一季名將(CARD_S01_FIGS)挑一位 —— 兵種符合 troops(陣列,fig.troop)、本命大招品階 >= tier、不在 used。權重:softUlt(本命大招依賴隊友 / 陣營)× softW。
+// 要求 A:先挑 A,A 抽光才用 S(>= 要求);要求 S:先挑 S,S 抽光降一階用 A;再沒有回 null(呼叫端退回無名 NPC + 通用大招,並記缺口)。回 {fig, tier} | null
+function bnStgLandFame(troops, tier, used, rng, opt) {
+  var list = (typeof CARD_S01_FIGS !== 'undefined' && CARD_S01_FIGS) ? CARD_S01_FIGS : Object.keys(BN_FIG_SKILLS), tiers = tier === 'S' ? ['S', 'A'] : ['A', 'S'], ti, c, w, r, i, f;
+  opt = opt || {};
+  for (ti = 0; ti < 2; ti++) {
+    c = list.filter(function (k) {
+      var f2 = BN_FIG_SKILLS[k];
+      if (!f2 || !f2.ult || !BN_SKILLS[f2.ult] || used[k]) return false;
+      if (troops && troops.indexOf(f2.troop) < 0) return false;
+      if (opt.noStrat && f2.dt === 'strat') return false;
+      return bnStgTier(f2.ult) === tiers[ti];
+    });
+    if (!c.length) continue;
+    w = c.map(function (k) { return (opt.soft && opt.soft.indexOf(BN_FIG_SKILLS[k].ult) >= 0) ? (opt.softW || 0.3) : 1; });
+    r = rng() * w.reduce(function (a, b) { return a + b; }, 0);
+    for (i = 0; i < c.length; i++) { r -= w[i]; if (r < 0 || i === c.length - 1) { f = c[i]; break; } }
+    return { fig: f, tier: tiers[ti] };
+  }
+  return null;
+}
+// lf(選用;領地守軍 / 野怪用,設計_領地守軍多隊與戰法成長_規格 2.2 第 5 條):{skills:[選擇戰法], ult, mul};有 lf 時 spec.skills / spec.ult 照 lf,並對每個選擇戰法 + 大招寫 kitInst[id].mul(mul 為 1 / 缺省不寫)。沒傳 lf = 行為與原本完全相同
+function bnStgMakeFoe(ent, v, ch, pos, st, sk, lf) {
   ent = bnStgFxEnt(ent);
   var fig = ent.fig ? BN_FIG_SKILLS[ent.fig] : null, arch = fig ? null : BN_STG_ARCH[ent[0]], troop = fig ? fig.troop : arch.troop, p = arch ? arch.prof : [1, 1, 1, 1, 1],
     gr = BN_STG.grOf[ch.n] | 0, boss = !!(st && st.boss && pos === 0), vk = ent.vk || (boss ? 1.05 : 1), card, spec, apt = {}, ov, more = !!(st && st.idx >= BN_STG.extraFrom);
@@ -207,6 +258,19 @@ function bnStgMakeFoe(ent, v, ch, pos, st, sk) {
     spec.ult = arch.ult;
     if (arch.hpK) spec.stats.hp = Math.round(spec.stats.hp * arch.hpK);
   }
+  if (lf) {
+    spec.skills = (lf.skills || []).filter(function (id) { return !!BN_SKILLS[id]; });
+    if (lf.ult && BN_SKILLS[lf.ult]) spec.ult = lf.ult;
+    if (spec.kitInst) {   // 舊選擇戰法的登記只留還在用的
+      var ki0 = spec.kitInst, ki1 = {}, any1 = false;
+      spec.skills.concat(spec.ult ? [spec.ult] : []).forEach(function (id) { if (ki0[id]) { ki1[id] = ki0[id]; any1 = true; } });
+      if (any1) spec.kitInst = ki1; else delete spec.kitInst;
+    }
+    if (typeof lf.mul === 'number' && lf.mul > 0 && lf.mul !== 1) {
+      spec.kitInst = spec.kitInst || {};
+      spec.skills.concat(spec.ult ? [spec.ult] : []).forEach(function (id) { spec.kitInst[id] = Object.assign({}, spec.kitInst[id] || {}, { mul: lf.mul }); });
+    }
+  }
   spec.look = 'foe:' + (fig ? (ent.look || BN_STG_FIG_LOOK[key] || 'yt_blade') : arch.look);
   spec.title = ent.title || ent[2] || '';
   spec.foe = 1;
@@ -214,8 +278,9 @@ function bnStgMakeFoe(ent, v, ch, pos, st, sk) {
 }
 var BN_STG_FIG_LOOK = { '槍': 'bandit_chief', '盾': 'yt_brute', '騎': 'clan_retainer', '弓': 'hu_archer', '謀': 'yt_mystic' };
 // 依 roster 條目與基準 v 組成敵方隊伍(3 人隊伍:超過 3 人取前 3,依原順序,保持確定性)。回 {units, power, list, bonds}
-function bnStgBuildTeam(ents, v, ch, st, sk) {
-  var specs = ents.slice(0, 3).map(function (e, k) { return bnStgMakeFoe(e, v, ch, k, st, sk); }), team, power = 0;
+// lfs(選用):依站位(同 ents 順序)傳給 bnStgMakeFoe 的 lf 陣列;沒傳 = 行為不變
+function bnStgBuildTeam(ents, v, ch, st, sk, lfs) {
+  var specs = ents.slice(0, 3).map(function (e, k) { return bnStgMakeFoe(e, v, ch, k, st, sk, lfs ? lfs[k] : undefined); }), team, power = 0;
   specs.forEach(function (sp, k) { sp.row = [2, 1, 0][k]; sp.col = 0; });   // 主將 row 2 / 副將 row 1 / 副將 row 0,col 0
   team = bnBuildTeam(specs);
   team.units.forEach(function (u) { power += bnPower(u); });

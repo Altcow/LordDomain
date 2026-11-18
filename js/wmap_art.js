@@ -30,8 +30,8 @@
 //   WMAP_DIR6 = 六個鄰向的邊中點(局部座標)
 //   wmapArtClear()    清快取(測試用;不清貼圖)
 //
-// ───────── 地面貼圖取樣(規格第 4 節 + tools/proto_hex_texture.html;貼圖 assets/wmap/tex/tex_<key>_<1024|512>.webp,key = grass mud wood rock rammed suburb mine farm_a farm_b hunt river shoal) ─────────
-//   地面 → 貼圖鍵:grass→grass、dirt→mud、wood→wood、rock→rock、rammed→rammed、suburb→suburb、mine→mine、farm a / b→farm_a / farm_b、hunt→hunt、river→river、shoal→shoal(wmapTexKeyOf(type, vi))
+// ───────── 地面貼圖取樣(規格第 4 節 + tools/proto_hex_texture.html;貼圖 assets/wmap/tex/tex_<key>_<1024|512>.webp,key = grass mud wood rock rammed suburb mine farm_a farm_b hunt river shoal sand;sand 2026-11-17 起,tex_sand 缺檔時用程式退路 #E2C477 + 小點) ─────────
+//   地面 → 貼圖鍵:grass→grass、dirt→mud、wood→wood、rock→rock、rammed→rammed、suburb→suburb、mine→mine、farm a / b→farm_a / farm_b、hunt→hunt、river→river、shoal→shoal、sand→sand(wmapTexKeyOf(type, vi))
 //   wmapTexLoad(key) → Promise<bool>     非同步載入 + 快取;載入前所有呼叫端自動退回程式退路;載入完會清掉對應 hx_ 快取並呼叫 WMAP_TEX.onload(key)(畫面層據此重烘)
 //   wmapTexReady(key) → bool;wmapTexSet(key, imgOrCanvas) 直接塞圖(測試 / 預載用);wmapTexReset(key) 釋放;wmapTexTrim(keepKeys[]) 只留清單內的貼圖(畫面只用到的幾種)
 //   wmapTexPattern(ctx, key, sg, ox, oy) → CanvasPattern | null    取樣 pattern。sg = 每「1024 參考貼圖像素」對應畫布 px(512 版內部自動 ×2);矩陣 = translate(−ox, −oy) · scale(sg, sg × 0.65);(ox, oy) = 畫布原點的世界座標(整張畫布 / 同一世界共用 → 相鄰格紋理連續;省略 = 0)。fill 時目前 transform 要是單位矩陣
@@ -67,8 +67,8 @@ var WMAP_PAL = {
   rock: '#a79f8c', rockDark: '#7b7463',
   water: '#58a5d4', waterDeep: '#3d86b8', waterHi: '#a9def0', bank: '#c9b783'
 };
-var WMAP_GROUND_N = { grass: 3, dirt: 2, wood: 2, road: 2, rammed: 2, rock: 2 };
-var WMAP_HXN = { grass: 3, dirt: 2, wood: 2, rock: 2, rammed: 1, suburb: 1, road: 1, mine: 1, farm: 2, hunt: 1, river: 1, shoal: 1 };
+var WMAP_GROUND_N = { grass: 3, dirt: 2, wood: 2, road: 2, rammed: 2, rock: 2, sand: 1 };
+var WMAP_HXN = { grass: 3, dirt: 2, wood: 2, rock: 2, sand: 1, rammed: 1, suburb: 1, road: 1, mine: 1, farm: 2, hunt: 1, river: 1, shoal: 1 };
 var WMAP_HEX = { W: 256, H: 144, T: 36, tileW: 256, tileH: 180, ax: 128, ay: 72, K: 0.65 };
 function wmapArtCellsRect(fw, fh) { var a = [], r, c; for (r = 0; r < fh; r++) for (c = 0; c < fw; c++) a.push([r, c]); return a; }
 function wmapArtPiece(fw, fh, U, cells, id) {   // 拼塊 / 城池底座(規格第 3 節公式)
@@ -181,9 +181,9 @@ function wmapArtHexWall(g, x, y, W, H, T, col, sides) {
 }
 
 // ───────── 地面貼圖(2026-11-17:12 張俯視貼圖 + 世界座標取樣;見檔頭) ─────────
-var WMAP_TEX_KEYS = ['grass', 'mud', 'wood', 'rock', 'rammed', 'suburb', 'mine', 'farm_a', 'farm_b', 'hunt', 'river', 'shoal'];
-var WMAP_TEX_OF = { grass: 'grass', dirt: 'mud', wood: 'wood', rock: 'rock', rammed: 'rammed', suburb: 'suburb', mine: 'mine', hunt: 'hunt', river: 'river', shoal: 'shoal' };
-var WMAP_TEX_PROC = { grass: ['grass', 0], mud: ['dirt', 0], wood: ['wood', 0], rock: ['rock', 0], rammed: ['rammed', 0], suburb: ['suburb', 0], mine: ['mine', 0], farm_a: ['farm', 0], farm_b: ['farm', 1], hunt: ['hunt', 0], river: ['river', 0], shoal: ['shoal', 0] };
+var WMAP_TEX_KEYS = ['grass', 'mud', 'wood', 'rock', 'rammed', 'suburb', 'mine', 'farm_a', 'farm_b', 'hunt', 'river', 'shoal', 'sand'];
+var WMAP_TEX_OF = { grass: 'grass', dirt: 'mud', wood: 'wood', rock: 'rock', rammed: 'rammed', suburb: 'suburb', mine: 'mine', hunt: 'hunt', river: 'river', shoal: 'shoal', sand: 'sand' };
+var WMAP_TEX_PROC = { grass: ['grass', 0], mud: ['dirt', 0], wood: ['wood', 0], rock: ['rock', 0], rammed: ['rammed', 0], suburb: ['suburb', 0], mine: ['mine', 0], farm_a: ['farm', 0], farm_b: ['farm', 1], hunt: ['hunt', 0], river: ['river', 0], shoal: ['shoal', 0], sand: ['sand', 0] };
 var WMAP_TEX = { base: 'assets/wmap/tex/', res: 512, sat: 0.65, span: 5, m: {}, mir: {}, nomirror: { farm_a: 1, farm_b: 1 }, nosat: { rock: 1 }, onload: null };
 function wmapTexKeyOf(type, vi) {
   if (type === 'farm') return (vi === 'b' || vi === 1) ? 'farm_b' : 'farm_a';
@@ -329,7 +329,7 @@ var WMAP_HXPAL = {
   grass: [null, WMAP_PAL.grassDark, WMAP_PAL.grassLite, 'tuft'], dirt: [WMAP_PAL.dirt, WMAP_PAL.dirtDark, WMAP_PAL.dirtLite, 'stone'], wood: [WMAP_PAL.wood, WMAP_PAL.woodDark, '#9cc56a', 'tuft'],
   rock: [WMAP_PAL.rock, WMAP_PAL.rockDark, '#c5beac', 'stone'], rammed: [WMAP_PAL.rammed, WMAP_PAL.rammedDark, '#e0d3ac', 'crack'], road: [WMAP_PAL.road, WMAP_PAL.roadEdge, '#ece0b8', 'crack'],
   suburb: ['#aed46e', '#79a843', '#d3ec9a', 'tuft'], mine: ['#80604a', '#5e4535', '#9c7a5c', 'ore'], hunt: ['#c9b27a', '#b09a63', '#dccb98', 'tuft'],
-  farm: [null, '#5b8f2a', '#a3cf5e', 'ridge'], river: [WMAP_PAL.water, WMAP_PAL.waterDeep, WMAP_PAL.waterHi, 'water'], shoal: ['#86cde2', '#58a5d4', '#cfeaf2', 'water']
+  farm: [null, '#5b8f2a', '#a3cf5e', 'ridge'], sand: ['#E2C477', '#c9a95a', '#f1dca4', 'dots'], river: [WMAP_PAL.water, WMAP_PAL.waterDeep, WMAP_PAL.waterHi, 'water'], shoal: ['#86cde2', '#58a5d4', '#cfeaf2', 'water']
 };
 function wmapArtHexIn(x, y, k) { var dy = Math.abs(y - 72); return dy <= 72 * k && Math.abs(x - 128) <= (128 - dy * 0.8889) * k; }
 function wmapArtHexDetail(g, type, vi, rng) {   // 程式紋理:裁在六邊形內;細節只放在 0.9 內縮範圍(邊緣只剩底色 → 同類相鄰不突兀)

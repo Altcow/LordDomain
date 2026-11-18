@@ -24,7 +24,7 @@ var BNT_ST = {
   atk_down: '攻擊下降', def_down: '防禦下降', spd_down: '速度下降', rate_down: '發動率下降', rate_up: '發動率提升', debuff_hit: '命中下降', wx_mark: '五行印', invert: '陰陽互換',
   atk_up: '攻擊提升', def_up: '防禦提升', spd_up: '速度提升', crit_up: '暴擊提升', stealth: '隱匿', evade: '規避', dodge_rate: '閃避', shield: '護盾', ward: '抵禦', undying: '不倒', guard: '援護', counter: '反擊', heal_block: '禁療', heal_reduce: '治療降低', reorder: '插隊', swap: '換位', control: '控制類狀態', debuff: '減益類狀態', dot: '持續傷害類狀態', any: '任何負面狀態'
 };
-BNT_ST.critdmg_up = '暴擊傷害提升'; BNT_ST.thorns = '荊棘'; BNT_ST.fuse = '引信'; BNT_ST.lag = '遲滯';
+BNT_ST.dblhit = '連擊'; BNT_ST.hit_heal = '受擊回氣'; BNT_ST.lifesteal = '吸血'; BNT_ST.critdmg_up = '暴擊傷害提升'; BNT_ST.thorns = '荊棘'; BNT_ST.fuse = '引信'; BNT_ST.lag = '遲滯';
 var BNT_FLAW = {
   no_inspire: '不受友方鼓舞類增益', forced_taunt_target: '被嘲諷時必定攻擊嘲諷者', act_last: '總是最後出手', late_dmg_taken: '戰鬥後期受傷增加', friendly_fire: '偶爾誤傷友軍',
   no_ally_morale: '不易受友軍增益影響', slow_on_ally_down: '友軍倒下時速度下降', timid_vs: '遇到剋星時可能怯戰', weak_vs: '遇到剋星時受傷大增', revoke_book: '張角兵力過低時收回天書',
@@ -209,6 +209,16 @@ function bntClause(kind, target, power, P, d, isExtra) {
     case 'debuff_multi':
       s = []; (P.list || []).forEach(function (it) { s.push(bntStName(it.st) + bntPct(it.chance || 0)); });
       return '使' + bntTg(target, 'enemy_one') + '各自有機率承受:' + s.join('、') + '(每項獨立判定)';
+    case 'fate_dice': {   // 命運骰子(2026-11-17):敵我雙方每人各自擲骰;數值依 P.pw 檔位
+      var fp = P.p || {}, fw = P.pw || 'S', fpos = {
+        lifesteal: '吸血(傷害的 ' + bntPct(bntKT('lifesteal_pct', fw)) + ' 回復自身,再受治療係數影響)', dblhit: '連擊(普通攻擊後再普攻一次,第二下 ' + bntPct(bntKT('dblhit', fw)) + ' 威力)', counter: '反擊(被近戰物理攻擊時反擊 ' + bntPct(bntKT('counter', fw)) + ' 威力)',
+        shield: '護盾', heal_hot: '回春(每回合末回復)', hit_heal: '受擊回氣(被打時 ' + bntPct(BN_DATA.hitHeal.p) + ' 機率回復 ' + bntPct(bntKT('hit_heal', fw)) + ' 最大兵力,每回合最多 ' + BN_DATA.hitHeal.perRound + ' 次)'
+      }, fneg = [], fcap = P.cap || {};
+      (P.neg || []).forEach(function (it) { fneg.push(typeof it === 'string' ? bntStName(it) : '控制(' + it.ctl.map(function (c) { return bntStName(c); }).join('、') + ' 擇一,同一判定只會中其中一項)'); });
+      return '擲骰定禍福:我方每人各自判定,增益 ' + bntPct(fp.allyPos || 0) + '、負面 ' + bntPct(fp.allyNeg || 0) + ';敵方每人各自判定,增益 ' + bntPct(fp.foePos || 0) + '、負面 ' + bntPct(fp.foeNeg || 0) +
+        '。增益池:' + (P.pos || []).map(function (x) { return fpos[x] || x; }).join('、') + (fcap.pos ? '(每人最多 ' + fcap.pos + ' 項)' : '') +
+        '。負面池:' + fneg.join('、') + (fcap.neg ? '(每人最多 ' + fcap.neg + ' 項)' : '') + '。增益與減益持續 ' + BN_DATA.buffRounds + ' 回合(控制 1 回合)' + (P.selfSafe ? ';施法者本人不受負面' : '');
+    }
     case 'reflect': return bntTg(target, 'self') + '受到傷害時反彈 ' + bntPct(bntKT(kind, pw)) + ' 的傷害給攻擊者(每擊上限 8% 攻擊者兵力)' + dur;
     case 'buff_critdmg': return bntTg(target, 'self') + '暴擊傷害 +' + bntPct(bntKT(kind, pw, sc)) + dur;
     case 'delay_burst': return '埋下引信:' + (P.after || 2) + ' 回合後爆發,對' + bntTg(target, 'enemy_one') + '造成 ' + bntPct(bntKT(kind, pw)) + ' 攻擊 / 謀略傷害(單次上限 ' + bntPct(bntKT('burst_cap', pw)) + ' 兵力)';

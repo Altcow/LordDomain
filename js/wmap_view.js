@@ -35,7 +35,7 @@ var WMAP = { on: false, WG: null, G: null, zi: 1, cam: { u: 32, v: 32 }, vw: 0, 
   selEls: [], card: null, hud: null, dbg: false, ground: null, seed: 0, B: 4, N: 64, listeners: [] };
 var WMAP_KNAME = ['平地', '山', '大石', '河', '淺灘', '道路', '主城', '邊界', '城內庭院', '縣城', '關口', '郡城', '州城'];
 var WMAP_TY = ['farm', 'mine', 'hunt', 'lumber', 'quarry'];
-var WMAP_PRI = { grass: 6, wood: 5, dirt: 3, rammed: 2, rock: 0 };
+var WMAP_PRI = { grass: 6, wood: 5, sand: 4, dirt: 3, rammed: 2, rock: 0 };
 // 畫面參數(規格待決 3:描邊遊戲內細一點;'diff' = 只在不同地形交界描邊;trans = 地形交界過渡帶開關)
 var WMAP_VCFG = {
   edge: 'all', trans: true, bevel: true, lw: 0.016, edgeA: 0.5, ink: '#4a3b2c',
@@ -64,6 +64,16 @@ function wmapDemoCellInfo(gi) {
 function wmapInfoOf(gi) { return WMAP.cellInfo ? WMAP.cellInfo(gi) : wmapDemoCellInfo(gi); }
 
 // ───────── 資料準備 ─────────
+var WMAP_SAND = { river: 0.6, mine: 0.15 };   // 沙地機率(規格 4.1):6 鄰有河 / 淺灘、6 鄰有礦坑資源格;外觀專用,不影響走法 / 成本 / 資源
+function wmapSandAt(gi) {   // 無資源、非城郊 / 城池占地的平地格 → 是否為沙地(確定性雜湊 wmGenHash01(seed, gi, 21 / 22);不讀時間 / 亂數)
+  var WG = WMAP.WG, N = WG.size, nb, i, j, k, hasR = false, hasM = false;
+  if (WG.k[gi] !== 0 || (WG.zone && WG.zone[gi]) || (WG.rt && WG.rt[gi] >= 0)) return false;
+  nb = wmHexNbs(gi, N);
+  for (i = 0; i < nb.length; i++) { j = nb[i]; k = WG.k[j]; if (k === 3 || k === 4) hasR = true; if (WG.rt && WG.rt[j] === 1 && WG.k[j] === 0) hasM = true; }
+  if (hasR && wmGenHash01(WG.seed, gi, 21) < WMAP_SAND.river) return true;
+  if (hasM && wmGenHash01(WG.seed, gi, 22) < WMAP_SAND.mine) return true;
+  return false;
+}
 function wmapGroundType(gi) {   // 地面種類(只影響外觀);雜訊用地面等向座標 wmHexGround(否則被拉伸)
   var WG = WMAP.WG, N = WG.size, k = WG.k[gi], x = gi % N, y = (gi - x) / N, n1, n2, q = wmHexGround(x, y);
   if (k === 6 || k === 8 || k === 9 || k === 11 || k === 12) return 'rammed';   // 主城 / 縣 / 郡 / 州:夯土
@@ -71,6 +81,7 @@ function wmapGroundType(gi) {   // 地面種類(只影響外觀);雜訊用地面
   if (k === 1) return 'rock';
   n1 = wmapNoise(WG.seed, q.x + 64, q.y + 64, 9); n2 = wmapNoise(WG.seed + 7, q.x + 64, q.y + 64, 7);
   if (k === 7) return n1 > 0.45 ? 'wood' : 'rock';
+  if (k === 0 && wmapSandAt(gi)) return 'sand';                    // 沙地(外觀地面,規格 4.1):河岸 / 淺灘旁 6 成、礦坑旁 3.5 成;只在無資源的一般平地,雜訊結果不變
   if (n1 > 0.72) return 'dirt';
   if (n2 > 0.7) return 'wood';
   return 'grass';
@@ -199,7 +210,7 @@ function wmapHexPath(g, cx, cy, W, H, infl) {
   var p = wmapHexVerts(cx, cy, W, H, infl || 0);
   g.moveTo(p[0], p[1]); g.lineTo(p[2], p[3]); g.lineTo(p[4], p[5]); g.lineTo(p[6], p[7]); g.lineTo(p[8], p[9]); g.lineTo(p[10], p[11]); g.closePath();
 }
-function wmapTexNeeded() { return ['grass', 'mud', 'wood', 'rock', 'rammed', 'river', 'shoal', 'farm_a', 'farm_b', 'mine', 'hunt']; }
+function wmapTexNeeded() { return ['grass', 'mud', 'wood', 'rock', 'rammed', 'river', 'shoal', 'farm_a', 'farm_b', 'mine', 'hunt', 'sand']; }
 function wmapTexKickLoad() {   // 非同步載入頂面貼圖;載入完重烘(去抖);沒有 wmap_art.js 的貼圖函式 / 沒有 Promise → 全部走程式退路
   var ks = wmapTexNeeded(), i;
   if (typeof wmapTexLoad !== 'function' || typeof WMAP_TEX === 'undefined') return;

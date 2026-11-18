@@ -1,6 +1,6 @@
 // js/wmap_mob_ui.js — TR2 野怪介面(核心在 js/wmap_mob.js,純函式)。
-// 做什麼:地圖上畫野怪標記(程式畫的小圖示:黑旗 + 1 / 2 / 3 個小兵表 Lv 段,地圖上沒有任何文字);點野怪格 → 沿用地塊小卡(WMAPGO.card)顯示「野怪 Lv・守軍戰力・去程」+〔剿匪〕(路過野怪不觸發戰鬥,只有按〔剿匪〕才會打);
-//       〔剿匪〕→ 滿版頁 wmmob(選隊 + 勝算 + 預估時間)→〔剿匪〕;抵達 / 路過戰的結果走既有快報條(wmap_settle_ui.js 的 wmapSettleUiReports)與戰報頁。
+// 做什麼:地圖上畫野怪標記(程式畫的小圖示:黑旗 + 1 / 2 / 3 個小兵表 Lv 段,地圖上沒有任何文字);點野怪格 → 沿用地塊小卡(WMAPGO.card)顯示「野怪 Lv・守軍戰力・去程」+〔剿滅〕(路過野怪不觸發戰鬥,只有按〔剿滅〕才會打);
+//       〔剿滅〕→ 滿版頁 wmmob(選隊 + 勝算 + 預估時間)→〔剿滅〕;抵達 / 路過戰的結果走既有快報條(wmap_settle_ui.js 的 wmapSettleUiReports)與戰報頁。
 // 每秒 tick 由 wmap_go_ui.js 的 wmapGoUiTick 之後呼叫(掛在 wmapGoUiInit 尾端的計時器之外,本檔自己 1 秒 interval 只刷新標記清單)。標記層是一張 canvas,放在行軍層下面(z-index 4),跟著 wmapFrame 同步。
 // 掛鉤:wmap_go_ui.js 的 wmapGoUiInit 尾端呼叫 wmapMobUiInit();wmap_ui 無改動。ES2017,不用 ?. ??;UTF-8 + CRLF。載入順序:wmap_settle_ui.js 之後。全域名一律 wmapMobUi* / WMOBUI。
 //
@@ -33,7 +33,29 @@ function wmapMobUiRefresh() {
   WMOBUI.list = list;
   if (sig !== WMOBUI.sig) { WMOBUI.sig = sig; wmapMobUiDraw(); }
 }
-function wmapMobUiIcon(g, x, y, s, lv, locked) {
+// 野怪標記(2026-11-17 設計_野怪四類_規格 3.2):站著的軍隊模型(兵種 = 主將兵種,pause 面朝下,勢力染色 = 類型色)+ 黑牙旗(旗上小圓點 = 類型色),運糧隊加糧袋徽章;wmapArmyDraw 不可用 / 圖還沒載入 → 退回程式畫的小圖示
+function wmapMobUiModel(g, m, pos, p, G, dpr) {
+  var T = (typeof WMOB_TY !== 'undefined' && WMOB_TY[m.tk]) || null, n = 0, bc, x = pos.x - p.px, y = pos.y - p.py + G.s * 0.1;
+  if (!T || typeof wmapArmyDraw !== 'function' || typeof wmapMobTroopOf !== 'function') return false;
+  try {
+    n = wmapArmyDraw(g, [{ id: m.id, side: 'foe', tag: 0, tp: wmapMobTroopOf(m.tk, m.lv), team: T.col, x: pos.x, y: pos.y + G.s * 0.1, s: G.s, dir: 0, mir: 0, fr: 4, wave: 0, alpha: m.locked ? 0.55 : 1, phase: 'stay', mode: 'pause', ring: null, sel: false, n: 0 }], { camX: -p.px, camY: -p.py, s: G.s, dpr: dpr, q: 'mid', now: typeof ldNow === 'function' ? ldNow() : 0 });
+  } catch (e) { return false; }
+  if (!n) return false;
+  if (T.badge === 'bag' && typeof wmapArmyArtBadge === 'function') { bc = wmapArmyArtBadge('bag'); if (bc) { g.save(); g.globalAlpha = m.locked ? 0.55 : 1; g.drawImage(bc, x - G.s * 0.17, y - G.s * 1.0, G.s * 0.34, G.s * 0.34); g.restore(); } }
+  wmapMobUiFlag(g, x + G.s * 0.42, y, G.s, T.col, m.locked);
+  return true;
+}
+function wmapMobUiFlag(g, x, y, s, col, locked) {   // 黑牙旗(旗杆 + 黑旗 + 類型色小圓點)
+  var u = s * 0.11;
+  g.save();
+  g.globalAlpha = locked ? 0.55 : 1;
+  g.strokeStyle = '#3b2c1c'; g.lineWidth = Math.max(1.5, u * 0.35);
+  g.beginPath(); g.moveTo(x, y); g.lineTo(x, y - u * 8); g.stroke();
+  g.fillStyle = '#16120f'; g.beginPath(); g.moveTo(x, y - u * 8); g.lineTo(x + u * 3.6, y - u * 6.8); g.lineTo(x, y - u * 5.4); g.closePath(); g.fill();
+  g.fillStyle = col || '#b3402f'; g.beginPath(); g.arc(x + u * 1.3, y - u * 6.8, u * 0.5, 0, Math.PI * 2); g.fill();
+  g.restore();
+}
+function wmapMobUiIcon(g, x, y, s, lv, locked, col) {
   var n = lv <= 3 ? 1 : (lv <= 6 ? 2 : 3), u = s * 0.11, i, ox, oy, k;
   g.save();
   g.globalAlpha = locked ? 0.55 : 1;
@@ -47,7 +69,7 @@ function wmapMobUiIcon(g, x, y, s, lv, locked) {
   g.strokeStyle = '#3b2c1c'; g.lineWidth = Math.max(1.5, u * 0.35);   // 旗杆 + 黑旗
   g.beginPath(); g.moveTo(x + u * 2.2 + n * u * 0.4, y); g.lineTo(x + u * 2.2 + n * u * 0.4, y - u * 8); g.stroke();
   g.fillStyle = '#16120f'; g.beginPath(); g.moveTo(x + u * 2.2 + n * u * 0.4, y - u * 8); g.lineTo(x + u * 2.2 + n * u * 0.4 + u * 3.6, y - u * 6.8); g.lineTo(x + u * 2.2 + n * u * 0.4, y - u * 5.4); g.closePath(); g.fill();
-  g.fillStyle = '#b3402f'; g.beginPath(); g.arc(x + u * 2.2 + n * u * 0.4 + u * 1.3, y - u * 6.8, u * 0.5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = col || '#b3402f'; g.beginPath(); g.arc(x + u * 2.2 + n * u * 0.4 + u * 1.3, y - u * 6.8, u * 0.5, 0, Math.PI * 2); g.fill();
   g.restore();
 }
 function wmapMobUiDraw() {
@@ -62,27 +84,32 @@ function wmapMobUiDraw() {
     m = WMOBUI.list[i]; c = m.gi % N; r = (m.gi - c) / N;
     pos = wmapArmyProj(c, r, G.s, N);
     if (pos.x - p.px < -80 || pos.x - p.px > vw + 80 || pos.y - p.py < -80 || pos.y - p.py > vh + 80) continue;
-    wmapMobUiIcon(g, pos.x - p.px, pos.y - p.py + G.s * 0.1, G.s, m.lv, m.locked);
+    if (!wmapMobUiModel(g, m, pos, p, G, dpr)) wmapMobUiIcon(g, pos.x - p.px, pos.y - p.py + G.s * 0.1, G.s, m.lv, m.locked, (typeof WMOB_TY !== 'undefined' && WMOB_TY[m.tk]) ? WMOB_TY[m.tk].col : '');
   }
 }
 
 // ───────── 小卡 ─────────
+function wmapMobUiInfoTxt(m) {   // 「兵種 盾・派騎兵較有利」(只給類型 / 等級帶出的兵種與剋法,不洩漏守軍細節)
+  var tp = wmapMobTroopOf(m.tk, m.lv), ct = wmapMobCounterOf(m.tk, m.lv);
+  return '兵種 ' + tp + (ct ? '・派' + ct + '兵較有利' : '');
+}
+function wmapMobUiLootTxt(m) { return typeof wmapSettleText === 'function' ? wmapSettleText(wmapMobLoot(m.lv, m.tk)) : ('文 ' + wmapMobCoin(m.lv, m.tk)); }
 function wmapMobUiCardShow(m) {
-  var c = wmapGoUiCtx(), card = WMAPGO.card, now = ldNow(), tg, plan, pt, foe, sub, btns, N = WMAP.WG.size, cx = m.gi % N;
+  var c = wmapGoUiCtx(), card = WMAPGO.card, now = ldNow(), tg, plan, sub, btns, N = WMAP.WG.size, cx = m.gi % N;
   if (!c || !card) return;
   tg = wmapMobTarget(WMAP.WG, m);
-  pt = wdPt(c.W, m.id) || wmapMobMakePt(c.W, m);
-  foe = wmapGoFoePower(c.W, pt);
   card.innerHTML = '';
   card.appendChild(wmapGoUiEl('div', 'wgc-t', '(' + cx + ',' + ((m.gi - cx) / N) + ') Lv' + m.lv + ' ' + m.ty));
+  card.appendChild(wmapGoUiEl('div', 'wgc-s', wmapMobUiInfoTxt(m)));
+  card.appendChild(wmapGoUiEl('div', 'wgc-s', (WMOB_TY[m.tk] || WMOB_TY.sz).say));
   if (!tg.ok) sub = '超出行軍範圍';
   else {
     plan = wmapGoPlan(c.W, WMAP.WG, tg, null, now, { fast: wmapGoFast() });
-    sub = '守軍戰力 ' + Math.round(foe) + '・去程約 ' + plan.goMins.toFixed(1) + ' 分・掉落 文 ' + wmapMobCoin(m.lv) + ' 糧 ' + wmapMobGrain(m.lv) + '・本批 ' + wmapMobUiHM(wmapMobBatchEnd(m.bk)) + ' 消失';
+    sub = '去程約 ' + plan.goMins.toFixed(1) + ' 分・掉落 ' + wmapMobUiLootTxt(m) + '・' + wmapMobUiHM(wmapMobBatchEnd(m.bk)) + ' 消失';
   }
   if (m.locked) sub = '已有隊伍前往・' + sub;
   card.appendChild(wmapGoUiEl('div', 'wgc-s', sub));
-  btns = (m.locked || !tg.ok ? '' : '<button type="button" class="wgc-b pri" data-wgo="mobgo">剿匪</button>') + '<button type="button" class="wgc-b" data-wgo="x" aria-label="關閉">×</button>';
+  btns = (m.locked || !tg.ok ? '' : '<button type="button" class="wgc-b pri" data-wgo="mobgo">剿滅</button>') + '<button type="button" class="wgc-b" data-wgo="x" aria-label="關閉">×</button>';
   card.insertAdjacentHTML('beforeend', '<div class="wgc-r">' + btns + '</div>');
   card.hidden = false;
   WMAPGO.cardGi = m.gi;
@@ -115,7 +142,7 @@ function wmapMobUiSend(gi, teamN) {
   if (r.events && r.events.length) wmapGoUiConsume(r.events, false);
   if (!r.ok) { wmapGoUiToast(r.reason === 'gone' ? '這隻野怪已經不在了' : wmapGoUiMsg(r.reason)); wmapGoUiSave(); return false; }
   wmapGoUiSave();
-  wmapGoUiToast(team.name + ' 出發剿匪 → Lv' + m.lv + ' ' + m.ty + '(約 ' + (r.plan.goMs / 60000).toFixed(1) + ' 分)');
+  wmapGoUiToast(team.name + ' 出發剿滅 → Lv' + m.lv + ' ' + m.ty + '(約 ' + (r.plan.goMs / 60000).toFixed(1) + ' 分)');
   if (typeof wmapSelect === 'function') wmapSelect(-1);
   wmapGoUiCardHide();
   wmapGoUiRefresh();
@@ -136,7 +163,7 @@ function wmapMobUiPageRender(el, ctx) {
   foe = wmapGoFoePower(c.W, pt);
   h = wmapGoUiEl('div', 'wgp-head');
   h.appendChild(wmapGoUiEl('div', 'wgp-title', '(' + cx + ',' + ((m.gi - cx) / N) + ') Lv' + m.lv + ' ' + m.ty));
-  h.appendChild(wmapGoUiEl('div', 'wgp-sub', '守軍戰力 ' + Math.round(foe) + '・掉落 文 ' + wmapMobCoin(m.lv) + ' 糧 ' + wmapMobGrain(m.lv) + '・' + wmapMobUiHM(wmapMobBatchEnd(m.bk)) + ' 消失'));
+  h.appendChild(wmapGoUiEl('div', 'wgp-sub', wmapMobUiInfoTxt(m) + '・掉落 ' + wmapMobUiLootTxt(m) + '・' + wmapMobUiHM(wmapMobBatchEnd(m.bk)) + ' 消失'));
   el.appendChild(h);
   teams = typeof wdTeams === 'function' ? wdTeams() : [];
   list = wmapGoUiEl('div', 'wgp-list');
@@ -164,7 +191,7 @@ function wmapMobUiPageRender(el, ctx) {
   el.appendChild(list);
   b = wmapGoUiEl('div', 'wgp-foot');
   row = wmapGoUiEl('button', 'wgp-btn', '調整隊伍'); row.setAttribute('type', 'button'); row.setAttribute('data-wgp', 'edit'); b.appendChild(row);
-  row = wmapGoUiEl('button', 'wgp-btn pri', '剿匪'); row.setAttribute('type', 'button'); row.setAttribute('data-wgp', 'go'); if (!selOk) row.disabled = true; b.appendChild(row);
+  row = wmapGoUiEl('button', 'wgp-btn pri', '剿滅'); row.setAttribute('type', 'button'); row.setAttribute('data-wgp', 'go'); if (!selOk) row.disabled = true; b.appendChild(row);
   el.appendChild(b);
   if (!el.__wmbBound) {
     el.__wmbBound = true;
@@ -206,7 +233,7 @@ function wmapMobUiInit() {
 
 if (typeof ldNavRegister === 'function') {
   ldNavRegister({
-    id: 'wmmob', title: '剿匪',
+    id: 'wmmob', title: '剿滅',
     build: function (el, ctx) { if (ctx.sel === undefined) ctx.sel = 0; wmapMobUiPageRender(el, ctx); },
     onShow: function (el, ctx) { wmapMobUiPageRender(el, ctx); }
   });
